@@ -1,0 +1,17 @@
+# Datos personales generados (nombres y teléfonos reales): nunca al repositorio
+out/
+data/
+*.xlsx
+*.csv
+*.pdf
+
+# Secretos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
