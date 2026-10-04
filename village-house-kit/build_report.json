@@ -1,0 +1,575 @@
+{
+ "house_1": {
+  "skipped": true,
+  "missing": [
+   "roof 1_BaseColor.png",
+   "roof 1_Normal.png"
+  ],
+  "materials": [
+   "house_1",
+   "roof_1"
+  ],
+  "kit_position_m": [
+   0.843,
+   -0.001,
+   0.0
+  ]
+ },
+ "house_2": {
+  "file": "house_2.glb",
+  "bytes": 18410208,
+  "nodes": [
+   "house_2",
+   "house_2_door"
+  ],
+  "materials": [
+   "house_2"
+  ],
+  "vertices": 1913,
+  "triangles": 2996,
+  "size_m": [
+   6.907,
+   5.118,
+   4.995
+  ],
+  "kit_position_m": [
+   11.154,
+   0.097,
+   0.0
+  ],
+  "missing": []
+ },
+ "house_3": {
+  "skipped": true,
+  "missing": [
+   "roof 3_BaseColor.png",
+   "roof 3_Normal.png"
+  ],
+  "materials": [
+   "house_3",
+   "roof_3"
+  ],
+  "kit_position_m": [
+   -11.02,
+   -0.545,
+   0.0
+  ]
+ },
+ "house_4": {
+  "file": "house_4.glb",
+  "bytes": 37902684,
+  "nodes": [
+   "house_4",
+   "house_4_door"
+  ],
+  "materials": [
+   "house_4",
+   "roof_4"
+  ],
+  "vertices": 3208,
+  "triangles": 4804,
+  "size_m": [
+   5.447,
+   5.256,
+   3.635
+  ],
+  "kit_position_m": [
+   17.782,
+   0.013,
+   0.0
+  ],
+  "missing": []
+ },
+ "house_5": {
+  "skipped": true,
+  "missing": [
+   "roof 5_BaseColor.png",
+   "roof 5_Normal.jpg"
+  ],
+  "materials": [
+   "house_5",
+   "roof_5"
+  ],
+  "kit_position_m": [
+   26.925,
+   -0.168,
+   0.0
+  ]
+ },
+ "gate": {
+  "file": "gate.glb",
+  "bytes": 16733732,
+  "nodes": [
+   "gate",
+   "gate_door_right",
+   "gate_door_left"
+  ],
+  "materials": [
+   "gate"
+  ],
+  "vertices": 654,
+  "triangles": 1140,
+  "size_m": [
+   3.608,
+   0.27,
+   3.602
+  ],
+  "kit_position_m": [
+   -0.023,
+   -5.881,
+   0.0
+  ],
+  "missing": []
+ },
+ "wooden_wall_1": {
+  "file": "wooden_wall_1.glb",
+  "bytes": 16715888,
+  "nodes": [
+   "wooden_wall_1"
+  ],
+  "materials": [
+   "gate"
+  ],
+  "vertices": 692,
+  "triangles": 1348,
+  "size_m": [
+   3.136,
+   0.439,
+   2.603
+  ],
+  "kit_position_m": [
+   3.802,
+   -5.933,
+   0.0
+  ],
+  "missing": []
+ },
+ "wooden_wall_2": {
+  "file": "wooden_wall_2.glb",
+  "bytes": 16722368,
+  "nodes": [
+   "wooden_wall_2"
+  ],
+  "materials": [
+   "gate"
+  ],
+  "vertices": 782,
+  "triangles": 1524,
+  "size_m": [
+   3.136,
+   0.442,
+   2.509
+  ],
+  "kit_position_m": [
+   7.327,
+   -5.931,
+   0.0
+  ],
+  "missing": []
+ },
+ "fortification": {
+  "file": "fortification.glb",
+  "bytes": 19795152,
+  "nodes": [
+   "fortification"
+  ],
+  "materials": [
+   "fortification"
+  ],
+  "vertices": 1168,
+  "triangles": 2016,
+  "size_m": [
+   4.616,
+   4.755,
+   7.636
+  ],
+  "kit_position_m": [
+   -19.869,
+   0.0,
+   0.0
+  ],
+  "missing": []
+ },
+ "stilt": {
+  "file": "stilt.glb",
+  "bytes": 21319768,
+  "nodes": [
+   "stilt"
+  ],
+  "materials": [
+   "stilt"
+  ],
+  "vertices": 2664,
+  "triangles": 5008,
+  "size_m": [
+   2.294,
+   5.446,
+   5.295
+  ],
+  "kit_position_m": [
+   -20.789,
+   -5.899,
+   0.0
+  ],
+  "missing": []
+ },
+ "structure": {
+  "skipped": true,
+  "missing": [
+   "structure_Normal.jpg"
+  ],
+  "materials": [
+   "structure"
+  ],
+  "kit_position_m": [
+   37.781,
+   -0.922,
+   0.0
+  ]
+ },
+ "well": {
+  "file": "well.glb",
+  "bytes": 3486140,
+  "nodes": [
+   "well"
+  ],
+  "materials": [
+   "well"
+  ],
+  "vertices": 2802,
+  "triangles": 5282,
+  "size_m": [
+   2.708,
+   2.723,
+   2.754
+  ],
+  "kit_position_m": [
+   10.975,
+   -6.272,
+   0.0
+  ],
+  "missing": []
+ },
+ "cart": {
+  "file": "cart.glb",
+  "bytes": 4572688,
+  "nodes": [
+   "cart"
+  ],
+  "materials": [
+   "cart"
+  ],
+  "vertices": 2712,
+  "triangles": 4792,
+  "size_m": [
+   3.342,
+   1.667,
+   1.314
+  ],
+  "kit_position_m": [
+   -3.903,
+   -9.707,
+   0.0
+  ],
+  "missing": []
+ },
+ "barrel": {
+  "file": "barrel.glb",
+  "bytes": 2422416,
+  "nodes": [
+   "barrel"
+  ],
+  "materials": [
+   "barrel"
+  ],
+  "vertices": 1826,
+  "triangles": 3442,
+  "size_m": [
+   0.705,
+   0.705,
+   0.955
+  ],
+  "kit_position_m": [
+   -1.381,
+   -9.653,
+   0.0
+  ],
+  "missing": []
+ },
+ "crate": {
+  "file": "crate.glb",
+  "bytes": 3468200,
+  "nodes": [
+   "crate"
+  ],
+  "materials": [
+   "crate"
+  ],
+  "vertices": 114,
+  "triangles": 224,
+  "size_m": [
+   0.505,
+   0.505,
+   0.505
+  ],
+  "kit_position_m": [
+   0.0,
+   -9.404,
+   0.0
+  ],
+  "missing": []
+ },
+ "bag_1": {
+  "file": "bag_1.glb",
+  "bytes": 2222896,
+  "nodes": [
+   "bag_1"
+  ],
+  "materials": [
+   "bag"
+  ],
+  "vertices": 2810,
+  "triangles": 5536,
+  "size_m": [
+   0.544,
+   0.575,
+   0.503
+  ],
+  "kit_position_m": [
+   7.012,
+   -9.591,
+   0.0
+  ],
+  "missing": []
+ },
+ "bag_2": {
+  "file": "bag_2.glb",
+  "bytes": 2223708,
+  "nodes": [
+   "bag_2"
+  ],
+  "materials": [
+   "bag"
+  ],
+  "vertices": 2810,
+  "triangles": 5536,
+  "size_m": [
+   0.492,
+   0.504,
+   0.398
+  ],
+  "kit_position_m": [
+   6.408,
+   -9.59,
+   0.0
+  ],
+  "missing": []
+ },
+ "bucket": {
+  "file": "bucket.glb",
+  "bytes": 2438736,
+  "nodes": [
+   "bucket"
+  ],
+  "materials": [
+   "bucket"
+  ],
+  "vertices": 632,
+  "triangles": 1120,
+  "size_m": [
+   0.404,
+   0.404,
+   0.632
+  ],
+  "kit_position_m": [
+   7.781,
+   -9.471,
+   0.0
+  ],
+  "missing": []
+ },
+ "table": {
+  "file": "table.glb",
+  "bytes": 13090960,
+  "nodes": [
+   "table"
+  ],
+  "materials": [
+   "table"
+  ],
+  "vertices": 160,
+  "triangles": 244,
+  "size_m": [
+   1.936,
+   1.014,
+   0.888
+  ],
+  "kit_position_m": [
+   2.564,
+   -9.407,
+   0.0
+  ],
+  "missing": []
+ },
+ "trunk": {
+  "file": "trunk.glb",
+  "bytes": 11385728,
+  "nodes": [
+   "trunk"
+  ],
+  "materials": [
+   "trunk"
+  ],
+  "vertices": 1260,
+  "triangles": 2464,
+  "size_m": [
+   0.827,
+   1.378,
+   0.577
+  ],
+  "kit_position_m": [
+   -3.476,
+   -5.769,
+   0.0
+  ],
+  "missing": []
+ },
+ "trunk_2": {
+  "file": "trunk_2.glb",
+  "bytes": 800952,
+  "nodes": [
+   "trunk_2"
+  ],
+  "materials": [
+   "trunk_2"
+  ],
+  "vertices": 162,
+  "triangles": 320,
+  "size_m": [
+   0.689,
+   0.723,
+   0.501
+  ],
+  "kit_position_m": [
+   5.73,
+   -9.531,
+   0.0
+  ],
+  "missing": []
+ },
+ "axe": {
+  "file": "axe.glb",
+  "bytes": 968372,
+  "nodes": [
+   "axe"
+  ],
+  "materials": [
+   "axe"
+  ],
+  "vertices": 428,
+  "triangles": 848,
+  "size_m": [
+   0.494,
+   0.051,
+   0.605
+  ],
+  "kit_position_m": [
+   5.833,
+   -9.553,
+   0.465
+  ],
+  "missing": []
+ },
+ "ladder_1": {
+  "file": "ladder_1.glb",
+  "bytes": 1551492,
+  "nodes": [
+   "ladder_1"
+  ],
+  "materials": [
+   "ladder"
+  ],
+  "vertices": 652,
+  "triangles": 1280,
+  "size_m": [
+   0.877,
+   0.212,
+   2.639
+  ],
+  "kit_position_m": [
+   0.872,
+   -9.788,
+   0.0
+  ],
+  "missing": []
+ },
+ "ladder_2": {
+  "file": "ladder_2.glb",
+  "bytes": 1518104,
+  "nodes": [
+   "ladder_2"
+  ],
+  "materials": [
+   "ladder"
+  ],
+  "vertices": 88,
+  "triangles": 132,
+  "size_m": [
+   0.881,
+   0.093,
+   4.359
+  ],
+  "kit_position_m": [
+   4.459,
+   -9.546,
+   0.0
+  ],
+  "missing": []
+ },
+ "fence_1": {
+  "file": "fence_1.glb",
+  "bytes": 5621148,
+  "nodes": [
+   "fence_1"
+  ],
+  "materials": [
+   "fence"
+  ],
+  "vertices": 192,
+  "triangles": 360,
+  "size_m": [
+   3.935,
+   0.413,
+   1.872
+  ],
+  "kit_position_m": [
+   15.867,
+   -9.28,
+   0.0
+  ],
+  "missing": []
+ },
+ "fence_2": {
+  "file": "fence_2.glb",
+  "bytes": 5619480,
+  "nodes": [
+   "fence_2"
+  ],
+  "materials": [
+   "fence"
+  ],
+  "vertices": 184,
+  "triangles": 338,
+  "size_m": [
+   3.908,
+   0.409,
+   1.89
+  ],
+  "kit_position_m": [
+   10.846,
+   -9.278,
+   0.0
+  ],
+  "missing": []
+ }
+}
