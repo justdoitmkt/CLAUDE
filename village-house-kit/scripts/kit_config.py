@@ -11,7 +11,9 @@ GLB_OUT = os.environ.get("KIT_GLB_OUT",
 # FBX material name -> clean name + texture files (relative to TEX_SRC/<folder>).
 # normal_dx: map authored in DirectX convention (green down); glTF needs OpenGL, so green is inverted.
 #            Determined per map (see README): curl/integrability test, groove profiles and lit renders.
-# opacity:   cut-out mask for thatch roofs (used only if the base color has no alpha of its own).
+# opacity:   cut-out mask for thatch roofs, used only if the base color has no alpha of its own.
+#            The roof base colors carry their own alpha (the one the FBX/MTL uses); inside the
+#            UVs it matches the opacity maps on >99.6% of the area.
 MATERIALS = {
     "house 1":       dict(name="house_1", folder="house 1", base="house 1_BaseColor.jpg", normal="house 1_Normal.jpg", rough="house 1_Roughness.jpg"),
     "roof 1":        dict(name="roof_1", folder="house 1", base="roof 1_BaseColor.png", normal="roof 1_Normal.png", rough="roof 1_Roughness.png", opacity="roof 1_opacity.jpg"),
@@ -21,7 +23,7 @@ MATERIALS = {
     "house 4":       dict(name="house_4", folder="house 4", base="house 4_BaseColor.jpg", normal="house 4_Normal.jpg", rough="house 4_Roughness.jpg"),
     "roof 4":        dict(name="roof_4", folder="house 4", base="roof 4_BaseColor.jpg", normal="roof 4_Normal.jpg", rough="roof 4_Roughness.jpg"),
     "house 5":       dict(name="house_5", folder="house 5", base="house 5_BaseColor.jpg", normal="house 5_Normal.jpg", rough="house 5_Roughness.jpg", metal="house 5_Metallic.jpg"),
-    "roof 5":        dict(name="roof_5", folder="house 5", base="roof 5_BaseColor.png", normal="roof 5_Normal.jpg", rough="roof 5_Roughness.jpg", opacity="roof 5_opacity.jpg"),
+    "roof 5":        dict(name="roof_5", folder="house 5", base="roof 5_BaseColor.png", normal="roof 5_Normal.jpg", rough="roof 5_Roughness.jpg", opacity="roof 5_opacity.jpg", normal_dx=True),
     "gate mat":      dict(name="gate", folder="gate", base="gate_BaseColor.jpg", normal="gate_Normal.jpg", rough="gate_Roughness.jpg", metal="gate_Metallic.jpg"),
     "Material.002":  dict(name="fortification", folder="fortification", base="fortification_BaseColor.jpg", normal="fortification_Normal.jpg", rough="fortification_Roughness.jpg"),
     "Material.001":  dict(name="stilt", folder="stilt", base="stilt_BaseColor.jpg", normal="stilt_Normal.jpg", rough="stilt_Roughness.jpg"),
@@ -70,3 +72,9 @@ GROUPS = {
     "fence_1":       [("fence 1", "fence_1")],
     "fence_2":       [("fence 2", "fence_2")],
 }
+
+# Doors whose authored origin is not on the door (so they could not swing): move the pivot to
+# the hinge edge, at mid height and mid thickness. Value = local axis/side of the hinge
+# (house 5: ring handle on the left seen from the front -> hinges on +X).
+HINGE_FIX = {"door 5 a": "+x"}
+

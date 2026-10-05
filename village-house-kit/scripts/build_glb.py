@@ -17,7 +17,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from kit_config import GLB_OUT, GROUPS, MATERIALS, SRC_FBX, TEX_OUT
+from kit_config import GLB_OUT, GROUPS, HINGE_FIX, MATERIALS, SRC_FBX, TEX_OUT
 
 GROUND_TOLERANCE = 0.1   # metres
 
@@ -110,6 +110,19 @@ def main():
     for o in meshes:
         a, b = before[o.name], world_bbox([o])
         assert (a[0] - b[0]).length < 1e-4 and (a[1] - b[1]).length < 1e-4, f"transform_apply moved {o.name}"
+
+    # move misplaced door pivots onto the hinge edge (geometry stays where it is)
+    for name, side in HINGE_FIX.items():
+        o = bpy.data.objects[name]
+        n = len(o.data.vertices)
+        co = np.empty(n * 3)
+        o.data.vertices.foreach_get("co", co)
+        lo, hi = co.reshape(n, 3).min(0), co.reshape(n, 3).max(0)
+        axis = "xyz".index(side[1])
+        hinge = (lo + hi) / 2
+        hinge[axis] = hi[axis] if side[0] == "+" else lo[axis]
+        o.data.transform(Matrix.Translation(Vector(-hinge)))
+        o.location += Vector(hinge)
 
     # MikkTSpace tangents (needed to match the baked normal maps) cannot be computed on n-gons:
     # triangulate only faces with 5+ corners, applied at export time, keeping custom normals.

@@ -1,19 +1,28 @@
 {
  "house_1": {
-  "skipped": true,
-  "missing": [
-   "roof 1_BaseColor.png",
-   "roof 1_Normal.png"
+  "file": "house_1.glb",
+  "bytes": 70261548,
+  "nodes": [
+   "house_1",
+   "house_1_door"
   ],
   "materials": [
    "house_1",
    "roof_1"
   ],
+  "vertices": 4112,
+  "triangles": 7378,
+  "size_m": [
+   10.722,
+   8.169,
+   7.218
+  ],
   "kit_position_m": [
    0.843,
    -0.001,
    0.0
-  ]
+  ],
+  "missing": []
  },
  "house_2": {
   "file": "house_2.glb",
@@ -40,20 +49,29 @@
   "missing": []
  },
  "house_3": {
-  "skipped": true,
-  "missing": [
-   "roof 3_BaseColor.png",
-   "roof 3_Normal.png"
+  "file": "house_3.glb",
+  "bytes": 75664504,
+  "nodes": [
+   "house_3",
+   "house_3_door"
   ],
   "materials": [
    "house_3",
    "roof_3"
   ],
+  "vertices": 2824,
+  "triangles": 3923,
+  "size_m": [
+   8.513,
+   7.676,
+   7.383
+  ],
   "kit_position_m": [
    -11.02,
    -0.545,
    0.0
-  ]
+  ],
+  "missing": []
  },
  "house_4": {
   "file": "house_4.glb",
@@ -81,20 +99,30 @@
   "missing": []
  },
  "house_5": {
-  "skipped": true,
-  "missing": [
-   "roof 5_BaseColor.png",
-   "roof 5_Normal.jpg"
+  "file": "house_5.glb",
+  "bytes": 74767308,
+  "nodes": [
+   "house_5",
+   "house_5_door",
+   "house_5_loft_door"
   ],
   "materials": [
    "house_5",
    "roof_5"
   ],
+  "vertices": 4874,
+  "triangles": 8646,
+  "size_m": [
+   10.26,
+   8.62,
+   7.35
+  ],
   "kit_position_m": [
    26.925,
    -0.168,
    0.0
-  ]
+  ],
+  "missing": []
  },
  "gate": {
   "file": "gate.glb",
@@ -214,18 +242,27 @@
   "missing": []
  },
  "structure": {
-  "skipped": true,
-  "missing": [
-   "structure_Normal.jpg"
+  "file": "structure.glb",
+  "bytes": 24233828,
+  "nodes": [
+   "structure"
   ],
   "materials": [
    "structure"
+  ],
+  "vertices": 1240,
+  "triangles": 2380,
+  "size_m": [
+   7.831,
+   8.188,
+   6.091
   ],
   "kit_position_m": [
    37.781,
    -0.922,
    0.0
-  ]
+  ],
+  "missing": []
  },
  "well": {
   "file": "well.glb",
