@@ -1,0 +1,2849 @@
+{
+ "Air_Conditioning_Unit": {
+  "triangles": 2535,
+  "source_triangles": 2535,
+  "degenerate_removed": 0,
+  "vertices": 1570,
+  "uv_sets": 1,
+  "materials": [
+   "Air_Conditioning_Unit"
+  ],
+  "winding": 0.9996055226824457,
+  "folder": "Props",
+  "file": "Props/Air_Conditioning_Unit.glb",
+  "bytes": 3700616
+ },
+ "Antenna": {
+  "triangles": 740,
+  "source_triangles": 740,
+  "degenerate_removed": 0,
+  "vertices": 396,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Generic"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Antenna.glb",
+  "bytes": 15709188
+ },
+ "Axe_1": {
+  "triangles": 812,
+  "source_triangles": 812,
+  "degenerate_removed": 0,
+  "vertices": 417,
+  "uv_sets": 1,
+  "materials": [
+   "Axes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Axe_1.glb",
+  "bytes": 10532920
+ },
+ "Axe_2": {
+  "triangles": 812,
+  "source_triangles": 812,
+  "degenerate_removed": 0,
+  "vertices": 417,
+  "uv_sets": 1,
+  "materials": [
+   "Axes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Axe_2.glb",
+  "bytes": 10532780
+ },
+ "Barbecue": {
+  "triangles": 5134,
+  "source_triangles": 5134,
+  "degenerate_removed": 0,
+  "vertices": 2707,
+  "uv_sets": 1,
+  "materials": [
+   "Barbecue"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Barbecue.glb",
+  "bytes": 15676424
+ },
+ "Bottom_Extender_4m": {
+  "triangles": 132,
+  "source_triangles": 132,
+  "degenerate_removed": 0,
+  "vertices": 72,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Bottom_Extender_4m.glb",
+  "bytes": 16895084
+ },
+ "Bowl": {
+  "triangles": 316,
+  "source_triangles": 316,
+  "degenerate_removed": 0,
+  "vertices": 160,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Bowl.glb",
+  "bytes": 3464380
+ },
+ "Bush_1": {
+  "triangles": 94,
+  "source_triangles": 94,
+  "degenerate_removed": 0,
+  "vertices": 88,
+  "uv_sets": 2,
+  "materials": [
+   "Bush_1"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Bush_1.glb",
+  "bytes": 10882956
+ },
+ "Bush_Tree": {
+  "triangles": 2112,
+  "source_triangles": 2112,
+  "degenerate_removed": 0,
+  "vertices": 1485,
+  "uv_sets": 1,
+  "materials": [
+   "Birch_Branches",
+   "Birch_Bark"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Bush_Tree.glb",
+  "bytes": 58776956
+ },
+ "Caravan": {
+  "triangles": 14169,
+  "source_triangles": 14169,
+  "degenerate_removed": 0,
+  "vertices": 7812,
+  "uv_sets": 3,
+  "materials": [
+   "Caravan_Addons",
+   "Caravan",
+   "Caravan_Windows",
+   "Caravan_2"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Caravan.glb",
+  "bytes": 66179684
+ },
+ "Cardboard_Box_1": {
+  "triangles": 333,
+  "source_triangles": 333,
+  "degenerate_removed": 0,
+  "vertices": 188,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_1.glb",
+  "bytes": 13370804
+ },
+ "Cardboard_Box_2": {
+  "triangles": 349,
+  "source_triangles": 349,
+  "degenerate_removed": 0,
+  "vertices": 197,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_2.glb",
+  "bytes": 13370804
+ },
+ "Cardboard_Box_3": {
+  "triangles": 328,
+  "source_triangles": 328,
+  "degenerate_removed": 0,
+  "vertices": 176,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_3.glb",
+  "bytes": 13367940
+ },
+ "Cardboard_Box_4": {
+  "triangles": 247,
+  "source_triangles": 247,
+  "degenerate_removed": 0,
+  "vertices": 127,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_4.glb",
+  "bytes": 13363996
+ },
+ "Cardboard_Box_5": {
+  "triangles": 301,
+  "source_triangles": 301,
+  "degenerate_removed": 0,
+  "vertices": 167,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_5.glb",
+  "bytes": 13367636
+ },
+ "Cardboard_Box_Open_1": {
+  "triangles": 570,
+  "source_triangles": 570,
+  "degenerate_removed": 0,
+  "vertices": 283,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes_Open"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_Open_1.glb",
+  "bytes": 15087044
+ },
+ "Cardboard_Box_Open_2": {
+  "triangles": 729,
+  "source_triangles": 729,
+  "degenerate_removed": 0,
+  "vertices": 363,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes_Open"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_Open_2.glb",
+  "bytes": 15092656
+ },
+ "Cardboard_Box_Open_3": {
+  "triangles": 658,
+  "source_triangles": 658,
+  "degenerate_removed": 0,
+  "vertices": 327,
+  "uv_sets": 1,
+  "materials": [
+   "Cardboard_Boxes_Open"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cardboard_Box_Open_3.glb",
+  "bytes": 15090784
+ },
+ "Cat_Tail": {
+  "triangles": 4230,
+  "source_triangles": 4230,
+  "degenerate_removed": 0,
+  "vertices": 2811,
+  "uv_sets": 1,
+  "materials": [
+   "Cat_Tail"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Cat_Tail.glb",
+  "bytes": 12278868
+ },
+ "Cat_Tail_2": {
+  "triangles": 624,
+  "source_triangles": 624,
+  "degenerate_removed": 0,
+  "vertices": 780,
+  "uv_sets": 1,
+  "materials": [
+   "Cat_Tail"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Cat_Tail_2.glb",
+  "bytes": 12130556
+ },
+ "Cutting_Board": {
+  "triangles": 60,
+  "source_triangles": 60,
+  "degenerate_removed": 0,
+  "vertices": 32,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Cutting_Board.glb",
+  "bytes": 3456516
+ },
+ "Diorama_Ground": {
+  "triangles": 20520,
+  "source_triangles": 20520,
+  "degenerate_removed": 0,
+  "vertices": 10445,
+  "uv_sets": 2,
+  "materials": [
+   "Diorama_Ground",
+   "Sand"
+  ],
+  "winding": 1.0,
+  "folder": "Unique",
+  "file": "Unique/Diorama_Ground.glb",
+  "bytes": 39563384
+ },
+ "Diorama_Water": {
+  "triangles": 8,
+  "source_triangles": 8,
+  "degenerate_removed": 0,
+  "vertices": 8,
+  "uv_sets": 1,
+  "materials": [
+   "Water_Lake",
+   "Water_Lake"
+  ],
+  "winding": 1.0,
+  "folder": "Unique",
+  "file": "Unique/Diorama_Water.glb",
+  "bytes": 198776
+ },
+ "Door_01": {
+  "triangles": 1716,
+  "source_triangles": 1727,
+  "degenerate_removed": 11,
+  "vertices": 973,
+  "uv_sets": 1,
+  "materials": [
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Door_01.glb",
+  "bytes": 18139836
+ },
+ "Fence_Old_1_2m": {
+  "triangles": 896,
+  "source_triangles": 896,
+  "degenerate_removed": 0,
+  "vertices": 476,
+  "uv_sets": 1,
+  "materials": [
+   "Fence_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Fence_Old_1_2m.glb",
+  "bytes": 90062236
+ },
+ "Fence_Old_2_2m": {
+  "triangles": 896,
+  "source_triangles": 896,
+  "degenerate_removed": 0,
+  "vertices": 476,
+  "uv_sets": 1,
+  "materials": [
+   "Fence_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Fence_Old_2_2m.glb",
+  "bytes": 90062232
+ },
+ "Fence_Old_3_2m": {
+  "triangles": 724,
+  "source_triangles": 724,
+  "degenerate_removed": 0,
+  "vertices": 384,
+  "uv_sets": 1,
+  "materials": [
+   "Fence_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Fence_Old_3_2m.glb",
+  "bytes": 90051216
+ },
+ "Fence_Old_Pole": {
+  "triangles": 220,
+  "source_triangles": 220,
+  "degenerate_removed": 0,
+  "vertices": 112,
+  "uv_sets": 1,
+  "materials": [
+   "Fence_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Fence_Old_Pole.glb",
+  "bytes": 90018812
+ },
+ "Flag": {
+  "triangles": 192,
+  "source_triangles": 192,
+  "degenerate_removed": 0,
+  "vertices": 117,
+  "uv_sets": 1,
+  "materials": [
+   "Flag"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Flag.glb",
+  "bytes": 2181100
+ },
+ "Flower_Patch_1": {
+  "triangles": 312,
+  "source_triangles": 312,
+  "degenerate_removed": 0,
+  "vertices": 426,
+  "uv_sets": 1,
+  "materials": [
+   "Grass_Patch_1"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Flower_Patch_1.glb",
+  "bytes": 12867580
+ },
+ "Fork": {
+  "triangles": 84,
+  "source_triangles": 84,
+  "degenerate_removed": 0,
+  "vertices": 44,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Fork.glb",
+  "bytes": 3458952
+ },
+ "Grass_Patch_1": {
+  "triangles": 694,
+  "source_triangles": 694,
+  "degenerate_removed": 0,
+  "vertices": 606,
+  "uv_sets": 2,
+  "materials": [
+   "Grass_Patch_1"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Grass_Patch_1.glb",
+  "bytes": 12883504
+ },
+ "Grass_Patch_2": {
+  "triangles": 175,
+  "source_triangles": 175,
+  "degenerate_removed": 0,
+  "vertices": 192,
+  "uv_sets": 1,
+  "materials": [
+   "Grass_Patch_2"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Grass_Patch_2.glb",
+  "bytes": 1216872
+ },
+ "Grass_Patch_Long": {
+  "triangles": 602,
+  "source_triangles": 602,
+  "degenerate_removed": 0,
+  "vertices": 526,
+  "uv_sets": 2,
+  "materials": [
+   "Grass_Patch_1"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Grass_Patch_Long.glb",
+  "bytes": 12878480
+ },
+ "Ivy_1": {
+  "triangles": 839,
+  "source_triangles": 839,
+  "degenerate_removed": 0,
+  "vertices": 825,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_1.glb",
+  "bytes": 8526864
+ },
+ "Ivy_2": {
+  "triangles": 1728,
+  "source_triangles": 1728,
+  "degenerate_removed": 0,
+  "vertices": 1703,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_2.glb",
+  "bytes": 8574348
+ },
+ "Ivy_3": {
+  "triangles": 1340,
+  "source_triangles": 1340,
+  "degenerate_removed": 0,
+  "vertices": 1320,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_3.glb",
+  "bytes": 8553636
+ },
+ "Ivy_4": {
+  "triangles": 974,
+  "source_triangles": 974,
+  "degenerate_removed": 0,
+  "vertices": 957,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 0.9804928131416838,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_4.glb",
+  "bytes": 8534632
+ },
+ "Ivy_5": {
+  "triangles": 1364,
+  "source_triangles": 1364,
+  "degenerate_removed": 0,
+  "vertices": 1345,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_5.glb",
+  "bytes": 8554980
+ },
+ "Ivy_6": {
+  "triangles": 1033,
+  "source_triangles": 1033,
+  "degenerate_removed": 0,
+  "vertices": 1023,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_6.glb",
+  "bytes": 8537540
+ },
+ "Ivy_Roots_1": {
+  "triangles": 96,
+  "source_triangles": 96,
+  "degenerate_removed": 0,
+  "vertices": 98,
+  "uv_sets": 1,
+  "materials": [
+   "Ivy"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Ivy_Roots_1.glb",
+  "bytes": 8487508
+ },
+ "Knive": {
+  "triangles": 64,
+  "source_triangles": 64,
+  "degenerate_removed": 0,
+  "vertices": 34,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Knive.glb",
+  "bytes": 3456716
+ },
+ "Log_1": {
+  "triangles": 970,
+  "source_triangles": 970,
+  "degenerate_removed": 0,
+  "vertices": 487,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_1.glb",
+  "bytes": 21444940
+ },
+ "Log_2": {
+  "triangles": 752,
+  "source_triangles": 752,
+  "degenerate_removed": 0,
+  "vertices": 378,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_2.glb",
+  "bytes": 21439360
+ },
+ "Log_3": {
+  "triangles": 1846,
+  "source_triangles": 1846,
+  "degenerate_removed": 0,
+  "vertices": 925,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_3.glb",
+  "bytes": 21472912
+ },
+ "Log_4": {
+  "triangles": 262,
+  "source_triangles": 262,
+  "degenerate_removed": 0,
+  "vertices": 133,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_4.glb",
+  "bytes": 21421776
+ },
+ "Log_5": {
+  "triangles": 326,
+  "source_triangles": 326,
+  "degenerate_removed": 0,
+  "vertices": 165,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_5.glb",
+  "bytes": 21424416
+ },
+ "Log_6": {
+  "triangles": 510,
+  "source_triangles": 510,
+  "degenerate_removed": 0,
+  "vertices": 257,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_6.glb",
+  "bytes": 21429844
+ },
+ "Log_Pile_1": {
+  "triangles": 62532,
+  "source_triangles": 62532,
+  "degenerate_removed": 0,
+  "vertices": 31524,
+  "uv_sets": 2,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_Pile_1.glb",
+  "bytes": 24055456
+ },
+ "Log_Pile_2": {
+  "triangles": 31658,
+  "source_triangles": 31658,
+  "degenerate_removed": 0,
+  "vertices": 15959,
+  "uv_sets": 2,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_Pile_2.glb",
+  "bytes": 22744392
+ },
+ "Log_Pile_3": {
+  "triangles": 19394,
+  "source_triangles": 19394,
+  "degenerate_removed": 0,
+  "vertices": 9775,
+  "uv_sets": 2,
+  "materials": [
+   "Wooden_Logs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Log_Pile_3.glb",
+  "bytes": 22223696
+ },
+ "Mailbox_Lid": {
+  "triangles": 254,
+  "source_triangles": 254,
+  "degenerate_removed": 0,
+  "vertices": 132,
+  "uv_sets": 1,
+  "materials": [
+   "Mailbox"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Mailbox_Lid.glb",
+  "bytes": 4061104
+ },
+ "Mailbox_Pole": {
+  "triangles": 510,
+  "source_triangles": 510,
+  "degenerate_removed": 0,
+  "vertices": 289,
+  "uv_sets": 1,
+  "materials": [
+   "Mailbox"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Mailbox_Pole.glb",
+  "bytes": 4077804
+ },
+ "Metal_Barrel": {
+  "triangles": 4228,
+  "source_triangles": 4228,
+  "degenerate_removed": 0,
+  "vertices": 2116,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Barrel_1"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Barrel.glb",
+  "bytes": 18231700
+ },
+ "Metal_Bucket": {
+  "triangles": 2456,
+  "source_triangles": 2456,
+  "degenerate_removed": 0,
+  "vertices": 1240,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Bucket"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Bucket.glb",
+  "bytes": 8921516
+ },
+ "Metal_Chimney_1": {
+  "triangles": 1014,
+  "source_triangles": 1014,
+  "degenerate_removed": 0,
+  "vertices": 539,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Chimney"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Chimney_1.glb",
+  "bytes": 12582148
+ },
+ "Metal_Chimney_2": {
+  "triangles": 1634,
+  "source_triangles": 1634,
+  "degenerate_removed": 0,
+  "vertices": 838,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Chimney"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Chimney_2.glb",
+  "bytes": 12609012
+ },
+ "Metal_Overhang": {
+  "triangles": 4684,
+  "source_triangles": 4684,
+  "degenerate_removed": 0,
+  "vertices": 2532,
+  "uv_sets": 1,
+  "materials": [
+   "Metal_Overhang"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Overhang.glb",
+  "bytes": 24826516
+ },
+ "Metal_Sheet_1": {
+  "triangles": 476,
+  "source_triangles": 476,
+  "degenerate_removed": 0,
+  "vertices": 240,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Sheet_1.glb",
+  "bytes": 21177380
+ },
+ "Metal_Sheet_2": {
+  "triangles": 476,
+  "source_triangles": 476,
+  "degenerate_removed": 0,
+  "vertices": 240,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Metal_Sheet_2.glb",
+  "bytes": 21177208
+ },
+ "Mug": {
+  "triangles": 124,
+  "source_triangles": 124,
+  "degenerate_removed": 0,
+  "vertices": 64,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Mug.glb",
+  "bytes": 3459236
+ },
+ "Office_Chair": {
+  "triangles": 6068,
+  "source_triangles": 6068,
+  "degenerate_removed": 0,
+  "vertices": 3222,
+  "uv_sets": 2,
+  "materials": [
+   "Office_Chair"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Office_Chair.glb",
+  "bytes": 19940976
+ },
+ "Old_Planks_Plank_1": {
+  "triangles": 68,
+  "source_triangles": 68,
+  "degenerate_removed": 0,
+  "vertices": 36,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plank_1.glb",
+  "bytes": 19987460
+ },
+ "Old_Planks_Plank_2": {
+  "triangles": 56,
+  "source_triangles": 56,
+  "degenerate_removed": 0,
+  "vertices": 30,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plank_2.glb",
+  "bytes": 19987004
+ },
+ "Old_Planks_Plank_3": {
+  "triangles": 70,
+  "source_triangles": 70,
+  "degenerate_removed": 0,
+  "vertices": 37,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plank_3.glb",
+  "bytes": 19987712
+ },
+ "Old_Planks_Plank_4": {
+  "triangles": 60,
+  "source_triangles": 60,
+  "degenerate_removed": 0,
+  "vertices": 32,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plank_4.glb",
+  "bytes": 19986836
+ },
+ "Old_Planks_Plank_5": {
+  "triangles": 44,
+  "source_triangles": 44,
+  "degenerate_removed": 0,
+  "vertices": 24,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plank_5.glb",
+  "bytes": 19985972
+ },
+ "Old_Planks_Plywood_1": {
+  "triangles": 60,
+  "source_triangles": 60,
+  "degenerate_removed": 0,
+  "vertices": 32,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plywood_1.glb",
+  "bytes": 19986836
+ },
+ "Old_Planks_Plywood_2": {
+  "triangles": 60,
+  "source_triangles": 60,
+  "degenerate_removed": 0,
+  "vertices": 32,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Planks"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Planks_Plywood_2.glb",
+  "bytes": 19986840
+ },
+ "Old_Sofa": {
+  "triangles": 6171,
+  "source_triangles": 6171,
+  "degenerate_removed": 0,
+  "vertices": 3158,
+  "uv_sets": 1,
+  "materials": [
+   "Old_Sofa"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Old_Sofa.glb",
+  "bytes": 24204596
+ },
+ "Outhouse_Door": {
+  "triangles": 928,
+  "source_triangles": 928,
+  "degenerate_removed": 0,
+  "vertices": 502,
+  "uv_sets": 1,
+  "materials": [
+   "Outhouse_Wood",
+   "Outhouse"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Outhouse_Door.glb",
+  "bytes": 80314204
+ },
+ "Outhouse_House": {
+  "triangles": 4802,
+  "source_triangles": 4802,
+  "degenerate_removed": 0,
+  "vertices": 2788,
+  "uv_sets": 2,
+  "materials": [
+   "Outhouse_Wood",
+   "Outhouse",
+   "Metal_Roof_blend"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Outhouse_House.glb",
+  "bytes": 101713604
+ },
+ "Outhouse_Lid": {
+  "triangles": 348,
+  "source_triangles": 348,
+  "degenerate_removed": 0,
+  "vertices": 180,
+  "uv_sets": 1,
+  "materials": [
+   "Outhouse"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Outhouse_Lid.glb",
+  "bytes": 1799216
+ },
+ "Pallet": {
+  "triangles": 654,
+  "source_triangles": 654,
+  "degenerate_removed": 0,
+  "vertices": 389,
+  "uv_sets": 1,
+  "materials": [
+   "Pallet"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pallet.glb",
+  "bytes": 18642912
+ },
+ "Pallet_Broken": {
+  "triangles": 710,
+  "source_triangles": 710,
+  "degenerate_removed": 0,
+  "vertices": 414,
+  "uv_sets": 1,
+  "materials": [
+   "Pallet"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pallet_Broken.glb",
+  "bytes": 18647488
+ },
+ "Picnic_Table": {
+  "triangles": 1130,
+  "source_triangles": 1130,
+  "degenerate_removed": 0,
+  "vertices": 618,
+  "uv_sets": 1,
+  "materials": [
+   "Picnic_Table"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Picnic_Table.glb",
+  "bytes": 17759084
+ },
+ "Pier": {
+  "triangles": 2360,
+  "source_triangles": 2360,
+  "degenerate_removed": 0,
+  "vertices": 1232,
+  "uv_sets": 2,
+  "materials": [
+   "Pier"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pier.glb",
+  "bytes": 52218144
+ },
+ "Pine_Tree": {
+  "triangles": 13864,
+  "source_triangles": 13864,
+  "degenerate_removed": 0,
+  "vertices": 10471,
+  "uv_sets": 2,
+  "materials": [
+   "Bark_Pine",
+   "Pine_Branches"
+  ],
+  "winding": 0.9997114829774957,
+  "folder": "Foliage",
+  "file": "Foliage/Pine_Tree.glb",
+  "bytes": 25351656
+ },
+ "Plastic_Chair": {
+  "triangles": 3680,
+  "source_triangles": 3680,
+  "degenerate_removed": 0,
+  "vertices": 1818,
+  "uv_sets": 1,
+  "materials": [
+   "Plastic_Chair"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Plastic_Chair.glb",
+  "bytes": 12593400
+ },
+ "Plastic_Trash_Bin_Bin": {
+  "triangles": 4377,
+  "source_triangles": 4377,
+  "degenerate_removed": 0,
+  "vertices": 2371,
+  "uv_sets": 1,
+  "materials": [
+   "Plastic_Trash_Bin"
+  ],
+  "winding": 0.995430660269591,
+  "folder": "Props",
+  "file": "Props/Plastic_Trash_Bin_Bin.glb",
+  "bytes": 12707064
+ },
+ "Plastic_Trash_Bin_Lid": {
+  "triangles": 1446,
+  "source_triangles": 1446,
+  "degenerate_removed": 0,
+  "vertices": 790,
+  "uv_sets": 1,
+  "materials": [
+   "Plastic_Trash_Bin"
+  ],
+  "winding": 0.9972337482710927,
+  "folder": "Props",
+  "file": "Props/Plastic_Trash_Bin_Lid.glb",
+  "bytes": 12517156
+ },
+ "Plate_1": {
+  "triangles": 156,
+  "source_triangles": 156,
+  "degenerate_removed": 0,
+  "vertices": 80,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Plate_1.glb",
+  "bytes": 3461692
+ },
+ "Plate_2": {
+  "triangles": 156,
+  "source_triangles": 156,
+  "degenerate_removed": 0,
+  "vertices": 80,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Plate_2.glb",
+  "bytes": 3461692
+ },
+ "Pole_Cables": {
+  "triangles": 7200,
+  "source_triangles": 7200,
+  "degenerate_removed": 0,
+  "vertices": 3648,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Generic"
+  ],
+  "winding": 1.0,
+  "folder": "Unique",
+  "file": "Unique/Pole_Cables.glb",
+  "bytes": 15925280
+ },
+ "Porch_4x4m": {
+  "triangles": 1120,
+  "source_triangles": 1120,
+  "degenerate_removed": 0,
+  "vertices": 584,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Floor"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Porch_4x4m.glb",
+  "bytes": 21588920
+ },
+ "Porch_Planks_1": {
+  "triangles": 816,
+  "source_triangles": 816,
+  "degenerate_removed": 0,
+  "vertices": 432,
+  "uv_sets": 1,
+  "materials": [
+   "Wood_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Porch_Planks_1.glb",
+  "bytes": 25407316
+ },
+ "Porch_Planks_2": {
+  "triangles": 612,
+  "source_triangles": 612,
+  "degenerate_removed": 0,
+  "vertices": 324,
+  "uv_sets": 1,
+  "materials": [
+   "Wood_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Porch_Planks_2.glb",
+  "bytes": 25395624
+ },
+ "Porch_Planks_3": {
+  "triangles": 476,
+  "source_triangles": 476,
+  "degenerate_removed": 0,
+  "vertices": 252,
+  "uv_sets": 1,
+  "materials": [
+   "Wood_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Porch_Planks_3.glb",
+  "bytes": 25387896
+ },
+ "Porch_Roof_4x4m": {
+  "triangles": 2760,
+  "source_triangles": 2760,
+  "degenerate_removed": 0,
+  "vertices": 1424,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Old",
+   "Metal_Roof_blend"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Porch_Roof_4x4m.glb",
+  "bytes": 46703040
+ },
+ "Porch_Roof_8x4m": {
+  "triangles": 4580,
+  "source_triangles": 4580,
+  "degenerate_removed": 0,
+  "vertices": 2346,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Old",
+   "Metal_Roof_blend"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Porch_Roof_8x4m.glb",
+  "bytes": 46799356
+ },
+ "Power_Pole_1": {
+  "triangles": 1392,
+  "source_triangles": 1392,
+  "degenerate_removed": 0,
+  "vertices": 761,
+  "uv_sets": 1,
+  "materials": [
+   "Power_Pole",
+   "Power_Pole_Addons"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Power_Pole_1.glb",
+  "bytes": 110441608
+ },
+ "Power_Pole_Addons": {
+  "triangles": 2652,
+  "source_triangles": 2652,
+  "degenerate_removed": 0,
+  "vertices": 1464,
+  "uv_sets": 1,
+  "materials": [
+   "Power_Pole_Addons"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Power_Pole_Addons.glb",
+  "bytes": 13555484
+ },
+ "Power_Pole_Light": {
+  "triangles": 650,
+  "source_triangles": 650,
+  "degenerate_removed": 0,
+  "vertices": 335,
+  "uv_sets": 1,
+  "materials": [
+   "Power_Pole_Light"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Power_Pole_Light.glb",
+  "bytes": 2222284
+ },
+ "Pumpkin_1": {
+  "triangles": 784,
+  "source_triangles": 784,
+  "degenerate_removed": 0,
+  "vertices": 394,
+  "uv_sets": 1,
+  "materials": [
+   "Pumpkins"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pumpkin_1.glb",
+  "bytes": 3155968
+ },
+ "Pumpkin_2": {
+  "triangles": 772,
+  "source_triangles": 772,
+  "degenerate_removed": 0,
+  "vertices": 388,
+  "uv_sets": 1,
+  "materials": [
+   "Pumpkins"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pumpkin_2.glb",
+  "bytes": 3155560
+ },
+ "Pumpkin_Sign": {
+  "triangles": 916,
+  "source_triangles": 916,
+  "degenerate_removed": 0,
+  "vertices": 464,
+  "uv_sets": 1,
+  "materials": [
+   "Pumpkin_Sign"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Pumpkin_Sign.glb",
+  "bytes": 4759732
+ },
+ "Reference_man": {
+  "triangles": 26756,
+  "source_triangles": 26756,
+  "degenerate_removed": 0,
+  "vertices": 13380,
+  "uv_sets": 1,
+  "materials": [
+   "Showcase_Floor"
+  ],
+  "winding": 0.9999626252055613,
+  "folder": "Utility",
+  "file": "Utility/Reference_man.glb",
+  "bytes": 864864
+ },
+ "Refrigerator_Old": {
+  "triangles": 3678,
+  "source_triangles": 3678,
+  "degenerate_removed": 0,
+  "vertices": 1945,
+  "uv_sets": 1,
+  "materials": [
+   "Refrigerator_Old"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Refrigerator_Old.glb",
+  "bytes": 16841664
+ },
+ "River_Stone_1": {
+  "triangles": 96,
+  "source_triangles": 96,
+  "degenerate_removed": 0,
+  "vertices": 50,
+  "uv_sets": 1,
+  "materials": [
+   "River_Stones"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/River_Stone_1.glb",
+  "bytes": 18571408
+ },
+ "River_Stone_2": {
+  "triangles": 110,
+  "source_triangles": 110,
+  "degenerate_removed": 0,
+  "vertices": 57,
+  "uv_sets": 1,
+  "materials": [
+   "River_Stones"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/River_Stone_2.glb",
+  "bytes": 18572316
+ },
+ "River_Stone_3": {
+  "triangles": 90,
+  "source_triangles": 90,
+  "degenerate_removed": 0,
+  "vertices": 47,
+  "uv_sets": 1,
+  "materials": [
+   "River_Stones"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/River_Stone_3.glb",
+  "bytes": 18571276
+ },
+ "River_Stone_4": {
+  "triangles": 108,
+  "source_triangles": 108,
+  "degenerate_removed": 0,
+  "vertices": 56,
+  "uv_sets": 1,
+  "materials": [
+   "River_Stones"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/River_Stone_4.glb",
+  "bytes": 18572064
+ },
+ "River_Stone_Set_1": {
+  "triangles": 918,
+  "source_triangles": 918,
+  "degenerate_removed": 0,
+  "vertices": 477,
+  "uv_sets": 1,
+  "materials": [
+   "River_Stones"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/River_Stone_Set_1.glb",
+  "bytes": 18614328
+ },
+ "Road_Sign": {
+  "triangles": 98,
+  "source_triangles": 98,
+  "degenerate_removed": 0,
+  "vertices": 56,
+  "uv_sets": 1,
+  "materials": [
+   "Road_Sign"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Road_Sign.glb",
+  "bytes": 19182948
+ },
+ "Rock_1": {
+  "triangles": 3092,
+  "source_triangles": 3092,
+  "degenerate_removed": 0,
+  "vertices": 1548,
+  "uv_sets": 1,
+  "materials": [
+   "Rock_1"
+  ],
+  "winding": 0.9996765847347995,
+  "folder": "Props",
+  "file": "Props/Rock_1.glb",
+  "bytes": 19735368
+ },
+ "Rocking_Chair": {
+  "triangles": 4016,
+  "source_triangles": 4016,
+  "degenerate_removed": 0,
+  "vertices": 2256,
+  "uv_sets": 1,
+  "materials": [
+   "Rocking_Chair"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Rocking_Chair.glb",
+  "bytes": 13033236
+ },
+ "Roof_4m": {
+  "triangles": 2992,
+  "source_triangles": 2992,
+  "degenerate_removed": 0,
+  "vertices": 1807,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_4m.glb",
+  "bytes": 63189276
+ },
+ "Roof_Both_Ends_4m": {
+  "triangles": 4465,
+  "source_triangles": 4465,
+  "degenerate_removed": 0,
+  "vertices": 2531,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Planks_Painted_2"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_Both_Ends_4m.glb",
+  "bytes": 66783220
+ },
+ "Roof_End_2_Gap_Right_4m": {
+  "triangles": 1883,
+  "source_triangles": 1883,
+  "degenerate_removed": 0,
+  "vertices": 1380,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Planks_Painted_2"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_End_2_Gap_Right_4m.glb",
+  "bytes": 66558012
+ },
+ "Roof_End_Gap_Left_4m": {
+  "triangles": 2084,
+  "source_triangles": 2084,
+  "degenerate_removed": 0,
+  "vertices": 1388,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Planks_Painted_2"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_End_Gap_Left_4m.glb",
+  "bytes": 66572536
+ },
+ "Roof_End_Gap_Right_4m": {
+  "triangles": 2252,
+  "source_triangles": 2253,
+  "degenerate_removed": 1,
+  "vertices": 1473,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Planks_Painted_2"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_End_Gap_Right_4m.glb",
+  "bytes": 66583972
+ },
+ "Roof_End_Left_4m": {
+  "triangles": 3694,
+  "source_triangles": 3694,
+  "degenerate_removed": 0,
+  "vertices": 2143,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_End_Left_4m.glb",
+  "bytes": 63255280
+ },
+ "Roof_End_Right_4m": {
+  "triangles": 3830,
+  "source_triangles": 3830,
+  "degenerate_removed": 0,
+  "vertices": 2219,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_End_Right_4m.glb",
+  "bytes": 63266904
+ },
+ "Roof_Gap_4m": {
+  "triangles": 1791,
+  "source_triangles": 1791,
+  "degenerate_removed": 0,
+  "vertices": 1225,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Generic"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_Gap_4m.glb",
+  "bytes": 63604376
+ },
+ "Roof_Gap_Filler_4m": {
+  "triangles": 508,
+  "source_triangles": 508,
+  "degenerate_removed": 0,
+  "vertices": 414,
+  "uv_sets": 2,
+  "materials": [
+   "Metal_Roof_blend",
+   "Wood_Planks_01",
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Roof_Gap_Filler_4m.glb",
+  "bytes": 62990216
+ },
+ "Satellite_Dish": {
+  "triangles": 622,
+  "source_triangles": 622,
+  "degenerate_removed": 0,
+  "vertices": 345,
+  "uv_sets": 1,
+  "materials": [
+   "Satellite_Dish"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Satellite_Dish.glb",
+  "bytes": 4708300
+ },
+ "Shopping_Cart": {
+  "triangles": 5590,
+  "source_triangles": 5590,
+  "degenerate_removed": 0,
+  "vertices": 3145,
+  "uv_sets": 1,
+  "materials": [
+   "Shopping_Cart"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Shopping_Cart.glb",
+  "bytes": 4775820
+ },
+ "ShowcaseFloor": {
+  "triangles": 910,
+  "source_triangles": 910,
+  "degenerate_removed": 0,
+  "vertices": 480,
+  "uv_sets": 1,
+  "materials": [
+   "Showcase_Floor"
+  ],
+  "winding": 1.0,
+  "folder": "Unique",
+  "file": "Unique/ShowcaseFloor.glb",
+  "bytes": 35984
+ },
+ "Shrubs_1": {
+  "triangles": 3468,
+  "source_triangles": 3468,
+  "degenerate_removed": 0,
+  "vertices": 2832,
+  "uv_sets": 1,
+  "materials": [
+   "Shrubs"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Shrubs_1.glb",
+  "bytes": 3044328
+ },
+ "Shrubs_1_Single": {
+  "triangles": 468,
+  "source_triangles": 468,
+  "degenerate_removed": 0,
+  "vertices": 384,
+  "uv_sets": 1,
+  "materials": [
+   "Shrubs"
+  ],
+  "winding": 1.0,
+  "folder": "Foliage",
+  "file": "Foliage/Shrubs_1_Single.glb",
+  "bytes": 2906044
+ },
+ "Side_Shed": {
+  "triangles": 4612,
+  "source_triangles": 4612,
+  "degenerate_removed": 0,
+  "vertices": 2592,
+  "uv_sets": 2,
+  "materials": [
+   "Side_Shed_Wood",
+   "Metal_Roof_blend",
+   "Metal_Generic"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Side_Shed.glb",
+  "bytes": 121335228
+ },
+ "Spoon": {
+  "triangles": 84,
+  "source_triangles": 84,
+  "degenerate_removed": 0,
+  "vertices": 44,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Spoon.glb",
+  "bytes": 3457608
+ },
+ "Stone_Chimney": {
+  "triangles": 5136,
+  "source_triangles": 5136,
+  "degenerate_removed": 0,
+  "vertices": 2584,
+  "uv_sets": 1,
+  "materials": [
+   "Stone_Chimney"
+  ],
+  "winding": 0.9996105919003115,
+  "folder": "Props",
+  "file": "Props/Stone_Chimney.glb",
+  "bytes": 74516720
+ },
+ "Tire": {
+  "triangles": 2560,
+  "source_triangles": 2560,
+  "degenerate_removed": 0,
+  "vertices": 1280,
+  "uv_sets": 1,
+  "materials": [
+   "Tire"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Tire.glb",
+  "bytes": 12642436
+ },
+ "Tray": {
+  "triangles": 212,
+  "source_triangles": 212,
+  "degenerate_removed": 0,
+  "vertices": 104,
+  "uv_sets": 1,
+  "materials": [
+   "Table_Props"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Tray.glb",
+  "bytes": 3466248
+ },
+ "Tree_Stump_1": {
+  "triangles": 2515,
+  "source_triangles": 2515,
+  "degenerate_removed": 0,
+  "vertices": 1381,
+  "uv_sets": 1,
+  "materials": [
+   "Tree_Stump"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Tree_Stump_1.glb",
+  "bytes": 9634016
+ },
+ "Utility_Box_1a": {
+  "triangles": 786,
+  "source_triangles": 786,
+  "degenerate_removed": 0,
+  "vertices": 540,
+  "uv_sets": 1,
+  "materials": [
+   "Utility_Boxes_1"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Utility_Box_1a.glb",
+  "bytes": 16532228
+ },
+ "Utility_Box_1b": {
+  "triangles": 426,
+  "source_triangles": 426,
+  "degenerate_removed": 0,
+  "vertices": 282,
+  "uv_sets": 1,
+  "materials": [
+   "Utility_Boxes_1"
+  ],
+  "winding": 0.9953051643192489,
+  "folder": "Props",
+  "file": "Props/Utility_Box_1b.glb",
+  "bytes": 16510912
+ },
+ "Utility_Box_2a": {
+  "triangles": 438,
+  "source_triangles": 438,
+  "degenerate_removed": 0,
+  "vertices": 290,
+  "uv_sets": 1,
+  "materials": [
+   "Utility_Boxes_2"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Utility_Box_2a.glb",
+  "bytes": 15418488
+ },
+ "Utility_Box_2b": {
+  "triangles": 428,
+  "source_triangles": 428,
+  "degenerate_removed": 0,
+  "vertices": 284,
+  "uv_sets": 1,
+  "materials": [
+   "Utility_Boxes_2"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Utility_Box_2b.glb",
+  "bytes": 15418188
+ },
+ "Wall_4m": {
+  "triangles": 462,
+  "source_triangles": 462,
+  "degenerate_removed": 0,
+  "vertices": 449,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_4m.glb",
+  "bytes": 45744204
+ },
+ "Wall_8m": {
+  "triangles": 838,
+  "source_triangles": 838,
+  "degenerate_removed": 0,
+  "vertices": 691,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_8m.glb",
+  "bytes": 45776484
+ },
+ "Wall_Door_4m": {
+  "triangles": 742,
+  "source_triangles": 742,
+  "degenerate_removed": 0,
+  "vertices": 710,
+  "uv_sets": 2,
+  "materials": [
+   "Door_01",
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Door_4m.glb",
+  "bytes": 63805504
+ },
+ "Wall_Door_Window_A_4m": {
+  "triangles": 1218,
+  "source_triangles": 1218,
+  "degenerate_removed": 0,
+  "vertices": 1080,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame",
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Door_Window_A_4m.glb",
+  "bytes": 87483564
+ },
+ "Wall_Door_Window_B_4m": {
+  "triangles": 1218,
+  "source_triangles": 1218,
+  "degenerate_removed": 0,
+  "vertices": 1080,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame",
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Door_Window_B_4m.glb",
+  "bytes": 87483512
+ },
+ "Wall_Door_Windows_8m": {
+  "triangles": 2003,
+  "source_triangles": 2003,
+  "degenerate_removed": 0,
+  "vertices": 1689,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Generic_Painted",
+   "Door_01",
+   "Window_Frame",
+   "Glass_Window"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Door_Windows_8m.glb",
+  "bytes": 79533168
+ },
+ "Wall_Pillar": {
+  "triangles": 76,
+  "source_triangles": 76,
+  "degenerate_removed": 0,
+  "vertices": 40,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Generic_Painted"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Pillar.glb",
+  "bytes": 16886724
+ },
+ "Wall_Top_4m": {
+  "triangles": 555,
+  "source_triangles": 555,
+  "degenerate_removed": 0,
+  "vertices": 582,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_4m.glb",
+  "bytes": 45751828
+ },
+ "Wall_Top_Door_4m": {
+  "triangles": 974,
+  "source_triangles": 974,
+  "degenerate_removed": 0,
+  "vertices": 942,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_Door_4m.glb",
+  "bytes": 63826520
+ },
+ "Wall_Top_Door_Window_A_4m": {
+  "triangles": 1364,
+  "source_triangles": 1364,
+  "degenerate_removed": 0,
+  "vertices": 1258,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame",
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_Door_Window_A_4m.glb",
+  "bytes": 87497184
+ },
+ "Wall_Top_Door_Window_B_4m": {
+  "triangles": 1364,
+  "source_triangles": 1364,
+  "degenerate_removed": 0,
+  "vertices": 1258,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame",
+   "Door_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_Door_Window_B_4m.glb",
+  "bytes": 87497128
+ },
+ "Wall_Top_Window_2_4m": {
+  "triangles": 1410,
+  "source_triangles": 1410,
+  "degenerate_removed": 0,
+  "vertices": 1266,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Glass_Window",
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_Window_2_4m.glb",
+  "bytes": 51339032
+ },
+ "Wall_Top_Window_4m": {
+  "triangles": 973,
+  "source_triangles": 973,
+  "degenerate_removed": 0,
+  "vertices": 915,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Top_Window_4m.glb",
+  "bytes": 69425008
+ },
+ "Wall_Window_2_4m": {
+  "triangles": 1261,
+  "source_triangles": 1261,
+  "degenerate_removed": 0,
+  "vertices": 1092,
+  "uv_sets": 2,
+  "materials": [
+   "Window_Frame",
+   "Glass_Window",
+   "Wood_Planks_Painted",
+   "Wood_Planks_01"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Window_2_4m.glb",
+  "bytes": 69455408
+ },
+ "Wall_Window_4m": {
+  "triangles": 783,
+  "source_triangles": 783,
+  "degenerate_removed": 0,
+  "vertices": 704,
+  "uv_sets": 2,
+  "materials": [
+   "Wood_Planks_Painted",
+   "Wood_Planks_01",
+   "Glass_Window",
+   "Window_Frame"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Wall_Window_4m.glb",
+  "bytes": 69408852
+ },
+ "Wheel_Barrow": {
+  "triangles": 5994,
+  "source_triangles": 5994,
+  "degenerate_removed": 0,
+  "vertices": 3133,
+  "uv_sets": 1,
+  "materials": [
+   "Wheel_Barrow"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wheel_Barrow.glb",
+  "bytes": 14899140
+ },
+ "Window_Frame_Blinder_Left": {
+  "triangles": 610,
+  "source_triangles": 610,
+  "degenerate_removed": 0,
+  "vertices": 498,
+  "uv_sets": 1,
+  "materials": [
+   "Window_Frame"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Window_Frame_Blinder_Left.glb",
+  "bytes": 18182256
+ },
+ "Window_Frame_Blinder_Right": {
+  "triangles": 606,
+  "source_triangles": 606,
+  "degenerate_removed": 0,
+  "vertices": 494,
+  "uv_sets": 1,
+  "materials": [
+   "Window_Frame"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Window_Frame_Blinder_Right.glb",
+  "bytes": 18182044
+ },
+ "Window_Frame_Part": {
+  "triangles": 158,
+  "source_triangles": 158,
+  "degenerate_removed": 0,
+  "vertices": 116,
+  "uv_sets": 1,
+  "materials": [
+   "Window_Frame",
+   "Glass_Window"
+  ],
+  "winding": 1.0,
+  "folder": "Modular",
+  "file": "Modular/Window_Frame_Part.glb",
+  "bytes": 23642640
+ },
+ "Wooden_Boat": {
+  "triangles": 3822,
+  "source_triangles": 3822,
+  "degenerate_removed": 0,
+  "vertices": 2393,
+  "uv_sets": 3,
+  "materials": [
+   "Wooden_Boat"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Boat.glb",
+  "bytes": 23558076
+ },
+ "Wooden_Crate": {
+  "triangles": 3748,
+  "source_triangles": 3748,
+  "degenerate_removed": 0,
+  "vertices": 1928,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Crate"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Crate.glb",
+  "bytes": 14430212
+ },
+ "Wooden_Crate_1": {
+  "triangles": 536,
+  "source_triangles": 536,
+  "degenerate_removed": 0,
+  "vertices": 320,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Crates"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Crate_1.glb",
+  "bytes": 15161212
+ },
+ "Wooden_Crate_2": {
+  "triangles": 300,
+  "source_triangles": 300,
+  "degenerate_removed": 0,
+  "vertices": 184,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Crates"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Crate_2.glb",
+  "bytes": 15143280
+ },
+ "Wooden_Stairs": {
+  "triangles": 1244,
+  "source_triangles": 1244,
+  "degenerate_removed": 0,
+  "vertices": 688,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Stairs"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Stairs.glb",
+  "bytes": 17418048
+ },
+ "Wooden_Table_Small": {
+  "triangles": 936,
+  "source_triangles": 936,
+  "degenerate_removed": 0,
+  "vertices": 504,
+  "uv_sets": 1,
+  "materials": [
+   "Wooden_Table_Small"
+  ],
+  "winding": 1.0,
+  "folder": "Props",
+  "file": "Props/Wooden_Table_Small.glb",
+  "bytes": 17141344
+ },
+ "Assemblies/Wall_Door_4m": {
+  "file": "Assemblies/Wall_Door_4m.glb",
+  "bytes": 63911964,
+  "parts": [
+   [
+    "Wall_Door_4m",
+    "Wall_Door_4m"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Door_Window_A_4m": {
+  "file": "Assemblies/Wall_Door_Window_A_4m.glb",
+  "bytes": 87707856,
+  "parts": [
+   [
+    "Wall_Door_Window_4m",
+    "Wall_Door_Window_A_4m"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Door_Window_B_4m": {
+  "file": "Assemblies/Wall_Door_Window_B_4m.glb",
+  "bytes": 87707812,
+  "parts": [
+   [
+    "Wall_Door_Window_B_4m",
+    "Wall_Door_Window_B_4m"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Door_Windows_8m": {
+  "file": "Assemblies/Wall_Door_Windows_8m.glb",
+  "bytes": 87791228,
+  "parts": [
+   [
+    "Wall_Door_Windows_8m",
+    "Wall_Door_Windows_8m"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ],
+   [
+    "Window_Frame_Blinder_Right",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Blinder_Left",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Part1",
+    "Window_Frame_Part"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Top_Door_4m": {
+  "file": "Assemblies/Wall_Top_Door_4m.glb",
+  "bytes": 63932976,
+  "parts": [
+   [
+    "Wall_Top_Door_4m",
+    "Wall_Top_Door_4m"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Top_Door_Window_A_4m": {
+  "file": "Assemblies/Wall_Top_Door_Window_A_4m.glb",
+  "bytes": 87721476,
+  "parts": [
+   [
+    "Wall_Top_Door_Window_4m",
+    "Wall_Top_Door_Window_A_4m"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Top_Door_Window_B_4m": {
+  "file": "Assemblies/Wall_Top_Door_Window_B_4m.glb",
+  "bytes": 87721432,
+  "parts": [
+   [
+    "Wall_Top_Door_Window_B_4m",
+    "Wall_Top_Door_Window_B_4m"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Door_01",
+    "Door_01"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Top_Window_2_4m": {
+  "file": "Assemblies/Wall_Top_Window_2_4m.glb",
+  "bytes": 69587128,
+  "parts": [
+   [
+    "Wall_Top_Window_2_4m",
+    "Wall_Top_Window_2_4m"
+   ],
+   [
+    "Window_Frame_Blinder_Right",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Blinder_Left",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Part1",
+    "Window_Frame_Part"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Top_Window_4m": {
+  "file": "Assemblies/Wall_Top_Window_4m.glb",
+  "bytes": 69542860,
+  "parts": [
+   [
+    "Wall_Top_Window_4m",
+    "Wall_Top_Window_4m"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Blinder_Right",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Blinder_Left",
+    "Window_Frame_Blinder_Left"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Window_2_4m": {
+  "file": "Assemblies/Wall_Window_2_4m.glb",
+  "bytes": 69573620,
+  "parts": [
+   [
+    "Wall_Window_2_4m",
+    "Wall_Window_2_4m"
+   ],
+   [
+    "Window_Frame_Blinder_Left1",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Part1",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Blinder_Right",
+    "Window_Frame_Blinder_Right"
+   ],
+   [
+    "Window_Frame_Blinder_Left",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right1",
+    "Window_Frame_Blinder_Right"
+   ]
+  ]
+ },
+ "Assemblies/Wall_Window_4m": {
+  "file": "Assemblies/Wall_Window_4m.glb",
+  "bytes": 69526704,
+  "parts": [
+   [
+    "Wall_Window_4m",
+    "Wall_Window_4m"
+   ],
+   [
+    "Window_Frame_Part",
+    "Window_Frame_Part"
+   ],
+   [
+    "Window_Frame_Blinder_Left",
+    "Window_Frame_Blinder_Left"
+   ],
+   [
+    "Window_Frame_Blinder_Right",
+    "Window_Frame_Blinder_Right"
+   ]
+  ]
+ },
+ "Assemblies/Mailbox": {
+  "file": "Assemblies/Mailbox.glb",
+  "bytes": 4092276,
+  "parts": [
+   [
+    "Mailbox_Pole",
+    "Mailbox_Pole"
+   ],
+   [
+    "Mailbox_Lid",
+    "Mailbox_Lid"
+   ]
+  ]
+ },
+ "Assemblies/Outhouse": {
+  "file": "Assemblies/Outhouse.glb",
+  "bytes": 101793712,
+  "parts": [
+   [
+    "Outhouse_House",
+    "Outhouse_House"
+   ],
+   [
+    "Outhouse_Door",
+    "Outhouse_Door"
+   ],
+   [
+    "Outhouse_Lid",
+    "Outhouse_Lid"
+   ]
+  ]
+ },
+ "Assemblies/Plastic_Trash_Bin": {
+  "file": "Assemblies/Plastic_Trash_Bin.glb",
+  "bytes": 12809432,
+  "parts": [
+   [
+    "Plastic_Trash_Bin_Plastic_Trash_Bin",
+    "Plastic_Trash_Bin_Bin"
+   ],
+   [
+    "Plastic_Trash_Bin_Plastic_Trash_Bin_Lid",
+    "Plastic_Trash_Bin_Lid"
+   ]
+  ]
+ },
+ "Assemblies/Plastic_Trash_Bin_2": {
+  "file": "Assemblies/Plastic_Trash_Bin_2.glb",
+  "bytes": 12469876,
+  "parts": [
+   [
+    "Plastic_Trash_Bin_Plastic_Trash_Bin",
+    "Plastic_Trash_Bin_Bin"
+   ],
+   [
+    "Plastic_Trash_Bin_Plastic_Trash_Bin_Lid",
+    "Plastic_Trash_Bin_Lid"
+   ]
+  ]
+ },
+ "Cabins/Cabin_01": {
+  "file": "Cabins/Cabin_01.glb",
+  "bytes": 197298224,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Window_B_4m4",
+  "parts": 52,
+  "meshes": [
+   "Air_Conditioning_Unit",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_2",
+   "Porch_4x4m",
+   "Porch_Roof_8x4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Window_B_4m",
+   "Wall_Pillar",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_02": {
+  "file": "Cabins/Cabin_02.glb",
+  "bytes": 219232688,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Window_B_4m2",
+  "parts": 61,
+  "meshes": [
+   "Air_Conditioning_Unit",
+   "Antenna",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_1",
+   "Porch_4x4m",
+   "Roof_4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Utility_Box_1a",
+   "Utility_Box_2b",
+   "Wall_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Window_B_4m",
+   "Wall_Pillar",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_03": {
+  "file": "Cabins/Cabin_03.glb",
+  "bytes": 291375436,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Top_Door_Window_A_4m",
+  "parts": 31,
+  "meshes": [
+   "Antenna",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Overhang",
+   "Porch_4x4m",
+   "Roof_Both_Ends_4m",
+   "Side_Shed",
+   "Wall_4m",
+   "Wall_Pillar",
+   "Wall_Top_Door_Window_A_4m",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_04": {
+  "file": "Cabins/Cabin_04.glb",
+  "bytes": 181982640,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Top_Door_Window_A_4m2",
+  "parts": 29,
+  "meshes": [
+   "Antenna",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Porch_4x4m",
+   "Roof_Both_Ends_4m",
+   "Wall_Door_Window_A_4m",
+   "Wall_Pillar",
+   "Wall_Top_4m",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_05": {
+  "file": "Cabins/Cabin_05.glb",
+  "bytes": 165496776,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Windows_8m2",
+  "parts": 52,
+  "meshes": [
+   "Air_Conditioning_Unit",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_2",
+   "Porch_4x4m",
+   "Utility_Box_2a",
+   "Wall_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Window_A_4m",
+   "Wall_Door_Windows_8m",
+   "Wall_Pillar",
+   "Wall_Top_4m",
+   "Wall_Top_Window_2_4m",
+   "Wall_Top_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_06": {
+  "file": "Cabins/Cabin_06.glb",
+  "bytes": 181329212,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Window_B_4m",
+  "parts": 51,
+  "meshes": [
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_1",
+   "Porch_4x4m",
+   "Porch_Roof_4x4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Satellite_Dish",
+   "Wall_Door_4m",
+   "Wall_Door_Window_B_4m",
+   "Wall_Pillar",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part"
+  ]
+ },
+ "Cabins/Cabin_07": {
+  "file": "Cabins/Cabin_07.glb",
+  "bytes": 241846836,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Window_B_4m3",
+  "parts": 101,
+  "meshes": [
+   "Antenna",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_1",
+   "Metal_Chimney_2",
+   "Metal_Overhang",
+   "Porch_4x4m",
+   "Roof_4m",
+   "Roof_End_2_Gap_Right_4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Roof_Gap_Filler_4m",
+   "Satellite_Dish",
+   "Utility_Box_1b",
+   "Wall_Door_4m",
+   "Wall_Door_Window_B_4m",
+   "Wall_Pillar",
+   "Wall_Top_Door_4m",
+   "Wall_Top_Door_Window_A_4m",
+   "Wall_Top_Window_2_4m",
+   "Wall_Window_2_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_08": {
+  "file": "Cabins/Cabin_08.glb",
+  "bytes": 177279104,
+  "source": "Modular_Cabins_Showcase.umap / Wall_Door_Windows_8m3",
+  "parts": 52,
+  "meshes": [
+   "Antenna",
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Metal_Chimney_2",
+   "Roof_End_Gap_Right_4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Roof_Gap_Filler_4m",
+   "Satellite_Dish",
+   "Wall_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Window_A_4m",
+   "Wall_Door_Windows_8m",
+   "Wall_Pillar",
+   "Wall_Top_4m",
+   "Wall_Top_Window_2_4m",
+   "Wall_Top_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part",
+   "Wooden_Stairs"
+  ]
+ },
+ "Cabins/Cabin_Rural_01": {
+  "file": "Cabins/Cabin_Rural_01.glb",
+  "bytes": 181154568,
+  "source": "Rural_Cabins.umap / Wall_8m2",
+  "parts": 59,
+  "meshes": [
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Porch_4x4m",
+   "Porch_Roof_8x4m",
+   "Roof_End_Gap_Right_4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Roof_Gap_Filler_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Windows_8m",
+   "Wall_Pillar",
+   "Wall_Top_4m",
+   "Wall_Window_2_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part"
+  ]
+ },
+ "Cabins/Cabin_Rural_02": {
+  "file": "Cabins/Cabin_Rural_02.glb",
+  "bytes": 163008620,
+  "source": "Rural_Cabins.umap / Wall_8m9",
+  "parts": 44,
+  "meshes": [
+   "Bottom_Extender_4m",
+   "Door_01",
+   "Porch_4x4m",
+   "Porch_Roof_8x4m",
+   "Roof_End_Left_4m",
+   "Roof_End_Right_4m",
+   "Wall_Door_4m",
+   "Wall_Door_Windows_8m",
+   "Wall_Pillar",
+   "Wall_Top_4m",
+   "Wall_Window_4m",
+   "Window_Frame_Blinder_Left",
+   "Window_Frame_Blinder_Right",
+   "Window_Frame_Part"
+  ]
+ }
+}

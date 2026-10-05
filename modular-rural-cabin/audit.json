@@ -1,0 +1,3765 @@
+{
+"Assemblies/Mailbox.glb": {
+"triangles": 764,
+"images": [
+"build/mat/Mailbox/normal.png",
+"build/mat/Mailbox/orm.png",
+"tex_src/Textures/Unique/Mailbox_BaseColor.png"
+],
+"bytes": 4092276,
+"materials": [
+"Mailbox"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Assemblies/Outhouse.glb": {
+"triangles": 6078,
+"images": [
+"build/mat/Outhouse_Wood/normal.png",
+"build/mat/Outhouse_Wood/orm.png",
+"build/mat/Outhouse_Wood/basecolor.png",
+"build/mat/Outhouse/normal.png",
+"build/mat/Outhouse/orm.png",
+"tex_src/Textures/Unique/Outhouse_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 101793712,
+"materials": [
+"Outhouse_Wood",
+"Outhouse",
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Plastic_Trash_Bin.glb": {
+"triangles": 5823,
+"images": [
+"build/mat/Plastic_Trash_Bin/normal.png",
+"build/mat/Plastic_Trash_Bin/orm.png",
+"tex_src/Textures/Unique/Plastic_Trash_Bin_BaseColor.png"
+],
+"bytes": 12809432,
+"materials": [
+"Plastic_Trash_Bin"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Assemblies/Plastic_Trash_Bin_2.glb": {
+"triangles": 5823,
+"images": [
+"build/mat/Plastic_Trash_Bin/normal.png",
+"build/mat/Plastic_Trash_Bin/orm.png",
+"tex_src/Textures/Unique/Plastic_Trash_Bin_2_BaseColor.png"
+],
+"bytes": 12469876,
+"materials": [
+"Plastic_Trash_Bin_2"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Door_4m.glb": {
+"triangles": 2458,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 63911964,
+"materials": [
+"Door_01",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Door_Window_A_4m.glb": {
+"triangles": 4308,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 87707856,
+"materials": [
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Door_Window_B_4m.glb": {
+"triangles": 4308,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 87707812,
+"materials": [
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Door_Windows_8m.glb": {
+"triangles": 6467,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 87791228,
+"materials": [
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Top_Door_4m.glb": {
+"triangles": 2690,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 63932976,
+"materials": [
+"Door_01",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Top_Door_Window_A_4m.glb": {
+"triangles": 4454,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 87721476,
+"materials": [
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Top_Door_Window_B_4m.glb": {
+"triangles": 4454,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 87721432,
+"materials": [
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Top_Window_2_4m.glb": {
+"triangles": 4158,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 69587128,
+"materials": [
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Top_Window_4m.glb": {
+"triangles": 2347,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 69542860,
+"materials": [
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Window_2_4m.glb": {
+"triangles": 4009,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 69573620,
+"materials": [
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Assemblies/Wall_Window_4m.glb": {
+"triangles": 2157,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 69526704,
+"materials": [
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_01.glb": {
+"triangles": 42253,
+"images": [
+"build/mat/Air_Conditioning_Unit/normal.png",
+"build/mat/Air_Conditioning_Unit/orm.png",
+"tex_src/Textures/Unique/Air_Conditioning_Unit_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted_Red/basecolor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 197298224,
+"materials": [
+"Air_Conditioning_Unit",
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Wood_Planks_Floor",
+"Wood_Old",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted_Red",
+"Door_01",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_02.glb": {
+"triangles": 44383,
+"images": [
+"build/mat/Air_Conditioning_Unit/normal.png",
+"build/mat/Air_Conditioning_Unit/orm.png",
+"tex_src/Textures/Unique/Air_Conditioning_Unit_BaseColor.png",
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Utility_Boxes_1/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_1_BaseColor.png",
+"build/mat/Utility_Boxes_1/orm.png",
+"build/mat/Utility_Boxes_2/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_2_BaseColor.png",
+"build/mat/Utility_Boxes_2/orm.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted_Green/basecolor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 219232688,
+"materials": [
+"Air_Conditioning_Unit",
+"Metal_Generic",
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Wood_Planks_Floor",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Utility_Boxes_1",
+"Utility_Boxes_2",
+"Door_01",
+"Wood_Planks_Painted_Green",
+"Window_Frame",
+"Glass_Window",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_03.glb": {
+"triangles": 28928,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Overhang/normal.png",
+"build/mat/Metal_Overhang/orm.png",
+"build/mat/Metal_Overhang/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png",
+"build/mat/Side_Shed_Wood/normal.png",
+"build/mat/Side_Shed_Wood/orm.png",
+"build/mat/Side_Shed_Wood/basecolor.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted_Blue/basecolor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 291375436,
+"materials": [
+"Metal_Generic",
+"Wood_Generic_Painted",
+"Metal_Overhang",
+"Wood_Planks_Floor",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2",
+"Side_Shed_Wood",
+"Wood_Planks_Painted_Blue",
+"Door_01",
+"Glass_Window",
+"Window_Frame",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_04.glb": {
+"triangles": 19579,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted_Red/basecolor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 181982640,
+"materials": [
+"Metal_Generic",
+"Wood_Generic_Painted",
+"Wood_Planks_Floor",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2",
+"Door_01",
+"Wood_Planks_Painted_Red",
+"Glass_Window",
+"Window_Frame",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_05.glb": {
+"triangles": 32874,
+"images": [
+"build/mat/Air_Conditioning_Unit/normal.png",
+"build/mat/Air_Conditioning_Unit/orm.png",
+"tex_src/Textures/Unique/Air_Conditioning_Unit_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Utility_Boxes_2/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_2_BaseColor.png",
+"build/mat/Utility_Boxes_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 165496776,
+"materials": [
+"Air_Conditioning_Unit",
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Wood_Planks_Floor",
+"Utility_Boxes_2",
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_06.glb": {
+"triangles": 36656,
+"images": [
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Satellite_Dish/normal.png",
+"build/mat/Satellite_Dish/orm.png",
+"tex_src/Textures/Unique/Satellite_Dish_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_Yellow/normal.png",
+"build/mat/Wood_Planks_Painted_Yellow/orm.png",
+"build/mat/Wood_Planks_Painted_Yellow/basecolor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png"
+],
+"bytes": 181329212,
+"materials": [
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Wood_Planks_Floor",
+"Wood_Old",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Satellite_Dish",
+"Door_01",
+"Wood_Planks_Painted_Yellow",
+"Window_Frame",
+"Glass_Window"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND"
+]
+},
+"Cabins/Cabin_07.glb": {
+"triangles": 74177,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Metal_Overhang/normal.png",
+"build/mat/Metal_Overhang/orm.png",
+"build/mat/Metal_Overhang/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png",
+"build/mat/Satellite_Dish/normal.png",
+"build/mat/Satellite_Dish/orm.png",
+"tex_src/Textures/Unique/Satellite_Dish_BaseColor.png",
+"build/mat/Utility_Boxes_1/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_1_BaseColor.png",
+"build/mat/Utility_Boxes_1/orm.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 241846836,
+"materials": [
+"Metal_Generic",
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Metal_Overhang",
+"Wood_Planks_Floor",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2",
+"Satellite_Dish",
+"Utility_Boxes_1",
+"Door_01",
+"Wood_Planks_Painted",
+"Window_Frame",
+"Glass_Window",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_08.glb": {
+"triangles": 36943,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png",
+"build/mat/Satellite_Dish/normal.png",
+"build/mat/Satellite_Dish/orm.png",
+"tex_src/Textures/Unique/Satellite_Dish_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 177279104,
+"materials": [
+"Metal_Generic",
+"Wood_Generic_Painted",
+"Metal_Chimney",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2",
+"Satellite_Dish",
+"Door_01",
+"Window_Frame",
+"Glass_Window",
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Cabins/Cabin_Rural_01.glb": {
+"triangles": 42572,
+"images": [
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic/normal.png",
+"build/mat/Wood_Generic/orm.png",
+"build/mat/Wood_Generic/basecolor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png"
+],
+"bytes": 181154568,
+"materials": [
+"Wood_Generic_Painted",
+"Wood_Planks_Floor",
+"Wood_Old",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic",
+"Door_01",
+"Wood_Planks_Painted",
+"Window_Frame",
+"Glass_Window"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND"
+]
+},
+"Cabins/Cabin_Rural_02.glb": {
+"triangles": 32144,
+"images": [
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png",
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png"
+],
+"bytes": 163008620,
+"materials": [
+"Wood_Generic_Painted",
+"Wood_Planks_Floor",
+"Wood_Old",
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Door_01",
+"Wood_Planks_Painted_2",
+"Glass_Window",
+"Window_Frame"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Foliage/Bush_1.glb": {
+"triangles": 94,
+"images": [
+"tex_src/Textures/Unique/Bush_1_normal.png",
+"tex_src/Textures/Unique/Bush_1_basecolor.png",
+"build/mat/Bush_1/orm.png"
+],
+"bytes": 10882956,
+"materials": [
+"Bush_1"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Bush_Tree.glb": {
+"triangles": 2112,
+"images": [
+"build/mat/Birch_Branches/normal.png",
+"build/mat/Birch_Branches/basecolor.png",
+"build/mat/Birch_Branches/orm.png",
+"build/mat/Birch_Bark/normal.png",
+"build/mat/Birch_Bark/orm.png",
+"tex_src/Textures/Tiling/Birch_Bark_BaseColor.png"
+],
+"bytes": 58776956,
+"materials": [
+"Birch_Branches",
+"Birch_Bark"
+],
+"alpha": [
+"MASK",
+"OPAQUE"
+]
+},
+"Foliage/Cat_Tail.glb": {
+"triangles": 4230,
+"images": [
+"build/mat/Cat_Tail/normal.png",
+"tex_src/Textures/Unique/Cat_Tail_Basecolor.png",
+"build/mat/Cat_Tail/orm.png"
+],
+"bytes": 12278868,
+"materials": [
+"Cat_Tail"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Cat_Tail_2.glb": {
+"triangles": 624,
+"images": [
+"build/mat/Cat_Tail/normal.png",
+"tex_src/Textures/Unique/Cat_Tail_Basecolor.png",
+"build/mat/Cat_Tail/orm.png"
+],
+"bytes": 12130556,
+"materials": [
+"Cat_Tail"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Flower_Patch_1.glb": {
+"triangles": 312,
+"images": [
+"build/mat/Grass_Patch_1/normal.png",
+"build/mat/Grass_Patch_1/basecolor.png",
+"build/mat/Grass_Patch_1/orm.png"
+],
+"bytes": 12867580,
+"materials": [
+"Grass_Patch_1"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Grass_Patch_1.glb": {
+"triangles": 694,
+"images": [
+"build/mat/Grass_Patch_1/normal.png",
+"build/mat/Grass_Patch_1/basecolor.png",
+"build/mat/Grass_Patch_1/orm.png"
+],
+"bytes": 12883504,
+"materials": [
+"Grass_Patch_1"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Grass_Patch_2.glb": {
+"triangles": 175,
+"images": [
+"build/mat/Grass_Patch_2/normal.png",
+"build/mat/Grass_Patch_2/basecolor.png",
+"build/mat/Grass_Patch_2/orm.png"
+],
+"bytes": 1216872,
+"materials": [
+"Grass_Patch_2"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Grass_Patch_Long.glb": {
+"triangles": 602,
+"images": [
+"build/mat/Grass_Patch_1/normal.png",
+"build/mat/Grass_Patch_1/basecolor.png",
+"build/mat/Grass_Patch_1/orm.png"
+],
+"bytes": 12878480,
+"materials": [
+"Grass_Patch_1"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_1.glb": {
+"triangles": 839,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8526864,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_2.glb": {
+"triangles": 1728,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8574348,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_3.glb": {
+"triangles": 1340,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8553636,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_4.glb": {
+"triangles": 974,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8534632,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_5.glb": {
+"triangles": 1364,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8554980,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_6.glb": {
+"triangles": 1033,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8537540,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Ivy_Roots_1.glb": {
+"triangles": 96,
+"images": [
+"tex_src/Textures/Unique/Ivy_normal.png",
+"build/mat/Ivy/basecolor.png",
+"build/mat/Ivy/orm.png"
+],
+"bytes": 8487508,
+"materials": [
+"Ivy"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Pine_Tree.glb": {
+"triangles": 13863,
+"images": [
+"build/mat/Bark_Pine/normal.png",
+"build/mat/Bark_Pine/orm.png",
+"tex_src/Textures/Tiling/Bark_Pine_BaseColor.png",
+"build/mat/Pine_Branches/normal.png",
+"build/mat/Pine_Branches/basecolor.png",
+"build/mat/Pine_Branches/orm.png"
+],
+"bytes": 25351656,
+"materials": [
+"Bark_Pine",
+"Pine_Branches"
+],
+"alpha": [
+"OPAQUE",
+"MASK"
+]
+},
+"Foliage/Shrubs_1.glb": {
+"triangles": 3468,
+"images": [
+"build/mat/Shrubs/normal.png",
+"build/mat/Shrubs/basecolor.png",
+"build/mat/Shrubs/orm.png"
+],
+"bytes": 3044328,
+"materials": [
+"Shrubs"
+],
+"alpha": [
+"MASK"
+]
+},
+"Foliage/Shrubs_1_Single.glb": {
+"triangles": 468,
+"images": [
+"build/mat/Shrubs/normal.png",
+"build/mat/Shrubs/basecolor.png",
+"build/mat/Shrubs/orm.png"
+],
+"bytes": 2906044,
+"materials": [
+"Shrubs"
+],
+"alpha": [
+"MASK"
+]
+},
+"Modular/Bottom_Extender_4m.glb": {
+"triangles": 132,
+"images": [
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 16895084,
+"materials": [
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Door_01.glb": {
+"triangles": 1716,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 18139836,
+"materials": [
+"Door_01"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Porch_4x4m.glb": {
+"triangles": 1120,
+"images": [
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_Floor/orm.png",
+"build/mat/Wood_Planks_Floor/basecolor.png"
+],
+"bytes": 21588920,
+"materials": [
+"Wood_Planks_Floor"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Porch_Roof_4x4m.glb": {
+"triangles": 2760,
+"images": [
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 46703040,
+"materials": [
+"Wood_Old",
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Porch_Roof_8x4m.glb": {
+"triangles": 4580,
+"images": [
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 46799356,
+"materials": [
+"Wood_Old",
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_4m.glb": {
+"triangles": 2992,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 63189276,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_Both_Ends_4m.glb": {
+"triangles": 4465,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png"
+],
+"bytes": 66783220,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_End_2_Gap_Right_4m.glb": {
+"triangles": 1883,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png"
+],
+"bytes": 66558012,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_End_Gap_Left_4m.glb": {
+"triangles": 2084,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png"
+],
+"bytes": 66572536,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_End_Gap_Right_4m.glb": {
+"triangles": 2252,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted_2/orm.png",
+"build/mat/Wood_Planks_Painted_2/basecolor.png"
+],
+"bytes": 66583972,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Planks_Painted_2"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_End_Left_4m.glb": {
+"triangles": 3694,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 63255280,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_End_Right_4m.glb": {
+"triangles": 3830,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 63266904,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_Gap_4m.glb": {
+"triangles": 1791,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic/normal.png",
+"build/mat/Wood_Generic/orm.png",
+"build/mat/Wood_Generic/basecolor.png"
+],
+"bytes": 63604376,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Roof_Gap_Filler_4m.glb": {
+"triangles": 508,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 62990216,
+"materials": [
+"Metal_Roof_blend",
+"Wood_Planks_01",
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_4m.glb": {
+"triangles": 462,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 45744204,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_8m.glb": {
+"triangles": 838,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 45776484,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Door_4m.glb": {
+"triangles": 742,
+"images": [
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 63805504,
+"materials": [
+"Door_01",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Door_Window_A_4m.glb": {
+"triangles": 1218,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 87483564,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame",
+"Door_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Door_Window_B_4m.glb": {
+"triangles": 1218,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 87483512,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame",
+"Door_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Door_Windows_8m.glb": {
+"triangles": 2003,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png"
+],
+"bytes": 79533168,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Generic_Painted",
+"Door_01",
+"Window_Frame",
+"Glass_Window"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"BLEND"
+]
+},
+"Modular/Wall_Pillar.glb": {
+"triangles": 76,
+"images": [
+"build/mat/Wood_Generic_Painted/normal.png",
+"build/mat/Wood_Generic_Painted/orm.png",
+"build/mat/Wood_Generic_Painted/basecolor.png"
+],
+"bytes": 16886724,
+"materials": [
+"Wood_Generic_Painted"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_4m.glb": {
+"triangles": 555,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 45751828,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_Door_4m.glb": {
+"triangles": 974,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 63826520,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Door_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_Door_Window_A_4m.glb": {
+"triangles": 1364,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 87497184,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame",
+"Door_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_Door_Window_B_4m.glb": {
+"triangles": 1364,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Door_01/normal.png",
+"build/mat/Door_01/orm.png",
+"tex_src/Textures/Unique/Door_01_BaseColor.png"
+],
+"bytes": 87497128,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame",
+"Door_01"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_Window_2_4m.glb": {
+"triangles": 1410,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 51339032,
+"materials": [
+"Wood_Planks_Painted",
+"Glass_Window",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Modular/Wall_Top_Window_4m.glb": {
+"triangles": 973,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png"
+],
+"bytes": 69425008,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Modular/Wall_Window_2_4m.glb": {
+"triangles": 1261,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png"
+],
+"bytes": 69455408,
+"materials": [
+"Window_Frame",
+"Glass_Window",
+"Wood_Planks_Painted",
+"Wood_Planks_01"
+],
+"alpha": [
+"OPAQUE",
+"BLEND",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Modular/Wall_Window_4m.glb": {
+"triangles": 783,
+"images": [
+"build/mat/Wood_Planks_Painted_2/normal.png",
+"build/mat/Wood_Planks_Painted/orm.png",
+"build/mat/Wood_Planks_Painted/basecolor.png",
+"build/mat/Wood_Planks_01/normal.png",
+"build/mat/Wood_Planks_01/orm.png",
+"tex_src/Textures/Tiling/Wood_Planks_01_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png",
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png"
+],
+"bytes": 69408852,
+"materials": [
+"Wood_Planks_Painted",
+"Wood_Planks_01",
+"Glass_Window",
+"Window_Frame"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"BLEND",
+"OPAQUE"
+]
+},
+"Modular/Window_Frame_Blinder_Left.glb": {
+"triangles": 610,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png"
+],
+"bytes": 18182256,
+"materials": [
+"Window_Frame"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Window_Frame_Blinder_Right.glb": {
+"triangles": 606,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png"
+],
+"bytes": 18182044,
+"materials": [
+"Window_Frame"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Modular/Window_Frame_Part.glb": {
+"triangles": 158,
+"images": [
+"build/mat/Window_Frame/normal.png",
+"build/mat/Window_Frame/orm.png",
+"tex_src/Textures/Unique/Window_Frame_BaseColor.png",
+"build/mat/Glass_Window/normal.png",
+"build/mat/Glass_Window/orm.png",
+"tex_src/Textures/Unique/Window_Glass_BaseColor.png"
+],
+"bytes": 23642640,
+"materials": [
+"Window_Frame",
+"Glass_Window"
+],
+"alpha": [
+"OPAQUE",
+"BLEND"
+]
+},
+"Props/Air_Conditioning_Unit.glb": {
+"triangles": 2535,
+"images": [
+"build/mat/Air_Conditioning_Unit/normal.png",
+"build/mat/Air_Conditioning_Unit/orm.png",
+"tex_src/Textures/Unique/Air_Conditioning_Unit_BaseColor.png"
+],
+"bytes": 3700616,
+"materials": [
+"Air_Conditioning_Unit"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Antenna.glb": {
+"triangles": 740,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png"
+],
+"bytes": 15709188,
+"materials": [
+"Metal_Generic"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Axe_1.glb": {
+"triangles": 812,
+"images": [
+"build/mat/Axes/normal.png",
+"build/mat/Axes/orm.png",
+"tex_src/Textures/Unique/Axes_BaseColor.png"
+],
+"bytes": 10532920,
+"materials": [
+"Axes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Axe_2.glb": {
+"triangles": 812,
+"images": [
+"build/mat/Axes/normal.png",
+"build/mat/Axes/orm.png",
+"tex_src/Textures/Unique/Axes_BaseColor.png"
+],
+"bytes": 10532780,
+"materials": [
+"Axes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Barbecue.glb": {
+"triangles": 5134,
+"images": [
+"build/mat/Barbecue/normal.png",
+"build/mat/Barbecue/orm.png",
+"tex_src/Textures/Unique/Barbecue_BaseColor.png"
+],
+"bytes": 15676424,
+"materials": [
+"Barbecue"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Bowl.glb": {
+"triangles": 316,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3464380,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Caravan.glb": {
+"triangles": 14169,
+"images": [
+"build/mat/Caravan_Addons/normal.png",
+"build/mat/Caravan_Addons/orm.png",
+"tex_src/Textures/Unique/Caravan_addons_BaseColor.png",
+"build/mat/Caravan/Caravan/normal.png",
+"build/mat/Caravan/Caravan/orm.png",
+"build/mat/Caravan/Caravan/basecolor.png",
+"build/mat/Caravan_Windows/normal.png",
+"build/mat/Caravan_Windows/orm.png",
+"tex_src/Textures/Unique/Caravan_Windows_BaseColor.png"
+],
+"bytes": 66179684,
+"materials": [
+"Caravan_Addons",
+"Caravan@Caravan",
+"Caravan_Windows",
+"Caravan_2@Caravan"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_1.glb": {
+"triangles": 333,
+"images": [
+"build/mat/Cardboard_Boxes/normal.png",
+"build/mat/Cardboard_Boxes/orm.png",
+"build/mat/Cardboard_Boxes/basecolor.png"
+],
+"bytes": 13370804,
+"materials": [
+"Cardboard_Boxes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_2.glb": {
+"triangles": 349,
+"images": [
+"build/mat/Cardboard_Boxes/normal.png",
+"build/mat/Cardboard_Boxes/orm.png",
+"build/mat/Cardboard_Boxes/basecolor.png"
+],
+"bytes": 13370804,
+"materials": [
+"Cardboard_Boxes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_3.glb": {
+"triangles": 328,
+"images": [
+"build/mat/Cardboard_Boxes/normal.png",
+"build/mat/Cardboard_Boxes/orm.png",
+"build/mat/Cardboard_Boxes/basecolor.png"
+],
+"bytes": 13367940,
+"materials": [
+"Cardboard_Boxes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_4.glb": {
+"triangles": 247,
+"images": [
+"build/mat/Cardboard_Boxes/normal.png",
+"build/mat/Cardboard_Boxes/orm.png",
+"build/mat/Cardboard_Boxes/basecolor.png"
+],
+"bytes": 13363996,
+"materials": [
+"Cardboard_Boxes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_5.glb": {
+"triangles": 301,
+"images": [
+"build/mat/Cardboard_Boxes/normal.png",
+"build/mat/Cardboard_Boxes/orm.png",
+"build/mat/Cardboard_Boxes/basecolor.png"
+],
+"bytes": 13367636,
+"materials": [
+"Cardboard_Boxes"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_Open_1.glb": {
+"triangles": 570,
+"images": [
+"build/mat/Cardboard_Boxes_Open/normal.png",
+"build/mat/Cardboard_Boxes_Open/orm.png",
+"tex_src/Textures/Unique/Cardboard_Boxes_Open_BaseColor.png"
+],
+"bytes": 15087044,
+"materials": [
+"Cardboard_Boxes_Open"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_Open_2.glb": {
+"triangles": 729,
+"images": [
+"build/mat/Cardboard_Boxes_Open/normal.png",
+"build/mat/Cardboard_Boxes_Open/orm.png",
+"tex_src/Textures/Unique/Cardboard_Boxes_Open_BaseColor.png"
+],
+"bytes": 15092656,
+"materials": [
+"Cardboard_Boxes_Open"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cardboard_Box_Open_3.glb": {
+"triangles": 658,
+"images": [
+"build/mat/Cardboard_Boxes_Open/normal.png",
+"build/mat/Cardboard_Boxes_Open/orm.png",
+"tex_src/Textures/Unique/Cardboard_Boxes_Open_BaseColor.png"
+],
+"bytes": 15090784,
+"materials": [
+"Cardboard_Boxes_Open"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Cutting_Board.glb": {
+"triangles": 60,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3456516,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Fence_Old_1_2m.glb": {
+"triangles": 896,
+"images": [
+"build/mat/Fence_Old/normal.png",
+"build/mat/Fence_Old/orm.png",
+"build/mat/Fence_Old/basecolor.png"
+],
+"bytes": 90062236,
+"materials": [
+"Fence_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Fence_Old_2_2m.glb": {
+"triangles": 896,
+"images": [
+"build/mat/Fence_Old/normal.png",
+"build/mat/Fence_Old/orm.png",
+"build/mat/Fence_Old/basecolor.png"
+],
+"bytes": 90062232,
+"materials": [
+"Fence_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Fence_Old_3_2m.glb": {
+"triangles": 724,
+"images": [
+"build/mat/Fence_Old/normal.png",
+"build/mat/Fence_Old/orm.png",
+"build/mat/Fence_Old/basecolor.png"
+],
+"bytes": 90051216,
+"materials": [
+"Fence_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Fence_Old_Pole.glb": {
+"triangles": 220,
+"images": [
+"build/mat/Fence_Old/normal.png",
+"build/mat/Fence_Old/orm.png",
+"build/mat/Fence_Old/basecolor.png"
+],
+"bytes": 90018812,
+"materials": [
+"Fence_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Flag.glb": {
+"triangles": 192,
+"images": [
+"build/mat/Flag/normal.png",
+"build/mat/Flag/basecolor.png",
+"build/mat/Flag/orm.png"
+],
+"bytes": 2181100,
+"materials": [
+"Flag"
+],
+"alpha": [
+"MASK"
+]
+},
+"Props/Fork.glb": {
+"triangles": 84,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3458952,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Knive.glb": {
+"triangles": 64,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3456716,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_1.glb": {
+"triangles": 970,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21444940,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_2.glb": {
+"triangles": 752,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21439360,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_3.glb": {
+"triangles": 1846,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21472912,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_4.glb": {
+"triangles": 262,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21421776,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_5.glb": {
+"triangles": 326,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21424416,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_6.glb": {
+"triangles": 510,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 21429844,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_Pile_1.glb": {
+"triangles": 62532,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 24055456,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_Pile_2.glb": {
+"triangles": 31658,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 22744392,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Log_Pile_3.glb": {
+"triangles": 19394,
+"images": [
+"build/mat/Wooden_Logs/normal.png",
+"build/mat/Wooden_Logs/orm.png",
+"build/mat/Wooden_Logs/basecolor.png"
+],
+"bytes": 22223696,
+"materials": [
+"Wooden_Logs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Mailbox_Lid.glb": {
+"triangles": 254,
+"images": [
+"build/mat/Mailbox/normal.png",
+"build/mat/Mailbox/orm.png",
+"tex_src/Textures/Unique/Mailbox_BaseColor.png"
+],
+"bytes": 4061104,
+"materials": [
+"Mailbox"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Mailbox_Pole.glb": {
+"triangles": 510,
+"images": [
+"build/mat/Mailbox/normal.png",
+"build/mat/Mailbox/orm.png",
+"tex_src/Textures/Unique/Mailbox_BaseColor.png"
+],
+"bytes": 4077804,
+"materials": [
+"Mailbox"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Barrel.glb": {
+"triangles": 4228,
+"images": [
+"build/mat/Metal_Barrel_1/normal.png",
+"build/mat/Metal_Barrel_1/orm.png",
+"tex_src/Textures/Unique/Metal_Barrel_1_BaseColor.png"
+],
+"bytes": 18231700,
+"materials": [
+"Metal_Barrel_1"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Bucket.glb": {
+"triangles": 2456,
+"images": [
+"build/mat/Metal_Bucket/normal.png",
+"build/mat/Metal_Bucket/orm.png",
+"tex_src/Textures/Unique/Metal_Bucket_BaseColor.png"
+],
+"bytes": 8921516,
+"materials": [
+"Metal_Bucket"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Chimney_1.glb": {
+"triangles": 1014,
+"images": [
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png"
+],
+"bytes": 12582148,
+"materials": [
+"Metal_Chimney"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Chimney_2.glb": {
+"triangles": 1634,
+"images": [
+"build/mat/Metal_Chimney/normal.png",
+"build/mat/Metal_Chimney/orm.png",
+"tex_src/Textures/Unique/Metal_Chimney_BaseColor.png"
+],
+"bytes": 12609012,
+"materials": [
+"Metal_Chimney"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Overhang.glb": {
+"triangles": 4684,
+"images": [
+"build/mat/Metal_Overhang/normal.png",
+"build/mat/Metal_Overhang/orm.png",
+"build/mat/Metal_Overhang/basecolor.png"
+],
+"bytes": 24826516,
+"materials": [
+"Metal_Overhang"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Sheet_1.glb": {
+"triangles": 476,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 21177380,
+"materials": [
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Metal_Sheet_2.glb": {
+"triangles": 476,
+"images": [
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 21177208,
+"materials": [
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Mug.glb": {
+"triangles": 124,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3459236,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Office_Chair.glb": {
+"triangles": 6068,
+"images": [
+"build/mat/Office_Chair/normal.png",
+"build/mat/Office_Chair/orm.png",
+"tex_src/Textures/Unique/Office_Chair_BaseColor.png"
+],
+"bytes": 19940976,
+"materials": [
+"Office_Chair"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plank_1.glb": {
+"triangles": 68,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19987460,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plank_2.glb": {
+"triangles": 56,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19987004,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plank_3.glb": {
+"triangles": 70,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19987712,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plank_4.glb": {
+"triangles": 60,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19986836,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plank_5.glb": {
+"triangles": 44,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19985972,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plywood_1.glb": {
+"triangles": 60,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19986836,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Planks_Plywood_2.glb": {
+"triangles": 60,
+"images": [
+"build/mat/Old_Planks/normal.png",
+"build/mat/Old_Planks/orm.png",
+"build/mat/Old_Planks/basecolor.png"
+],
+"bytes": 19986840,
+"materials": [
+"Old_Planks"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Old_Sofa.glb": {
+"triangles": 6171,
+"images": [
+"build/mat/Old_Sofa/normal.png",
+"build/mat/Old_Sofa/orm.png",
+"tex_src/Textures/Unique/Old_Sofa_BaseColor.png"
+],
+"bytes": 24204596,
+"materials": [
+"Old_Sofa"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Outhouse_Door.glb": {
+"triangles": 928,
+"images": [
+"build/mat/Outhouse_Wood/normal.png",
+"build/mat/Outhouse_Wood/orm.png",
+"build/mat/Outhouse_Wood/basecolor.png",
+"build/mat/Outhouse/normal.png",
+"build/mat/Outhouse/orm.png",
+"tex_src/Textures/Unique/Outhouse_BaseColor.png"
+],
+"bytes": 80314204,
+"materials": [
+"Outhouse_Wood",
+"Outhouse"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Props/Outhouse_House.glb": {
+"triangles": 4802,
+"images": [
+"build/mat/Outhouse_Wood/normal.png",
+"build/mat/Outhouse_Wood/orm.png",
+"build/mat/Outhouse_Wood/basecolor.png",
+"build/mat/Outhouse/normal.png",
+"build/mat/Outhouse/orm.png",
+"tex_src/Textures/Unique/Outhouse_BaseColor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png"
+],
+"bytes": 101713604,
+"materials": [
+"Outhouse_Wood",
+"Outhouse",
+"Metal_Roof_blend"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Props/Outhouse_Lid.glb": {
+"triangles": 348,
+"images": [
+"build/mat/Outhouse/normal.png",
+"build/mat/Outhouse/orm.png",
+"tex_src/Textures/Unique/Outhouse_BaseColor.png"
+],
+"bytes": 1799216,
+"materials": [
+"Outhouse"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pallet.glb": {
+"triangles": 654,
+"images": [
+"build/mat/Pallet/normal.png",
+"build/mat/Pallet/orm.png",
+"tex_src/Textures/Unique/Pallet_BaseColor.png"
+],
+"bytes": 18642912,
+"materials": [
+"Pallet"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pallet_Broken.glb": {
+"triangles": 710,
+"images": [
+"build/mat/Pallet/normal.png",
+"build/mat/Pallet/orm.png",
+"tex_src/Textures/Unique/Pallet_BaseColor.png"
+],
+"bytes": 18647488,
+"materials": [
+"Pallet"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Picnic_Table.glb": {
+"triangles": 1130,
+"images": [
+"build/mat/Picnic_Table/normal.png",
+"build/mat/Picnic_Table/orm.png",
+"build/mat/Picnic_Table/basecolor.png"
+],
+"bytes": 17759084,
+"materials": [
+"Picnic_Table"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pier.glb": {
+"triangles": 2360,
+"images": [
+"build/mat/Pier/Pier/normal.png",
+"build/mat/Pier/Pier/orm.png",
+"build/mat/Pier/Pier/basecolor.png"
+],
+"bytes": 52218144,
+"materials": [
+"Pier@Pier"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Plastic_Chair.glb": {
+"triangles": 3680,
+"images": [
+"build/mat/Plastic_Chair/normal.png",
+"build/mat/Plastic_Chair/orm.png",
+"tex_src/Textures/Unique/Plastic_Chair_BaseColor.png"
+],
+"bytes": 12593400,
+"materials": [
+"Plastic_Chair"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Plastic_Trash_Bin_Bin.glb": {
+"triangles": 4377,
+"images": [
+"build/mat/Plastic_Trash_Bin/normal.png",
+"build/mat/Plastic_Trash_Bin/orm.png",
+"tex_src/Textures/Unique/Plastic_Trash_Bin_BaseColor.png"
+],
+"bytes": 12707064,
+"materials": [
+"Plastic_Trash_Bin"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Plastic_Trash_Bin_Lid.glb": {
+"triangles": 1446,
+"images": [
+"build/mat/Plastic_Trash_Bin/normal.png",
+"build/mat/Plastic_Trash_Bin/orm.png",
+"tex_src/Textures/Unique/Plastic_Trash_Bin_BaseColor.png"
+],
+"bytes": 12517156,
+"materials": [
+"Plastic_Trash_Bin"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Plate_1.glb": {
+"triangles": 156,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3461692,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Plate_2.glb": {
+"triangles": 156,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3461692,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Porch_Planks_1.glb": {
+"triangles": 816,
+"images": [
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png"
+],
+"bytes": 25407316,
+"materials": [
+"Wood_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Porch_Planks_2.glb": {
+"triangles": 612,
+"images": [
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png"
+],
+"bytes": 25395624,
+"materials": [
+"Wood_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Porch_Planks_3.glb": {
+"triangles": 476,
+"images": [
+"build/mat/Wood_Old/normal.png",
+"build/mat/Wood_Old/orm.png",
+"tex_src/Textures/Tiling/Wood_Old_BaseColor.png"
+],
+"bytes": 25387896,
+"materials": [
+"Wood_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Power_Pole_1.glb": {
+"triangles": 1392,
+"images": [
+"build/mat/Power_Pole/normal.png",
+"build/mat/Power_Pole/orm.png",
+"build/mat/Power_Pole/basecolor.png",
+"build/mat/Power_Pole_Addons/normal.png",
+"build/mat/Power_Pole_Addons/orm.png",
+"tex_src/Textures/Unique/Power_Pole_addons_BaseColor.png"
+],
+"bytes": 110441608,
+"materials": [
+"Power_Pole",
+"Power_Pole_Addons"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Props/Power_Pole_Addons.glb": {
+"triangles": 2652,
+"images": [
+"build/mat/Power_Pole_Addons/normal.png",
+"build/mat/Power_Pole_Addons/orm.png",
+"tex_src/Textures/Unique/Power_Pole_addons_BaseColor.png"
+],
+"bytes": 13555484,
+"materials": [
+"Power_Pole_Addons"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Power_Pole_Light.glb": {
+"triangles": 650,
+"images": [
+"build/mat/Power_Pole_Light/normal.png",
+"build/mat/Power_Pole_Light/orm.png",
+"tex_src/Textures/Unique/Power_Pole_Light_BaseColor.png"
+],
+"bytes": 2222284,
+"materials": [
+"Power_Pole_Light"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pumpkin_1.glb": {
+"triangles": 784,
+"images": [
+"build/mat/Pumpkins/normal.png",
+"build/mat/Pumpkins/orm.png",
+"build/mat/Pumpkins/basecolor.png"
+],
+"bytes": 3155968,
+"materials": [
+"Pumpkins"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pumpkin_2.glb": {
+"triangles": 772,
+"images": [
+"build/mat/Pumpkins/normal.png",
+"build/mat/Pumpkins/orm.png",
+"build/mat/Pumpkins/basecolor.png"
+],
+"bytes": 3155560,
+"materials": [
+"Pumpkins"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Pumpkin_Sign.glb": {
+"triangles": 916,
+"images": [
+"build/mat/Pumpkin_Sign/normal.png",
+"build/mat/Pumpkin_Sign/orm.png",
+"tex_src/Textures/Unique/Pumpkin_Sign_BaseColor.png"
+],
+"bytes": 4759732,
+"materials": [
+"Pumpkin_Sign"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Refrigerator_Old.glb": {
+"triangles": 3678,
+"images": [
+"build/mat/Refrigerator_Old/normal.png",
+"build/mat/Refrigerator_Old/orm.png",
+"tex_src/Textures/Unique/Refrigerator_Old_BaseColor.png"
+],
+"bytes": 16841664,
+"materials": [
+"Refrigerator_Old"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/River_Stone_1.glb": {
+"triangles": 96,
+"images": [
+"build/mat/River_Stones/normal.png",
+"build/mat/River_Stones/orm.png",
+"build/mat/River_Stones/basecolor.png"
+],
+"bytes": 18571408,
+"materials": [
+"River_Stones"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/River_Stone_2.glb": {
+"triangles": 110,
+"images": [
+"build/mat/River_Stones/normal.png",
+"build/mat/River_Stones/orm.png",
+"build/mat/River_Stones/basecolor.png"
+],
+"bytes": 18572316,
+"materials": [
+"River_Stones"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/River_Stone_3.glb": {
+"triangles": 90,
+"images": [
+"build/mat/River_Stones/normal.png",
+"build/mat/River_Stones/orm.png",
+"build/mat/River_Stones/basecolor.png"
+],
+"bytes": 18571276,
+"materials": [
+"River_Stones"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/River_Stone_4.glb": {
+"triangles": 108,
+"images": [
+"build/mat/River_Stones/normal.png",
+"build/mat/River_Stones/orm.png",
+"build/mat/River_Stones/basecolor.png"
+],
+"bytes": 18572064,
+"materials": [
+"River_Stones"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/River_Stone_Set_1.glb": {
+"triangles": 918,
+"images": [
+"build/mat/River_Stones/normal.png",
+"build/mat/River_Stones/orm.png",
+"build/mat/River_Stones/basecolor.png"
+],
+"bytes": 18614328,
+"materials": [
+"River_Stones"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Road_Sign.glb": {
+"triangles": 98,
+"images": [
+"build/mat/Road_Sign/normal.png",
+"build/mat/Road_Sign/orm.png",
+"tex_src/Textures/Unique/Road_Sign_BaseColor.png"
+],
+"bytes": 19182948,
+"materials": [
+"Road_Sign"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Rock_1.glb": {
+"triangles": 3092,
+"images": [
+"build/mat/Rock_1/normal.png",
+"build/mat/Rock_1/orm.png",
+"build/mat/Rock_1/basecolor.png"
+],
+"bytes": 19735368,
+"materials": [
+"Rock_1"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Rocking_Chair.glb": {
+"triangles": 4016,
+"images": [
+"build/mat/Rocking_Chair/normal.png",
+"build/mat/Rocking_Chair/orm.png",
+"tex_src/Textures/Unique/Rocking_Chair_BaseColor.png"
+],
+"bytes": 13033236,
+"materials": [
+"Rocking_Chair"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Satellite_Dish.glb": {
+"triangles": 622,
+"images": [
+"build/mat/Satellite_Dish/normal.png",
+"build/mat/Satellite_Dish/orm.png",
+"tex_src/Textures/Unique/Satellite_Dish_BaseColor.png"
+],
+"bytes": 4708300,
+"materials": [
+"Satellite_Dish"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Shopping_Cart.glb": {
+"triangles": 5590,
+"images": [
+"build/mat/Shopping_Cart/normal.png",
+"build/mat/Shopping_Cart/orm.png",
+"tex_src/Textures/Unique/Shopping_Cart_basecolor.png"
+],
+"bytes": 4775820,
+"materials": [
+"Shopping_Cart"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Side_Shed.glb": {
+"triangles": 4612,
+"images": [
+"build/mat/Side_Shed_Wood/normal.png",
+"build/mat/Side_Shed_Wood/orm.png",
+"build/mat/Side_Shed_Wood/basecolor.png",
+"build/mat/Metal_Roof_blend/normal.png",
+"build/mat/Metal_Roof_blend/basecolor.png",
+"build/mat/Metal_Roof_blend/orm.png",
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png"
+],
+"bytes": 121335228,
+"materials": [
+"Side_Shed_Wood",
+"Metal_Roof_blend",
+"Metal_Generic"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Props/Spoon.glb": {
+"triangles": 84,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3457608,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Stone_Chimney.glb": {
+"triangles": 5136,
+"images": [
+"build/mat/Stone_Chimney/normal.png",
+"build/mat/Stone_Chimney/orm.png",
+"build/mat/Stone_Chimney/basecolor.png"
+],
+"bytes": 74516720,
+"materials": [
+"Stone_Chimney"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Tire.glb": {
+"triangles": 2560,
+"images": [
+"build/mat/Tire/normal.png",
+"build/mat/Tire/orm.png",
+"tex_src/Textures/Unique/Tire_BaseColor.png"
+],
+"bytes": 12642436,
+"materials": [
+"Tire"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Tray.glb": {
+"triangles": 212,
+"images": [
+"build/mat/Table_Props/normal.png",
+"build/mat/Table_Props/orm.png",
+"tex_src/Textures/Unique/Table_Props_BaseColor.png"
+],
+"bytes": 3466248,
+"materials": [
+"Table_Props"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Tree_Stump_1.glb": {
+"triangles": 2515,
+"images": [
+"build/mat/Tree_Stump/normal.png",
+"build/mat/Tree_Stump/orm.png",
+"build/mat/Tree_Stump/basecolor.png"
+],
+"bytes": 9634016,
+"materials": [
+"Tree_Stump"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Utility_Box_1a.glb": {
+"triangles": 786,
+"images": [
+"build/mat/Utility_Boxes_1/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_1_BaseColor.png",
+"build/mat/Utility_Boxes_1/orm.png"
+],
+"bytes": 16532228,
+"materials": [
+"Utility_Boxes_1"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Utility_Box_1b.glb": {
+"triangles": 426,
+"images": [
+"build/mat/Utility_Boxes_1/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_1_BaseColor.png",
+"build/mat/Utility_Boxes_1/orm.png"
+],
+"bytes": 16510912,
+"materials": [
+"Utility_Boxes_1"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Utility_Box_2a.glb": {
+"triangles": 438,
+"images": [
+"build/mat/Utility_Boxes_2/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_2_BaseColor.png",
+"build/mat/Utility_Boxes_2/orm.png"
+],
+"bytes": 15418488,
+"materials": [
+"Utility_Boxes_2"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Utility_Box_2b.glb": {
+"triangles": 428,
+"images": [
+"build/mat/Utility_Boxes_2/normal.png",
+"tex_src/Textures/Unique/UtilityBoxes_2_BaseColor.png",
+"build/mat/Utility_Boxes_2/orm.png"
+],
+"bytes": 15418188,
+"materials": [
+"Utility_Boxes_2"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wheel_Barrow.glb": {
+"triangles": 5994,
+"images": [
+"build/mat/Wheel_Barrow/normal.png",
+"build/mat/Wheel_Barrow/orm.png",
+"tex_src/Textures/Unique/Wheel_Barrow_BaseColor.png"
+],
+"bytes": 14899140,
+"materials": [
+"Wheel_Barrow"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Boat.glb": {
+"triangles": 3822,
+"images": [
+"build/mat/Wooden_Boat/Wooden_Boat/normal.png",
+"build/mat/Wooden_Boat/Wooden_Boat/orm.png",
+"build/mat/Wooden_Boat/Wooden_Boat/basecolor.png"
+],
+"bytes": 23558076,
+"materials": [
+"Wooden_Boat@Wooden_Boat"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Crate.glb": {
+"triangles": 3748,
+"images": [
+"build/mat/Wooden_Crate/normal.png",
+"build/mat/Wooden_Crate/orm.png",
+"tex_src/Textures/Unique/Wooden_Crate_BaseColor.png"
+],
+"bytes": 14430212,
+"materials": [
+"Wooden_Crate"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Crate_1.glb": {
+"triangles": 536,
+"images": [
+"build/mat/Wooden_Crates/normal.png",
+"build/mat/Wooden_Crates/orm.png",
+"tex_src/Textures/Unique/Wooden_Crates_BaseColor.png"
+],
+"bytes": 15161212,
+"materials": [
+"Wooden_Crates"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Crate_2.glb": {
+"triangles": 300,
+"images": [
+"build/mat/Wooden_Crates/normal.png",
+"build/mat/Wooden_Crates/orm.png",
+"tex_src/Textures/Unique/Wooden_Crates_BaseColor.png"
+],
+"bytes": 15143280,
+"materials": [
+"Wooden_Crates"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Stairs.glb": {
+"triangles": 1244,
+"images": [
+"build/mat/Wooden_Stairs/normal.png",
+"build/mat/Wooden_Stairs/orm.png",
+"build/mat/Wooden_Stairs/basecolor.png"
+],
+"bytes": 17418048,
+"materials": [
+"Wooden_Stairs"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Props/Wooden_Table_Small.glb": {
+"triangles": 936,
+"images": [
+"build/mat/Wooden_Table_Small/normal.png",
+"build/mat/Wooden_Table_Small/orm.png",
+"tex_src/Textures/Unique/Wooden_Table_Small_BaseColor.png"
+],
+"bytes": 17141344,
+"materials": [
+"Wooden_Table_Small"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Unique/Diorama_Ground.glb": {
+"triangles": 20520,
+"images": [
+"build/mat/Diorama_Ground/Diorama_Ground/normal.png",
+"build/mat/Diorama_Ground/Diorama_Ground/orm.png",
+"build/mat/Diorama_Ground/Diorama_Ground/basecolor.png",
+"build/mat/Sand/normal.png",
+"build/mat/Sand/orm.png",
+"build/mat/Sand/basecolor.png"
+],
+"bytes": 39563384,
+"materials": [
+"Diorama_Ground@Diorama_Ground",
+"Sand"
+],
+"alpha": [
+"OPAQUE",
+"OPAQUE"
+]
+},
+"Unique/Diorama_Water.glb": {
+"triangles": 8,
+"images": [
+"build/mat/Water_Lake/Diorama_Water/normal.png"
+],
+"bytes": 198776,
+"materials": [
+"Water_Lake@Diorama_Water"
+],
+"alpha": [
+"BLEND"
+]
+},
+"Unique/Pole_Cables.glb": {
+"triangles": 7200,
+"images": [
+"build/mat/Metal_Generic/normal.png",
+"build/mat/Metal_Generic/basecolor.png",
+"build/mat/Metal_Generic/orm.png"
+],
+"bytes": 15925280,
+"materials": [
+"Metal_Generic"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Unique/ShowcaseFloor.glb": {
+"triangles": 910,
+"images": [
+"build/mat/Showcase_Floor/normal.png",
+"build/mat/Showcase_Floor/orm.png",
+"build/mat/Showcase_Floor/basecolor.png"
+],
+"bytes": 35984,
+"materials": [
+"Showcase_Floor"
+],
+"alpha": [
+"OPAQUE"
+]
+},
+"Utility/Reference_man.glb": {
+"triangles": 26756,
+"images": [
+"build/mat/Showcase_Floor/normal.png",
+"build/mat/Showcase_Floor/orm.png",
+"build/mat/Showcase_Floor/basecolor.png"
+],
+"bytes": 864864,
+"materials": [
+"Showcase_Floor"
+],
+"alpha": [
+"OPAQUE"
+]
+}
+}
