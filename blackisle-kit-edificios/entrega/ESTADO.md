@@ -1,6 +1,6 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-09 · Fase actual: **A (preparación) — BLOQUEADA en R1**
+Última actualización: 2026-10-09 · Fase actual: **A (preparación) — BLOQUEADA en R1 + red**
 
 ## Resumen
 | Fase | Estado |
@@ -53,5 +53,25 @@
 - **R1:** el usuario reactivará la cuota ilimitada en Higgsfield y avisará. No se gastan créditos de pago; al aviso se re-verifica A-3.
 - **Blender:** aprobado el módulo `bpy` 5.2.2 local (Cycles en CPU) como Blender del proyecto.
 
+## Diagnóstico R1 (2026-10-09, 18:10–18:20 UTC) — créditos gastados por Claude: 0
+- El usuario sí genera ilimitado en la **web** a 1k. Su historial de hoy: dos FLUX.2 Pro 1k con el mismo prompt y los mismos
+  parámetros a las 18:08:21 (−1 crédito) y 18:08:23 (0 créditos). Incluso en la web, uno de los dos se cobró.
+- Por la **API MCP** (la que uso yo), una generación real con `use_unlim:true` se **rechaza** en los 9 modelos de imagen:
+  "Unlimited generations aren't supported for <modelo>" (nano_banana_pro, gpt_image_2, nano_banana_2 [=nano_banana_flash],
+  nano_banana, seedream_v4_5, seedream_v5_lite, seedream_v5_pro, flux_2, kling_omni_image). El rechazo no cobra.
+  Saldo antes de estas pruebas 516,26 y después 516,26. El crédito que faltaba respecto a 517,26 corresponde al FLUX.2 Pro de la web.
+- Conclusión: el campo `unlim` del MCP es la cuota de "free-trial unlimited". Lo ilimitado del plan Ultra solo aplica en la web
+  y la API no lo expone para esta cuenta. No se arregla desde aquí.
+- Precios por API (consulta previa con `get_cost`, sin generar): nano_banana_pro 1k/2k = 2 · gpt_image_2 high 1k = 3,5 / 2k = 6,5 /
+  low 1k = 0,5 · seedream_v4_5 = 1 · flux_2 pro 1k = 1.
+  Estimación del pipeline completo (52 imágenes + 40 % de repeticiones): ~155 créditos con lettering a 1k, ~218 con lettering a 2k.
+- **Segundo bloqueo, de red:** el contenedor no alcanza ningún host de Higgsfield (CONNECT 403): `upload.higgsfield.ai` (subida),
+  `d2ol7oe51mr4n9.cloudfront.net` (medios subidos), `d8j0ntlcm91z4.cloudfront.net` (resultados), `higgsfield.ai`.
+  Sin esos hosts no puedo subir referencias ni descargar resultados (R6), ni siquiera pagando.
+  Hay 7 URLs de subida presignadas creadas (caducan en 24 h, sin usar).
+- Resolución 1k vs 2k (análisis): 1k basta técnicamente. Una palabra de 3,6 m a 290 px/m necesita 1044 px y un 3:2 a 1k da ~1536 px.
+  Un mosaico de 3 m a 170 px/m necesita 510 px. Los conceptos solo sirven para aprobación.
+
 ## Problemas abiertos
-- **R1:** cuota ilimitada no disponible. Esperando el aviso del usuario para re-verificar.
+- **R1:** la cuota ilimitada no es usable por API. Esperando decisión del usuario sobre la vía.
+- **Red:** hosts de Higgsfield bloqueados en el entorno cloud.
