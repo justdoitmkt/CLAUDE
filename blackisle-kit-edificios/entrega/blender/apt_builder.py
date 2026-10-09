@@ -181,13 +181,14 @@ def build_facade(cfg, mb, side):
     placed = []
     for p in facade_panels(cfg, side):
         kind = p["kind"]
-        if kind == "breeze":  # la celosía va en dress (es el cierre del núcleo de escalera)
-            placed.append(dict(p, opening=None))
-            continue
         L, H = p["L"], p["H"]
         op = OPENING.get(kind)
         openings = []
-        if op is not None:
+        if kind == "breeze":  # cierre del núcleo: celosía de 2,4 m centrada entre jambas de concreto, de losa a viga
+            w = min(2.4, L - 0.3)
+            u0 = (L - w) / 2
+            openings = [(round(u0, 4), round(u0 + w, 4), 0.0, round(H, 4))]
+        elif op is not None:
             w, h, sill = op
             w = min(w, L - 0.3)
             h = min(h, H - sill - 0.1) if sill > 0 else min(h, H - 0.05)
@@ -216,7 +217,7 @@ def build_facade(cfg, mb, side):
 # ----------------------------------------------------------------------------------------------
 # interior: núcleo de escalera, corredor, departamentos
 # ----------------------------------------------------------------------------------------------
-def partition(mb, p0, p1, z0, H, doors=(), t=PART, mat="plaster", door_h=2.05):
+def partition(mb, p0, p1, z0, H, doors=(), t=PART, mat="plaster", door_h=2.05, out=None, tag="room"):
     """División interior recta entre p0 y p1 (eje X o Y), centrada en la línea.
     doors = [(coordenada_centro_absoluta, ancho)] sobre el eje del muro (x si corre en X, y si corre en Y)."""
     (xa, ya), (xb, yb) = p0, p1
@@ -233,6 +234,9 @@ def partition(mb, p0, p1, z0, H, doors=(), t=PART, mat="plaster", door_h=2.05):
     else:
         m = Matrix(((0, -1, 0, xa + t / 2), (1, 0, 0, a0), (0, 0, 1, z0), (0, 0, 0, 1)))
     wall_with_openings(mb, L, H, t, ops, mat_out=mat, mat_in=mat, mat_reveal=mat, m=m)
+    if out is not None:
+        for (u0, u1, v0, v1) in ops:
+            out.append(dict(m=m, u0=u0, w=u1 - u0, h=v1, t=t, tag=tag))
 
 
 def inner_faces(cfg):
@@ -242,7 +246,7 @@ def inner_faces(cfg):
         ys[0] - (COL / 2 - RECESS) + INFILL, ys[-1] + (COL / 2 - RECESS) - INFILL
 
 
-def build_interior_apt_a(cfg, mb):
+def build_interior_apt_a(cfg, mb, out=None):
     """Plantas de APT_A (todas las escaleras dentro).
     PB: vestíbulo pasante x 0.3..3.3 entre la entrada delantera (vestíbulo rehundido) y la trasera; el descanso de PB se abre al núcleo
         (x 3.70→fachada este, y ±1.475); local oeste (2 crujías) + bodega con WC atrás; local este al frente + cuarto atrás.
@@ -262,37 +266,166 @@ def build_interior_apt_a(cfg, mb):
         for sg in (-1, 1):
             partition(mb, (3.625, sg * wy), (xin1, sg * wy), z0, H, t=0.15)
         if lv == 0:
-            partition(mb, (0.25, y_lobby_in), (0.25, yin1), z0, H, doors=[(-3.0, 0.9), (3.0, 0.9)])
-            partition(mb, (3.35, y_lobby_in), (3.35, -wy), z0, H, doors=[(-3.0, 0.9)])
-            partition(mb, (3.35, wy), (3.35, yin1), z0, H, doors=[(3.2, 0.9)])
-            partition(mb, (xin0, 0.6), (0.2, 0.6), z0, H, doors=[(-3.6, 1.4)])          # local oeste | bodega
-            partition(mb, (xin0, 3.0), (-5.0, 3.0), z0, H, doors=[(-6.0, 0.8)])          # WC de la bodega
+            partition(mb, (0.25, y_lobby_in), (0.25, yin1), z0, H, doors=[(-3.0, 0.9), (3.0, 0.9)], out=out)
+            partition(mb, (3.35, y_lobby_in), (3.35, -wy), z0, H, doors=[(-3.0, 0.9)], out=out)
+            partition(mb, (3.35, wy), (3.35, yin1), z0, H, doors=[(3.2, 0.9)], out=out)
+            partition(mb, (xin0, 0.6), (0.2, 0.6), z0, H, doors=[(-3.6, 1.4)], out=out)          # local oeste | bodega
+            partition(mb, (xin0, 3.0), (-5.0, 3.0), z0, H, doors=[(-6.0, 0.8)], out=out)          # WC de la bodega
             partition(mb, (-5.0, 3.0), (-5.0, yin1), z0, H)
             continue
         cw, xh = 0.75, 2.4
         for sg in (-1, 1):
             yc, yo = sg * cw, (yin0 if sg < 0 else yin1)
             # corredor (muro hacia los deptos) con puertas de acceso a A1/A3 (x -1.0) y A2/A4 (x 1.8)
-            partition(mb, (xin0, yc), (xh, yc), z0, H, doors=[(-1.0, 0.9), (1.8, 0.9)])
+            partition(mb, (xin0, yc), (xh, yc), z0, H, doors=[(-1.0, 0.9), (1.8, 0.9)], out=out, tag="entry")
             partition(mb, (xh, yc), (xh, sg * wy), z0, H)                                   # quiebre corredor → vestíbulo
             partition(mb, (xh, sg * wy), (3.625, sg * wy), z0, H, t=0.15)                  # vestíbulo de escalera
             partition(mb, (0.0, yo), (0.0, yc), z0, H)                                       # medianera A1|A2
             # A1/A3: estancia x -3.6..0 · recámara x xin0..-3.6 (lado fachada) · cocina x -5.4..-3.6 y baño x xin0..-5.4 (lado corredor)
-            partition(mb, (-3.6, yo), (-3.6, yc), z0, H, doors=[(sg * 3.8, 0.8), (sg * 1.6, 0.8)])
+            partition(mb, (-3.6, yo), (-3.6, yc), z0, H, doors=[(sg * 3.8, 0.8), (sg * 1.6, 0.8)], out=out)
             partition(mb, (xin0, sg * 2.4), (-3.6, sg * 2.4), z0, H)
-            partition(mb, (-5.4, sg * 2.4), (-5.4, yc), z0, H, doors=[(sg * 1.6, 0.7)])
+            partition(mb, (-5.4, sg * 2.4), (-5.4, yc), z0, H, doors=[(sg * 1.6, 0.7)], out=out)
             # A2/A4: estancia x 0..3.6 · recámara de esquina x 3.6..xin1 · cocina-acceso x 1.2..2.4 y baño x 0..1.2 (lado corredor)
-            partition(mb, (3.6, yo), (3.6, sg * wy), z0, H, doors=[(sg * 3.0, 0.8)])
-            partition(mb, (0.0, sg * 2.6), (2.4, sg * 2.6), z0, H, doors=[(1.8, 1.2)])
-            partition(mb, (1.2, sg * 2.6), (1.2, yc), z0, H, doors=[(sg * 1.7, 0.7)])
+            partition(mb, (3.6, yo), (3.6, sg * wy), z0, H, doors=[(sg * 3.0, 0.8)], out=out)
+            partition(mb, (0.0, sg * 2.6), (2.4, sg * 2.6), z0, H, doors=[(1.8, 1.2)], out=out)
+            partition(mb, (1.2, sg * 2.6), (1.2, yc), z0, H, doors=[(sg * 1.7, 0.7)], out=out)
     return mb
+
+
+# ----------------------------------------------------------------------------------------------
+# vestido con el kit (G1 vanos + G2 circulación)
+# ----------------------------------------------------------------------------------------------
+def _T(x, y, z):
+    return Matrix.Translation((x, y, z))
+
+
+ROT_Z90 = Matrix(((0, -1, 0, 0), (1, 0, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
+
+
+def dress_openings(cfg, placed, details, interior):
+    """Ventanas, puertas, cortinas metálicas, celosía, rejas y barandales de loggia sobre los paneles de fachada."""
+    from kit import circulation as circ
+    from kit import openings as op
+    r = rng(cfg["seed"] + 101)
+    n = 0
+    for side, panels in placed.items():
+        primary = side == "front"
+        for p in panels:
+            o = p.get("opening")
+            if o is None:
+                continue
+            u0, u1, v0, v1 = o
+            w, h = u1 - u0, v1 - v0
+            M = p["m"] @ _T(u0, 0, v0)
+            seed = int(r.integers(0, 10**6))
+            kind = p["kind"]
+            if kind in ("window", "window_small"):
+                roll = r.random()
+                if roll < 0.18:
+                    k = "boarded"
+                elif kind == "window_small" and roll < 0.45:
+                    k = "casement"
+                else:
+                    k = "sliding"
+                curtain = primary or r.random() < 0.4
+                details.join(op.window(k, w, h, INFILL, seed=seed, broken=float(r.uniform(0.55, 1.0)), curtain=curtain), M)
+            elif kind == "vent":
+                details.join(op.window("casement", w, h, INFILL, seed=seed, broken=1.0, curtain=False), M)
+            elif kind == "window_high":
+                details.join(op.window("sliding", w, h, INFILL, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False), M)
+                if r.random() < 0.6:
+                    details.join(op.security_grille(w, h, seed=seed + 1), M)
+            elif kind == "loggia":
+                details.join(op.window("sliding", w, h, INFILL, seed=seed, broken=float(r.uniform(0.5, 1.0)), curtain=True,
+                                       sill=False), M)
+            elif kind == "lobby":
+                details.join(op.door("double_glazed", w, h, INFILL, seed=seed, open_angle=float(r.uniform(15, 70))), M)
+            elif kind in ("door_rear", "door_service"):
+                details.join(op.door("metal", w, h, INFILL, seed=seed, open_angle=float(r.uniform(0, 80))), M)
+            elif kind == "shutter":
+                details.join(op.rolling_shutter(w, h, seed=seed, dent=float(r.uniform(0.4, 0.9)),
+                                                open_frac=float(r.choice([0.0, 0.0, 0.35]))), M)
+            elif kind == "breeze":
+                details.join(op.breeze_block_screen(w, h, seed=seed, pattern="cross", bevel=0.0, y0=0.025,
+                                                    missing=float(r.uniform(0.04, 0.12))), M)
+            n += 1
+            # barandal de loggia sobre el canto de la losa
+            if kind == "loggia" and side == "front":
+                y_axis = cfg["ys"][0] - BEAM_W / 2 + 0.07
+                details.join(circ.railing("tube_metal", p["L"], h=1.0, seed=seed + 7, bend=float(r.choice([0.0, 0.0, 0.12])),
+                                          missing=float(r.uniform(0.05, 0.2))), _T(p["a0"], y_axis, p["z0"]))
+    return n
+
+
+def dress_interior_doors(cfg, doors, interior):
+    from kit import openings as op
+    r = rng(cfg["seed"] + 202)
+    n = 0
+    for d in doors:
+        keep = 0.65 if d["tag"] == "entry" else 0.3          # saqueo: muchas hojas arrancadas (queda el vano con su derrame)
+        if r.random() > keep:
+            continue
+        M = d["m"] @ _T(d["u0"], 0, 0)
+        interior.join(op.door("flush", d["w"], d["h"], d["t"], seed=int(r.integers(0, 10**6)), open_angle=float(r.uniform(0, 95))), M)
+        n += 1
+    return n
+
+
+def dress_stairs(cfg, interior):
+    """Escalera en U por entrepiso (PB con huella 0,25 para compartir el núcleo de 3,443 m) + guarda en el último nivel."""
+    from kit import circulation as circ
+    st = cfg["stair"]
+    zl = level_z(cfg)
+    nlv = len(cfg["h"])
+    for lv in range(nlv - 1):                        # la última planta no sube (acceso al ático por escotilla)
+        fh = cfg["h"][lv]
+        kw = dict(width=1.4, floor_h=fh, landing_depth=1.2, gap=0.15, seed=cfg["seed"] * 10 + lv, broken=0.08,
+                  rail="tube_metal", debris=(lv == 0))
+        if fh > 3.0:
+            kw.update(going=0.25, landing_depth=1.19)
+        fp = circ.stair_u_footprint(**{k: kw[k] for k in ("width", "floor_h", "landing_depth", "gap")}, going=kw.get("going", 0.28))
+        assert fp["L"] <= st["w"] + 0.003 and fp["W"] <= st["l"] + 0.003, fp
+        interior.join(circ.stair_u(**kw), _T(st["x0"], st["y0"], zl[lv]))
+    # guarda sobre el hueco en la última planta (donde ya no arranca el tramo 1)
+    interior.join(circ.railing("tube_metal", 1.4, h=1.0, seed=cfg["seed"] + 5, missing=0.05),
+                  _T(st["x0"] - 0.06, st["y0"], zl[nlv - 1]) @ ROT_Z90)
 
 
 # ----------------------------------------------------------------------------------------------
 # ensamblado
 # ----------------------------------------------------------------------------------------------
+def build_apt_a(collection_root=None, dress=True):
+    """APT_A_5p completo hasta donde llega el kit aprobado. Devuelve dict colección -> [objetos]."""
+    from kit.common import get_collection
+    cfg = cfg_apt_a()
+    cid = cfg["id"]
+    root = collection_root or get_collection(cid)
+    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior")}
+    out = {k: [] for k in cols}
+    shell = MB()
+    build_frame(cfg, shell)
+    placed = {}
+    for side in ("front", "back", "west", "east"):
+        placed[side] = build_facade(cfg, shell, side)
+    out["Shell"].append(shell.finish(f"{cid}_Shell", cols["Shell"], uv_size=3.0, merge=0))
+    inter = MB()
+    doors = []
+    build_interior_apt_a(cfg, inter, out=doors)
+    if dress:
+        det = MB()
+        stats = dict(openings=dress_openings(cfg, placed, det, inter))
+        stats["interior_doors"] = dress_interior_doors(cfg, doors, inter)
+        dress_stairs(cfg, inter)
+        out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
+        out["stats"] = stats
+    out["Interior"].append(inter.finish(f"{cid}_Interior", cols["Interior"], uv_size=3.0, merge=0))
+    out["cfg"] = cfg
+    out["placed"] = placed
+    return out
+
+
 def build_structure(cfg, collection=None):
-    """Estructura + fachadas + interior. Devuelve (objetos, paneles colocados)."""
+    """(compatibilidad) Estructura + fachadas + interior sin vestir."""
     objs = []
     mb = MB()
     build_frame(cfg, mb)
