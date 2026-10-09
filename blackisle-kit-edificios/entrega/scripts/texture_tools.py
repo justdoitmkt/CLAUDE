@@ -154,3 +154,47 @@ def glb_tris(path):
                 cnt = j["accessors"][p["indices"]]["count"] if "indices" in p else j["accessors"][p["attributes"]["POSITION"]]["count"]
                 total += (cnt // 3) * uses.get(i, 0)
     return total
+
+
+def despill_all(path):
+    """Despill de verde en TODOS los píxeles de un PNG RGBA ya recortado (G <= max(R, B)).
+    Para arte que por diseño no lleva verde y que el modelo tiñó de verde en brillos o halos."""
+    a = np.asarray(Image.open(path).convert("RGBA")).copy()
+    a[..., 1] = np.minimum(a[..., 1], np.maximum(a[..., 0], a[..., 2]))
+    Image.fromarray(a, "RGBA").save(path)
+
+
+def split_sheet(src_rgba, dst_prefix, min_gap=12, min_size=40, margin=8):
+    """Separa una hoja RGBA (piezas en cuadrícula con huecos vacíos) en piezas sueltas.
+    Corta primero por filas vacías y luego por columnas vacías dentro de cada fila (proyección del alfa).
+    Devuelve la lista de rutas guardadas: <dst_prefix>_01.png, _02.png… en orden de lectura."""
+    a = np.asarray(Image.open(src_rgba).convert("RGBA"))
+    occ = a[..., 3] > 20
+
+    def bands(profile):
+        out, start, gap = [], None, 0
+        for i, v in enumerate(profile):
+            if v:
+                if start is None:
+                    start = i
+                gap = 0
+            elif start is not None:
+                gap += 1
+                if gap >= min_gap:
+                    out.append((start, i - gap + 1))
+                    start, gap = None, 0
+        if start is not None:
+            out.append((start, len(profile)))
+        return [(s, e) for s, e in out if e - s >= min_size]
+
+    paths = []
+    for (y0, y1) in bands(occ.any(axis=1)):
+        for (x0, x1) in bands(occ[y0:y1].any(axis=0)):
+            sub = occ[y0:y1, x0:x1]
+            ys = np.where(sub.any(axis=1))[0]
+            yy0, yy1 = max(y0 + ys.min() - margin, 0), min(y0 + ys.max() + 1 + margin, a.shape[0])
+            xx0, xx1 = max(x0 - margin, 0), min(x1 + margin, a.shape[1])
+            p = f"{dst_prefix}_{len(paths) + 1:02d}.png"
+            Image.fromarray(a[yy0:yy1, xx0:xx1], "RGBA").save(p)
+            paths.append(p)
+    return paths

@@ -1,14 +1,16 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-09 · Fase actual: **B/C generadas → PUNTO DE CONTROL 1 (esperando al usuario) · red bloqueada para descargas**
+Última actualización: 2026-10-09 · Fase actual: **E · modelado (kit modular + piloto APT_A_5p)**
 
 ## Resumen
 | Fase | Estado |
 |---|---|
 | A · Preparación y verificación | Hecha salvo el paso A-3: **cuota ilimitada no disponible → detenido (R1)** |
-| B · Conceptos (Higgsfield) | Pendiente, bloqueada por R1 |
-| C · Lettering (Higgsfield) | Pendiente, bloqueada por R1 |
-| PC1 · Aprobación del usuario | Pendiente |
+| B · Conceptos (Higgsfield) | **Hecha.** 25 vistas vigentes descargadas y revisadas con mis ojos (R5) |
+| C · Lettering (Higgsfield) | **Hecha.** 15 piezas, ortografía verificada; 31 recortes RGBA en `lettering/cutouts/` |
+| PC1 · Aprobación del usuario | **Aprobado** ("dale", 2026-10-09). Se usan los heroes v2/v3 |
+| D · Biblioteca de materiales | **Entradas hechas:** 16 texturas 1024² repetibles en `texturas/`. Paneles de grafiti pendientes (dependen de los vanos del modelo) |
+| E · Modelado | En curso: kit modular + piloto APT_A_5p |
 | D–G | Pendientes |
 
 | Modelo | Estado |
@@ -145,7 +147,16 @@ Tienes que construir literalmente toda la estructura del edificio, incluso por d
 - Conceptos invalidados por la regla 2: APT_B v2 (torre exterior) y APT_D v2 (escalera de emergencia).
   Rehechos como v3: hero APT_B 8ac1d4d9 y hero APT_D 5dac2101 (lote de 2, 3 créditos).
 
+## Fase D · biblioteca (lote 9, 16 imágenes, 24 créditos; saldo esperado 411,26)
+- 10 entradas: T1 concreto (anclado a ref_1), T2 aplanado y pintura, T3 teja, T4 madera, W1 tablones oscuros (anclado a ref_5),
+  W2 tablas grises, R1 lámina óxido, R2 tablones grises, S1 ladrillo, M1 metal oxidado.
+- 6 máscaras K1–K6 en gris puro. Todo pasado por `make_seamless` y revisado en mosaico 2×2: sin costuras visibles.
+- **Pendiente conocido:** S1 y T3 tienen fantasmas (hiladas dobles) en la zona de mezcla. Impacto bajo: en las cabañas, ladrillo y teja van
+  como geometría individual. Si el QA a 2 m de los parches de ladrillo de APT_B lo delata, se repara con inpaint (nano_banana_2_1, máscara en cruz).
+- Lettering: corrección de verde en todos los píxeles (C01 tenía 10 % y C06 20 % de tinte verde en brillos), erosión de alfa de 1 px y
+  hojas S05–S07 separadas en 6 piezas cada una por proyección de alfa. C01 se invirtió a tinta negra con contorno blanco, como la referencia;
+  la versión blanca queda como `C01_mi_vida_loca_blanco.png`.
+
 ## Problemas abiertos
-- **Red (bloqueante para R5/R6 y para la Fase D):** `d8j0ntlcm91z4.cloudfront.net` (resultados) sigue bloqueado; WebFetch tampoco resuelve el host.
-  No puedo ver ni descargar lo generado. Las referencias ya no dependen de `upload.higgsfield.ai`.
+- ~~Red~~ **Resuelto:** el usuario habilitó `d8j0ntlcm91z4.cloudfront.net`. Las 52 imágenes de B/C se descargaron (52/52) y se revisaron.
 - **Red:** hosts de Higgsfield bloqueados en el entorno cloud.
