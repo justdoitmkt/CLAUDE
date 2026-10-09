@@ -49,6 +49,9 @@
 - `scripts/` añadido al árbol de §7 para `texture_tools.py` (no es un script de Blender).
 - GitHub rechaza archivos > 100 MB: los GLB se mantendrán por debajo de ese límite (el objetivo de §G ya es ≤ 100 MB).
 
+## Decisiones del usuario (2026-10-09)
+- **R1:** el usuario reactivará la cuota ilimitada en Higgsfield y avisará. No se gastan créditos de pago; al aviso se re-verifica A-3.
+- **Blender:** aprobado el módulo `bpy` 5.2.2 local (Cycles en CPU) como Blender del proyecto.
+
 ## Problemas abiertos
-- **R1:** cuota ilimitada no disponible. Esperando decisión del usuario.
-- **Blender:** se usa el módulo `bpy` local en vez de un conector; pendiente de confirmación del usuario.
+- **R1:** cuota ilimitada no disponible. Esperando el aviso del usuario para re-verificar.
