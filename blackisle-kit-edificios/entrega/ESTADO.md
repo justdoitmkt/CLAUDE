@@ -1,6 +1,6 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-09 · Fase actual: **A (preparación) — BLOQUEADA en R1 + red**
+Última actualización: 2026-10-09 · Fase actual: **B/C generadas → PUNTO DE CONTROL 1 (esperando al usuario) · red bloqueada para descargas**
 
 ## Resumen
 | Fase | Estado |
@@ -72,6 +72,80 @@
 - Resolución 1k vs 2k (análisis): 1k basta técnicamente. Una palabra de 3,6 m a 290 px/m necesita 1044 px y un 3:2 a 1k da ~1536 px.
   Un mosaico de 3 m a 170 px/m necesita 510 px. Los conceptos solo sirven para aprobación.
 
+## Autorización de créditos (usuario, 2026-10-09 ~18:18 UTC)
+- El usuario ordena: **"usa nano banana 2.1 en 1k, el precio es de 1,5"** → excepción explícita a R1.
+  Precio verificado con `get_cost`: 1,5 créditos a 1k (también con `thinking_level: high`).
+- Todo B/C/D se genera con `nano_banana_2_1`, 1k, `thinking_level: high`, semilla fija por pieza.
+
+## Referencias en Higgsfield (importadas del repo público con media_import_url)
+| Archivo | media_id |
+|---|---|
+| ref_1_cara_ancha_puerta | 826f5f8a-d0e0-4006-ac4e-8391608353fc |
+| ref_2_cara_angosta_palafito | c14a000d-42fe-40e1-a577-4df0f1a259eb |
+| ref_3_cara_ancha_sombra_casas | 7fdd05e2-c217-4418-bba7-fdababc96743 |
+| ref_4_cara_angosta_bloque_azul | 70ba0369-ca59-4aa1-b9f7-fcec8298f36a |
+| ref_5_casa_madera_2p | b2e078a1-50d9-449b-9be1-43ea23500592 |
+| ref_grafiti_planta_baja_1 | fc3cbfd2-363d-49ae-9405-876324d21435 |
+| ref_grafiti_planta_baja_4 | 67e24312-2560-485c-91e5-bb51766edc9f |
+
+## Generaciones (job_id) y libro de créditos — `nano_banana_2_1`, 1k, 1,5 créditos por imagen
+| Lote | Contenido | Enviadas | Filtro nsfw (reembolsadas) | Créditos netos |
+|---|---|---|---|---|
+| 1 | heroes v1 sin referencias + C01–C05 | 12 | 0 | 18 |
+| 2 | heroes v2 con referencias + C06–C08, S01, S02 | 12 | 0 | 18 |
+| 3 | elevaciones y primeros planos (C, D, cabañas) + S03, S04 | 12 | 3 | 13,5 |
+| 4 | elevación y primer plano A/B + S05–S07 | 7 | 2 | 7,5 |
+| 5 | reintento 1 de las bloqueadas | 5 | 4 | 1,5 |
+| 6 | reintento 2 (prompt mínimo, entorno natural) | 4 | 0 | 6 |
+| 7 | heroes v3 APT_B y APT_D (escaleras internas) | 2 | 0 | 3 |
+| 8 | elevación y primer plano B3/D3 + vistas traseras de los 4 departamentos | 8 | 0 | 12 |
+| **Total** | | **62** | **9** | **79,5** |
+- Saldo: 516,26 → 435,26 (−81,0). Diferencia de 1,5 sin generación asociada: cargo de Nano Banana 2.1 a las 18:18:06 UTC,
+  antes de mi primer lote (18:19:47). Coincide con mi primera consulta `get_cost` y no aparece ningún trabajo en el historial.
+  Atribución incierta; se informa tal cual.
+- Los rechazos `nsfw` son falsos positivos del filtro de salida. Se reembolsan solos.
+
+### Set vigente de conceptos (PC1)
+| Modelo | hero | elevación | primer plano | trasera |
+|---|---|---|---|---|
+| APT_A_5p | d2c82805 (v2) | a38bcdd7 | 07a9622f | d3ceefc1 |
+| APT_B_4p | 8ac1d4d9 (v3) | 114509a8 | e5f634d0 | 1c3e07c8 |
+| APT_C_3p | 18c151f9 (v2) | 771a18ab | 7de5a0de | c3ae54f0 |
+| APT_D_4p | 5dac2101 (v3) | 28ab0d48 | d4a892f8 | 09afc20e |
+| CAB_1_tablones | a2b2b4ff (v2) | d4e97b6a | 0848e204 | — |
+| CAB_2_pilotes | 1f19e8e4 (v2) | 09e68b08 | 8c897fb7 | — |
+| CAB_3_ladrillo | b24ed18c (v2) | 4e2d1b53 | 58fb64a9 | — |
+- Alternativas sin referencias (v1): APT_A bf9509c2 · APT_C a1521cb0 · CAB_1 545bedd7 · CAB_2 a56a5132 · CAB_3 c07258a0.
+- Obsoletos por la regla de escaleras: APT_B v1 016e5682 / v2 7a0a6e29 (+ a42d1cb5); APT_D v1 26c355c0 / v2 a42aa29a (+ 9c65905c, 92087026).
+- Lettering: C01 21e9d88a · C02 0d25f4dc · C03 94f5f0d2 · C04 7d933e77 · C05 d4f3f014 · C06 ef162266 · C07 16f01111 · C08 c1dc06e5 ·
+  S01 7de785e8 · S02 ff9aefe3 · S03 5ea8dae7 · S04 426af700 · S05 9028e01f · S06 3aff111c · S07 1d644e07
+- Recorte del verde: `key_out` local (gratis, probado). Remove background, autorizado por el usuario, queda como respaldo para las placas
+  con contaminación verde en el borde.
+- **Sin verificar con mis ojos (R5):** la CDN está bloqueada. La ortografía del lettering está pendiente de revisión al poder descargar.
+
+## CAMBIOS DE DISEÑO ORDENADOS POR EL USUARIO (2026-10-09 ~18:30 UTC) — prevalecen sobre §4 del brief
+Cita: "Los modelos de edificios de departamento necesito que tengan entrada trasera y delantera en la parte de abajo.
+Y ninguna escalera debe de estar afuera para subir a los cuartos. Las escaleras deben de estar por dentro.
+Tienes que construir literalmente toda la estructura del edificio, incluso por dentro."
+1. **Los 4 departamentos llevan entrada delantera (cara −Y) y trasera (cara +Y) en PB**, conectadas por el vestíbulo o corredor de PB
+   hasta el núcleo de escalera.
+2. **Cero escaleras exteriores.** Toda escalera que sube a los departamentos va dentro de la envolvente.
+   - APT_A: el núcleo con celosía de bloques queda **dentro de la planta**. La celosía es parte de la fachada y la escalera queda detrás.
+   - APT_B: **se elimina la torre de escalera exterior.** Núcleo de escalera interno. Las galerías de acceso se mantienen como
+     pasillos-balcón abiertos a los que se llega desde los descansos internos (son corredores, no escaleras).
+   - APT_C: escalera interna en el encuentro de las dos alas.
+   - APT_D: **se elimina la escalera de emergencia metálica.** Núcleo interno marcado en la cara angosta E por una franja vertical
+     de ventilas cuadradas. La pieza firma pasa a ser los balcones en voladizo, las buhardillas y esa franja.
+3. **Interior completo** (sustituye al "interior mínimo" de E-8): todos los pisos con departamentos divididos en cuartos
+   (estancia, recámaras, cocina, baño), corredor o vestíbulo por planta, muros divisorios con espesor, vanos con marcos y algunas hojas
+   de puerta, núcleo de escalera real con descansos y barandal (peldaño 0,17 × 0,28, ancho 1,2 m), azotea o ático accesible.
+   Sin mobiliario, con escombro y daño interior.
+   Impacto: el bloque "Interior" de §5 sube de 8–25 k a ~60–150 k triángulos por departamento.
+   Se añade el atlas `interior` (albedo 4096², normal y ORM 2048²) dentro del presupuesto de ≤ 300 MB, bajando primero las caras traseras.
+- Conceptos invalidados por la regla 2: APT_B v2 (torre exterior) y APT_D v2 (escalera de emergencia).
+  Rehechos como v3: hero APT_B 8ac1d4d9 y hero APT_D 5dac2101 (lote de 2, 3 créditos).
+
 ## Problemas abiertos
-- **R1:** la cuota ilimitada no es usable por API. Esperando decisión del usuario sobre la vía.
+- **Red (bloqueante para R5/R6 y para la Fase D):** `d8j0ntlcm91z4.cloudfront.net` (resultados) sigue bloqueado; WebFetch tampoco resuelve el host.
+  No puedo ver ni descargar lo generado. Las referencias ya no dependen de `upload.higgsfield.ai`.
 - **Red:** hosts de Higgsfield bloqueados en el entorno cloud.
