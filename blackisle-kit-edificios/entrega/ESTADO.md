@@ -10,12 +10,13 @@
 | C · Lettering (Higgsfield) | **Hecha.** 15 piezas, ortografía verificada; 31 recortes RGBA en `lettering/cutouts/` |
 | PC1 · Aprobación del usuario | **Aprobado** ("dale", 2026-10-09). Se usan los heroes v2/v3 |
 | D · Biblioteca de materiales | **Entradas hechas:** 16 texturas 1024² repetibles en `texturas/`. Paneles de grafiti pendientes (dependen de los vanos del modelo) |
-| E · Modelado | En curso: kit modular + piloto APT_A_5p |
+| E · Modelado | En curso. Kit: G1 y G2 aprobados tras revisión adversarial; G3 y G4 en revisión (con niveles de detalle). APT_A: estructura + interior + vestido G1/G2 |
+| PC2 · Biblioteca + panel | Hecho (informativo): `render_qa/PC2_*.jpg`; paneles `texturas/graffiti/G_APT_A_{front,back,west,east}.png` (capa RGBA) + `.jpg` sobre T1 |
 | D–G | Pendientes |
 
 | Modelo | Estado |
 |---|---|
-| APT_A_5p (piloto) | no iniciado |
+| APT_A_5p (piloto) | estructura + 4 deptos/piso + escaleras internas + 69 vanos vestidos + 27 puertas interiores (523 882 tris sin techo/servicios/daño) |
 | APT_B_4p · APT_C_3p · APT_D_4p | no iniciados |
 | CAB_1_tablones · CAB_2_pilotes · CAB_3_ladrillo | no iniciados |
 
@@ -156,6 +157,19 @@ Tienes que construir literalmente toda la estructura del edificio, incluso por d
 - Lettering: corrección de verde en todos los píxeles (C01 tenía 10 % y C06 20 % de tinte verde en brillos), erosión de alfa de 1 px y
   hojas S05–S07 separadas en 6 piezas cada una por proyección de alfa. C01 se invirtió a tinta negra con contorno blanco, como la referencia;
   la versión blanca queda como `C01_mi_vida_loca_blanco.png`.
+
+## Decisiones de método (R8, 2026-10-10)
+- **Presupuesto:** el interior completo exigido por el usuario no cabe en el techo de 600 k del brief. Nuevo techo **≤ 700 k para departamentos**
+  (≤ 300 k cabañas). Se recorta primero el interior (hojas de puertas: saqueo) y se usan niveles de detalle bajos en fachadas secundarias.
+- **Texturas del interior:** ~2000 m² de superficie no caben como horneado único a densidad útil. Interior = materiales repetibles PBR a escala
+  real (UV de caja 2 m) + oclusión horneada en un 2.º canal UV (glTF occlusionTexture.texCoord=1 → `aoMap` en Three.js).
+  Exterior (fachadas, techo, detalles) = atlas únicos horneados según §4.7.
+- **Grafiti:** capa RGBA por cara (`compose_graffiti_dense`): tags de fondo → héroes enteros fuera de vanos y sin encimarse → tags →
+  íconos únicos → goteos → borrados grises de rodillo que no tapan héroes → desgaste con K1 → desvanecimiento hasta PB+0,7 m.
+  Zonas excluidas calculadas de los vanos reales del modelo (`texturas/graffiti/G_APT_A_mapa.json`). Las cortinas metálicas llevan su
+  propio grafiti en el atlas de detalles.
+- **Reinicio del contenedor (2026-10-09 ~23:45):** se perdió el workflow del kit. Los 4 módulos construidos sobrevivieron en disco (commit ffaa3a3);
+  las revisiones de G1/G2 ya estaban completas; las de G3/G4 se relanzaron.
 
 ## Problemas abiertos
 - ~~Red~~ **Resuelto:** el usuario habilitó `d8j0ntlcm91z4.cloudfront.net`. Las 52 imágenes de B/C se descargaron (52/52) y se revisaron.
