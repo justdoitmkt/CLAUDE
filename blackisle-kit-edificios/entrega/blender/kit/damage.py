@@ -26,8 +26,14 @@ sobre una retícula, sin caras internas) + biseles solo en las aristas exteriore
     ejes en orden (x -> (y, z), y -> (x, z), z -> (x, y)). Columnas: axis='z', sides=(±1, ±1) = cualquiera de sus 4 esquinas.
 Para colocar `spall_edge` a mano en otra orientación usa `spall_matrix(...)` (misma convención) y construye tú el hueco.
 
-Triángulos medidos (barrido de 8 semillas): rebar_nest 15–35 k (n = 4–11) · rubble_pile 10–51 k (r 0,6–2,0, n 30–100) ·
-chunk 90–750 (0,1–0,7 m; losa grande hasta ~4 k) · spall_edge 3–14 k (0,5–1,9 m) · spalled_box 10–19 k (losa 2–4 m, 1 mordida).
+NIVEL DE DETALLE: todas las funciones públicas aceptan detail='high' (por defecto) | 'mid' | 'low' (ver services._detail;
+la semilla se consume igual en los 3 niveles). Triángulos medidos (barrido de 8 semillas × 3 niveles; high / mid / low):
+  rebar_nest (n 4–11, largo 0,4–0,9) ....... 19–40 k     / 3,2–3,8 k / 1,2–1,4 k   (n 8, 0,6 m: 28,5 / 3,3 / 1,25 k)
+  rubble_pile (r 0,6–2,0, n 30–100) ........ 16–115 k    / 4,6–30 k  / 2,7–9,3 k   (r 1, n 60: 50 / 13,3 / 5,6 k)
+  chunk (0,1–0,7 m) ........................ 0,3–3,6 k   / 0,1–1,5 k / 80–140
+  spall_edge (0,5–1,9 m) ................... 3,0–13,9 k  / 0,6–2,5 k / 0,3–1,1 k
+  spalled_box (losa 2–3,4 m, 2 mordidas) ... 18,7–27 k   / 5,6–8,0 k / 2,4–3,3 k  · columna 2,6 m: 19,9 / 6,0 / 2,5 k
+Control de costo adicional: rebar_nest(n, seg, ribs) y rubble_pile(n, gravel).
 """
 import math
 
@@ -190,10 +196,12 @@ def _stirrup(mb, cx, cy, z, hw, hd, rr, r=0.0032, tilt=(0.0, 0.0), open_=0.0, ma
     start = int(rr.integers(0, 4))
     c = corners[start:] + corners[:start]
     c0 = Vector((c[0][0], c[0][1], z))
-    path = [Vector((cc[0], cc[1], z)) for cc in c] + [c0 + (Vector((c[1][0], c[1][1], z)) - c0) * 0.25]
-    path = _fillet(path, 0.02, 4)
     hk_in = (Vector((cx, cy, z)) - c0).normalized()
-    path = [c0 + hk_in * 0.07 + Vector((0, 0, -0.003))] + path[0:] + [path[-1] + hk_in * 0.06 + Vector((0, 0, 0.003))]
+    q25 = c0 + (Vector((c[1][0], c[1][1], z)) - c0) * 0.25
+    # ganchos a 135° incluidos ANTES del redondeo: también sus dobleces quedan curvos (antes eran quiebres secos)
+    path = ([c0 + hk_in * 0.07 + Vector((0, 0, -0.003))] + [Vector((cc[0], cc[1], z)) for cc in c] + [c0, q25]
+            + [q25 + hk_in * 0.06 + Vector((0, 0, 0.003))])
+    path = _fillet(path, 0.02, 4)
     if open_ > 0:
         k = len(path) // 2
         for i in range(k, len(path)):
@@ -409,7 +417,10 @@ def _concrete_chunk(mb, M, size, rr, nz, kind=None, dres=None, rebar=None, res=1
 def rebar_nest(seed=0, n=8, length=0.6, stump=(0.35, 0.35, 0.35), r=None, detail="high", seg=None, ribs=None):
     """Muñón de columna de concreto roto (0,35 × 0,35, fractura irregular con esquinas desprendidas) del que salen
     n varillas corrugadas de 8 lados (Ø 3/8"–1/2") dobladas en curva, en gancho o con quiebre seco, estribos (uno en su
-    lugar, otro zafado y abierto) y pedazos de concreto aún pegados. Origen: centro de la base del muñón (z = 0)."""
+    lugar, otro zafado y abierto) y pedazos de concreto aún pegados. Origen: centro de la base del muñón (z = 0).
+    detail: high / mid / low = 28,5 / 3,3 / 1,25 k con n = 8, length = 0,6 (≈ 2,9 k / 0,3 k / 0,1 k por varilla).
+    mid / low: varillas lisas de 5 / 4 lados simplificadas (el corrugado no se lee a > 3 m), muñón a paso × 2 / × 5.
+    Control fino: n (varillas), seg (lados de varilla), ribs (forzar o quitar el corrugado)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -545,7 +556,10 @@ def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
     """Montón de escombro: base de cascajo/arena con perfil de talud irregular y n trozos de concreto (cascos convexos
     rugosos, losas con varilla) APILADOS con un campo de alturas (cada pieza descansa sobre las anteriores), ladrillos
     enteros y rotos, grava y varillas dobladas asomando.
-    Origen: centro del montón sobre el piso (la base se entierra 2 cm, z = -0,02)."""
+    Origen: centro del montón sobre el piso (la base se entierra 2 cm, z = -0,02).
+    detail: high / mid / low = 50 / 13,3 / 5,6 k con radius = 1, n = 60 y 93 / 24 / 8,4 k con radius = 1,6, n = 90.
+    mid: trozos con la mitad de resolución y 1 de cada 2 piedras de grava; low: cada trozo es el poliedro limpio de sus
+    planos de fractura (20–60 triángulos) y 1 de cada 4 piedras. Control fino: n (trozos) y gravel (piedras por trozo)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -676,7 +690,8 @@ def chunk(size=0.3, seed=0, kind=None, detail="high"):
     """Trozo suelto e irregular de concreto (casco convexo rugoso). size: escalar (dimensión mayor) o (sx, sy, sz).
     kind: 'block' (pedazo macizo de esquinas cortadas), 'slab' (pedazo de losa con caras moldeadas planas y, si es
     grande, varilla asomando) o None (al azar). Origen: centro en planta, z = 0 en su punto más bajo (se apoya en el piso;
-    para escombro colgante o desconches usar la matriz que convenga)."""
+    para escombro colgante o desconches usar la matriz que convenga).
+    detail: high / mid / low = 2,4 / 0,8 / 0,09 k para 0,45 m (low = poliedro limpio de los planos de fractura)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -791,7 +806,9 @@ def spall_edge(length, depth, seed=0, edge_bevel=0.015, cover=0.035, bar_r=0.006
     varilla longitudinal corrugada expuesta (recubrimiento `cover` al eje) y esquinas de estribo cada `stirrup_every`.
     Coordenadas y uso: ver la docstring del módulo (arista en +X, caras del anfitrión y = 0 y z = 0, la pieza llena
     y ∈ [0, depth), z ∈ (-depth, 0]). Queda una junta de 1 mm con el anfitrión (se lee como grieta). Para un empalme
-    soldado sin junta usar `spalled_box`, que integra la mordida en el sólido del anfitrión."""
+    soldado sin junta usar `spalled_box`, que integra la mordida en el sólido del anfitrión.
+    detail: high / mid / low = 8,4 / 1,7 / 0,7 k para 1,2 × 0,12 (estaciones cada 1,5 / 3 / 6 cm, perfil de 12 / 8 / 5
+    puntos, varilla lisa en mid / low, 1 de cada 2 / 4 piedras de agregado)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -850,7 +867,9 @@ def spalled_box(mb, mn, mx, spalls, mat="concrete", bevel=0.015, seg=2, detail="
     Construcción: barrido (loft) a lo largo del eje de una sección = rectángulo con sus 4 esquinas, cada una con el
     chaflán redondo de radio `bevel` o con el perfil de mordida donde la hay; estaciones cada 1,5 cm dentro de las
     mordidas; los extremos de la caja llevan su propio redondeo (3 estaciones) y tapa. Varillas, estribos y agregado
-    expuestos se agregan con la misma convención que `spall_edge`."""
+    expuestos se agregan con la misma convención que `spall_edge`.
+    detail: high / mid / low = 29 / 8,3 / 3,4 k para una losa de 3,6 m con 2 mordidas y 23,6 / 6,9 / 2,9 k para una
+    columna de 2,6 m con 2 mordidas (mismos recortes que spall_edge)."""
     with _detail(detail):
         mn, mx = _v(mn), _v(mx)
         if not spalls:

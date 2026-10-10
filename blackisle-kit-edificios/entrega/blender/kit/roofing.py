@@ -299,15 +299,18 @@ def _plan_local(R, x, y):
 # trazado compartido de hiladas / correas (roof_frame y las cubiertas deben coincidir)
 # =====================================================================================================================
 def _tile_courses(vlen):
-    """v del borde inferior de cada hilada de teja (la última se ajusta para llegar a 3 cm de la cumbrera)."""
-    vs, v = [], TILE_V0
-    while v + TILE_L <= vlen - 0.03 + 1e-9:
-        vs.append(v)
-        v += TILE_E
-    top = vlen - 0.03 - TILE_L
-    if not vs or top - vs[-1] > 0.06:
-        vs.append(max(top, TILE_V0))
-    return vs
+    """v del borde inferior de cada hilada de teja: galga UNIFORME (<= TILE_E) de modo que la última llegue a 3 cm de la
+    cumbrera. Antes la última hilada se apretaba contra la penúltima y, con más solape del previsto, se metía en ella."""
+    span = vlen - 0.03 - TILE_L - TILE_V0
+    if span <= 1e-6:
+        return [TILE_V0]
+    n = max(1, int(math.ceil(span / TILE_E - 1e-9)))
+    return [TILE_V0 + span * i / n for i in range(n + 1)]
+
+
+def _galga(vlen):
+    vs = _tile_courses(vlen)
+    return vs[1] - vs[0] if len(vs) > 1 else TILE_E
 
 
 def _batten_vs(vlen):
@@ -727,6 +730,11 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
 # =====================================================================================================================
 TILE_GAP = 0.003
 LB = 1.5 * (TILE_T + TILE_GAP)          # el borde bajo del canal apoya DENTRO del canal inferior (anidado sin intersección)
+
+
+def _lb(e):
+    """Elevación de la boca baja del canal para la galga e: holgura TILE_GAP contra el canal inferior (LB con e = 0,30)."""
+    return (TILE_T + TILE_GAP) * TILE_L / e
 CAP_L, CAP_RN, CAP_RW, CAP_T, CAP_TH, CAP_STEP = 0.42, 0.105, 0.135, 0.014, math.radians(66.0), 0.32
 
 # Niveles de detalle de barrel_tiles(detail=...). La disposición (qué teja falta, cuál se corre o se rompe, el hueco, los
@@ -850,18 +858,19 @@ def _tile_m(u, vb, nb, nt, L=TILE_L):
     return _frame_m(X, Y, X.cross(Y), Vector((u, vb, nb)))
 
 
-def _canal_sec(v_rel):
+def _canal_sec(v_rel, e=TILE_E):
     """Secciones de canal (centro n, ri, ro) que cubren v_rel (relativo a la base de la hilada) — hiladas k-1, k, k+1."""
     out = []
-    for off in (-TILE_E, 0.0, TILE_E):
+    lb = _lb(e)
+    for off in (-e, 0.0, e):
         x = v_rel - off
         if -1e-9 <= x <= TILE_L + 1e-9:
             ri = TILE_RN + (TILE_RW - TILE_RN) * x / TILE_L
-            out.append((LB * (1.0 - x / TILE_L) + ri + TILE_T, ri, ri + TILE_T))
+            out.append((lb * (1.0 - x / TILE_L) + ri + TILE_T, ri, ri + TILE_T))
     return out
 
 
-def _cobija_lifts():
+def _cobija_lifts(e=TILE_E):
     """Altura del eje de la cobija (relativa a TILE_N) en su boca ancha (abajo) y estrecha (arriba), resuelta numéricamente para
     que no toque los canales vecinos (a ±S/2) ni la cobija inferior. Estado estacionario: igual para todas las hiladas."""
     th, S, g = TILE_TH, TILE_S, TILE_GAP
@@ -879,7 +888,7 @@ def _cobija_lifts():
             ri = ri_cob(x)
             ro = ri + TILE_T
             q = -1.0
-            for (cn, rci, rco) in _canal_sec(x):
+            for (cn, rci, rco) in _canal_sec(x, e):
                 for cu in (S / 2, -S / 2):
                     # puntos de la cobija contra la cara superior del canal
                     for rr in (ri, ro):
@@ -905,7 +914,7 @@ def _cobija_lifts():
             # sobre el plano de rastreles
             q = max(q, g - ri * math.cos(th))
             # cobija inferior (su boca estrecha queda bajo la ancha de esta)
-            xl = x + TILE_E
+            xl = x + e
             if xl <= TILE_L:
                 nl = nb + (nt - nb) * xl / TILE_L
                 rol = ri_cob(xl) + TILE_T
@@ -921,20 +930,20 @@ def _cobija_lifts():
     return nb, nt
 
 
-_COB = None
+_COB = {}
 
 
-def _cob():
-    global _COB
-    if _COB is None:
-        _COB = _cobija_lifts()
-    return _COB
+def _cob(e=TILE_E):
+    k = round(e, 3)
+    if k not in _COB:
+        _COB[k] = _cobija_lifts(k)
+    return _COB[k]
 
 
-def _tile_env():
+def _tile_env(e=TILE_E):
     """Altura máxima de la capa de teja sobre TILE_N (perpendicular)."""
-    nb, nt = _cob()
-    can = max(LB + TILE_RN + TILE_T - TILE_RN * math.cos(TILE_TH), TILE_RW + TILE_T - TILE_RW * math.cos(TILE_TH))
+    nb, nt = _cob(e)
+    can = max(_lb(round(e, 3)) + TILE_RN + TILE_T - TILE_RN * math.cos(TILE_TH), TILE_RW + TILE_T - TILE_RW * math.cos(TILE_TH))
     cob = max(nb + TILE_RW + TILE_T, nt + TILE_RN + TILE_T)
     return max(can, cob) + 0.012
 
@@ -1085,9 +1094,11 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
     R = _Roof(kind, w, d, pitch_deg, overhang, rake)
     r = rng(seed + 4242)
     mb = MB()
-    nb_c, nt_c = _cob()
-    h_env = _tile_env()
     courses = _tile_courses(R.vlen)
+    ge = round(_galga(R.vlen), 3)                 # galga uniforme de este faldón (<= 0,30)
+    nb_c, nt_c = _cob(ge)
+    h_env = _tile_env(ge)
+    lb_c = _lb(ge)
     hl = None
     if hole is not None:
         hx, hy = _plan_local(R, hole[0], hole[1])
@@ -1164,8 +1175,8 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 pieces.append((s, j, k, u, vb, dv, lift, lb, lt, roll, yaw, x0, jag0, jseed, is_canal, near, boq))
 
     # ---- pasada 2: geometría según el nivel ----
-    v_eave = R.ov / R.cp + 0.02 + lod["eave_extra"] * TILE_E
-    v_eave_c = v_eave + lod["eave_cob"] * TILE_E     # las cobijas, techo de los canales de aire bajo ellas, una hilada más
+    v_eave = R.ov / R.cp + 0.02 + lod["eave_extra"] * ge
+    v_eave_c = v_eave + lod["eave_cob"] * ge         # las cobijas, techo de los canales de aire bajo ellas, una hilada más
     rake_u = R.hw - 0.05
     extra_lift = {}                  # elevación de la cobija corrida para la superior de la misma línea si también se corrió
     def bad(j_, k_):
@@ -1178,7 +1189,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
             mode = _FULL
         else:
             # caras que deja ver cada situación (ver docstring); en 'low' solo las que se ven desde las vistas típicas
-            under = vb + TILE_L - TILE_E < (v_eave if is_canal else v_eave_c) or (kind == "gable" and abs(u) > rake_u)
+            under = vb + TILE_L - ge < (v_eave if is_canal else v_eave_c) or (kind == "gable" and abs(u) > rake_u)
             g = set(_MODES[lod["open"]])
             if is_canal:
                 if under or (mid and bad(j, k - 1)):
@@ -1196,7 +1207,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                     g.add("cap")
             mode = "prism" if (is_canal and detail == "low" and not g) else frozenset(g)
         if is_canal:
-            nb, nt = TILE_N + LB + TILE_RN + TILE_T + lift, TILE_N + TILE_RW + TILE_T + lift
+            nb, nt = TILE_N + lb_c + TILE_RN + TILE_T + lift, TILE_N + TILE_RW + TILE_T + lift
         else:
             base = extra_lift.get((s, j, k - 1), 0.0) if lb else 0.0
             if base:

@@ -17,13 +17,31 @@ construyen como superficie y se les da espesor con `bmesh.ops.solidify`; el vidr
 
 Escala (brief §4.2): A/C de ventana 0,60 × 0,40 × 0,45 · split exterior 0,80 × 0,55 × 0,28 · medidor 0,36 × 0,50 × 0,17 ·
 cable de acometida Ø 9 mm · conduit EMT 3/4" (Ø 23 mm) · tinaco 1100 L Ø 1,10 × 1,37 · ladrillo 0,24 × 0,06 × 0,12 (junta 1 cm).
-Triángulos medidos (barrido de 8 semillas, tests/test_G4_servicios_dano.py imprime los de la vitrina):
-  ac_unit window 17,9–18,0 k · split_outdoor 28,2–28,4 k · box_old 17,0–17,1 k · cable_bundle (3 anclajes) 12–26 k ·
-  conduit 6,5–8,9 k · meter_box 9,9–10,8 k · light_fixture wall 3,4–3,6 k / bracket 2,9–3,0 k · tv_antenna 7,9–8,1 k ·
-  satellite_dish 5,1 k · water_tank 16,5–16,7 k · mailboxes(n) 10–28 k · extinguisher_cabinet 4,9 k ·
-  sign_torn 5–14 k (según w × h) · laundry_line 2,5–13 k (según largo) · curtain_torn 5–20 k (según w × h).
-Todo cabe en 0 aristas no-manifold fuera de 'fabric' (verificado en 168 combinaciones semilla/tamaño), sin caras de área
-0 ni vértices sueltos, y es determinista por semilla.
+
+NIVEL DE DETALLE (presupuesto de ~600–700 k triángulos por edificio con interiores)
+  Todas las funciones públicas aceptan detail='high' (por defecto: la geometría aprobada, para < 3 m) | 'mid' (3–6 m) |
+  'low' (> 6 m o instancias repetidas). Qué quita cada nivel: ver `_detail`. La silueta, las ménsulas, rejillas,
+  desagües, cables y las manchas metal_rust por cara se conservan en los 3 niveles. La semilla se consume igual en los 3:
+  misma semilla = mismo estado (puertas, roturas, flechas, piezas faltantes), así el constructor puede cambiar de LOD sin
+  que la pieza 'salte'. Triángulos medidos (barrido de 8 semillas × 3 niveles; high / mid / low):
+    ac_unit window ......... 17,9–18,0 k / 5,0–5,3 k / 2,2–2,3 k
+    ac_unit split_outdoor .. 28,2–28,4 k / 8,2 k     / 3,5 k
+    ac_unit box_old ........ 17,0–17,1 k / 5,4 k     / 2,4 k
+    cable_bundle ........... 7,9–33 k    / 3,3–13 k  / 1,7–7,3 k   (4 cables, 2 vanos de 5 m: 23,4 / 9,3 / 5,0 k)
+    conduit (4–5 m) ........ 4,9–7,8 k   / 1,8–2,8 k / 1,0–1,7 k
+    meter_box .............. 9,6–10,8 k  / 3,4–4,0 k / 1,6–2,0 k
+    light_fixture .......... wall 3,4–3,6 k / 1,6–1,7 k / 0,8 k · bracket 2,9–3,0 k / 1,5 k / 0,8 k
+    tv_antenna ............. 7,9–8,1 k   / 3,2–3,4 k / 1,7–1,8 k
+    satellite_dish ......... 5,1 k       / 2,4 k     / 1,1 k
+    water_tank ............. 16,5–16,7 k / 5,3 k     / 3,3 k
+    mailboxes (n 4–18) ..... 8,9–27 k    / 2,9–8,9 k / 1,6–5,2 k   (n = 8: 15,8 / 5,2 / 3,1 k)
+    extinguisher_cabinet ... 4,9 k       / 1,6 k     / 0,8 k
+    sign_torn (1,2–3 m) .... 5,0–11,4 k  / 1,4–3,2 k / 0,8–1,5 k
+    laundry_line (2–4 m) ... 7,2–14,1 k  / 2,1–4,0 k / 1,1–2,2 k
+    curtain_torn ........... 6,0–18,1 k  / 2,0–5,6 k / 0,9–2,2 k
+  tests/test_G4_servicios_dano.py imprime la tabla por nivel de la vitrina y renderiza la vitrina LOD (G4_lod_*.png).
+Todo cabe en 0 aristas no-manifold fuera de 'fabric' (verificado en 8 semillas × 22 piezas × 3 niveles), sin caras de
+área 0 ni vértices sueltos, sin componentes con normales invertidas, y es determinista por semilla.
 """
 import contextlib
 import math
@@ -1127,7 +1145,9 @@ def ac_unit(kind="window", seed=0, detail="high"):
     ventana 0,66 × 0,44 × 0,56 dentro de una jaula antirrobo, con un panel lateral arrancado).
     Origen: cara del muro (y = 0), centro del equipo en X, z = 0 = apoyo del cuerpo (las ménsulas cuelgan debajo).
     'window' y 'box_old' entran en el muro (y > 0) 0,14 / 0,20: el constructor abre un vano de 0,606 × 0,406 /
-    0,666 × 0,446 o lo coloca dentro de una ventana. Carcasa de chapa biselada con abolladuras y manchas metal_rust."""
+    0,666 × 0,446 o lo coloca dentro de una ventana. Carcasa de chapa biselada con abolladuras y manchas metal_rust.
+    detail: costo por equipo (high / mid / low): window 18,0 / 5,0–5,3 / 2,2–2,3 k · split_outdoor 28,4 / 8,2 / 3,5 k ·
+    box_old 17,1 / 5,4 / 2,4 k. mid y low conservan rejilla, lamas, ménsulas, desagüe y óxido por cara (retícula más gruesa)."""
     with _detail(detail):
         r = rng(seed)
         if kind == "window":
@@ -1193,7 +1213,9 @@ def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0)
     bucles de goteo hacia una mufa de PVC en los extremos y (loose=True) cables sueltos colgando con puntas deshiladas.
     points: anclajes en coordenadas del constructor, SOBRE la cara del muro/poste (centro del bastidor).
     mount: dirección hacia fuera del muro en los anclajes (por defecto -Y). sag: flecha del haz a media luz (m); cada
-    cable cuelga entre 0 y 50 % más que el haz (distinta flecha)."""
+    cable cuelga entre 0 y 50 % más que el haz (distinta flecha).
+    detail: high / mid / low = 23,4 / 9,3 / 5,0 k para 4 cables y 2 vanos de 5 m (≈ 1,1 k / 0,45 k / 0,25 k por cable y
+    metro de vano); mid y low simplifican la catenaria (Douglas-Peucker) y los carretes; low omite las puntas deshiladas."""
     with _detail(detail):
         rr = rng(seed)
         mb = MB()
@@ -1448,7 +1470,8 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
     """Tubería conduit EMT 3/4" (Ø 23 mm) sobre el muro, con curvas de radio 0,12, coples cada 3,05 m, abrazaderas de
     2 orejas cada ~1,2 m (una falta y el tubo se despega), cajas de registro 4×4" en los extremos (la final abierta con
     cables saliendo) y, al azar, cajas en las esquinas en vez de curva.
-    points: polilínea SOBRE la cara del muro (plano y = 0 local; se usan x, z). El tubo corre a y = -(r + standoff)."""
+    points: polilínea SOBRE la cara del muro (plano y = 0 local; se usan x, z). El tubo corre a y = -(r + standoff).
+    detail: high / mid / low = 7,5 / 2,7 / 1,5 k para 3 tramos y 4 cajas (4,5 m); el costo crece con el número de cajas."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -1572,13 +1595,19 @@ def _hinge(mb, p, h=0.05, r=0.0055, mat="metal_rust"):
 
 
 def _padlock(mb, p, rr, open_=True):
-    """Candado colgando (cuerpo con bisel + arco abierto) de un punto p (centro del arco)."""
+    """Candado colgando de un alambre: p = punto superior del alambre donde se apoya el interior del arco.
+    Arco rígido en U (pierna larga dentro del cuerpo); abierto = arco subido 10 mm y girado 35° sobre la pierna larga
+    (la corta queda fuera del cuerpo). Cuerpo con bisel y bocallave."""
     p = _v(p)
     rot = _R("Z", rr.uniform(-25, 25)) @ _R("X", rr.uniform(-12, 12))
-    M = _T(p) @ rot
-    arc = [M @ Vector((0.012 * math.cos(a), 0, -0.02 + 0.016 * math.sin(a) + (0.012 if open_ and a < PI / 2 else 0.0)))
-           for a in [PI * i / 12 for i in range(13)]]
-    _tube(mb, [M @ Vector((0.012, 0, -0.035))] + arc[1:] + [M @ Vector((-0.012, 0, -0.035))], 0.0032, seg=6, mat="aluminium")
+    lift = 0.010 if open_ else 0.0
+    M = _T(p) @ rot @ _T(0, 0, 0.004 + 0.0032 - lift)
+    U = [Vector((0.012 * math.cos(a), 0, -0.02 + 0.016 * math.sin(a))) for a in [PI * i / 12 for i in range(13)]]
+    pts = [Vector((0.012, 0, -0.035))] + U[1:] + [Vector((-0.012, 0, -0.05))]
+    if open_:
+        S_ = _about((-0.012, 0, 0), _R("Z", 35)) @ _T(0, 0, lift)
+        pts = [S_ @ q for q in pts]
+    _tube(mb, [M @ q for q in pts], 0.0032, seg=6, mat="aluminium")
     _box(mb, (-0.021, -0.008, -0.07), (0.021, 0.008, -0.03), "metal_rust", bevel=0.004, seg=2, m=M)
     _cyl(mb, M @ Vector((0, -0.0085, -0.058)), M @ Vector((0, -0.0075, -0.058)), 0.004, seg=10, mat="aluminium")
 
@@ -1586,7 +1615,8 @@ def _padlock(mb, p, rr, open_=True):
 def meter_box(seed=0, open_door=True, detail="high"):
     """Gabinete de medidor de chapa (0,36 × 0,50 × 0,17) con puerta de ventanilla redonda (vidrio roto) abierta o
     entreabierta, base de medidor (con medidor o con las mordazas vacías), interruptor, tubo conduit que baja del muro
-    y un enredo de cables colgando por abajo. Origen: cara del muro, centro del gabinete en X, z = 0 = fondo del gabinete."""
+    y un enredo de cables colgando por abajo. Origen: cara del muro, centro del gabinete en X, z = 0 = fondo del gabinete.
+    detail: high / mid / low = 10,2 / 3,6 / 1,7 k."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -1638,7 +1668,8 @@ def meter_box(seed=0, open_door=True, detail="high"):
         for i in range(3):
             o = (i - 1) * 0.012
             p0 = Vector((0.05 + o, -0.06, H + 0.01))
-            top_to_meter = _spline([p0, p0 + Vector((0, 0, -0.05)), Vector((0.06 + o, sy - 0.03, 0.47)), Vector((0.02 + o, sy - 0.05, 0.43))], 0.02)
+            # baja del conduit hacia el tablero sin volver a subir (antes hacía un gancho de 150°)
+            top_to_meter = _spline([p0, p0 + Vector((0, 0, -0.03)), Vector((0.06 + o, sy - 0.035, 0.455)), Vector((0.02 + o, sy - 0.05, 0.43))], 0.02)
             _tube(mb, top_to_meter, 0.0045, seg=6, mat="cable")
             b0 = Vector((o * 2, sy - 0.04, 0.205))
             _tube(mb, _spline([b0, b0 + Vector((0, -0.01, -0.02)), Vector((o * 2, sy - 0.06, 0.16))], 0.02), 0.0035, seg=6, mat="cable")
@@ -1683,7 +1714,7 @@ def meter_box(seed=0, open_door=True, detail="high"):
         _tube(mb, _fillet([(x1 + 0.002, yf + 0.012, 0.235), (x1 + 0.022, yf + 0.012, 0.235), (x1 + 0.022, yf + 0.028, 0.235),
                            (x1 + 0.002, yf + 0.028, 0.235)], 0.006, 4), 0.0028, seg=6, mat="metal_rust")
         if rr.random() < 0.7:
-            _padlock(mb, st + Vector((0.016, 0.0, -0.002)), rr)
+            _padlock(mb, st + Vector((0.016, 0.0, 0.0028)), rr)
         _declump(mb)
         return mb
 
@@ -1691,7 +1722,8 @@ def meter_box(seed=0, open_door=True, detail="high"):
 def light_fixture(kind="wall", seed=0, detail="high"):
     """Luminaria exterior rota. kind='wall': arbotante tipo tortuga (base fundida Ø 0,24, rejilla de 4 arcos, globo de
     vidrio partido, socket con el bulbo roto). kind='bracket': brazo de cuello de ganso con pantalla de lámina abollada
-    colgando chueca y cable suelto. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa)."""
+    colgando chueca y cable suelto. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa).
+    detail: high / mid / low = wall 3,6 / 1,7 / 0,8 k · bracket 3,0 / 1,5 / 0,8 k."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -1800,7 +1832,8 @@ def light_fixture(kind="wall", seed=0, detail="high"):
 def tv_antenna(seed=0, detail="high"):
     """Antena yagi de TV en azotea: trípode de ángulo con zapatas atornilladas, mástil Ø 32 inclinado, 3 vientos (uno
     flojo), botalón cuadrado de 1,4 m con reflector, dipolo plegado con caja de bornes y 8 directores (doblados, uno
-    falta), coaxial encintado bajando por el mástil. Origen: base del mástil sobre la losa (z = 0)."""
+    falta), coaxial encintado bajando por el mástil. Origen: base del mástil sobre la losa (z = 0).
+    detail: high / mid / low = 8,1 / 3,4 / 1,8 k."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -1901,10 +1934,12 @@ def tv_antenna(seed=0, detail="high"):
             element(x, half, broken=(rr.random() < 0.15))
         # coaxial: caja -> botalón -> mástil -> losa
         c0 = Md @ Vector((0.0, 0.0, -0.046))
-        pb = [Mb_ @ (boom_at(x) + Vector((0, 0.0, -0.016))) for x in (-0.22, -0.15, -0.06)]
+        pb = [Mb_ @ (boom_at(x) + Vector((0, 0.0, -0.03))) for x in (-0.2, -0.15, -0.06)]
         down = [top + lean.to_3x3() @ Vector((0.022 * math.cos(z * 6), 0.022 * math.sin(z * 6), -0.12 - z)) for z in [0.1 * k for k in range(int(Hm / 0.1) - 2)]]
         end_ = [Vector(down[-1]) + Vector((0.05, 0.02, -0.12)), Vector((0.25, 0.06, 0.008)), Vector((1.2, 0.3, 0.008))]
-        cpts = _spline([c0, c0 + Vector((0, 0, -0.03))] + pb + [top + lean.to_3x3() @ Vector((0.03, 0, -0.1))] + down[::3] + end_, 0.03)
+        # sale de la caja de bornes hacia el mástil por debajo del botalón y baja por el mástil (sin los dos ganchos de
+        # 168° que hacía la spline con puntos de control a 2–3 cm junto a otros a 30 cm)
+        cpts = _spline([c0, c0 + Mb_.to_3x3() @ Vector((0.015, 0, -0.008))] + pb + [top + lean.to_3x3() @ Vector((0.03, 0, -0.1))] + down[3::3] + end_, 0.03)
         _tube(mb, cpts, 0.0035, seg=6, mat="cable")
         for k in range(2, len(down), 4):
             _torus(mb, down[k] - (down[k] - (top + lean.to_3x3() @ Vector((0, 0, -0.12 - 0.1 * k)))) * 0.45,
@@ -1916,7 +1951,8 @@ def tv_antenna(seed=0, detail="high"):
 def satellite_dish(seed=0, detail="high"):
     """Antena parabólica offset (0,62 × 0,56) en ménsula de muro: placa con 4 taquetes, brazo, mástil Ø 42, soporte de
     elevación con ranuras, plato abollado y vencido hacia abajo, brazo del LNB doblado y coaxial con bucle de goteo
-    entrando al muro. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa)."""
+    entrando al muro. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa).
+    detail: high / mid / low = 5,1 / 2,4 / 1,1 k."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2055,7 +2091,9 @@ def _brick_wall(mb, x0, x1, yc, courses, rr, nz, z0=0.0, missing=0.03, BL=0.24, 
 def water_tank(seed=0, detail="high"):
     """Tinaco de polietileno de 1100 L (Ø 1,10 × 1,40) con nervaduras, cuello y tapa (puesta, corrida o tirada), sobre
     losa de concreto de 1,32 × 1,16 apoyada en 3 muretes de tabique de 6 hiladas; salida con válvula, jarro de aire y
-    alimentación de PVC. Origen: centro de la base sobre la losa de azotea (z = 0)."""
+    alimentación de PVC. Origen: centro de la base sobre la losa de azotea (z = 0).
+    detail: high / mid / low = 16,6 / 5,3 / 3,3 k (mid / low: un núcleo de mortero por murete en vez de una caja
+    por junta, nervaduras con 4 / 3 puntos de perfil)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2139,7 +2177,8 @@ def water_tank(seed=0, detail="high"):
 def mailboxes(n=8, seed=0, detail="high"):
     """Batería de n buzones de chapa (celda 0,27 × 0,135 × 0,26) con marco, divisiones, puertas con ranura, tarjetero y
     chapa: unas cerradas, otras abiertas, colgando de una bisagra o arrancadas (quedan los muñones de bisagra), papeles
-    viejos dentro. Origen: cara del muro, centro inferior del gabinete."""
+    viejos dentro. Origen: cara del muro, centro inferior del gabinete.
+    detail: high / mid / low = 15,8 / 5,2 / 3,1 k con n = 8 (≈ 1,9 / 0,6 / 0,4 k por buzón)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2225,7 +2264,8 @@ def mailboxes(n=8, seed=0, detail="high"):
 def extinguisher_cabinet(seed=0, detail="high"):
     """Gabinete de extintor de sobreponer (0,30 × 0,64 × 0,20), VACÍO: gancho doblado al fondo, puerta de marco con el
     vidrio roto (esquirlas en el marco) abierta o colgando, letrero de lámina arriba colgando de un tornillo.
-    Origen: cara del muro, centro inferior del gabinete."""
+    Origen: cara del muro, centro inferior del gabinete.
+    detail: high / mid / low = 4,9 / 1,6 / 0,8 k."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2306,7 +2346,9 @@ def sign_torn(w=2.4, h=0.6, seed=0, detail="high"):
     """Letrero luminoso de comercio (caja de lámina de 0,14 de fondo con marco de aluminio) con la cara de acrílico
     arrancada: quedan jirones colgando enroscados del marco superior y un pedazo en la esquina inferior; tubos
     fluorescentes rotos, caídos o faltantes con sus sockets, balastro y cable entrando desde el muro.
-    Origen: cara del muro, centro inferior del letrero; ocupa x = -w/2..w/2, z = 0..h."""
+    Origen: cara del muro, centro inferior del letrero; ocupa x = -w/2..w/2, z = 0..h.
+    detail: high / mid / low = 8,7 / 2,3 / 1,1 k para 2,4 × 0,6 (los jirones se generan a resolución completa y se
+    submuestrean: misma silueta de desgarro en los 3 niveles)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2487,7 +2529,9 @@ def laundry_line(length=3.0, seed=0, detail="high"):
     camisas, pantalones, trapos rotos; una colgando de una sola pinza) y pinzas sueltas.
     Origen: armella izquierda; el alambre va de x = 0 a x = length a z = 0 (antes de la flecha). Las armellas se
     atornillan en superficies verticales: plano x = 0 (mirando a +X) y plano x = length (mirando a -X).
-    Las telas son LÁMINAS (material 'fabric', una cara): usar DoubleSide."""
+    Las telas son LÁMINAS (material 'fabric', una cara): usar DoubleSide.
+    detail: high / mid / low = 11,3 / 3,1 / 1,6 k para 2,9 m (telas submuestreadas × 2 / × 3; los cortes de
+    mangas, entrepierna y desgarros se conservan)."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)
@@ -2559,7 +2603,8 @@ def curtain_torn(w=1.4, h=1.5, seed=0, detail="high"):
     """Cortina rasgada colgando de una barra con argollas: 2 lienzos con pliegues, tiras desgarradas (con tela faltante)
     que se mecen, agujeros, bastilla deshilachada y, al azar, un lienzo medio desprendido de la barra (o la barra vencida).
     Coordenadas del vano: u = 0..w en X, v = 0..h en Z; la tela cuelga en el plano y ≈ 0 y las ménsulas de la barra van
-    a un muro en y = +0,07 (cara interior). La tela es LÁMINA ('fabric', una cara): usar DoubleSide."""
+    a un muro en y = +0,07 (cara interior). La tela es LÁMINA ('fabric', una cara): usar DoubleSide.
+    detail: high / mid / low = 9,7 / 3,2 / 1,3 k para 1,4 × 1,5 y 14,5 / 4,6 / 1,8 k para 1,8 × 2,0."""
     with _detail(detail):
         rr = rng(seed)
         nz = _Nz(rr)

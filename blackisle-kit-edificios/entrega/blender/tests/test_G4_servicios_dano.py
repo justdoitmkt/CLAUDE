@@ -245,7 +245,7 @@ def grp(*gs):
 ALL = [ob for (ob, _) in assets.values()]
 LOD_ALL = lod_objs + lod_dmg
 shot("general", ALL + people, azim=22, elev=20, margin=0.92)
-shot("oblicua", ALL + people, azim=58, elev=28, margin=0.85)
+shot("oblicua", ALL + people, azim=58, elev=28, margin=1.02)
 shot("ac_cerca", grp("ac"), target=Vector((3.0, -0.35, 2.45)), dist=2.3, azim=24, elev=6, fov=50)
 shot("ac_bajo", grp("ac"), target=Vector((6.6, -0.3, 2.2)), dist=2.4, azim=-28, elev=-14, fov=50)
 shot("servicios_cerca", grp("serv"), target=Vector((10.4, -0.35, 1.85)), dist=2.9, azim=18, elev=8, fov=55)

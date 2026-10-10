@@ -605,6 +605,108 @@ def dress_roof(cfg, pent, roof, details, detail="low"):
             dp = circ.downpipe(tl, Vector((tl.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i)
             details.join(dp, R)
     return dict(spot=spot, culled_frame=k_frame, culled_tiles=k_tiles, downpipes=len(tops))
+def _panel(placed, side, level, bay):
+    for p in placed[side]:
+        if p["level"] == level and p["bay"] == bay:
+            return p
+    raise KeyError((side, level, bay))
+
+
+def dress_services(cfg, placed, pent, details, interior, detail_far="low", detail_near="mid"):
+    """Elementos secundarios con lógica constructiva (>= 30 distintos en el modelo completo)."""
+    from kit import services as sv
+    r = rng(cfg["seed"] + 505)
+    zl = level_z(cfg)
+    n = {}
+    def add(key, mb, M, target=details):
+        target.join(mb, M)
+        n[key] = n.get(key, 0) + 1
+    # A/C: condensadoras bajo ventanas (trasera y oeste: lejanas; frente: una cercana) y equipos viejos en PB
+    for side, lv, bay, kind, det in (("back", 1, 1, "split_outdoor", detail_far), ("back", 2, 2, "split_outdoor", detail_far),
+                                      ("back", 3, 1, "split_outdoor", detail_far), ("back", 4, 2, "box_old", detail_far),
+                                      ("west", 2, 0, "split_outdoor", detail_far), ("west", 3, 2, "box_old", detail_far),
+                                      ("front", 2, 0, "split_outdoor", detail_near)):
+        p = _panel(placed, side, lv, bay)
+        o = p["opening"]
+        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=det), p["m"] @ _T((o[0] + o[1]) / 2, 0, 0.32))
+    # acometida aérea por la banda de viga de PB (frente) + medidores y conduit junto al vestíbulo
+    yb = cfg["ys"][0] - BEAM_W / 2 - 0.005
+    zc = zl[1] - 0.30
+    add("cable_bundle", sv.cable_bundle([(-7.0, yb, zc), (-3.6, yb, zc + 0.04), (-0.1, yb, zc)], n=4, sag=0.22, seed=int(r.integers(1e6)),
+                                        detail=detail_near), Matrix())
+    p = _panel(placed, "front", 0, 0)
+    for i, u in enumerate((p["L"] - 0.55, p["L"] - 0.12)):
+        add("meter_box", sv.meter_box(seed=int(r.integers(1e6)), open_door=bool(i), detail=detail_near), p["m"] @ _T(u - 0.2, 0, 1.25))
+    add("conduit", sv.conduit([(p["L"] - 0.75, 0, 1.78), (p["L"] - 0.75, 0, p["H"] - 0.05)], seed=int(r.integers(1e6)),
+                              detail=detail_near), p["m"])
+    # letreros arrancados sobre los locales
+    for bay in (1, 3):
+        p = _panel(placed, "front", 0, bay)
+        add("sign_torn", sv.sign_torn(w=min(2.6, p["L"] - 0.3), h=0.42, seed=int(r.integers(1e6)), detail=detail_near),
+            p["m"] @ _T(p["L"] / 2, -0.03, p["H"] + 0.04))
+    # arbotantes rotos en columnas del frente y puerta trasera
+    for x in (-3.6, 3.6):
+        add("light_fixture", sv.light_fixture("bracket", seed=int(r.integers(1e6)), detail=detail_near),
+            _T(x, cfg["ys"][0] - COL / 2, zl[1] - 0.75))
+    p = _panel(placed, "back", 0, 2)
+    o = p["opening"]
+    add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=detail_near), p["m"] @ _T((o[0] + o[1]) / 2, 0, o[3] + 0.35))
+    # buzones en el vestíbulo (muro x = 0,25, cara este) y extintores vacíos en los vestíbulos de escalera
+    add("mailboxes", sv.mailboxes(n=12, seed=int(r.integers(1e6)), detail=detail_near), _T(0.30 + 0.001, -1.2, zl[0] + 1.05) @ _rot_z(90), interior)
+    for lv in (1, 3):
+        add("extinguisher_cabinet", sv.extinguisher_cabinet(seed=int(r.integers(1e6)), detail=detail_near),
+            _T(3.05, -cfg["stair"]["wall_y"] + 0.075 + 0.001, zl[lv] + 1.05) @ _rot_z(180), interior)
+    # tendederos en 4 loggias
+    for (lv, bay) in ((1, 1), (2, 2), (3, 1), (4, 2)):
+        p = _panel(placed, "front", lv, bay)
+        add("laundry_line", sv.laundry_line(length=p["L"] - 2 * INFILL - 0.02, seed=int(r.integers(1e6)), detail=detail_near),
+            _T(p["a0"] + INFILL + 0.01, p["face"] + 0.55, p["z0"] + 1.95))
+    # azotea del casetón: 2 tinacos, antena; parabólica en el muro sur del casetón
+    zt = pent["top_z"]
+    for x in (4.45, 6.25):
+        add("water_tank", sv.water_tank(seed=int(r.integers(1e6)), detail=detail_far), _T(x, 0.25, zt))
+    add("tv_antenna", sv.tv_antenna(seed=int(r.integers(1e6)), detail=detail_far), _T(5.35, -1.45, zt))
+    add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=detail_far), _T(4.7, -1.8 - (COL / 2 - RECESS), zl[-1] + 1.7))
+    return n
+
+
+def dress_damage(cfg, shell, details, interior, skirt, detail="low"):
+    """Daño concentrado en la fachada oeste (la 'muy dañada') + varillas de espera + escombro y trozos."""
+    from kit import damage as dm
+    r = rng(cfg["seed"] + 606)
+    zl = level_z(cfg)
+    n = {}
+    def add(key, mb, M, target):
+        target.join(mb, M)
+        n[key] = n.get(key, 0) + 1
+    # columnas de la fachada oeste con esquinas mordidas (piezas adicionales: se colocan como envolvente de la columna original,
+    # 1 mm por fuera, para no tocar la estructura base)
+    x = cfg["xs"][0]
+    for j, y in enumerate(cfg["ys"][1:3], start=1):
+        c = COL / 2 + 0.002
+        z0 = zl[int(r.integers(1, 4))] + 0.3
+        mbx = MB()
+        dm.spalled_box(mbx, (x - c, y - c, z0), (x + c, y + c, z0 + 1.6),
+                       [dict(axis="z", sides=(-1, int(r.choice([-1, 1]))), start=0.25, length=1.0, depth=0.09, seed=int(r.integers(1e6)))],
+                       detail=detail)
+        add("spalled_column", mbx, Matrix(), shell)
+    # varillas de espera: castillos en las 4 esquinas de la azotea del casetón + ruinas de una ampliación demolida atrás
+    for (xx, yy) in ((3.6, -1.8), (7.2, -1.8), (3.6, 1.8), (7.2, 1.8)):
+        add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 8)), length=0.7, stump=(0.25, 0.25, 0.25), detail=detail),
+            _T(xx, yy, zl[-1] + PENT_H + 0.35), details)
+    for (xx, yy) in ((-6.0, 8.6), (-2.4, 8.6), (1.2, 8.6), (-6.0, 11.0), (-2.4, 11.0), (1.2, 11.0)):
+        add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(5, 9)), length=float(r.uniform(0.6, 1.1)),
+                                        stump=(0.35, 0.35, float(r.uniform(0.3, 0.9))), detail=detail), _T(xx, yy, 0.0), skirt)
+    # escombro: al pie de la fachada oeste, en el local oeste (PB), en el corredor del 2.º piso y entre las ruinas
+    for (xx, yy, zz, rad, tgt) in ((-9.0, -1.5, 0.0, 1.3, skirt), (-4.2, -3.0, zl[0], 0.9, interior), (-5.2, 0.0, zl[2], 0.6, interior),
+                                   (-1.0, 9.8, 0.0, 1.1, skirt)):
+        add("rubble_pile", dm.rubble_pile(radius=rad, seed=int(r.integers(1e6)), n=int(rad * 40), detail=detail), _T(xx, yy, zz), tgt)
+    # trozos sueltos al pie de los muros
+    for _ in range(18):
+        xx, yy = float(r.uniform(-9.5, -7.5)), float(r.uniform(-5.5, 5.5))
+        add("chunk", dm.chunk(size=float(r.uniform(0.12, 0.45)), seed=int(r.integers(1e6)), detail=detail),
+            _T(xx, yy, 0.0) @ _rot_z(float(r.uniform(0, 360))), skirt)
+    return n
 # ----------------------------------------------------------------------------------------------
 # ensamblado
 # ----------------------------------------------------------------------------------------------
@@ -636,13 +738,22 @@ def build_apt_a(collection_root=None, dress=True, roof_detail="low"):
         roof = MB()
         stats["roof"] = dress_roof(cfg, pent, roof, det, detail=roof_detail)
         out["Roof"].append(roof.finish(f"{cid}_Roof", cols["Roof"], uv_size=2.0, merge=0))
+        stats["services"] = dress_services(cfg, placed, pent, det, inter)
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
         out["stats"] = stats
     out["Interior"].append(inter.finish(f"{cid}_Interior", cols["Interior"], uv_size=3.0, merge=0))
     sk = MB()
     lobby = (0.2, cfg["ys"][0] - 3.2, 3.4, cfg["ys"][0])          # accesos limpios de hierba
     rear = (1.0, cfg["ys"][-1], 2.6, cfg["ys"][-1] + 3.0)
-    out["stats_skirt"] = build_skirt(cfg, sk, keep_clear=(lobby, rear))
+    out["stats_skirt"] = build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear))
+    if dress:
+        dmg_shell, dmg_det, dmg_int = MB(), MB(), MB()
+        out["stats_damage"] = dress_damage(cfg, dmg_shell, dmg_det, dmg_int, sk)
+        cols["Damage"] = get_collection(f"{cid}_Damage", root)
+        out["Damage"] = []
+        for nm, mbd in (("Damage_Shell", dmg_shell), ("Damage_Details", dmg_det), ("Damage_Interior", dmg_int)):
+            if len(mbd.bm.faces):
+                out["Damage"].append(mbd.finish(f"{cid}_{nm}", cols["Damage"], uv_size=2.0, merge=0))
     out["Skirt"].append(sk.finish(f"{cid}_Skirt", cols["Skirt"], uv_size=2.0, merge=0))
     out["cfg"] = cfg
     out["placed"] = placed
