@@ -548,6 +548,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 _rafter(mb, R, "y", x, sgn, a_ridge, at, r, tails, pieces=pcs, straight=x in tie_x)
 
     # ---------------- limatesas y cabios de testero ----------------
+    test_y = {}
     if kind == "hip":
         for sx in (-1, 1):
             for sy in (-1, 1):
@@ -581,6 +582,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 a_t = _tail_end(hw + ov, r.uniform(-0.012, 0.012), tails)
                 if a_t - xh < 0.25:
                     continue
+                test_y.setdefault(sx, []).append(yj)
                 plane, _ = _hip_side_plane(R, sx, sy, (sx * a_t, yj))
                 _rafter(mb, R, "x", yj, sx, xh, a_t, r, tails, cut0=plane)
 
@@ -696,8 +698,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
             lim = (hw - PLATE_W - 0.05) if kind == "hip" else hw - 0.002
             _blocking(mb, occ, -lim, lim, lambda u, sg=sg: (u, sg * (hd - 0.025), 0.0), PLATE_H + 0.001, zt_w)
             if kind == "hip":
-                k = int((hd + ov - 0.1) / spacing)
-                occ = [((j + 0.5) * spacing, RAFTER_W / 2 + 0.008) for j in range(-k, k)]
+                occ = [(y, RAFTER_W / 2) for y in test_y.get(sg, [])]
                 lim = hd - PLATE_W - 0.05
                 _blocking(mb, occ, -lim, lim, lambda u, sg=sg: (sg * (hw - 0.025), u, 0.0), PLATE_H + 0.001, zt_w)
 
@@ -736,9 +737,9 @@ CAP_L, CAP_RN, CAP_RW, CAP_T, CAP_TH, CAP_STEP = 0.42, 0.105, 0.135, 0.014, math
 #   boq / bead / tube: puntos del arco de las boquillas del alero, (puntos del perfil, paso de estaciones x 0,14 m) del cordón de
 #                     mortero de los caballetes y segmentos del remate de limatesas.
 TILE_LOD = {
-    "high": dict(cob=6, can=6, cap=7, open=None, cap_mode="closed", boq=9, bead=(6, 1), tube=12, eave_extra=0),
-    "mid": dict(cob=5, can=5, cap=6, open="sides", cap_mode="sides", boq=7, bead=(6, 2), tube=10, eave_extra=1),
-    "low": dict(cob=5, can=3, cap=5, open="lip", cap_mode="lip", boq=4, bead=(4, 3), tube=8, eave_extra=0),
+    "high": dict(cob=6, can=6, cap=7, open=None, cap_mode="closed", boq=9, bead=(6, 1), tube=12, eave_extra=0, eave_cob=0),
+    "mid": dict(cob=5, can=5, cap=6, open="sides", cap_mode="sides", boq=7, bead=(6, 2), tube=10, eave_extra=1, eave_cob=1),
+    "low": dict(cob=5, can=3, cap=5, open="lip", cap_mode="lip", boq=4, bead=(4, 3), tube=8, eave_extra=1, eave_cob=1),
 }
 _CAN_LOW = tuple(math.radians(a) for a in (-70.0, -25.0, 25.0, 70.0))
 _CAN_HALF = math.radians(25.0)          # semiancho angular de la franja del canal-prisma
@@ -971,16 +972,16 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
         if skip is not None and skip(P0 + X * (x + CAP_L / 2)):
             continue
         M = base @ _T(x, 0, 0) @ _about((CAP_L / 2, 0, 0), _R("X", rot[0]) @ _R("Z", rot[1]))
-        last = i == n_caps - 1
+        end = i in (0, n_caps - 1)        # los extremos vuelan sobre esquinas y remates: se ven por debajo
         _tile_piece(mb, M, seg, r, True, True, rn=CAP_RN, rw=CAP_RW, t=CAP_T, th=CAP_TH, L=CAP_L,
-                    mode="closed" if (last and not plug1) else mode)
+                    mode="closed" if end else mode)
     # tapón de mortero en las bocas de los extremos
     for flag, x, rr in ((plug0, 0.012, CAP_RW), (plug1, Ltot - 0.012 - 0.035, CAP_RN)):
         if not flag:
             continue
         rr2 = rr - 0.003
         pts = [(rr2 * math.sin(a), rr2 * math.cos(a)) for a in [-CAP_TH + 2 * CAP_TH * i / 8 for i in range(9)]]
-        low = min(env(p[0]) for p in pts) - 0.04
+        low = min(env(p[0]) for p in pts) - H - 0.04      # relativo al eje (antes quedaba por encima de las puntas)
         pts = [pts[0], *pts, pts[-1]]
         pts[0] = (pts[0][0], low)
         pts[-1] = (pts[-1][0], low)
@@ -1160,6 +1161,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
 
     # ---- pasada 2: geometría según el nivel ----
     v_eave = R.ov / R.cp + 0.02 + lod["eave_extra"] * TILE_E
+    v_eave_c = v_eave + lod["eave_cob"] * TILE_E     # las cobijas, techo de los canales de aire bajo ellas, una hilada más
     rake_u = R.hw - 0.05
     extra_lift = {}                  # elevación de la cobija corrida para la superior de la misma línea si también se corrió
     def bad(j_, k_):
@@ -1172,11 +1174,13 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
             mode = _FULL
         else:
             # caras que deja ver cada situación (ver docstring); en 'low' solo las que se ven desde las vistas típicas
-            under = vb + TILE_L - TILE_E < v_eave or (kind == "gable" and abs(u) > rake_u)
+            under = vb + TILE_L - TILE_E < (v_eave if is_canal else v_eave_c) or (kind == "gable" and abs(u) > rake_u)
             g = set(_MODES[lod["open"]])
             if is_canal:
                 if under or (mid and bad(j, k - 1)):
                     g.add("hid")
+                if k == 0:
+                    g.add("sides")          # en la hilada del alero los cantos del canal se ven desde abajo
                 if mid and bad(j, k + 1):
                     g.add("cap")
                 if bad(j - 1, k) or bad(j + 1, k):
@@ -1296,6 +1300,15 @@ CORR_P, CORR_A = 0.076, 0.018           # paso y altura de onda
 CORR_WAVES = 13                         # 13 ondas = 0,988 de ancho total; ancho útil 12 ondas = 0,912 (~0,9)
 CORR_SEG = 8                            # segmentos por onda
 CORR_LAP_E = 0.15                       # solape de testa
+# Niveles de detalle de corrugated_roof(detail=...): segmentos por onda, paso mínimo de filas a lo largo del faldón (el
+# parámetro row manda si es mayor), abolladuras y tornillo. La disposición (láminas, solapes, desgarro, esquina levantada,
+# qué tornillo falta o está flojo) es la misma en los tres niveles. Las láminas que tocan el desgarro o la esquina levantada
+# conservan filas de 0,18 en esa franja en todos los niveles (el borde rasgado no se degrada).
+CORR_LOD = {
+    "high": dict(seg=8, row=0.0, dents=True, screw="full", sag=True),
+    "mid": dict(seg=6, row=0.30, dents=True, screw="head", sag=True),
+    "low": dict(seg=4, row=99.0, dents=False, screw="button", sag=False),
+}
 
 
 def _lamina(mb, P, mat, keep=None):
@@ -1315,23 +1328,40 @@ def _lamina(mb, P, mat, keep=None):
             mb.face([gv(i, j), gv(i + 1, j), gv(i + 1, j + 1), gv(i, j + 1)], mat)
 
 
-def _screw(mb, p, N, r, tilt=0.0, mat="metal_rust"):
-    """Tornillo autorroscante con arandela de neopreno sobre una cresta (p en la superficie, N normal)."""
+def _screw(mb, p, N, r, tilt=0.0, mat="metal_rust", kind="full"):
+    """Tornillo autorroscante sobre una cresta (p en la superficie, N normal). kind: 'full' arandela de neopreno de 8 lados +
+    cabeza hexagonal que arranca DENTRO de la arandela (sólidos que se cruzan, sin caras coplanares) · 'head' solo la cabeza
+    hexagonal (20 tris) · 'button' botón de 4 lados (12 tris)."""
     N = _vec(N).normalized()
     if tilt:
         ax = N.orthogonal().normalized()
         N = (Matrix.Rotation(math.radians(tilt), 3, ax) @ N).normalized()
     p = _vec(p)
-    mb.cyl(p + N * 0.0006, p + N * 0.0031, 0.0105, seg=8, mat="cable")
-    mb.cyl(p + N * 0.0033, p + N * 0.0085, 0.0056, seg=6, mat=mat)
+    if kind == "full":
+        mb.cyl(p + N * 0.0006, p + N * 0.0031, 0.0105, seg=8, mat="cable")
+        mb.cyl(p + N * 0.0021, p + N * 0.0085, 0.0056, seg=6, mat=mat)
+    elif kind == "head":
+        mb.cyl(p + N * 0.0006, p + N * 0.0085, 0.0075, seg=6, mat=mat, r1=0.0058)
+    else:
+        mb.cyl(p + N * 0.0006, p + N * 0.0085, 0.0075, seg=4, mat=mat, r1=0.006)
 
 
-def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, rake=None, row=0.18, lifted=True):
+def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, rake=None, row=0.18, lifted=True, detail="high"):
     """Cubierta a dos aguas de lámina ondulada sobre roof_frame('gable', w, d, pitch_deg, overhang, cover='sheet').
     Láminas de 13 ondas (0,9 útil) con solape lateral de 1 onda y de testa de 0,15, onda sinusoidal de 8 segmentos, flecha entre
     correas, abolladuras, tornillos con arandela en crestas sobre cada correa, cumbrera de lámina doblada con dobladillo,
     tapajuntas de remate en L, una lámina con la esquina levantada/doblada y `torn` = sección arrancada con borde rizado
-    (torn=True usa damage_spot('gable', ...); o (x, y, r) en planta). Láminas = superficies de una cara (LAMINA_MATS)."""
+    (torn=True usa damage_spot('gable', ...); o (x, y, r) en planta). Láminas = superficies de una cara (LAMINA_MATS).
+    detail = 'high' | 'mid' | 'low' (CORR_LOD): 8 / 6 / 4 segmentos por onda; filas en las correas y tramos de como mucho
+    row / 0,30 m entre ellas (high / mid, con flecha y abolladuras); en 'low' la chapa no tiene flecha ni abolladuras y solo
+    lleva las filas del alero, del solape y de los extremos; tornillo con arandela / solo cabeza hexagonal / botón de 4 lados. Medido con test_G3 (--budget) en
+    9 x 6 a 35° con vuelo 0,6 y desgarro (cabaña CAB_1, 2 x 5,0 x 4,4 m de faldón = 88 m² de lámina):
+      high ~146 k tris (~1660 tris/m²) · mid ~72 k (~820/m²) · low ~33 k (~375/m²)."""
+    if detail not in CORR_LOD:
+        raise ValueError("detail debe ser 'high', 'mid' o 'low'")
+    lod = CORR_LOD[detail]
+    cseg = lod["seg"]
+    row = max(row, lod["row"])
     R = _Roof("gable", w, d, pitch_deg, overhang, rake)
     r = rng(seed + 31337)
     mat = "roof_metal_light" if light else "roof_metal"
@@ -1373,7 +1403,7 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
     oil = _N1(r, wl=0.8)
 
     def sag(u, v):
-        if v <= purl[0] or v >= purl[-1]:
+        if not lod["sag"] or v <= purl[0] or v >= purl[-1]:
             return 0.0
         for a, b in zip(purl[:-1], purl[1:]):
             if a <= v <= b:
@@ -1384,6 +1414,14 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
 
     def eave_curl(u, v):
         return -0.012 * (0.6 + 0.4 * eave_n(u)) * max(0.0, (v0 + 0.14 - v) / 0.14) ** 2
+
+    torn_uv = {}
+    if tl is not None:
+        rmax = tl[2] * 1.45 + 0.2
+        for s_ in ("front", "back"):
+            u_c = tl[0] if s_ == "front" else -tl[0]
+            v_c = ((tl[1] + R.hd + R.ov) if s_ == "front" else (R.hd + R.ov - tl[1])) / R.cp
+            torn_uv[s_] = (u_c - rmax, u_c + rmax, v_c - rmax / R.cp, v_c + rmax / R.cp)
 
     lift_pick = None
     if lifted:
@@ -1398,17 +1436,42 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
         for j, (va, vb) in enumerate(rows_v):
             for i, (ua, ub) in enumerate(cols_u):
                 # ---- rejilla en coordenadas de vertiente ----
-                nu = max(2, int(round((ub - ua) / (CORR_P / CORR_SEG))))
-                us = [ua + (ub - ua) * k / nu for k in range(nu + 1)]
-                nv = max(2, int(math.ceil((vb - va) / row)))
-                vs = sorted({va + (vb - va) * k / nv for k in range(nv + 1)} |
-                            {p for p in purl if va + 0.02 < p < vb - 0.02})
+                # u en múltiplos exactos de P/seg desde ua (crestas y valles caen en vértices en todos los niveles)
+                du_s = CORR_P / cseg
+                us = [ua + du_s * k for k in range(int((ub - ua) / du_s - 1e-6) + 1)]
+                if ub - us[-1] > 0.25 * du_s:
+                    us.append(ub)
+                else:
+                    us[-1] = ub
+                # filas: las correas (la flecha es nula ahí) y tramos iguales entre ellas de como mucho `row`
+                knots = [va] + ([p for p in purl if va + 0.02 < p < vb - 0.02] if lod["sag"] else []) + [vb]
+                vset = set()
+                for a_, b_ in zip(knots[:-1], knots[1:]):
+                    nk = max(1 if (a_ != va and b_ != vb) else 1, int(math.ceil((b_ - a_) / row - 1e-6)))
+                    if a_ != va and b_ != vb and lod["sag"]:
+                        nk = max(nk, 2)                                       # al menos una fila a media luz
+                    vset |= {a_ + (b_ - a_) * q / nk for q in range(nk + 1)}
+                if row > 0.18:
+                    vset |= {v for v in (va + 0.07, va + 0.14) if j == 0}        # rizo del alero
+                if not lod["sag"]:
+                    vset |= {v for v in (va + CORR_LAP_E + 0.02, va + CORR_LAP_E + 0.10) if j > 0}   # escalón del solape
+                peel = lift_pick == (s, i) and j == 0
+                tb = torn_uv.get(s)
+                fine = (tb is not None and ua < tb[1] and ub > tb[0]) or peel
+                if fine and row > 0.18:
+                    lo_, hi_ = (tb[2], tb[3]) if (tb is not None and ua < tb[1] and ub > tb[0]) else (va, va + 1.9)
+                    if peel:
+                        lo_, hi_ = min(lo_, va), max(hi_, va + 1.9)
+                    nf = int(math.ceil((vb - va) / 0.18))
+                    vset |= {va + (vb - va) * k / nf for k in range(nf + 1) if lo_ <= va + (vb - va) * k / nf <= hi_}
+                vs = sorted(vset)
                 dents = []
                 for _ in range(int(r.integers(0, 3))):
                     dents.append((r.uniform(ua + 0.2, max(ua + 0.21, ub - 0.2)), r.uniform(va + 0.3, max(va + 0.31, vb - 0.3)),
                                   r.uniform(0.08, 0.22), r.uniform(0.006, 0.02)))
                 dents = [dd for dd in dents if all(abs(dd[1] - p) > dd[2] + 0.05 for p in purl)]
-                peel = lift_pick == (s, i) and j == 0
+                if not lod["dents"]:
+                    dents = []
                 P, inside = [], []
                 for v in vs:
                     rowp, rowi = [], []
@@ -1516,7 +1579,8 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
                                 continue
                         loose = r.uniform() < 0.05
                         q = Ms @ Vector((uc, p, n + (0.004 if loose else 0.0)))
-                        _screw(mb, q, (Ms.to_3x3() @ Vector((0, 0, 1))), r, tilt=r.uniform(8, 25) if loose else r.uniform(0, 3))
+                        _screw(mb, q, (Ms.to_3x3() @ Vector((0, 0, 1))), r, tilt=r.uniform(8, 25) if loose else r.uniform(0, 3),
+                               kind=lod["screw"])
 
     # ---- cumbrera de lámina doblada ----
     n0 = SHEET_N + CORR_A + 0.015
@@ -1555,7 +1619,7 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
             for sname in ("front", "back"):
                 uu = -x if sname == "back" else x
                 q = R.to_world(sname, uu, R.vlen - 0.11, n0 + 0.0015 + lift)
-                _screw(mb, q, R.frame(sname)[3], r, tilt=r.uniform(0, 4))
+                _screw(mb, q, R.frame(sname)[3], r, tilt=r.uniform(0, 4), kind=lod["screw"])
 
     # ---- tapajuntas de remate (L) en los hastiales ----
     nf = SHEET_N + CORR_A + 0.012
@@ -1572,7 +1636,8 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
             _lamina(mb, P, mat)
             for kv in range(1, nvs):
                 v = v0 + (R.vlen - 0.21 - v0) * kv / nvs
-                _screw(mb, R.to_world(sname, uside * (ue - 0.06), v, nf), R.frame(sname)[3], r, tilt=r.uniform(0, 4))
+                _screw(mb, R.to_world(sname, uside * (ue - 0.06), v, nf), R.frame(sname)[3], r, tilt=r.uniform(0, 4),
+                       kind=lod["screw"])
     return R.finalize(mb)
 
 

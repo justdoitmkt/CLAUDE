@@ -8,7 +8,7 @@ t = time.time()
 res = ab.build_apt_a()
 print('construido en', round(time.time() - t, 1), 's', res.get('stats'))
 objs = []
-for k in ('Shell', 'Details', 'Interior'):
+for k in ('Shell', 'Details', 'Interior', 'Skirt'):
     for o in res[k]:
         objs.append(o)
         print(f'{o.name:22s} tris {tri_count([o]):8d}  {mesh_health(o)}')

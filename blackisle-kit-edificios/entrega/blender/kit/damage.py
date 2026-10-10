@@ -63,6 +63,9 @@ def _hull(mb, pts, mat="rubble", m=None, detail=0, nz=None, amp=0.0, freq=20.0, 
         bmesh.ops.dissolve_degenerate(tmp, dist=weld, edges=list(tmp.edges))
     bmesh.ops.triangulate(tmp, faces=[f for f in tmp.faces if len(f.verts) > 4])
     _fix_slivers(tmp)
+    junk = [v for v in tmp.verts if not v.link_faces]
+    if junk:
+        bmesh.ops.delete(tmp, geom=junk, context="VERTS")
     if detail > 0:
         tmp.normal_update()
         orig = list(tmp.verts)

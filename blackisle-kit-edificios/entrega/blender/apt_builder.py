@@ -438,6 +438,77 @@ def dress_penthouse(cfg, pent, details):
 
 
 # ----------------------------------------------------------------------------------------------
+# base y entorno inmediato: arena acumulada + hierba seca
+# ----------------------------------------------------------------------------------------------
+def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
+    """Terreno de arena alrededor de la planta: deriva contra los muros (hasta ~0,32 m sobre el desplante, tapando el zócalo),
+    ondulación de dunas y borde que muere en z=0. Hierba seca en matas de hojas finas (láminas 'vegetation', DoubleSide),
+    más densas junto a los muros y en esquinas. keep_clear: rectángulos (x0, y0, x1, y1) libres de hierba (accesos)."""
+    import numpy as np
+    r = rng(cfg["seed"] + 303)
+    xs, ys = cfg["xs"], cfg["ys"]
+    fx0, fx1 = xs[0] - COL_CORNER / 2, xs[-1] + COL_CORNER / 2
+    fy0, fy1 = ys[0] - COL_CORNER / 2, ys[-1] + COL_CORNER / 2
+    X0, X1, Y0, Y1 = fx0 - margin, fx1 + margin, fy0 - margin, fy1 + margin
+    nx, ny = int((X1 - X0) / cell) + 1, int((Y1 - Y0) / cell) + 1
+    gx = np.linspace(X0, X1, nx)
+    gy = np.linspace(Y0, Y1, ny)
+    GX, GY = np.meshgrid(gx, gy, indexing="ij")
+    dx = np.maximum(np.maximum(fx0 - GX, GX - fx1), 0)
+    dy = np.maximum(np.maximum(fy0 - GY, GY - fy1), 0)
+    d = np.hypot(dx, dy)                                   # distancia a la planta (0 dentro)
+    inside = (GX > fx0) & (GX < fx1) & (GY > fy0) & (GY < fy1)
+    ph = r.uniform(0, 6.28, 4)
+    dune = (0.06 * np.sin(GX * 0.9 + ph[0]) * np.cos(GY * 0.7 + ph[1]) + 0.04 * np.sin(GX * 2.3 + GY * 1.7 + ph[2])
+            + 0.025 * np.sin(GX * 5.1 - GY * 4.3 + ph[3]))
+    drift = 0.32 * np.exp(-d / 0.9) * (0.7 + 0.3 * np.sin(GX * 1.3 + GY * 0.8 + ph[0]))
+    edge = np.clip((margin - d) / 1.2, 0, 1)               # muere en z=0 en el borde del parche
+    Z = np.where(inside, -0.05, (drift + dune + 0.03) * edge)
+    # malla en rejilla; se omiten las celdas totalmente dentro de la planta (bajo el edificio)
+    vid = {}
+    def V(i, j):
+        if (i, j) not in vid:
+            vid[(i, j)] = mb.bm.verts.new((float(GX[i, j]), float(GY[i, j]), float(Z[i, j])))
+        return vid[(i, j)]
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            if inside[i, j] and inside[i + 1, j] and inside[i, j + 1] and inside[i + 1, j + 1]:
+                continue
+            mb.face([V(i, j), V(i + 1, j), V(i + 1, j + 1), V(i, j + 1)], "sand")
+    # hierba seca
+    def zat(x, y):
+        i = int(round((x - X0) / cell)); j = int(round((y - Y0) / cell))
+        return float(Z[min(max(i, 0), nx - 1), min(max(j, 0), ny - 1)])
+    n_tufts = 0
+    for _ in range(4000):
+        x, y = float(r.uniform(X0 + 0.3, X1 - 0.3)), float(r.uniform(Y0 + 0.3, Y1 - 0.3))
+        ddx = max(fx0 - x, x - fx1, 0); ddy = max(fy0 - y, y - fy1, 0)
+        dd = math.hypot(ddx, ddy)
+        if dd <= 0.05 or any(k[0] <= x <= k[2] and k[1] <= y <= k[3] for k in keep_clear):
+            continue
+        if r.random() > 0.85 * math.exp(-dd / 1.1) + 0.06:
+            continue
+        z0 = zat(x, y) - 0.02
+        for _b in range(int(r.integers(7, 15))):
+            a = float(r.uniform(0, 6.283)); lean = float(r.uniform(0.15, 0.6)); h = float(r.uniform(0.18, 0.55))
+            w = float(r.uniform(0.006, 0.012))
+            px, py = x + float(r.normal(0, 0.04)), y + float(r.normal(0, 0.04))
+            ca, sa = math.cos(a), math.sin(a)
+            side = (-sa * w, ca * w)
+            mid = (px + ca * lean * h * 0.35, py + sa * lean * h * 0.35, z0 + h * 0.55)
+            tip = (px + ca * lean * h, py + sa * lean * h, z0 + h * (0.9 - 0.25 * lean))
+            v = [mb.bm.verts.new(p) for p in ((px - side[0], py - side[1], z0), (px + side[0], py + side[1], z0),
+                                               (mid[0] + side[0] * 0.6, mid[1] + side[1] * 0.6, mid[2]),
+                                               (mid[0] - side[0] * 0.6, mid[1] - side[1] * 0.6, mid[2]), tip)]
+            mb.face([v[0], v[1], v[2], v[3]], "vegetation")
+            mb.face([v[3], v[2], v[4]], "vegetation")
+        n_tufts += 1
+        if n_tufts >= 320:
+            break
+    return n_tufts
+
+
+# ----------------------------------------------------------------------------------------------
 # ensamblado
 # ----------------------------------------------------------------------------------------------
 def build_apt_a(collection_root=None, dress=True):
@@ -446,7 +517,7 @@ def build_apt_a(collection_root=None, dress=True):
     cfg = cfg_apt_a()
     cid = cfg["id"]
     root = collection_root or get_collection(cid)
-    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior")}
+    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt")}
     out = {k: [] for k in cols}
     shell = MB()
     build_frame(cfg, shell)
@@ -468,6 +539,11 @@ def build_apt_a(collection_root=None, dress=True):
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
         out["stats"] = stats
     out["Interior"].append(inter.finish(f"{cid}_Interior", cols["Interior"], uv_size=3.0, merge=0))
+    sk = MB()
+    lobby = (0.2, cfg["ys"][0] - 3.2, 3.4, cfg["ys"][0])          # accesos limpios de hierba
+    rear = (1.0, cfg["ys"][-1], 2.6, cfg["ys"][-1] + 3.0)
+    out["stats_skirt"] = build_skirt(cfg, sk, keep_clear=(lobby, rear))
+    out["Skirt"].append(sk.finish(f"{cid}_Skirt", cols["Skirt"], uv_size=2.0, merge=0))
     out["cfg"] = cfg
     out["placed"] = placed
     return out

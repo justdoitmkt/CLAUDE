@@ -132,7 +132,7 @@ class _Nz:
 
 def _declump(mb, dist=0.00016):
     """Separa vértices de PIEZAS DISTINTAS (componentes conexas) que quedaron a menos de `dist`, para que el
-    remove_doubles de MB.finish() (0,1 mm) no las suelde y cree aristas no-manifold. Mueve 0,6 mm (invisible)."""
+    remove_doubles de MB.finish() (0,1 mm) no las suelde y cree aristas no-manifold. Mueve 0,3 mm (invisible)."""
     bm = mb.bm
     vs = list(bm.verts)
     if not vs:
@@ -155,7 +155,7 @@ def _declump(mb, dist=0.00016):
     for i, v in enumerate(vs):
         kd.insert(v.co, i)
     kd.balance()
-    push = Vector((0.00031, -0.00037, 0.00043))
+    push = Vector((0.00014, -0.00017, 0.0002))  # |push| = 0,3 mm: > 0,16 + 0,1 mm y sin torcer hilos de 0,7 mm
     moved = 0
     done = set()
     for i, v in enumerate(vs):
@@ -1184,7 +1184,7 @@ def _frayed(mb, p, t, rr, n=3, r=0.0011, L=0.04, mat="aluminium"):
         for k in range(1, 6):
             s = k / 5
             pts.append(p + t * ln * s + sp * (0.0015 + 0.012 * s * s) + b.cross(sp) * curl * 0.01 * s ** 3)
-        _tube(mb, pts, r, seg=4, mat=mat)
+        _tube(mb, pts, r, seg=4, mat=mat, up=b)  # marco fijo: sin anillos torcidos en hilos tan finos
 
 
 def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0), loose=True, detail="high"):
