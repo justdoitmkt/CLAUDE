@@ -36,25 +36,33 @@ import bmesh
 from mathutils import Matrix, Vector
 
 from kit.common import MB, rng
-from kit.services import PI, _R, _T, _Nz, _declump, _fillet, _lattice, _merge, _smooth, _tube, _v
+from kit.services import (PI, _LOD, _R, _T, _Nz, _box, _declump, _detail, _fillet, _lattice, _lv, _merge, _simplify, _smooth,
+                          _tube, _v)
 
 
 # =====================================================================================================================
 # utilidades
 # =====================================================================================================================
-def _hull(mb, pts, mat="rubble", m=None, detail=0, nz=None, amp=0.0, freq=20.0, flat=None, matfn=None):
+def _hull(mb, pts, mat="rubble", m=None, detail=0, nz=None, amp=0.0, freq=20.0, flat=None, matfn=None, weld=0.0):
     """Casco convexo (bmesh.ops.convex_hull) de `pts`. detail = cortes de subdivisión de cada arista para poder rugosear
     la superficie de fractura con ruido (amp, freq); `flat(p) -> True` marca vértices de caras originales (moldeadas)
-    que no se rugosean. matfn(centro, normal) -> material por cara. Sólido cerrado."""
+    que no se rugosean. matfn(centro, normal) -> material por cara. weld > 0: suelda antes los puntos a menos de `weld`
+    (evita astillas de área ~0 cuando los puntos vienen muestreados sobre planos). Sólido cerrado."""
     tmp = bmesh.new()
     vs = [tmp.verts.new(_v(p)) for p in pts]
+    if weld > 0:
+        bmesh.ops.remove_doubles(tmp, verts=vs, dist=weld)
+        vs = list(tmp.verts)
     bmesh.ops.convex_hull(tmp, input=vs, use_existing_faces=False)
     junk = [v for v in tmp.verts if not v.link_faces]
     if junk:
         bmesh.ops.delete(tmp, geom=junk, context="VERTS")
     # une triángulos casi coplanares (caras de fractura planas, menos triángulos delgados)
     bmesh.ops.dissolve_limit(tmp, angle_limit=math.radians(2.0), verts=list(tmp.verts), edges=list(tmp.edges))
+    if weld > 0:
+        bmesh.ops.dissolve_degenerate(tmp, dist=weld, edges=list(tmp.edges))
     bmesh.ops.triangulate(tmp, faces=[f for f in tmp.faces if len(f.verts) > 4])
+    _fix_slivers(tmp)
     if detail > 0:
         tmp.normal_update()
         orig = list(tmp.verts)
@@ -82,6 +90,20 @@ def _hull(mb, pts, mat="rubble", m=None, detail=0, nz=None, amp=0.0, freq=20.0, 
             if mm:
                 f.material_index = out.mi(mm)
     _merge(mb, out, m)
+
+
+def _fix_slivers(bm, area=1e-8):
+    """Astillas de área ~0 (vértice colineal sobre el borde de un n-gono al triangular): se gira su arista más larga."""
+    for _ in range(4):
+        bad = [f for f in bm.faces if len(f.verts) == 3 and f.calc_area() < area]
+        if not bad:
+            return
+        for f in bad:
+            if not f.is_valid:
+                continue
+            e = max(f.edges, key=lambda e_: e_.calc_length())
+            if len(e.link_faces) == 2:
+                bmesh.utils.edge_rotate(e, True)
 
 
 def _rebar_path(rr, p0, d0, L, bend_dir, kind="bent", step=0.006):
@@ -123,13 +145,22 @@ def _rebar_path(rr, p0, d0, L, bend_dir, kind="bent", step=0.006):
     return pts
 
 
-def _rebar(mb, pts, r, ribs=True, seg=8, mat="metal_rust"):
-    """Varilla corrugada de 8 lados: anillos de corrugado (r × 1,16) cada ~12 mm (2 muestras por paso de 6 mm)."""
+def _rebar(mb, pts, r, ribs=None, seg=None, mat="metal_rust"):
+    """Varilla corrugada: anillos de corrugado (r × 1,16) cada ~12 mm (2 muestras por paso de 6 mm).
+    ribs / seg = None -> según el nivel: high corrugada de 8 lados · mid lisa de 5 lados · low lisa de 4 lados; las lisas
+    se simplifican (Douglas-Peucker): los tramos rectos quedan en 1 segmento y solo la dobladura conserva estaciones."""
+    if ribs is None:
+        ribs = _lv(True, False, False)
+    if seg is None:
+        seg = _lv(8, 5, 4)
     if ribs:
         radii = [r * (1.16 if (i % 2 == 1) else 1.0) for i in range(len(pts))]
-        _tube(mb, pts, r, seg=seg, mat=mat, radii=radii)
+        _tube(mb, pts, r, seg=seg, mat=mat, radii=radii, lod=False)
     else:
-        _tube(mb, pts, r, seg=seg, mat=mat)
+        P = [_v(p) for p in pts]
+        if _LOD.level != "high":
+            P = [P[i] for i in _simplify(P, r)]
+        _tube(mb, P, r, seg=seg, mat=mat, lod=False)
 
 
 def _resample(pts, step):
@@ -275,7 +306,7 @@ def _frac_chunk(rr, size, kind, res=1.0, nzoff=None, nz=None):
     sx, sy, sz = size
     big = max(sx, sy, sz)
     planes = _frac_planes(rr, sx, sy, sz, kind)
-    N = int(min(14, max(3, round((big / 0.032 + 2) * res))))
+    N = int(min(14, max(3, round((big / 0.032 + 2) * res * _lv(1.0, 0.5, 1.0)))))
     dirs, quads = _cube_sphere(N)
     sc = Vector((sx, sy, sz)) / big
 
@@ -298,6 +329,20 @@ def _frac_chunk(rr, size, kind, res=1.0, nzoff=None, nz=None):
         dep = min(T * 0.45, R * rr.uniform(0.25, 0.5))
         scoops.append((u * (T + R - dep), R))
     off = nzoff if nzoff is not None else Vector((rr.uniform(-50, 50), rr.uniform(-50, 50), rr.uniform(-50, 50)))
+    if _LOD.level == "low":
+        # 'low': el poliedro limpio de los planos de fractura (casco convexo de puntos sobre los planos, caras coplanares
+        # fundidas): misma silueta y mismas caras de cimbra, sin rugosidad ni cuencas. ~20–60 triángulos.
+        pts = [u * ray(u)[0] for u in (Vector((s_.x * sc.x, s_.y * sc.y, s_.z * sc.z)).normalized() for s_ in _cube_sphere(5)[0])]
+        molded = [(n_, d_) for (n_, d_, mo_) in planes if mo_]
+
+        def matfn(c, nn):
+            return "concrete" if any(nn.dot(n_) > 0.995 and abs(c.dot(n_) - d_) < 0.01 * big for (n_, d_) in molded) else None
+        tmp = MB()
+        _hull(tmp, pts, "rubble", matfn=matfn, weld=0.012 * big)
+        ext = max(max(v.co[a] for v in tmp.bm.verts) - min(v.co[a] for v in tmp.bm.verts) for a in range(3))
+        if ext > big * 1.03:
+            tmp.transform(Matrix.Diagonal((big / ext, big / ext, big / ext, 1.0)))
+        return tmp
     amp = 0.03 * big + 0.0015
     f1 = 2.4 / big
     tmp = MB()
@@ -332,16 +377,17 @@ def _frac_chunk(rr, size, kind, res=1.0, nzoff=None, nz=None):
     return tmp
 
 
-def _concrete_chunk(mb, M, size, rr, nz, kind=None, detail=None, rebar=None, res=1.0):
+def _concrete_chunk(mb, M, size, rr, nz, kind=None, dres=None, rebar=None, res=1.0):
     """Trozo de concreto (fragmento de fractura rugoso, ver `_frac_chunk`) con transformación M. size = (sx, sy, sz).
-    detail (opcional) fuerza la resolución de la esfera-cubo. Devuelve kind."""
+    dres (opcional) ajusta la resolución de la esfera-cubo. El nivel de detalle activo lo aplica `_frac_chunk`.
+    Devuelve kind."""
     sx, sy, sz = size
     kind = kind or ("slab" if rr.random() < 0.35 else "block")
     if kind == "slab":
         sz = min(max(0.07, min(sz, 0.35 * min(sx, sy))), 0.2)
     big = max(sx, sy, sz)
-    if detail is not None:
-        res = res * (0.6 + 0.3 * detail)
+    if dres is not None:
+        res = res * (0.6 + 0.3 * dres)
     _merge(mb, _frac_chunk(rr, (sx, sy, sz), kind, res=res, nz=nz), M)
     if rebar or (rebar is None and kind == "slab" and big > 0.25 and rr.random() < 0.7):
         for k in range(int(rr.integers(1, 3))):
@@ -357,115 +403,116 @@ def _concrete_chunk(mb, M, size, rr, nz, kind=None, detail=None, rebar=None, res
 # =====================================================================================================================
 # varillas expuestas
 # =====================================================================================================================
-def rebar_nest(seed=0, n=8, length=0.6, stump=(0.35, 0.35, 0.35), r=None):
+def rebar_nest(seed=0, n=8, length=0.6, stump=(0.35, 0.35, 0.35), r=None, detail="high", seg=None, ribs=None):
     """Muñón de columna de concreto roto (0,35 × 0,35, fractura irregular con esquinas desprendidas) del que salen
     n varillas corrugadas de 8 lados (Ø 3/8"–1/2") dobladas en curva, en gancho o con quiebre seco, estribos (uno en su
     lugar, otro zafado y abierto) y pedazos de concreto aún pegados. Origen: centro de la base del muñón (z = 0)."""
-    rr = rng(seed)
-    nz = _Nz(rr)
-    mb = MB()
-    W, Dp, H = stump
-    hw, hd = W / 2, Dp / 2
+    with _detail(detail):
+        rr = rng(seed)
+        nz = _Nz(rr)
+        mb = MB()
+        W, Dp, H = stump
+        hw, hd = W / 2, Dp / 2
 
-    band = min(0.16, 0.45 * H)
-    H0 = H - band
-    # desconches en las aristas verticales (esquina, z, radio, profundidad) y núcleo más alto que el recubrimiento
-    chips = [(int(rr.integers(0, 4)), rr.uniform(0.06, max(0.07, H0 - 0.08)), rr.uniform(0.03, 0.07), rr.uniform(0.008, 0.022))
-             for _ in range(int(rr.integers(2, 5)))]
-    corners = [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)]
+        band = min(0.16, 0.45 * H)
+        H0 = H - band
+        # desconches en las aristas verticales (esquina, z, radio, profundidad) y núcleo más alto que el recubrimiento
+        chips = [(int(rr.integers(0, 4)), rr.uniform(0.06, max(0.07, H0 - 0.08)), rr.uniform(0.03, 0.07), rr.uniform(0.008, 0.022))
+                 for _ in range(int(rr.integers(2, 5)))]
+        corners = [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)]
 
-    def top_h(x, y):
-        e = max(abs(x) / hw, abs(y) / hd)
-        p3 = Vector((x, y, 0))
-        h = (H + 0.04 * nz(p3, 6.0) + 0.016 * nz(p3 + Vector((0, 0, 3)), 19.0) + 0.006 * nz(p3 + Vector((0, 0, 7)), 47.0)
-             - 0.07 * _smooth((e - 0.5) / 0.5) * (0.7 + 0.6 * (0.5 + 0.5 * nz(p3 + Vector((0, 0, 11)), 9.0))))
-        return max(h, H0 + 0.035)
+        def top_h(x, y):
+            e = max(abs(x) / hw, abs(y) / hd)
+            p3 = Vector((x, y, 0))
+            h = (H + 0.04 * nz(p3, 6.0) + 0.016 * nz(p3 + Vector((0, 0, 3)), 19.0) + 0.006 * nz(p3 + Vector((0, 0, 7)), 47.0)
+                 - 0.07 * _smooth((e - 0.5) / 0.5) * (0.7 + 0.6 * (0.5 + 0.5 * nz(p3 + Vector((0, 0, 11)), 9.0))))
+            return max(h, H0 + 0.035)
 
-    def push_at(x, y):  # cuánto se ha caído el recubrimiento en el borde superior (2–4,5 cm)
-        return 0.02 + 0.025 * (0.5 + 0.5 * nz(Vector((x, y, 5)), 7.0))
+        def push_at(x, y):  # cuánto se ha caído el recubrimiento en el borde superior (2–4,5 cm)
+            return 0.02 + 0.025 * (0.5 + 0.5 * nz(Vector((x, y, 5)), 7.0))
 
-    def hdir(p):
-        cx = min(max(p.x, -hw + 0.07), hw - 0.07)
-        cy = min(max(p.y, -hd + 0.07), hd - 0.07)
-        d = Vector((p.x - cx, p.y - cy, 0.0))
-        return d.normalized() if d.length > 1e-9 else Vector((0, 0, 0))
+        def hdir(p):
+            cx = min(max(p.x, -hw + 0.07), hw - 0.07)
+            cy = min(max(p.y, -hd + 0.07), hd - 0.07)
+            d = Vector((p.x - cx, p.y - cy, 0.0))
+            return d.normalized() if d.length > 1e-9 else Vector((0, 0, 0))
 
-    def deform(p, nrm):
-        q = p.copy()
-        top = nrm.z > 0.7
-        if top or p.z > H0:
-            # banda de fractura: sube hasta la línea de rotura y el recubrimiento se cae (sin aleros: la cara superior
-            # recibe el mismo empuje hacia dentro que el último anillo del costado)
-            e = max(abs(p.x) / hw, abs(p.y) / hd)
-            t = 1.0 if top else (p.z - H0) / band
-            w = _smooth((e - 0.6) / 0.4) if top else 1.0
-            ht = top_h(p.x, p.y)
-            q.z = ht if top else H0 + t * (ht - H0)
-            d = hdir(p)
-            q -= d * push_at(p.x, p.y) * (t ** 1.6) * w
-            q += Vector((nrm.x, nrm.y, 0)) * (-0.006 * abs(nz(p, 23.0)) * t)
+        def deform(p, nrm):
+            q = p.copy()
+            top = nrm.z > 0.7
+            if top or p.z > H0:
+                # banda de fractura: sube hasta la línea de rotura y el recubrimiento se cae (sin aleros: la cara superior
+                # recibe el mismo empuje hacia dentro que el último anillo del costado)
+                e = max(abs(p.x) / hw, abs(p.y) / hd)
+                t = 1.0 if top else (p.z - H0) / band
+                w = _smooth((e - 0.6) / 0.4) if top else 1.0
+                ht = top_h(p.x, p.y)
+                q.z = ht if top else H0 + t * (ht - H0)
+                d = hdir(p)
+                q -= d * push_at(p.x, p.y) * (t ** 1.6) * w
+                q += Vector((nrm.x, nrm.y, 0)) * (-0.006 * abs(nz(p, 23.0)) * t)
+            else:
+                q -= nrm * (0.0012 * nz(p, 7.0) + 0.0012 * abs(nz(p, 31.0)))
+                for (ci, zc, R, dep) in chips:
+                    cx, cy = corners[ci]
+                    dd = math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2 + ((p.z - zc) * 0.7) ** 2)
+                    if dd < R:
+                        q -= hdir(p) * dep * (1 - dd / R) ** 1.5 * (0.7 + 0.3 * nz(p, 40.0))
+            return q
+
+        body = _lattice((-hw, -hd, 0.0), (hw, hd, H), r=0.012, step=0.016, mat="concrete", deform=deform,
+                        matfn=lambda c, nn: "rubble" if c.z > H0 + 0.02 else None)
+        _merge(mb, body)
+        # varillas: esquinas + intermedias
+        cov = 0.045
+        perim = []
+        cx_, cy_ = hw - cov, hd - cov
+        ring = [(-cx_, -cy_), (cx_, -cy_), (cx_, cy_), (-cx_, cy_)]
+        if n <= 4:
+            perim = ring[:n]
         else:
-            q -= nrm * (0.0012 * nz(p, 7.0) + 0.0012 * abs(nz(p, 31.0)))
-            for (ci, zc, R, dep) in chips:
-                cx, cy = corners[ci]
-                dd = math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2 + ((p.z - zc) * 0.7) ** 2)
-                if dd < R:
-                    q -= hdir(p) * dep * (1 - dd / R) ** 1.5 * (0.7 + 0.3 * nz(p, 40.0))
-        return q
-
-    body = _lattice((-hw, -hd, 0.0), (hw, hd, H), r=0.012, step=0.016, mat="concrete", deform=deform,
-                    matfn=lambda c, nn: "rubble" if c.z > H0 + 0.02 else None)
-    _merge(mb, body)
-    # varillas: esquinas + intermedias
-    cov = 0.045
-    perim = []
-    cx_, cy_ = hw - cov, hd - cov
-    ring = [(-cx_, -cy_), (cx_, -cy_), (cx_, cy_), (-cx_, cy_)]
-    if n <= 4:
-        perim = ring[:n]
-    else:
-        perim = list(ring)
-        extra = n - 4
-        mids = [((ring[i][0] + ring[(i + 1) % 4][0]) / 2, (ring[i][1] + ring[(i + 1) % 4][1]) / 2) for i in range(4)]
-        k = 0
-        while len(perim) < n:
-            perim.append(mids[k % 4] if k < 4 else (mids[k % 4][0] * rr.uniform(0.4, 0.8), mids[k % 4][1] * rr.uniform(0.4, 0.8)))
-            k += 1
-    kinds = ["bent", "bent", "bent", "hook", "kink", "straight"]
-    tips = []
-    for i, (bx, by) in enumerate(perim):
-        rb = r or (0.0064 if (i < 4) else 0.0048)
-        out = Vector((bx, by, 0.0))
-        out = out.normalized() if out.length > 1e-6 else Vector((1, 0, 0))
-        bend = (out * rr.uniform(0.4, 1.0) + Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), 0)) * 0.6).normalized()
-        L = length * rr.uniform(0.55, 1.15)
-        kind = kinds[int(rr.integers(0, len(kinds)))]
-        if rr.random() < 0.12:
-            L *= rr.uniform(0.2, 0.4)  # varilla cortada
-        z0 = H - 0.14
-        straight_in = [Vector((bx, by, z0)), Vector((bx, by, top_h(bx, by) - 0.01))]
-        lean = Vector((rr.uniform(-0.03, 0.03), rr.uniform(-0.03, 0.03), 1.0)).normalized()
-        pts = _rebar_path(rr, straight_in[-1], lean, L, bend, kind=kind)
-        pts = _resample(straight_in, 0.006)[:-1] + pts
-        _rebar(mb, pts, rb)
-        tips.append(pts)
-    # estribos: uno en su lugar justo sobre la fractura, otro zafado e inclinado
-    ex = cx_ + 0.0064 + 0.0035
-    ey = cy_ + 0.0064 + 0.0035
-    zf = H + 0.06
-    _stirrup(mb, 0.0, 0.0, H - 0.07, ex, ey, rr)
-    _stirrup(mb, 0.0, 0.0, zf, ex + 0.004, ey + 0.004, rr, tilt=(rr.uniform(-6, 6), rr.uniform(-6, 6)), open_=0.0)
-    _stirrup(mb, rr.uniform(-0.02, 0.02), rr.uniform(-0.02, 0.02), zf + rr.uniform(0.08, 0.16), ex + 0.01, ey + 0.01, rr,
-             tilt=(rr.uniform(-25, 25), rr.uniform(-25, 25)), open_=rr.uniform(0.03, 0.08))
-    # pedazos de concreto aún pegados a 1–2 varillas
-    for _ in range(int(rr.integers(1, 3))):
-        pts = tips[int(rr.integers(0, len(tips)))]
-        p = pts[min(len(pts) - 1, int(len(pts) * rr.uniform(0.25, 0.45)))]
-        s = rr.uniform(0.04, 0.07)
-        _concrete_chunk(mb, _T(p) @ _R("Z", rr.uniform(0, 360)) @ _R("X", rr.uniform(0, 360)), (s, s * 0.8, s * 0.6), rr, nz,
-                        kind="block", detail=1, rebar=False)
-    _declump(mb)
-    return mb
+            perim = list(ring)
+            extra = n - 4
+            mids = [((ring[i][0] + ring[(i + 1) % 4][0]) / 2, (ring[i][1] + ring[(i + 1) % 4][1]) / 2) for i in range(4)]
+            k = 0
+            while len(perim) < n:
+                perim.append(mids[k % 4] if k < 4 else (mids[k % 4][0] * rr.uniform(0.4, 0.8), mids[k % 4][1] * rr.uniform(0.4, 0.8)))
+                k += 1
+        kinds = ["bent", "bent", "bent", "hook", "kink", "straight"]
+        tips = []
+        for i, (bx, by) in enumerate(perim):
+            rb = r or (0.0064 if (i < 4) else 0.0048)
+            out = Vector((bx, by, 0.0))
+            out = out.normalized() if out.length > 1e-6 else Vector((1, 0, 0))
+            bend = (out * rr.uniform(0.4, 1.0) + Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), 0)) * 0.6).normalized()
+            L = length * rr.uniform(0.55, 1.15)
+            kind = kinds[int(rr.integers(0, len(kinds)))]
+            if rr.random() < 0.12:
+                L *= rr.uniform(0.2, 0.4)  # varilla cortada
+            z0 = H - 0.14
+            straight_in = [Vector((bx, by, z0)), Vector((bx, by, top_h(bx, by) - 0.01))]
+            lean = Vector((rr.uniform(-0.03, 0.03), rr.uniform(-0.03, 0.03), 1.0)).normalized()
+            pts = _rebar_path(rr, straight_in[-1], lean, L, bend, kind=kind)
+            pts = _resample(straight_in, 0.006)[:-1] + pts
+            _rebar(mb, pts, rb, ribs=ribs, seg=seg)
+            tips.append(pts)
+        # estribos: uno en su lugar justo sobre la fractura, otro zafado e inclinado
+        ex = cx_ + 0.0064 + 0.0035
+        ey = cy_ + 0.0064 + 0.0035
+        zf = H + 0.06
+        _stirrup(mb, 0.0, 0.0, H - 0.07, ex, ey, rr)
+        _stirrup(mb, 0.0, 0.0, zf, ex + 0.004, ey + 0.004, rr, tilt=(rr.uniform(-6, 6), rr.uniform(-6, 6)), open_=0.0)
+        _stirrup(mb, rr.uniform(-0.02, 0.02), rr.uniform(-0.02, 0.02), zf + rr.uniform(0.08, 0.16), ex + 0.01, ey + 0.01, rr,
+                 tilt=(rr.uniform(-25, 25), rr.uniform(-25, 25)), open_=rr.uniform(0.03, 0.08))
+        # pedazos de concreto aún pegados a 1–2 varillas
+        for _ in range(int(rr.integers(1, 3))):
+            pts = tips[int(rr.integers(0, len(tips)))]
+            p = pts[min(len(pts) - 1, int(len(pts) * rr.uniform(0.25, 0.45)))]
+            s = rr.uniform(0.04, 0.07)
+            _concrete_chunk(mb, _T(p) @ _R("Z", rr.uniform(0, 360)) @ _R("X", rr.uniform(0, 360)), (s, s * 0.8, s * 0.6), rr, nz,
+                            kind="block", dres=1, rebar=False)
+        _declump(mb)
+        return mb
 
 
 # =====================================================================================================================
@@ -474,7 +521,7 @@ def rebar_nest(seed=0, n=8, length=0.6, stump=(0.35, 0.35, 0.35), r=None):
 def _brick(mb, M, rr, broken=False):
     """Ladrillo 0,24 × 0,12 × 0,06 con bisel de 4 mm; broken: medio ladrillo con el extremo roto (casco)."""
     if not broken:
-        mb.box((-0.12, -0.06, -0.03), (0.12, 0.06, 0.03), "brick", bevel=0.004, seg=1, m=M)
+        _box(mb, (-0.12, -0.06, -0.03), (0.12, 0.06, 0.03), "brick", bevel=0.004, seg=1, m=M)
         return
     Lb = rr.uniform(0.08, 0.17)
     pts = []
@@ -491,162 +538,172 @@ def _brick(mb, M, rr, broken=False):
     _hull(mb, pts, "brick", m=M)
 
 
-def rubble_pile(radius=1.0, seed=0, n=60):
+def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
     """Montón de escombro: base de cascajo/arena con perfil de talud irregular y n trozos de concreto (cascos convexos
     rugosos, losas con varilla) APILADOS con un campo de alturas (cada pieza descansa sobre las anteriores), ladrillos
     enteros y rotos, grava y varillas dobladas asomando.
     Origen: centro del montón sobre el piso (la base se entierra 2 cm, z = -0,02)."""
-    rr = rng(seed)
-    nz = _Nz(rr)
-    mb = MB()
-    R = float(radius)
-    Hm = 0.26 * R * rr.uniform(0.85, 1.15)  # base de finos; los trozos apilados hacen el resto del talud
-    rad_n = [rr.uniform(0.85, 1.15) for _ in range(7)]
+    with _detail(detail):
+        rr = rng(seed)
+        nz = _Nz(rr)
+        mb = MB()
+        R = float(radius)
+        Hm = 0.26 * R * rr.uniform(0.85, 1.15)  # base de finos; los trozos apilados hacen el resto del talud
+        rad_n = [rr.uniform(0.85, 1.15) for _ in range(7)]
 
-    def Rth(a):
-        k = (a % (2 * PI)) / (2 * PI) * 7
-        i = int(k)
-        t = _smooth(k - i)
-        return R * (rad_n[i % 7] * (1 - t) + rad_n[(i + 1) % 7] * t)
+        def Rth(a):
+            k = (a % (2 * PI)) / (2 * PI) * 7
+            i = int(k)
+            t = _smooth(k - i)
+            return R * (rad_n[i % 7] * (1 - t) + rad_n[(i + 1) % 7] * t)
 
-    pk = Vector((rr.uniform(-0.2, 0.2) * R, rr.uniform(-0.2, 0.2) * R, 0))
-    bumps = [(rr.uniform(-0.55, 0.55) * R, rr.uniform(-0.55, 0.55) * R, rr.uniform(0.15, 0.35) * R, rr.uniform(0.06, 0.16) * R)
-             for _ in range(int(rr.integers(2, 5)))]
+        pk = Vector((rr.uniform(-0.2, 0.2) * R, rr.uniform(-0.2, 0.2) * R, 0))
+        bumps = [(rr.uniform(-0.55, 0.55) * R, rr.uniform(-0.55, 0.55) * R, rr.uniform(0.15, 0.35) * R, rr.uniform(0.06, 0.16) * R)
+                 for _ in range(int(rr.integers(2, 5)))]
 
-    def hgt(x, y):
-        a = math.atan2(y - pk.y * 0.0, x - pk.x * 0.0)
-        rr_ = math.hypot(x, y) / Rth(a)
-        off = math.hypot(x - pk.x, y - pk.y) / max(R, 1e-6)
-        base = Hm * max(0.0, 1.0 - min(rr_, 1.0) ** 1.6) ** 1.4 * (1.0 - 0.35 * off)
-        edge = min(1.0, (1 - min(rr_, 1.0)) * 4)
-        bmp = sum(h * math.exp(-((x - bx) ** 2 + (y - by) ** 2) / (w * w)) for (bx, by, w, h) in bumps)
-        return base + edge * (bmp + 0.045 * R * nz(Vector((x, y, 0)), 3.0 / R) + 0.015 * nz(Vector((x, y, 5)), 9.0)
-                              + 0.012 * nz(Vector((x, y, 9)), 23.0))
+        def hgt(x, y):
+            a = math.atan2(y - pk.y * 0.0, x - pk.x * 0.0)
+            rr_ = math.hypot(x, y) / Rth(a)
+            off = math.hypot(x - pk.x, y - pk.y) / max(R, 1e-6)
+            base = Hm * max(0.0, 1.0 - min(rr_, 1.0) ** 1.6) ** 1.4 * (1.0 - 0.35 * off)
+            edge = min(1.0, (1 - min(rr_, 1.0)) * 4)
+            bmp = sum(h * math.exp(-((x - bx) ** 2 + (y - by) ** 2) / (w * w)) for (bx, by, w, h) in bumps)
+            return base + edge * (bmp + 0.045 * R * nz(Vector((x, y, 0)), 3.0 / R) + 0.015 * nz(Vector((x, y, 5)), 9.0)
+                                  + 0.012 * nz(Vector((x, y, 9)), 23.0))
 
-    nr, ns = 14, 56
-    center = mb.bm.verts.new((0.0, 0.0, hgt(0.0, 0.0)))
-    rings = []
-    ts = [(i / nr) ** 0.85 for i in range(1, nr)] + [0.985, 1.0, 1.035]
-    for i, t in enumerate(ts):
-        ring = []
+        nr, ns = _lv((14, 56), (9, 36), (6, 22))
+        center = mb.bm.verts.new((0.0, 0.0, hgt(0.0, 0.0)))
+        rings = []
+        ts = [(i / nr) ** 0.85 for i in range(1, nr)] + [0.985, 1.0, 1.035]
+        for i, t in enumerate(ts):
+            ring = []
+            for k in range(ns):
+                a = 2 * PI * k / ns
+                Ra = Rth(a)
+                x, y = Ra * t * math.cos(a), Ra * t * math.sin(a)
+                if t > 1.02:
+                    z = -0.025
+                else:
+                    z = hgt(x, y) - 0.016 * _smooth((t - 0.8) / 0.2) + 0.006 * nz(Vector((x, y, 3)), 13.0)
+                ring.append(mb.bm.verts.new((x, y, z)))
+            rings.append(ring)
+        nr = len(rings)
         for k in range(ns):
-            a = 2 * PI * k / ns
-            Ra = Rth(a)
-            x, y = Ra * t * math.cos(a), Ra * t * math.sin(a)
-            if t > 1.02:
-                z = -0.025
-            else:
-                z = hgt(x, y) - 0.016 * _smooth((t - 0.8) / 0.2) + 0.006 * nz(Vector((x, y, 3)), 13.0)
-            ring.append(mb.bm.verts.new((x, y, z)))
-        rings.append(ring)
-    nr = len(rings)
-    for k in range(ns):
-        mb.face([center, rings[0][k], rings[0][(k + 1) % ns]], "rubble")
-    for i in range(nr - 1):
-        for k in range(ns):
-            kk = (k + 1) % ns
-            f = mb.face([rings[i][k], rings[i + 1][k], rings[i + 1][kk], rings[i][kk]], "rubble")
-            if nz(f.calc_center_median(), 2.5) > 0.25:
-                f.material_index = mb.mi("sand")
-    mb.face(list(reversed(rings[-1])), "rubble")
-    # campo de alturas (5 cm) para APILAR: cada trozo se apoya sobre lo ya colocado (los grandes primero)
-    cell = 0.05
-    org = -1.15 * R
-    G = int(2.3 * R / cell) + 2
-    hf = [[max(hgt(org + i * cell, org + j * cell), 0.0) if math.hypot(org + i * cell, org + j * cell) < Rth(
-        math.atan2(org + j * cell, org + i * cell)) else 0.0 for j in range(G)] for i in range(G)]
+            mb.face([center, rings[0][k], rings[0][(k + 1) % ns]], "rubble")
+        for i in range(nr - 1):
+            for k in range(ns):
+                kk = (k + 1) % ns
+                f = mb.face([rings[i][k], rings[i + 1][k], rings[i + 1][kk], rings[i][kk]], "rubble")
+                if nz(f.calc_center_median(), 2.5) > 0.25:
+                    f.material_index = mb.mi("sand")
+        mb.face(list(reversed(rings[-1])), "rubble")
+        # campo de alturas (5 cm) para APILAR: cada trozo se apoya sobre lo ya colocado (los grandes primero)
+        cell = 0.05
+        org = -1.15 * R
+        G = int(2.3 * R / cell) + 2
+        hf = [[max(hgt(org + i * cell, org + j * cell), 0.0) if math.hypot(org + i * cell, org + j * cell) < Rth(
+            math.atan2(org + j * cell, org + i * cell)) else 0.0 for j in range(G)] for i in range(G)]
 
-    def cells(x, y, rad):
-        i0, i1 = max(0, int((x - rad - org) / cell)), min(G - 1, int((x + rad - org) / cell) + 1)
-        j0, j1 = max(0, int((y - rad - org) / cell)), min(G - 1, int((y + rad - org) / cell) + 1)
-        for i in range(i0, i1 + 1):
-            for j in range(j0, j1 + 1):
-                d = math.hypot(org + i * cell - x, org + j * cell - y)
-                if d <= rad:
-                    yield i, j, d
+        def cells(x, y, rad):
+            i0, i1 = max(0, int((x - rad - org) / cell)), min(G - 1, int((x + rad - org) / cell) + 1)
+            j0, j1 = max(0, int((y - rad - org) / cell)), min(G - 1, int((y + rad - org) / cell) + 1)
+            for i in range(i0, i1 + 1):
+                for j in range(j0, j1 + 1):
+                    d = math.hypot(org + i * cell - x, org + j * cell - y)
+                    if d <= rad:
+                        yield i, j, d
 
-    def hf_at(x, y, rad):
-        vals = [hf[i][j] for (i, j, _) in cells(x, y, rad)]
-        return max(vals) if vals else 0.0
+        def hf_at(x, y, rad):
+            vals = [hf[i][j] for (i, j, _) in cells(x, y, rad)]
+            return max(vals) if vals else 0.0
 
-    smax = min(0.55, 0.42 * R)
-    smin = 0.05
-    sizes = sorted([smin * (smax / smin) ** (rr.random() ** 1.3) for _ in range(n)], reverse=True)
-    for s in sizes:
-        a = rr.uniform(0, 2 * PI)
-        d = Rth(a) * 0.85 * (rr.random() ** 0.7) * (0.7 if s > 0.3 else 1.0)
-        x, y = d * math.cos(a), d * math.sin(a)
-        roll = rr.random()
-        yaw = rr.uniform(0, 360)
-        tilt = (rr.uniform(-28, 28), rr.uniform(-28, 28))
-        rot = _R("Z", yaw) @ _R("X", tilt[0]) @ _R("Y", tilt[1])
-        if roll < 0.2 and s < 0.25:
-            base = hf_at(x, y, 0.08)
-            _brick(mb, _T(x, y, base + 0.02) @ rot, rr, broken=rr.random() < 0.5)
-            for (i, j, dd) in cells(x, y, 0.1):
-                hf[i][j] = max(hf[i][j], base + 0.05 * (1 - dd / 0.1))
-            continue
-        sx, sy, sz = s, s * rr.uniform(0.55, 1.0), s * rr.uniform(0.35, 0.8)
-        fr = 0.42 * max(sx, sy)
-        base = hf_at(x, y, fr * 0.6)
-        zc = base + sz * rr.uniform(0.05, 0.35)
-        kind = _concrete_chunk(mb, _T(x, y, zc) @ rot, (sx, sy, sz), rr, nz)
-        top = zc + (min(sz, 0.2) if kind == "slab" else sz) * 0.4
-        for (i, j, dd) in cells(x, y, fr):
-            hf[i][j] = max(hf[i][j], top - (top - base) * (dd / fr) ** 2 * 0.8)
-    # grava y cascajo fino sobre la superficie
-    for _ in range(int(n * 2.5)):
-        a = rr.uniform(0, 2 * PI)
-        d = Rth(a) * 1.2 * math.sqrt(rr.random())
-        x, y = d * math.cos(a), d * math.sin(a)
-        g = rr.uniform(0.012, 0.04) * (0.6 if d > Rth(a) else 1.0)
-        c = Vector((x, y, max(hgt(x, y), hf_at(x, y, 0.03) - 0.02, 0.0) + g * 0.15))
-        gp = [c + Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-0.6, 0.6))).normalized() * g * rr.uniform(0.5, 1.0)
-              for _ in range(8)]
-        _hull(mb, gp, "rubble" if rr.random() < 0.75 else "brick")
-    # varillas sueltas asomando
-    for _ in range(max(2, n // 15)):
-        a = rr.uniform(0, 2 * PI)
-        d = Rth(a) * rr.uniform(0.1, 0.7)
-        x, y = d * math.cos(a), d * math.sin(a)
-        p0 = Vector((x, y, hf_at(x, y, 0.05) - 0.12))
-        dirv = Vector((rr.uniform(-0.6, 0.6), rr.uniform(-0.6, 0.6), 1.0)).normalized()
-        pts = _rebar_path(rr, p0, dirv, rr.uniform(0.3, 0.9), Vector((math.cos(a), math.sin(a), 0)),
-                          kind=rr.choice(["bent", "kink", "hook", "straight"]))
-        _rebar(mb, pts, rr.choice([0.0048, 0.0064]))
-    _declump(mb)
-    return mb
+        smax = min(0.55, 0.42 * R)
+        smin = 0.05
+        sizes = sorted([smin * (smax / smin) ** (rr.random() ** 1.3) for _ in range(n)], reverse=True)
+        for s in sizes:
+            a = rr.uniform(0, 2 * PI)
+            d = Rth(a) * 0.85 * (rr.random() ** 0.7) * (0.7 if s > 0.3 else 1.0)
+            x, y = d * math.cos(a), d * math.sin(a)
+            roll = rr.random()
+            yaw = rr.uniform(0, 360)
+            tilt = (rr.uniform(-28, 28), rr.uniform(-28, 28))
+            rot = _R("Z", yaw) @ _R("X", tilt[0]) @ _R("Y", tilt[1])
+            if roll < 0.2 and s < 0.25:
+                base = hf_at(x, y, 0.08)
+                _brick(mb, _T(x, y, base + 0.02) @ rot, rr, broken=rr.random() < 0.5)
+                for (i, j, dd) in cells(x, y, 0.1):
+                    hf[i][j] = max(hf[i][j], base + 0.05 * (1 - dd / 0.1))
+                continue
+            sx, sy, sz = s, s * rr.uniform(0.55, 1.0), s * rr.uniform(0.35, 0.8)
+            fr = 0.42 * max(sx, sy)
+            base = hf_at(x, y, fr * 0.6)
+            zc = base + sz * rr.uniform(0.05, 0.35)
+            kind = _concrete_chunk(mb, _T(x, y, zc) @ rot, (sx, sy, sz), rr, nz)
+            top = zc + (min(sz, 0.2) if kind == "slab" else sz) * 0.4
+            for (i, j, dd) in cells(x, y, fr):
+                hf[i][j] = max(hf[i][j], top - (top - base) * (dd / fr) ** 2 * 0.8)
+        # grava y cascajo fino sobre la superficie
+        gstep = _lv(1, 2, 4)  # mid / low: se construye 1 de cada 2 / 4 piedras (la semilla se consume igual)
+        for gi in range(int(n * gravel)):
+            a = rr.uniform(0, 2 * PI)
+            d = Rth(a) * 1.2 * math.sqrt(rr.random())
+            x, y = d * math.cos(a), d * math.sin(a)
+            g = rr.uniform(0.012, 0.04) * (0.6 if d > Rth(a) else 1.0)
+            c = Vector((x, y, max(hgt(x, y), hf_at(x, y, 0.03) - 0.02, 0.0) + g * 0.15))
+            gp = [c + Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-0.6, 0.6))).normalized() * g * rr.uniform(0.5, 1.0)
+                  for _ in range(8)]
+            gm = "rubble" if rr.random() < 0.75 else "brick"
+            if gi % gstep == 0:
+                _hull(mb, gp, gm)
+        # varillas sueltas asomando
+        for _ in range(max(2, n // 15)):
+            a = rr.uniform(0, 2 * PI)
+            d = Rth(a) * rr.uniform(0.1, 0.7)
+            x, y = d * math.cos(a), d * math.sin(a)
+            p0 = Vector((x, y, hf_at(x, y, 0.05) - 0.12))
+            dirv = Vector((rr.uniform(-0.6, 0.6), rr.uniform(-0.6, 0.6), 1.0)).normalized()
+            pts = _rebar_path(rr, p0, dirv, rr.uniform(0.3, 0.9), Vector((math.cos(a), math.sin(a), 0)),
+                              kind=rr.choice(["bent", "kink", "hook", "straight"]))
+            _rebar(mb, pts, rr.choice([0.0048, 0.0064]))
+        _declump(mb)
+        return mb
 
 
-def chunk(size=0.3, seed=0, kind=None):
+def chunk(size=0.3, seed=0, kind=None, detail="high"):
     """Trozo suelto e irregular de concreto (casco convexo rugoso). size: escalar (dimensión mayor) o (sx, sy, sz).
     kind: 'block' (pedazo macizo de esquinas cortadas), 'slab' (pedazo de losa con caras moldeadas planas y, si es
     grande, varilla asomando) o None (al azar). Origen: centro en planta, z = 0 en su punto más bajo (se apoya en el piso;
     para escombro colgante o desconches usar la matriz que convenga)."""
-    rr = rng(seed)
-    nz = _Nz(rr)
-    if isinstance(size, (int, float)):
-        s = float(size)
-        size = (s, s * rr.uniform(0.6, 0.95), s * rr.uniform(0.4, 0.75))
-    tmp = MB()
-    _concrete_chunk(tmp, Matrix.Identity(4), tuple(size), rr, nz, kind=kind)
-    zmin = min(v.co.z for v in tmp.bm.verts)
-    tmp.transform(_T(0, 0, -zmin))
-    _declump(tmp)
-    return tmp
+    with _detail(detail):
+        rr = rng(seed)
+        nz = _Nz(rr)
+        if isinstance(size, (int, float)):
+            s = float(size)
+            size = (s, s * rr.uniform(0.6, 0.95), s * rr.uniform(0.4, 0.75))
+        tmp = MB()
+        _concrete_chunk(tmp, Matrix.Identity(4), tuple(size), rr, nz, kind=kind)
+        zmin = min(v.co.z for v in tmp.bm.verts)
+        tmp.transform(_T(0, 0, -zmin))
+        _declump(tmp)
+        return tmp
 
 
 # =====================================================================================================================
 # mordidas de arista
 # =====================================================================================================================
+def _bite_k():
+    return _lv(12, 8, 5)
+
+
 class _Bite:
     """Perfil de una mordida a lo largo de una arista canónica (arista en +X, x = 0..L; d1 = distancia hacia dentro desde
     la cara 1 (y = 0), d2 = distancia hacia dentro desde la cara 2 (z = 0)). Fuera de la mordida el perfil es el chaflán
     redondo de radio b (mismo perfil que MB.box(bevel=b, seg=2)), así empalma con la arista sana."""
 
-    K = 12
+    K = 12  # estaciones del perfil en 'high' (mid 8, low 5: ver _bite_k)
 
     def __init__(self, L, D, b, rr, nz):
+        self.K = _bite_k()
         self.L, self.D, self.b, self.nz = L, D, min(b, 0.3 * D), nz
         self.Dp = D - 0.001
         self.BY, self.BZ = self.Dp * rr.uniform(0.8, 0.98), self.Dp * rr.uniform(0.8, 0.98)
@@ -708,53 +765,58 @@ class _Bite:
             _tube(mb, _resample(path, 0.01), rs, seg=8, mat="metal_rust")
             xs += stirrup_every * rr.uniform(0.85, 1.15)
         if aggregate:
-            for _ in range(int((self.xb - self.xa) * 24)):
+            astep = _lv(1, 2, 4)  # mid / low: 1 de cada 2 / 4 piedras de agregado (la semilla se consume igual)
+            for ai in range(int((self.xb - self.xa) * 24)):
                 x = rr.uniform(self.xa + self.ramp * 0.5, self.xb - self.ramp * 0.5)
                 if self.env(x) < 0.35:
                     continue
                 c = self.curve(x)
-                d1, d2 = c[int(rr.integers(3, self.K))]
+                k12 = int(rr.integers(3, 12))  # sorteo con el rango de 'high' (K = 12) y se lleva al K del nivel
+                d1, d2 = c[max(1, min(self.K, int(round(k12 * self.K / 12))))]
                 inward = (Vector((Dp, Dp)) - Vector((d1, d2))).normalized()
                 rad = rr.uniform(0.006, 0.016)
                 ctr = Vector((x, d1 + inward.x * rad * 0.45, -(d2 + inward.y * rad * 0.45)))
                 pts = [ctr + Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-1, 1))).normalized() * rad * rr.uniform(0.6, 1.0)
                        for _ in range(9)]
-                _hull(mb, pts, "rubble")
+                if ai % astep == 0:
+                    _hull(mb, pts, "rubble")
 
 
-def spall_edge(length, depth, seed=0, edge_bevel=0.015, cover=0.035, bar_r=0.0064, stirrup_every=0.18, aggregate=True):
+def spall_edge(length, depth, seed=0, edge_bevel=0.015, cover=0.035, bar_r=0.0064, stirrup_every=0.18, aggregate=True,
+               detail="high"):
     """Pieza de reemplazo de una arista desconchada ("mordida"): prisma de esquina con perfil irregular de fractura,
     varilla longitudinal corrugada expuesta (recubrimiento `cover` al eje) y esquinas de estribo cada `stirrup_every`.
     Coordenadas y uso: ver la docstring del módulo (arista en +X, caras del anfitrión y = 0 y z = 0, la pieza llena
     y ∈ [0, depth), z ∈ (-depth, 0]). Queda una junta de 1 mm con el anfitrión (se lee como grieta). Para un empalme
     soldado sin junta usar `spalled_box`, que integra la mordida en el sólido del anfitrión."""
-    rr = rng(seed)
-    nz = _Nz(rr)
-    mb = MB()
-    L, D = float(length), float(depth)
-    bite = _Bite(L, D, edge_bevel, rr, nz)
-    Dp = bite.Dp
-    nst = max(8, int(L / 0.015))
-    rings = []
-    x0, x1 = 0.001, L - 0.001
-    for i in range(nst + 1):
-        x = x0 + (x1 - x0) * i / nst
-        prof = [(Dp, 0.0)] + bite.curve(x) + [(0.0, Dp), (Dp, Dp)]
-        rings.append([mb.bm.verts.new((x, d1, -d2)) for (d1, d2) in prof])
-    m = len(rings[0])
-    K = bite.K
-    for i in range(nst):
-        A, B = rings[i], rings[i + 1]
-        for k in range(m):
-            kk = (k + 1) % m
-            f = mb.face([A[k], A[kk], B[kk], B[k]], "concrete")
-            if 2 <= k <= K + 1 and bite.env(A[k].co.x) > 0.05:
-                f.material_index = mb.mi("rubble")
-    mb.face(list(reversed(rings[0])), "concrete")
-    mb.face(rings[-1], "concrete")
-    bite.details(mb, rr, cover=cover, bar_r=bar_r, stirrup_every=stirrup_every, aggregate=aggregate)
-    _declump(mb)
-    return mb
+    with _detail(detail):
+        rr = rng(seed)
+        nz = _Nz(rr)
+        mb = MB()
+        L, D = float(length), float(depth)
+        bite = _Bite(L, D, edge_bevel, rr, nz)
+        Dp = bite.Dp
+        nst = max(8, int(L / _lv(0.015, 0.03, 0.06)))
+        rings = []
+        x0, x1 = 0.001, L - 0.001
+        for i in range(nst + 1):
+            x = x0 + (x1 - x0) * i / nst
+            prof = [(Dp, 0.0)] + bite.curve(x) + [(0.0, Dp), (Dp, Dp)]
+            rings.append([mb.bm.verts.new((x, d1, -d2)) for (d1, d2) in prof])
+        m = len(rings[0])
+        K = bite.K
+        for i in range(nst):
+            A, B = rings[i], rings[i + 1]
+            for k in range(m):
+                kk = (k + 1) % m
+                f = mb.face([A[k], A[kk], B[kk], B[k]], "concrete")
+                if 2 <= k <= K + 1 and bite.env(A[k].co.x) > 0.05:
+                    f.material_index = mb.mi("rubble")
+        mb.face(list(reversed(rings[0])), "concrete")
+        mb.face(rings[-1], "concrete")
+        bite.details(mb, rr, cover=cover, bar_r=bar_r, stirrup_every=stirrup_every, aggregate=aggregate)
+        _declump(mb)
+        return mb
 
 
 _AX = {"x": (0, (1, 2)), "y": (1, (0, 2)), "z": (2, (0, 1))}
@@ -777,7 +839,7 @@ def spall_matrix(mn, mx, axis, sides, start):
     return Matrix(((X.x, Y.x, Z.x, o.x), (X.y, Y.y, Z.y, o.y), (X.z, Y.z, Z.z, o.z), (0, 0, 0, 1)))
 
 
-def spalled_box(mb, mn, mx, spalls, mat="concrete", bevel=0.015, seg=2):
+def spalled_box(mb, mn, mx, spalls, mat="concrete", bevel=0.015, seg=2, detail="high"):
     """Caja anfitriona (losa, viga, columna) CON mordidas de arista, como UN SOLO sólido soldado, sin booleanos ni
     juntas. Escribe en `mb` y lo devuelve.
     spalls: lista de dict(axis, sides, start, length, depth[, seed]) — ver docstring del módulo. Todas las mordidas van
@@ -786,94 +848,96 @@ def spalled_box(mb, mn, mx, spalls, mat="concrete", bevel=0.015, seg=2):
     chaflán redondo de radio `bevel` o con el perfil de mordida donde la hay; estaciones cada 1,5 cm dentro de las
     mordidas; los extremos de la caja llevan su propio redondeo (3 estaciones) y tapa. Varillas, estribos y agregado
     expuestos se agregan con la misma convención que `spall_edge`."""
-    mn, mx = _v(mn), _v(mx)
-    if not spalls:
-        mb.box(tuple(mn), tuple(mx), mat, bevel=bevel, seg=seg)
+    with _detail(detail):
+        mn, mx = _v(mn), _v(mx)
+        if not spalls:
+            _box(mb, tuple(mn), tuple(mx), mat, bevel=bevel, seg=seg)
+            return mb
+        axis = spalls[0]["axis"]
+        ai, (e1, e2) = _AX[axis]
+        b = min(bevel, 0.3 * min(mx[q] - mn[q] for q in range(3)))
+        corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]  # recorrido antihorario en (e1, e2)
+        bites = {c: [] for c in corners}
+        ext = {e1: mx[e1] - mn[e1], e2: mx[e2] - mn[e2]}
+        depths = []
+        for i, sp in enumerate(spalls):
+            assert sp["axis"] == axis, "spalled_box: todas las mordidas deben ir sobre aristas del mismo eje"
+            dep = min(float(sp["depth"]), 0.9 * min(ext.values()))
+            # dos mordidas en esquinas vecinas (comparten cara) que se traslapan a lo largo del eje: que no se crucen
+            s0, s1_ = float(sp["start"]), float(sp["start"]) + float(sp["length"])
+            for j, o in enumerate(spalls):
+                if j == i or not (float(o["start"]) < s1_ and s0 < float(o["start"]) + float(o["length"])):
+                    continue
+                a, c = tuple(sp["sides"]), tuple(o["sides"])
+                for q, ax_ in ((0, e1), (1, e2)):  # comparten la cara normal a e2 (limita a lo largo de e1) o la normal a e1
+                    if a[1 - q] == c[1 - q] and a[q] != c[q]:
+                        lim = ext[ax_] - 0.03
+                        tot = dep + float(o["depth"])
+                        if tot > lim:
+                            dep = dep * lim / tot
+            depths.append(dep)
+        for sp, dep in zip(spalls, depths):
+            rr = rng(sp.get("seed", 0))
+            nz = _Nz(rr)
+            bt = _Bite(float(sp["length"]), dep, b, rr, nz)
+            bites[tuple(sp["sides"])].append((mn[ai] + float(sp["start"]), bt, rr))
+        a0, a1 = mn[ai], mx[ai]
+        e = 0.7 * b
+        st = {a0, a0 + 0.293 * e, a0 + e, a1 - e, a1 - 0.293 * e, a1}
+        for c in corners:
+            for (s0, bt, _) in bites[c]:
+                n = max(8, int(bt.L / _lv(0.015, 0.03, 0.06)))
+                st |= {min(max(s0 + bt.L * i / n, a0 + e + 0.002), a1 - e - 0.002) for i in range(n + 1)}
+        st = sorted(st)
+        K = _bite_k()
+        flat_bevel = [(b + b * math.cos(math.radians(90 + 90 * k / K)), b - b * math.sin(math.radians(90 + 90 * k / K)))
+                      for k in range(K + 1)]
+        flat_bevel = [(flat_bevel[0][0] + 0.004, 0.0)] + flat_bevel + [(0.0, flat_bevel[-1][1] + 0.004)]
+        host = MB()
+        rings, ring_bite = [], []
+        for x in st:
+            inset = 0.0
+            if x < a0 + e - 1e-9:
+                th = math.acos(max(-1.0, min(1.0, 1 - (x - a0) / e))) if e > 0 else PI / 2
+                inset = e * (1 - math.sin(th))
+            elif x > a1 - e + 1e-9:
+                th = math.acos(max(-1.0, min(1.0, 1 - (a1 - x) / e))) if e > 0 else PI / 2
+                inset = e * (1 - math.sin(th))
+            ring, flags = [], []
+            for (s1, s2) in corners:
+                curve, bitten = flat_bevel, False
+                for (s0, bt, _) in bites[(s1, s2)]:
+                    if s0 < x < s0 + bt.L:
+                        curve, bitten = bt.curve(x - s0), bt.env(x - s0) > 0.05
+                        break
+                uc = mn[e1] if s1 < 0 else mx[e1]
+                vc = mn[e2] if s2 < 0 else mx[e2]
+                pts = curve if s1 != s2 else list(reversed(curve))
+                for (d1, d2) in pts:
+                    co = Vector((0.0, 0.0, 0.0))
+                    co[ai] = x
+                    co[e1] = uc - s1 * (d1 + inset)
+                    co[e2] = vc - s2 * (d2 + inset)
+                    ring.append(host.bm.verts.new(co))
+                    flags.append(bitten)
+            rings.append(ring)
+            ring_bite.append(flags)
+        m = len(rings[0])
+        nper = K + 3
+        for i in range(len(rings) - 1):
+            A, B = rings[i], rings[i + 1]
+            for k in range(m):
+                kk = (k + 1) % m
+                f = host.face([A[k], A[kk], B[kk], B[k]], mat)
+                j = k % nper
+                if ring_bite[i][k] and ring_bite[i + 1][k] and 1 <= j <= nper - 2:
+                    f.material_index = host.mi("rubble")
+        host.face(list(reversed(rings[0])), mat)
+        host.face(rings[-1], mat)
+        _merge(mb, host)
+        for c in corners:
+            for (s0, bt, rr) in bites[c]:
+                det = MB()
+                bt.details(det, rr)
+                _merge(mb, det, spall_matrix(mn, mx, axis, c, s0 - mn[ai]))
         return mb
-    axis = spalls[0]["axis"]
-    ai, (e1, e2) = _AX[axis]
-    b = min(bevel, 0.3 * min(mx[q] - mn[q] for q in range(3)))
-    corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]  # recorrido antihorario en (e1, e2)
-    bites = {c: [] for c in corners}
-    ext = {e1: mx[e1] - mn[e1], e2: mx[e2] - mn[e2]}
-    depths = []
-    for i, sp in enumerate(spalls):
-        assert sp["axis"] == axis, "spalled_box: todas las mordidas deben ir sobre aristas del mismo eje"
-        dep = min(float(sp["depth"]), 0.9 * min(ext.values()))
-        # dos mordidas en esquinas vecinas (comparten cara) que se traslapan a lo largo del eje: que no se crucen
-        s0, s1_ = float(sp["start"]), float(sp["start"]) + float(sp["length"])
-        for j, o in enumerate(spalls):
-            if j == i or not (float(o["start"]) < s1_ and s0 < float(o["start"]) + float(o["length"])):
-                continue
-            a, c = tuple(sp["sides"]), tuple(o["sides"])
-            for q, ax_ in ((0, e1), (1, e2)):  # comparten la cara normal a e2 (limita a lo largo de e1) o la normal a e1
-                if a[1 - q] == c[1 - q] and a[q] != c[q]:
-                    lim = ext[ax_] - 0.03
-                    tot = dep + float(o["depth"])
-                    if tot > lim:
-                        dep = dep * lim / tot
-        depths.append(dep)
-    for sp, dep in zip(spalls, depths):
-        rr = rng(sp.get("seed", 0))
-        nz = _Nz(rr)
-        bt = _Bite(float(sp["length"]), dep, b, rr, nz)
-        bites[tuple(sp["sides"])].append((mn[ai] + float(sp["start"]), bt, rr))
-    a0, a1 = mn[ai], mx[ai]
-    e = 0.7 * b
-    st = {a0, a0 + 0.293 * e, a0 + e, a1 - e, a1 - 0.293 * e, a1}
-    for c in corners:
-        for (s0, bt, _) in bites[c]:
-            n = max(8, int(bt.L / 0.015))
-            st |= {min(max(s0 + bt.L * i / n, a0 + e + 0.002), a1 - e - 0.002) for i in range(n + 1)}
-    st = sorted(st)
-    flat_bevel = [(b + b * math.cos(math.radians(90 + 90 * k / _Bite.K)), b - b * math.sin(math.radians(90 + 90 * k / _Bite.K)))
-                  for k in range(_Bite.K + 1)]
-    flat_bevel = [(flat_bevel[0][0] + 0.004, 0.0)] + flat_bevel + [(0.0, flat_bevel[-1][1] + 0.004)]
-    host = MB()
-    rings, ring_bite = [], []
-    for x in st:
-        inset = 0.0
-        if x < a0 + e - 1e-9:
-            th = math.acos(max(-1.0, min(1.0, 1 - (x - a0) / e))) if e > 0 else PI / 2
-            inset = e * (1 - math.sin(th))
-        elif x > a1 - e + 1e-9:
-            th = math.acos(max(-1.0, min(1.0, 1 - (a1 - x) / e))) if e > 0 else PI / 2
-            inset = e * (1 - math.sin(th))
-        ring, flags = [], []
-        for (s1, s2) in corners:
-            curve, bitten = flat_bevel, False
-            for (s0, bt, _) in bites[(s1, s2)]:
-                if s0 < x < s0 + bt.L:
-                    curve, bitten = bt.curve(x - s0), bt.env(x - s0) > 0.05
-                    break
-            uc = mn[e1] if s1 < 0 else mx[e1]
-            vc = mn[e2] if s2 < 0 else mx[e2]
-            pts = curve if s1 != s2 else list(reversed(curve))
-            for (d1, d2) in pts:
-                co = Vector((0.0, 0.0, 0.0))
-                co[ai] = x
-                co[e1] = uc - s1 * (d1 + inset)
-                co[e2] = vc - s2 * (d2 + inset)
-                ring.append(host.bm.verts.new(co))
-                flags.append(bitten)
-        rings.append(ring)
-        ring_bite.append(flags)
-    m = len(rings[0])
-    nper = _Bite.K + 3
-    for i in range(len(rings) - 1):
-        A, B = rings[i], rings[i + 1]
-        for k in range(m):
-            kk = (k + 1) % m
-            f = host.face([A[k], A[kk], B[kk], B[k]], mat)
-            j = k % nper
-            if ring_bite[i][k] and ring_bite[i + 1][k] and 1 <= j <= nper - 2:
-                f.material_index = host.mi("rubble")
-    host.face(list(reversed(rings[0])), mat)
-    host.face(rings[-1], mat)
-    _merge(mb, host)
-    for c in corners:
-        for (s0, bt, rr) in bites[c]:
-            det = MB()
-            bt.details(det, rr)
-            _merge(mb, det, spall_matrix(mn, mx, axis, c, s0 - mn[ai]))
-    return mb

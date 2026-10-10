@@ -382,16 +382,20 @@ def _dedupe(A, tol=1e-3):
     return out
 
 
-def _rafter(mb, R, axis, coord, sgn, a0, a1, r, tails, cut0=None, pieces=None, deep=0.0, w=RAFTER_W, mat="wood"):
+def _rafter(mb, R, axis, coord, sgn, a0, a1, r, tails, cut0=None, pieces=None, deep=0.0, w=RAFTER_W, mat="wood",
+            straight=False):
     """Cabio a plomo. axis 'y': corre en Y en x = coord, lado sgn; axis 'x': corre en X en y = coord (faldones de testero).
-    pieces: [(a_lo, a_hi, jag_lo, jag_hi, M)] para cabios rotos/faltantes (M = matriz aplicada a la pieza o None)."""
+    pieces: [(a_lo, a_hi, jag_lo, jag_hi, M)] para cabios rotos/faltantes (M = matriz aplicada a la pieza o None).
+    El arqueo lateral se anula en el apoyo y en la cola (frisos y solera a 1,5 mm); straight=True lo anula entero (cabios con
+    tirante y nudillo clavados al costado)."""
     h_e = R.hd if axis == "y" else R.hw
     zb, zt, st = _rafter_fns(R, h_e, a0, a1, tails, r, deep)
     bow = _N1(r, wl=3.0)
-    bamp = r.uniform(0.002, 0.007)
+    bamp = r.uniform(0.002, 0.007) * (0.0 if straight else 1.0)
+    seat0 = h_e - PLATE_W
 
     def P(a):
-        o = coord + bamp * bow(a)
+        o = coord + bamp * bow(a) * math.sin(PI * min(max((a - a0) / max(seat0 - a0, 1e-3), 0.0), 1.0))
         return Vector((o, sgn * a, 0.0)) if axis == "y" else Vector((sgn * a, o, 0.0))
 
     if pieces is None:
@@ -408,6 +412,29 @@ def _rafter(mb, R, axis, coord, sgn, a0, a1, r, tails, cut0=None, pieces=None, d
         _merge(mb, tmp, M)
 
 
+def _tail_end(a_tail, j, tails):
+    """Punta del cabio: con colas, a_tail + j; sin colas (fascia en a_tail + 1 mm) queda 2–6 mm por dentro de la fascia."""
+    return a_tail + j if tails else a_tail - 0.002 - 0.3 * abs(j)
+
+
+def _blocking(mb, occ, lo, hi, at, z0, z1, gap=0.0015, t=0.04):
+    """Frisos (tablas de espesor t) entre los miembros occ = [(centro, semiancho)] a lo largo de la solera, de lo a hi.
+    at(u) -> punto base (centro del espesor) en la cota 0; z0..z1 = cotas de la tabla."""
+    cuts = sorted((c - hw_ - gap, c + hw_ + gap) for c, hw_ in occ)
+    cur = lo
+    spans = []
+    for a, b in cuts:
+        if a > cur:
+            spans.append((cur, a))
+        cur = max(cur, b)
+    if hi > cur:
+        spans.append((cur, hi))
+    for a, b in spans:
+        if b - a < 0.08 or z1 - z0 < 0.04:
+            continue
+        _beam(mb, [Vector(at(a)), Vector(at(b))], Vector((0, 0, 1)), t, z0, z1, "wood_dark", c=0.004)
+
+
 def _hip_side_plane(R, sx, sy, jack_pt, off=0.026):
     """Plano lateral de la limatesa (cuadrante sx, sy) del lado donde está jack_pt: para el corte de mejilla de los cabios cortos."""
     q0 = Vector((sx * (R.hw - R.hd), 0.0, 0.0))
@@ -422,12 +449,15 @@ def _hip_side_plane(R, sx, sy, jack_pt, off=0.026):
 # 1) ESTRUCTURA DE MADERA
 # =====================================================================================================================
 def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=True, damage=0.0, cover="tile", spot=None,
-               rake=None, ties=True):
+               rake=None, ties=True, blocking=True):
     """Estructura de cubierta de madera (ver cabecera del módulo para medidas y cotas).
     cover: 'tile' (rastreles para teja curva a paso de hilada), 'sheet' (correas para lámina ondulada) o 'boards'
     (sin rastreles: los tablones de board_roof_stepped se clavan directo a los cabios).
     damage 0..1: abre un hueco en una vertiente (spot = (x, y, r) en planta; por defecto damage_spot(...)): rastreles
-    cortados y colgando, cabios partidos (la pieza superior cuelga de la cumbrera) o faltantes, y escombro de madera en z = 0."""
+    cortados y colgando, cabios partidos (la pieza superior cuelga de la cumbrera) o faltantes, y escombro de madera en z = 0.
+    blocking: frisos (tablas de 0,04 entre cabios sobre la solera, en la cara exterior de los muros de alero) que cierran el
+    desván por el alero: desde abajo solo se ve el vuelo, nunca el intradós de las tejas interiores (lo aprovechan los niveles
+    'mid'/'low' de barrel_tiles)."""
     R = _Roof(kind, w, d, pitch_deg, overhang, rake)
     r = rng(seed)
     mb = MB()
@@ -455,13 +485,13 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
     zr_top = R.zt0 + (hd - RIDGE_T / 2) * tp - 0.002
     rb_end = xr - (0.02 if kind == "hip" else 0.0)
     nrs = max(2, int(math.ceil(2 * rb_end / 0.8)) + 1)
-    rpts = [(-rb_end + 2 * rb_end * i / (nrs - 1), r.uniform(-0.002, 0.002), 0.0) for i in range(nrs)]
+    rpts = [(-rb_end + 2 * rb_end * i / (nrs - 1), 0.25 * r.uniform(-0.002, 0.002), 0.0) for i in range(nrs)]
     rsag = [-r.uniform(0.0, 0.01) * math.sin(PI * i / (nrs - 1)) for i in range(nrs)]
     ridge_bot = zr_top - (R.Dv + 0.07)
     _beam(mb, rpts, Z, RIDGE_T, [ridge_bot + s for s in rsag], [zr_top + s for s in rsag], "wood", c=0.005)
 
     # ---------------- cabios de los faldones largos ----------------
-    a_ridge = RIDGE_T / 2 + 0.001
+    a_ridge = RIDGE_T / 2 + 0.0017            # 1,2 mm libres contra la tabla de cumbrera (que oscila ±0,5 mm)
     a_tail = hd + ov
     raf_x = []
     if kind == "gable":
@@ -473,6 +503,8 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
         k = int((hw + ov - 0.08) / spacing)
         raf_x = [i * spacing for i in range(-k, k + 1)]
     raf_x = [x + r.uniform(-0.008, 0.008) if abs(abs(x) - hw) > 0.05 else x for x in raf_x]
+    commons = [x for x in raf_x if abs(x) < xr - 0.05 and abs(abs(x) - hw) > 0.06 and abs(x) < hw]
+    tie_x = {x: (1 if (i // 2) % 2 == 0 else -1) for i, x in enumerate(commons) if i % 2 == 0} if ties else {}
 
     def damaged_pieces(axis_c, sgn, a0, a1, M_axis):
         """Piezas de un cabio en Y afectado por el hueco (None = intacto)."""
@@ -505,15 +537,15 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 if a_tail - yh < 0.25:
                     continue
                 plane, _ = _hip_side_plane(R, sx, sgn, (x, sgn * a_tail))
-                _rafter(mb, R, "y", x, sgn, yh, a_tail + r.uniform(-0.012, 0.012), r, tails, cut0=plane,
+                _rafter(mb, R, "y", x, sgn, yh, _tail_end(a_tail, r.uniform(-0.012, 0.012), tails), r, tails, cut0=plane,
                         pieces=damaged_pieces(x, sgn, yh, a_tail, "X"))
             else:
-                at = a_tail + r.uniform(-0.015, 0.012)
+                at = _tail_end(a_tail, r.uniform(-0.015, 0.012), tails)
                 pcs = damaged_pieces(x, sgn, a_ridge, at, "X")
                 if pcs is None and tails and r.uniform() < 0.08:
                     # cola podrida/partida
                     pcs = [(a_ridge, at - r.uniform(0.08, 0.25), 0.0, 0.04, None)]
-                _rafter(mb, R, "y", x, sgn, a_ridge, at, r, tails, pieces=pcs)
+                _rafter(mb, R, "y", x, sgn, a_ridge, at, r, tails, pieces=pcs, straight=x in tie_x)
 
     # ---------------- limatesas y cabios de testero ----------------
     if kind == "hip":
@@ -546,7 +578,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 yj = (j + 0.5) * spacing + r.uniform(-0.008, 0.008)
                 sy = 1 if yj > 0 else -1
                 xh = abs(yj) + (hw - hd) + 0.037
-                a_t = hw + ov + r.uniform(-0.012, 0.012)
+                a_t = _tail_end(hw + ov, r.uniform(-0.012, 0.012), tails)
                 if a_t - xh < 0.25:
                     continue
                 plane, _ = _hip_side_plane(R, sx, sy, (sx * a_t, yj))
@@ -603,8 +635,8 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
         u0, u1 = R.u_limits(s, 0.07)
         if kind == "hip":
             u0, u1 = u0 + 0.09, u1 - 0.09
-        if cover != "boards":
-            tb = BAT_T + 0.010 if cover == "tile" else PUR_T
+        if cover == "tile":
+            tb = BAT_T + 0.010
             pts = [O + U * (u0 + (u1 - u0) * i / 6) + V * 0.07 + N * 0.001 for i in range(7)]
             _beam(mb, pts, N, 0.14, 0.0, tb, "wood_grey", c=0.004)
 
@@ -614,12 +646,12 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
         for sg in (-1, 1):
             y0 = sg * (hd + ov + 0.0135)
             xe = (hw + ov + 0.026) if kind == "hip" else (hw + R.ovr + 0.026)
-            _beam(mb, [(-xe, y0, 0), (0, y0 + r.uniform(-0.003, 0.003), 0), (xe, y0, 0)], Z, 0.025,
+            _beam(mb, [(-xe, y0, 0), (0, y0 + sg * abs(r.uniform(-0.003, 0.003)), 0), (xe, y0, 0)], Z, 0.025,
                   ze - 0.20, ze + cov_top / R.cp, "wood_grey", c=0.004)
             if kind == "hip":
                 x0 = sg * (hw + ov + 0.0135)
                 ye = hd + ov - 0.001
-                _beam(mb, [(x0, -ye, 0), (x0 + r.uniform(-0.003, 0.003), 0, 0), (x0, ye, 0)], Z, 0.025,
+                _beam(mb, [(x0, -ye, 0), (x0 + sg * abs(r.uniform(-0.003, 0.003)), 0, 0), (x0, ye, 0)], Z, 0.025,
                       ze - 0.20, ze + cov_top / R.cp, "wood_grey", c=0.004)
     if kind == "gable":
         for sx in (-1, 1):
@@ -629,12 +661,11 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 btop = {"tile": BAT_T + 0.018, "sheet": PUR_T - 0.002, "boards": -0.003}[cover]
                 zt_ = [R.zt0 + (hd - abs(y)) * tp + btop / R.cp for y in ys]
                 zb_ = [z - 0.24 for z in zt_]
-                _beam(mb, [(xb + r.uniform(-0.003, 0.003), y, 0) for y in ys], Z, 0.025, zb_, zt_, "wood_grey", c=0.004,
+                _beam(mb, [(xb + sx * abs(r.uniform(-0.003, 0.003)), y, 0) for y in ys], Z, 0.025, zb_, zt_, "wood_grey", c=0.004,
                       cut0=((0, sy * 0.001, 0), (0, sy, 0)))
 
     # ---------------- tirantes, nudillos, pendolones y correas de apoyo ----------------
     if ties:
-        commons = [x for x in raf_x if abs(x) < xr - 0.05 and abs(abs(x) - hw) > 0.06 and abs(x) < hw]
         for i, x in enumerate(commons):
             if i % 2:
                 continue
@@ -656,15 +687,30 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 xp = x - side * 0.08
                 _box(mb, (xp - 0.05, -0.05, 0.001), (xp + 0.05, 0.05, ridge_bot - 0.012), "wood", bevel=0.006)
 
+    # ---------------- frisos entre cabios en los muros de alero ----------------
+    if blocking:
+        zt_w = R.zt0 + 0.005 * tp - 0.002
+        tie_occ = [(x + sd * (RAFTER_W / 2 + 0.026), 0.025) for x, sd in tie_x.items()]
+        for sg in (-1, 1):
+            occ = [(x, RAFTER_W / 2) for x in raf_x if abs(x) <= hw] + tie_occ
+            lim = (hw - PLATE_W - 0.05) if kind == "hip" else hw - 0.002
+            _blocking(mb, occ, -lim, lim, lambda u, sg=sg: (u, sg * (hd - 0.025), 0.0), PLATE_H + 0.001, zt_w)
+            if kind == "hip":
+                k = int((hd + ov - 0.1) / spacing)
+                occ = [((j + 0.5) * spacing, RAFTER_W / 2 + 0.008) for j in range(-k, k)]
+                lim = hd - PLATE_W - 0.05
+                _blocking(mb, occ, -lim, lim, lambda u, sg=sg: (sg * (hw - 0.025), u, 0.0), PLATE_H + 0.001, zt_w)
+
     # ---------------- escombro de madera bajo el hueco ----------------
     if sp is not None:
-        for _ in range(int(2 + 4 * damage)):
+        for idb in range(int(2 + 4 * damage)):
             L = r.uniform(0.3, 1.4)
             a = r.uniform(0, 2 * PI)
             cx = min(max(sp[0] + r.uniform(-0.6, 0.6) * sp[2], -hw + 0.5), hw - 0.5)
             cy = min(max(sp[1] + r.uniform(-0.6, 0.6) * sp[2], -hd + 0.5), hd - 0.5)
-            p0 = Vector((cx - math.cos(a) * L / 2, cy - math.sin(a) * L / 2, 0.001))
-            p1 = Vector((cx + math.cos(a) * L / 2, cy + math.sin(a) * L / 2, 0.001))
+            zb0 = 0.001 + 0.0013 * idb                     # cada trozo a otra cota y algo inclinado: nunca coplanares
+            p0 = Vector((cx - math.cos(a) * L / 2, cy - math.sin(a) * L / 2, zb0))
+            p1 = Vector((cx + math.cos(a) * L / 2, cy + math.sin(a) * L / 2, zb0 + 0.006 + 0.004 * (idb % 3)))
             big = r.uniform() < 0.35
             wd, ht = (RAFTER_W, RAFTER_D) if big else (BAT_W, BAT_T)
             if big:
@@ -681,44 +727,108 @@ TILE_GAP = 0.003
 LB = 1.5 * (TILE_T + TILE_GAP)          # el borde bajo del canal apoya DENTRO del canal inferior (anidado sin intersección)
 CAP_L, CAP_RN, CAP_RW, CAP_T, CAP_TH, CAP_STEP = 0.42, 0.105, 0.135, 0.014, math.radians(66.0), 0.32
 
-
-def _shell_ring(x, ri, t, th, seg, convex):
-    ro, s = ri + t, (1.0 if convex else -1.0)
-    ang = [-th + 2 * th * i / seg for i in range(seg + 1)]
-    return ([Vector((x, ro * math.sin(a), s * ro * math.cos(a))) for a in ang] +
-            [Vector((x, ri * math.sin(a), s * ri * math.cos(a))) for a in reversed(ang)])
-
-
-def _shell(mb, M, rings, seg, mat):
-    """Casco de arco cerrado (sólido) a partir de anillos de _shell_ring."""
-    vs = [[mb.bm.verts.new(M @ p) for p in rg] for rg in rings]
-    k = 2 * (seg + 1)
-    for a, b in zip(vs[:-1], vs[1:]):
-        for j in range(k):
-            jj = (j + 1) % k
-            mb.face([a[j], a[jj], b[jj], b[j]], mat)
-    for rg, rev in ((vs[0], True), (vs[-1], False)):
-        for i in range(seg):
-            q = [rg[i], rg[i + 1], rg[2 * seg + 1 - (i + 1)], rg[2 * seg + 1 - i]]
-            mb.face(list(reversed(q)) if rev else q, mat)
+# Niveles de detalle de barrel_tiles(detail=...). La disposición (qué teja falta, cuál se corre o se rompe, el hueco, los
+# caballetes y los cortes del cordón) es IDÉNTICA en los tres niveles con la misma semilla: se puede cambiar de nivel sin saltos.
+#   cob / can / cap : segmentos del arco de cobija / canal / caballete (con 5 el diedro es de 28°: sombreado suave con el
+#                     ángulo de 30° de MB.finish; con 4 el arco se ve facetado). El canal de 'low' usa 3 tramos desiguales
+#                     (faceta central de ±25°, la única parte del canal que dejan ver las cobijas).
+#   open            : forma de las piezas NO expuestas (las expuestas siempre son sólidos cerrados, ver barrel_tiles).
+#   boq / bead / tube: puntos del arco de las boquillas del alero, (puntos del perfil, paso de estaciones x 0,14 m) del cordón de
+#                     mortero de los caballetes y segmentos del remate de limatesas.
+TILE_LOD = {
+    "high": dict(cob=6, can=6, cap=7, open=None, cap_mode="closed", boq=9, bead=(6, 1), tube=12, eave_extra=0),
+    "mid": dict(cob=5, can=5, cap=6, open="sides", cap_mode="sides", boq=7, bead=(6, 2), tube=10, eave_extra=1),
+    "low": dict(cob=5, can=3, cap=5, open="lip", cap_mode="lip", boq=4, bead=(4, 3), tube=8, eave_extra=0),
+}
+_CAN_LOW = tuple(math.radians(a) for a in (-70.0, -25.0, 25.0, 70.0))
+_CAN_HALF = math.radians(25.0)          # semiancho angular de la franja del canal-prisma
+_FULL = frozenset(("sides", "hid", "cap"))
+_MODES = {"closed": _FULL, "sides": frozenset(("sides",)), "lip": frozenset()}
 
 
 def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0, jag1=0.0, rn=TILE_RN, rw=TILE_RW,
-                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile"):
-    """Teja troncocónica en local: X = largo (0..L), arco en YZ con centro en el eje X. x0/x1 recortan (pieza rota)."""
+                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile", mode="closed", angles=None, lip_c=False):
+    """Teja troncocónica en local: X = largo (0..L, x = 0 es la boca de ABAJO), arco en YZ con centro en el eje X.
+    x0/x1 recortan (pieza rota); jag0/jag1 astillan esos extremos con `r` (rng propio de la pieza). El cono es recto, así que
+    bastan dos anillos (un anillo intermedio no añade forma, solo triángulos).
+    mode: 'closed' sólido cerrado · 'sides' cara vista + labio de la boca baja + cantos laterales (sin cara oculta ni testa
+    alta) · 'lip' cara vista + labio · 'prism' (solo canal) franja central cerrada de 8 tris (fondo plano de ±25° a la
+    profundidad del intradós y quilla en el trasdós: queda DENTRO del volumen del canal real, así que conserva sus holguras)
+    · o un conjunto con los grupos que se añaden a cara vista + labio: {'sides', 'hid' (cara oculta), 'cap' (testa alta)}.
+    lip_c (solo con 'lip'): labio solo en los tramos centrales (|ángulo| < 45°).
+    La cara vista es el trasdós de la cobija (convex) y el intradós del canal. Los modos abiertos se orientan bien con el
+    recálculo de normales de MB.finish (el vértice más alejado del centro siempre pertenece a una cara con la normal hacia
+    fuera); lo verifica el test con rayos."""
     def ri(x):
         f = x / L
         return rn + (rw - rn) * ((1.0 - f) if wide_bottom else f)
-    xs = [x0, x1] if (x1 - x0) < 0.3 else [x0, (x0 + x1) / 2, x1]
-    rings = []
-    for i, x in enumerate(xs):
-        rg = _shell_ring(x, ri(x), t, th, seg, convex)
-        j = jag0 if i == 0 else (jag1 if i == len(xs) - 1 else 0.0)
-        if j:
-            sgn = 1.0 if i == 0 else -1.0
-            rg = [p + Vector((sgn * r.uniform(0.0, j), 0, 0)) for p in rg]
-        rings.append(rg)
-    _shell(mb, M, rings, seg, mat)
+
+    def jag(pts, j, sg):
+        return [p + Vector((sg * r.uniform(0.0, j), 0, 0)) for p in pts] if j else pts
+
+    F = mb.face
+    if mode == "prism":
+        rings = []
+        for x, j, sg in ((x0, jag0, 1.0), (x1, jag1, -1.0)):
+            rr = ri(x)
+            uc = rr * math.sin(_CAN_HALF)
+            pts = jag([Vector((x, -uc, -rr)), Vector((x, uc, -rr)), Vector((x, 0.0, -(rr + t)))], j, sg)
+            rings.append([mb.bm.verts.new(M @ p) for p in pts])
+        a, b = rings
+        F([a[0], a[1], b[1], b[0]], mat)
+        F([a[1], a[2], b[2], b[1]], mat)
+        F([a[2], a[0], b[0], b[2]], mat)
+        F([a[2], a[1], a[0]], mat)
+        F([b[0], b[1], b[2]], mat)
+        return
+    A = list(angles) if angles is not None else [-th + 2 * th * i / seg for i in range(seg + 1)]
+    n = len(A) - 1
+    s = 1.0 if convex else -1.0
+
+    def arc(x, rad):
+        return [Vector((x, rad * math.sin(a), s * rad * math.cos(a))) for a in A]
+    o0, i0 = arc(x0, ri(x0) + t), arc(x0, ri(x0))
+    o1, i1 = arc(x1, ri(x1) + t), arc(x1, ri(x1))
+    if jag0:
+        d0 = [r.uniform(0.0, jag0) for _ in range(2 * (n + 1))]
+        o0 = [p + Vector((d0[k], 0, 0)) for k, p in enumerate(o0)]
+        i0 = [p + Vector((d0[n + 1 + k], 0, 0)) for k, p in enumerate(i0)]
+    if jag1:
+        d1 = [r.uniform(0.0, jag1) for _ in range(2 * (n + 1))]
+        o1 = [p - Vector((d1[k], 0, 0)) for k, p in enumerate(o1)]
+        i1 = [p - Vector((d1[n + 1 + k], 0, 0)) for k, p in enumerate(i1)]
+    V0, H0, V1, H1 = (o0, i0, o1, i1) if convex else (i0, o0, i1, o1)
+
+    def mk(pts):
+        return [mb.bm.verts.new(M @ p) for p in pts]
+    g = _MODES[mode] if isinstance(mode, str) else mode
+    v0, v1 = mk(V0), mk(V1)
+    for i in range(n):
+        F([v0[i], v0[i + 1], v1[i + 1], v1[i]], mat)          # cara vista
+    if not g and lip_c:
+        # solo el labio central (|ángulo| < 45°): los costados de la boca se ven de canto y casi no cuentan
+        keep = [i for i in range(n) if abs(A[i] + A[i + 1]) / 2 < math.radians(45.0)]
+        h0 = {i: mb.bm.verts.new(M @ H0[i]) for i in sorted({q for i in keep for q in (i, i + 1)})}
+        for i in keep:
+            F([v0[i + 1], v0[i], h0[i], h0[i + 1]], mat)
+        return
+    h0 = mk(H0)
+    for i in range(n):
+        F([v0[i + 1], v0[i], h0[i], h0[i + 1]], mat)          # labio (testa de la boca baja)
+    if not g:
+        return
+    if "hid" in g or "cap" in g:
+        h1 = mk(H1)
+    else:
+        h1 = {0: mb.bm.verts.new(M @ H1[0]), n: mb.bm.verts.new(M @ H1[n])}
+    for i in range(n):
+        if "hid" in g:
+            F([h0[i], h0[i + 1], h1[i + 1], h1[i]], mat)      # cara oculta
+        if "cap" in g:
+            F([v1[i], v1[i + 1], h1[i + 1], h1[i]], mat)      # testa alta
+    if "sides" in g:
+        for i in (0, n):
+            F([v0[i], v1[i], h1[i], h0[i]], mat)              # cantos laterales
 
 
 def _frame_m(X, Y, Z, O):
@@ -825,11 +935,12 @@ def _tile_env():
 
 
 def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, plug0=False, plug1=False, skip=None,
-             bead_sides=(-1, 1), bead_depth=0.1, skirt=None):
+             bead_sides=(-1, 1), bead_depth=0.1, skirt=None, mode="closed", bead=(6, 1)):
     """Caballetes de P0 a P1 (boca ancha hacia P0, solape ~1/4) sobre la línea de cumbrera/limatesa, con cordones de mortero.
     b = 'arriba' del caballete; normals = normales de los dos planos; h_layer = altura de la capa de teja sobre el plano de cabios.
     skirt = (lado, z_piso): en ese lado el cordón es un faldón de mortero enrasado que baja del canto del caballete hasta z_piso
-    (remate de hastial sobre la tabla de remate)."""
+    (remate de hastial sobre la tabla de remate). mode = modo de _tile_piece de los caballetes (por dentro los tapa el lecho);
+    bead = (puntos del perfil 6|4, paso de estaciones en múltiplos de 0,14 m). Los cortes del cordón no dependen del nivel."""
     P0, P1 = _vec(P0), _vec(P1)
     X = (P1 - P0).normalized()
     Z = (b - X * b.dot(X)).normalized()
@@ -856,10 +967,13 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
     base = _frame_m(X, Y, Z, P0 + Z * H)
     for i in range(n_caps):
         x = i * step
+        rot = (r.uniform(-1.2, 1.2), r.uniform(-0.25, 0.25))
         if skip is not None and skip(P0 + X * (x + CAP_L / 2)):
             continue
-        M = base @ _T(x, 0, 0) @ _about((CAP_L / 2, 0, 0), _R("X", r.uniform(-1.2, 1.2)) @ _R("Z", r.uniform(-0.25, 0.25)))
-        _tile_piece(mb, M, seg + 1, r, True, True, rn=CAP_RN, rw=CAP_RW, t=CAP_T, th=CAP_TH, L=CAP_L)
+        M = base @ _T(x, 0, 0) @ _about((CAP_L / 2, 0, 0), _R("X", rot[0]) @ _R("Z", rot[1]))
+        last = i == n_caps - 1
+        _tile_piece(mb, M, seg, r, True, True, rn=CAP_RN, rw=CAP_RW, t=CAP_T, th=CAP_TH, L=CAP_L,
+                    mode="closed" if (last and not plug1) else mode)
     # tapón de mortero en las bocas de los extremos
     for flag, x, rr in ((plug0, 0.012, CAP_RW), (plug1, Ltot - 0.012 - 0.035, CAP_RN)):
         if not flag:
@@ -874,15 +988,18 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
         m = base @ _T(x, 0, 0) @ _frame_m(Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 0, 0)))
         mb.plate(outline, 0.035, "mortar", m=m)
     if not beads:
-        return
-    # cordones de mortero a ambos lados (con tramos desprendidos)
+        return H
+    # cordones de mortero a ambos lados (con tramos desprendidos). Los cortes salen de un rng propio sobre la rejilla fija de
+    # 0,14 m, así que son los mismos en todos los niveles; el nivel solo submuestrea las estaciones de cada tramo.
     nz = _N1(r, wl=0.7)
+    rb = rng(int(r.integers(0, 2 ** 31)))
+    npts, stride = bead
     for sg in bead_sides:
         n_st = max(2, int(Ltot / 0.14))
         runs, cur = [], []
         for i in range(n_st + 1):
             x = Ltot * i / n_st
-            if r.uniform() < 0.02 and len(cur) >= 3:
+            if rb.uniform() < 0.02 and len(cur) >= 3:
                 runs.append(cur)
                 cur = []
                 continue
@@ -892,21 +1009,27 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
         for run in runs:
             if len(run) < 3:
                 continue
+            if stride > 1:
+                run = [x for ii, x in enumerate(run) if ii % stride == 0 or ii == len(run) - 1]
+                if len(run) < 2:
+                    continue
             rings = []
             for ii, x in enumerate(run):
-                f = min(max(x / CAP_L, 0.0), 1.0) if x < CAP_L else 0.5
-                rr = (CAP_RW + CAP_RN) / 2 + 0.0 * f
+                rr = (CAP_RW + CAP_RN) / 2
                 yr = sg * (rr + CAP_T * 0.5) * math.sin(CAP_TH)
                 zr = H + rr * math.cos(CAP_TH)
                 k = 1.0 + 0.45 * nz(x + sg * 3.1)
                 ye = yr + sg * 0.045 * k
                 yb_ = yr + sg * 0.028 * k
+                end = ii in (0, len(run) - 1)
                 if skirt is not None and sg == skirt[0]:
                     zf = skirt[1]
                     prof = [(yr - sg * 0.03, zr + 0.004), (yr + sg * (0.004 + 0.004 * k), zr + 0.002),
                             (yr + sg * (0.008 + 0.006 * k), (zr + zf) / 2), (yr + sg * (0.004 + 0.004 * k), zf),
                             (yr - sg * 0.04, zf)]
-                    if ii in (0, len(run) - 1):
+                    if npts < 6:
+                        prof = [prof[0], prof[2], prof[3], prof[4]]
+                    if end:
                         cy, cz = yr - sg * 0.01, (zr + zf) / 2
                         prof = [(cy + (py - cy) * 0.7, cz + (pz - cz) * 0.7) for py, pz in prof]
                     o = P0 + X * x
@@ -916,7 +1039,9 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
                 prof = [(yr - sg * 0.022, zr + 0.004), (yr + sg * 0.006, zr + 0.003), (yb_, (zr + env(yb_)) / 2 + 0.008 * k),
                         (ye, env(ye) - 0.01 + 0.007 * k), (ye + sg * 0.004, env(ye) - bead_depth),
                         (yr - sg * 0.03, env(yr) - bead_depth)]
-                if ii in (0, len(run) - 1):
+                if npts < 6:
+                    prof = [prof[0], prof[3], prof[4], prof[5]]
+                if end:
                     # extremos del tramo redondeados (se encogen hacia el canto del caballete)
                     cy, cz = yr + sg * 0.01, zr - 0.02
                     prof = [(cy + (py - cy) * 0.35, cz + (pz - cz) * 0.35) for py, pz in prof]
@@ -926,12 +1051,32 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
     return H
 
 
-def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=None, rake=None, seg=6):
+def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=None, rake=None, seg=6, detail="high"):
     """Teja curva de barro (canal + cobija alternadas, 0,45 m, solape 1/3) sobre roof_frame(kind, w, d, pitch_deg, overhang,
     cover='tile') con las mismas medidas. Canales con la boca estrecha abajo anidados en el canal inferior; cobijas resueltas
     numéricamente sobre los canales (sin intersecciones nominales). Recorte en limatesas por centro de pieza, caballetes con cordón
-    de mortero en cumbrera y limatesas, boquillas de mortero en el alero, jitter por pieza, tejas faltantes, corridas y rotas.
-    hole = (x, y, r) en planta: hueco que deja ver la estructura (usa damage_spot(...) para que coincida con roof_frame)."""
+    de mortero en cumbrera y limatesas, boquillas de mortero en el alero, jitter por pieza, tejas faltantes, cobijas corridas
+    (resbaladas 15–21 cm, salen de debajo de la superior y montan sobre la inferior sin intersecarla) y rotas.
+    hole = (x, y, r) en planta: hueco que deja ver la estructura (usa damage_spot(...) para que coincida con roof_frame).
+
+    detail = 'high' | 'mid' | 'low' (TILE_LOD). Misma disposición en los tres niveles. 'high' = todas las piezas son sólidos
+    cerrados con `seg` segmentos (seg solo se usa en 'high'). En 'mid' y 'low' son sólidos cerrados SOLO las piezas EXPUESTAS:
+    hiladas cuyo intradós se ve desde abajo en el vuelo del alero (y una más en 'mid'), líneas sobre el vuelo de remate del
+    hastial, piezas junto al hueco, corridas o rotas, y toda pieza con una vecina (3 x 3 en su vertiente) faltante, corrida o
+    rota. Las demás pierden primero las caras que nunca se ven: la cara inferior tapada por la hilada y los canales vecinos y la
+    testa alta tapada por la hilada de arriba.
+      'mid': cobija y canal = cara vista + labio + cantos (24 tris) · caballetes abiertos por dentro (los tapa el lecho).
+      'low': cobija = trasdós de 5 tramos + labio (20 tris) · canal = franja central cerrada de 8 tris (el resto del canal lo
+             tapan siempre las cobijas) · boquillas, cordón y remates simplificados.
+    Las piezas abiertas solo se ven por su cara vista (orientada hacia fuera): no necesitan DoubleSide. Medido con
+    test_G3 (--budget) en un hip de 16 x 12,5 m en planta con alero (14,8 x 11,3 + vuelo 0,6, 26°, 222,5 m² de faldón,
+    ~6200 tejas):
+      high ~331 k tris (~1490 tris/m²) · mid ~188 k (~845/m²) · low ~108 k (~485/m²)   [antes de este control: 524 k]."""
+    if detail not in TILE_LOD:
+        raise ValueError("detail debe ser 'high', 'mid' o 'low'")
+    lod = dict(TILE_LOD[detail])
+    if detail == "high":
+        lod.update(cob=seg, can=seg, cap=seg + 1)
     R = _Roof(kind, w, d, pitch_deg, overhang, rake)
     r = rng(seed + 4242)
     mb = MB()
@@ -946,6 +1091,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
     fu = _N1(r, wl=2.3)          # deriva suave de las líneas (todas juntas: no rompe el anidado)
     fn = _N1(r, wl=1.7)          # abultamiento suave de la capa
     clump = _N1(r, wl=1.1)
+    D_T = TILE_RW - TILE_RN
 
     def in_hole(x, y, extra=0.0):
         if hl is None:
@@ -955,9 +1101,9 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
         rad = hl[2] * (1.0 + 0.2 * hn(a * 1.7)) + extra
         return dx * dx + dy * dy < rad * rad
 
-    frags = []
+    # ---- pasada 1: disposición (todas las decisiones aleatorias; no depende del nivel de detalle) ----
+    frags, pieces, grid = [], [], {}
     for s in R.slopes:
-        Ms = R.matrix(s)
         ulo, uhi = R.u_limits(s, 0.0)
         imax = int(abs(uhi) / (TILE_S / 2)) + 2
         for j in range(-imax, imax + 1):
@@ -976,6 +1122,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 u = u_line + du_f + line_off + r.uniform(-0.0015, 0.0015)
                 px, py = R.to_plan(s, u, vm)
                 if in_hole(px, py):
+                    grid[(s, j, k)] = 1
                     if r.uniform() < 0.25:
                         frags.append((s, u, vm, is_canal))
                     continue
@@ -986,47 +1133,97 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 if k == len(courses) - 1 and kind == "hip" and s in ("right", "left"):
                     pm *= 0.5
                 if r.uniform() < pm:
+                    grid[(s, j, k)] = 1
                     if r.uniform() < 0.3:
                         frags.append((s, u, vm, is_canal))
                     continue
                 lift = 0.006 * max(0.0, fn(px * 0.6 + py * 0.9)) + r.uniform(0.0, 0.0015)
                 roll, yaw, dv = r.uniform(-2.5, 2.5), r.uniform(-0.3, 0.3), r.uniform(-0.004, 0.004)
-                x0, jag0 = 0.0, 0.0
+                x0, jag0, slid, lb, lt = 0.0, 0.0, 0.0, 0.0, 0.0
                 if near and r.uniform() < 0.5 or r.uniform() < 0.012:
-                    dv -= r.uniform(0.03, 0.09)                 # corrida
-                    lift += r.uniform(0.012, 0.025)
-                    roll += r.uniform(-7, 7)
-                    yaw += r.uniform(-3.5, 3.5)
+                    a_dv, a_lift, a_roll, a_yaw = r.uniform(0.03, 0.09), r.uniform(0.012, 0.025), r.uniform(-7, 7), r.uniform(-3.5, 3.5)
+                    if not is_canal and k > 0:
+                        # cobija corrida: resbala 15–21 cm (sale de debajo de la superior) y monta sobre la inferior; se levanta
+                        # lo que pierde de holgura al resbalar + el giro en planta (limitado a ±1,2°) para no intersecarla
+                        slid = 0.15 + (a_dv - 0.03)
+                        dv -= slid
+                        roll += a_roll
+                        yaw = max(-1.2, min(1.2, yaw + 0.3 * a_yaw))
+                        lt = 0.004 + D_T * slid / TILE_L
+                        lb = lt + 3.0 * 0.225 * math.sin(math.radians(abs(yaw))) + 0.3 * a_lift
                 elif near and r.uniform() < 0.4 or r.uniform() < 0.025:
                     x0, jag0 = r.uniform(0.05, 0.16), 0.03         # rota: falta el borde visto
-                if is_canal:
-                    nb, nt = TILE_N + LB + TILE_RN + TILE_T + lift, TILE_N + TILE_RW + TILE_T + lift
-                else:
-                    nb, nt = TILE_N + nb_c + lift, TILE_N + nt_c + lift
-                M = Ms @ _tile_m(u, vb + dv, nb, nt) @ _about((TILE_L / 2, 0, 0), _R("X", roll) @ _R("Z", yaw))
-                _tile_piece(mb, M, seg, r, not is_canal, not is_canal, x0=x0, jag0=jag0)
-                # boquilla de mortero en la boca de la cobija del alero
-                if k == 0 and not is_canal and r.uniform() < 0.8 and x0 == 0.0:
-                    rr = TILE_RW - 0.004
-                    pts = [(rr * math.sin(a), rr * math.cos(a)) for a in [-TILE_TH + 2 * TILE_TH * i / 8 for i in range(9)]]
-                    low = rr * math.cos(TILE_TH) - 0.05
-                    pts = [(pts[0][0], low)] + pts + [(pts[-1][0], low)]
-                    m = M @ _T(0.012, 0, 0) @ _frame_m(Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 0, 0)))
-                    mb.plate(list(reversed(pts)), 0.03, "mortar", m=m)
+                jseed = int(r.integers(0, 2 ** 31)) if jag0 else 0
+                boq = k == 0 and not is_canal and r.uniform() < 0.8 and x0 == 0.0
+                grid[(s, j, k)] = 2 if (slid or x0) else 0
+                pieces.append((s, j, k, u, vb, dv, lift, lb, lt, roll, yaw, x0, jag0, jseed, is_canal, near, boq))
+
+    # ---- pasada 2: geometría según el nivel ----
+    v_eave = R.ov / R.cp + 0.02 + lod["eave_extra"] * TILE_E
+    rake_u = R.hw - 0.05
+    extra_lift = {}                  # elevación de la cobija corrida para la superior de la misma línea si también se corrió
+    def bad(j_, k_):
+        return grid.get((s, j_, k_), 0) != 0
+
+    mid = detail == "mid"
+    for (s, j, k, u, vb, dv, lift, lb, lt, roll, yaw, x0, jag0, jseed, is_canal, near, boq) in pieces:
+        Ms = R.matrix(s)
+        if detail == "high" or near or x0 or lb:
+            mode = _FULL
+        else:
+            # caras que deja ver cada situación (ver docstring); en 'low' solo las que se ven desde las vistas típicas
+            under = vb + TILE_L - TILE_E < v_eave or (kind == "gable" and abs(u) > rake_u)
+            g = set(_MODES[lod["open"]])
+            if is_canal:
+                if under or (mid and bad(j, k - 1)):
+                    g.add("hid")
+                if mid and bad(j, k + 1):
+                    g.add("cap")
+                if bad(j - 1, k) or bad(j + 1, k):
+                    g.add("sides")          # sin la cobija de al lado se ve el canal entero
+            else:
+                if under or bad(j, k - 1) or (mid and (bad(j - 1, k) or bad(j + 1, k))):
+                    g.add("hid")
+                if bad(j, k + 1):
+                    g.add("cap")
+            mode = "prism" if (is_canal and detail == "low" and not g) else frozenset(g)
+        if is_canal:
+            nb, nt = TILE_N + LB + TILE_RN + TILE_T + lift, TILE_N + TILE_RW + TILE_T + lift
+        else:
+            base = extra_lift.get((s, j, k - 1), 0.0) if lb else 0.0
+            if base:
+                base += 0.004
+            nb, nt = TILE_N + nb_c + lift + lb + base, TILE_N + nt_c + lift + lt + base
+            if lb:
+                extra_lift[(s, j, k)] = lb + base
+        M = Ms @ _tile_m(u, vb + dv, nb, nt) @ _about((TILE_L / 2, 0, 0), _R("X", roll) @ _R("Z", yaw))
+        _tile_piece(mb, M, lod["can"] if is_canal else lod["cob"], rng(jseed) if jag0 else None, not is_canal, not is_canal,
+                    x0=x0, jag0=jag0, mode=mode, angles=_CAN_LOW if (is_canal and detail == "low") else None,
+                    lip_c=detail == "low")
+        if boq:
+            # boquilla de mortero en la boca de la cobija del alero
+            rr = TILE_RW - 0.004
+            nq = lod["boq"] - 1
+            pts = [(rr * math.sin(a), rr * math.cos(a)) for a in [-TILE_TH + 2 * TILE_TH * i / nq for i in range(nq + 1)]]
+            low = rr * math.cos(TILE_TH) - 0.05
+            pts = [(pts[0][0], low)] + pts + [(pts[-1][0], low)]
+            m = M @ _T(0.012, 0, 0) @ _frame_m(Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 0, 0)))
+            mb.plate(list(reversed(pts)), 0.03, "mortar", m=m)
 
     # ---- caballetes ----
     ns = {s: R.frame(s)[3] for s in R.slopes}
     h_layer = TILE_N + h_env
     bd = 0.85 * h_env
     Z = Vector((0, 0, 1))
+    cap_kw = dict(mode=lod["cap_mode"], bead=lod["bead"])
 
     def skip(p):
         return in_hole(p.x, p.y, 0.1)
 
     if kind == "gable":
         e = R.hw + R.ovr + 0.03
-        _cap_run(mb, R, (-e, 0, R.z_ridge), (e, 0, R.z_ridge), Z, [ns["front"], ns["back"]], r, seg, h_layer,
-                 plug0=True, plug1=True, skip=skip, bead_depth=bd)
+        _cap_run(mb, R, (-e, 0, R.z_ridge), (e, 0, R.z_ridge), Z, [ns["front"], ns["back"]], r, lod["cap"], h_layer,
+                 plug0=True, plug1=True, skip=skip, bead_depth=bd, **cap_kw)
         # remate de hastial: caballetes recibidos con mortero sobre la última línea y el rastrel hasta la tabla de remate
         for s in ("front", "back"):
             Nn = ns[s]
@@ -1034,13 +1231,13 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 ue = sx * (R.hw + R.ovr - 0.075)
                 P0 = R.to_world(s, ue, TILE_V0 + 0.01)
                 P1 = R.to_world(s, ue, R.vlen - 0.16)
-                _cap_run(mb, R, P0, P1, Nn, [Nn, Nn], r, seg, h_layer, plug0=True, skip=skip, bead_depth=bd,
-                         skirt=(-1 if ue > 0 else 1, BAT_T + 0.016))
+                _cap_run(mb, R, P0, P1, Nn, [Nn, Nn], r, lod["cap"], h_layer, plug0=True, skip=skip, bead_depth=bd,
+                         skirt=(-1 if ue > 0 else 1, BAT_T + 0.016), **cap_kw)
     else:
         xr = R.ridge_half
         if xr > 0.05:
-            _cap_run(mb, R, (-xr - 0.05, 0, R.z_ridge), (xr + 0.05, 0, R.z_ridge), Z, [ns["front"], ns["back"]], r, seg,
-                     h_layer, skip=skip, bead_depth=bd)
+            _cap_run(mb, R, (-xr - 0.05, 0, R.z_ridge), (xr + 0.05, 0, R.z_ridge), Z, [ns["front"], ns["back"]], r,
+                     lod["cap"], h_layer, skip=skip, bead_depth=bd, **cap_kw)
         z_e = R.zt0 - R.ov * R.tp
         for sx in (-1, 1):
             for sy in (-1, 1):
@@ -1049,21 +1246,22 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 c = c + (top - c).normalized() * 0.02
                 n1 = ns["front"] if sy < 0 else ns["back"]
                 n2 = ns["right"] if sx > 0 else ns["left"]
-                Hh = _cap_run(mb, R, c, top + (top - c).normalized() * 0.04, (n1 + n2).normalized(), [n1, n2], r, seg,
-                              h_layer, plug0=True, skip=skip, bead_depth=bd)
+                Hh = _cap_run(mb, R, c, top + (top - c).normalized() * 0.04, (n1 + n2).normalized(), [n1, n2], r,
+                              lod["cap"], h_layer, plug0=True, skip=skip, bead_depth=bd, **cap_kw)
             # remate de mortero donde se juntan limatesas y cumbrera
             p = Vector((sx * (xr + 0.02), 0.0, R.z_ridge + (Hh or 0.1) + 0.02))
             rad = [0.02, 0.075, 0.11, 0.125, 0.115, 0.08, 0.025]
             pts = [p + Vector((sx * (i - 3) * 0.05, r.uniform(-0.008, 0.008), r.uniform(-0.006, 0.006) - 0.012 * abs(i - 3)))
                    for i in range(7)]
-            mb.tube(pts, 0.1, seg=12, mat="mortar", radii=[q * r.uniform(0.92, 1.08) for q in rad])
+            mb.tube(pts, 0.1, seg=lod["tube"], mat="mortar", radii=[q * r.uniform(0.92, 1.08) for q in rad])
 
-    # ---- fragmentos: sobre las tejas bajo el hueco y caídos dentro (z = 0) ----
+    # ---- fragmentos: sobre las crestas de las cobijas bajo el hueco y caídos dentro (z = 0) ----
+    crown = TILE_N + max(nb_c + TILE_RW, nt_c + TILE_RN) + TILE_T
     for (s, u, vm, is_canal) in frags[:14]:
         Ms = R.matrix(s)
         L = r.uniform(0.09, 0.22)
         if hl is not None and r.uniform() < 0.5:
-            # caído al piso bajo el hueco
+            # caído al piso bajo el hueco (apoya en las puntas del arco a 2 mm del piso)
             a = r.uniform(0, 2 * PI)
             px = hl[0] + r.uniform(-0.7, 0.7) * hl[2]
             py = hl[1] + r.uniform(-0.7, 0.7) * hl[2]
@@ -1072,14 +1270,22 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
             rr = TILE_RN + r.uniform(0, 0.02)
             zc = 0.002 - rr * math.cos(TILE_TH)
             M = _T(px, py, zc) @ _R("Z", math.degrees(a)) @ _T(-L / 2, 0, 0)
-            _tile_piece(mb, M, seg, r, True, False, x0=0.0, x1=L, jag0=0.02, jag1=0.02)
+            _tile_piece(mb, M, lod["cob"], rng(int(r.integers(0, 2 ** 31))), True, False, x0=0.0, x1=L, jag0=0.02, jag1=0.02,
+                        rn=rr, rw=rr)
         else:
             vf = vm - r.uniform(0.5, 1.2)
             if vf < 0.3:
                 continue
-            M = Ms @ _T(u + r.uniform(-0.1, 0.1), vf, TILE_N + h_env - 0.004) @ _R("Z", r.uniform(-60, 60)) @ \
-                _R("X", r.uniform(-15, 15)) @ _T(-L / 2, 0, 0)
-            _tile_piece(mb, M, seg, r, r.uniform() < 0.5, False, x0=0.0, x1=L, jag0=0.02, jag1=0.02)
+            # trozo boca abajo tendido sobre la cresta de la cobija más cercana: la punta más baja del arco (tras el giro)
+            # queda 3 mm sobre la cresta
+            du, yw, tl, _ = r.uniform(-0.1, 0.1), r.uniform(-60, 60), r.uniform(-15, 15), r.uniform()
+            uc = (2 * round(((u + du) / (TILE_S / 2) - 1) / 2) + 1) * TILE_S / 2
+            ra = TILE_RN + 0.01
+            phi = tl * 0.25
+            M = Ms @ _T(uc, vf, crown + 0.003 - ra * math.cos(TILE_TH + math.radians(abs(phi)))) @ \
+                _R("Z", yw) @ _R("X", phi) @ _T(-L / 2, 0, 0)
+            _tile_piece(mb, M, lod["cob"], rng(int(r.integers(0, 2 ** 31))), True, False, x0=0.0, x1=L, jag0=0.02, jag1=0.02,
+                        rn=ra, rw=ra)
     return R.finalize(mb)
 
 

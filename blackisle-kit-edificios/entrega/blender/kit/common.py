@@ -229,8 +229,12 @@ def wall_with_openings(mb, length, height, thickness, openings=(), mat_out="conc
     """Muro en coordenadas locales: u = 0..length (eje X), v = 0..height (eje Z), cara exterior en y = 0, interior en y = thickness.
     openings: [(u0, u1, v0, v1)] rectángulos que atraviesan el muro (puertas: v0 = 0).
     Malla de cuadriláteros soldada (grid por las líneas de los vanos) + jambas/dintel/alféizar. `m` coloca el muro en el mundo."""
-    us = sorted({0.0, float(length)} | {float(o[i]) for o in openings for i in (0, 1)})
-    vs = sorted({0.0, float(height)} | {float(o[i]) for o in openings for i in (2, 3)})
+    R = lambda x: round(float(x), 5)          # rejilla soldada sin filas/columnas fantasma por error de coma flotante
+    length, height = R(length), R(height)
+    openings = [(max(R(o[0]), 0.0), min(R(o[1]), length), max(R(o[2]), 0.0), min(R(o[3]), height)) for o in openings]
+    openings = [o for o in openings if o[1] - o[0] > 1e-4 and o[3] - o[2] > 1e-4]
+    us = sorted({0.0, length} | {o[i] for o in openings for i in (0, 1)})
+    vs = sorted({0.0, height} | {o[i] for o in openings for i in (2, 3)})
 
     def hole(cu, cv):
         return any(o[0] <= cu <= o[1] and o[2] <= cv <= o[3] for o in openings)
@@ -273,8 +277,8 @@ def wall_with_openings(mb, length, height, thickness, openings=(), mat_out="conc
     # jambas, dintel y alféizar (las caras internas de cada vano), segmentadas por la rejilla para soldar
     if reveal:
         for (u0, u1, v0, v1) in openings:
-            i0, i1 = us.index(float(u0)), us.index(float(u1))
-            j0, j1 = vs.index(float(v0)), vs.index(float(v1))
+            i0, i1 = us.index(u0), us.index(u1)
+            j0, j1 = vs.index(v0), vs.index(v1)
             for i in range(i0, i1):  # alféizar (abajo) y dintel (arriba)
                 if j0 > 0:
                     mb.face([V(vf, i, j0, 0), V(vb, i, j0, thickness), V(vb, i + 1, j0, thickness), V(vf, i + 1, j0, 0)], mat_reveal)
@@ -334,9 +338,10 @@ def mesh_health(obj):
 
 # ---------------- vista de arcilla ----------------
 def clay_render(objs, out_path, res=(960, 540), samples=24, azim=35.0, elev=18.0, fov=40.0, margin=1.15, target=None, dist=None,
-                ground=True, sun_azim=50.0, sun_elev=35.0):
+                ground=True, sun_azim=50.0, sun_elev=35.0, clay=True):
     """Render de arcilla en Cycles CPU: material gris uniforme, cielo tenue + sol con sombras, piso opcional.
-    Encuadra automáticamente los `objs` (azim 0 = vista desde -Y, la fachada principal)."""
+    Encuadra automáticamente los `objs` (azim 0 = vista desde -Y, la fachada principal). clay=False usa los materiales reales."""
+    use_clay = bool(clay)
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
@@ -355,7 +360,7 @@ def clay_render(objs, out_path, res=(960, 540), samples=24, azim=35.0, elev=18.0
         pass
     clay = bpy.data.materials.get("_clay") or bpy.data.materials.new("_clay")
     clay.diffuse_color = (0.42, 0.42, 0.42, 1)
-    sc.view_layers[0].material_override = clay
+    sc.view_layers[0].material_override = clay if use_clay else None
     if sc.world is None:
         sc.world = bpy.data.worlds.new("W")
     w = sc.world

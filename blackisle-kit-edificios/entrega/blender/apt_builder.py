@@ -129,7 +129,7 @@ def build_frame(cfg, mb):
     st = cfg["stair"]
     hole = (st["x0"] - x0, st["x0"] + st["w"] - x0, st["y0"] - y0, st["y0"] + st["l"] - y0)
     for k, zt in enumerate(zl):
-        openings = [hole] if 0 < k < len(zl) - 1 else []
+        openings = [hole] if k > 0 else []                    # la escalera sigue hasta el casetón de azotea
         if k == 0:
             wall_with_openings(mb, x1 - x0, y1 - y0, GROUND, openings, mat_out="concrete", mat_in="concrete",
                                mat_reveal="concrete", m=m_slab(x0, y0, zt))
@@ -137,6 +137,47 @@ def build_frame(cfg, mb):
             wall_with_openings(mb, x1 - x0, y1 - y0, SLAB, openings, mat_out="concrete", mat_in="plaster",
                                mat_reveal="concrete", m=m_slab(x0, y0, zt))
     return mb
+
+
+PENT_H = 2.7          # casetón de escalera sobre la losa de azotea
+
+
+def build_penthouse(cfg, mb, details=None):
+    """Casetón sobre el núcleo: prolonga las 4 columnas (3.6/7.2, ±1.8), vigas perimetrales, losa de techo con pretil,
+    muros norte/sur ciegos, muro oeste con puerta metálica al ático y celosía al este (continúa la de la fachada)."""
+    zl = level_z(cfg)
+    z0, z1 = zl[-1], zl[-1] + PENT_H
+    cx, cy = (3.6, 7.2), (-1.8, 1.8)
+    for x in cx:
+        for y in cy:
+            c = COL / 2
+            mb.box((x - c, y - c, z0 - SLAB), (x + c, y + c, z1 - SLAB), "concrete", bevel=0.012, seg=2)
+    for y in cy:
+        mb.box((cx[0] + COL / 2, y - BEAM_W / 2, z1 - 0.40), (cx[1] - COL / 2, y + BEAM_W / 2, z1 - SLAB), "concrete", bevel=0.01, seg=1)
+    for x in cx:
+        mb.box((x - BEAM_W / 2, cy[0] + COL / 2, z1 - 0.40), (x + BEAM_W / 2, cy[1] - COL / 2, z1 - SLAB), "concrete", bevel=0.01, seg=1)
+    # losa de techo del casetón + pretil bajo
+    x0, x1, y0, y1 = cx[0] - COL / 2 - 0.05, cx[1] + COL / 2 + 0.05, cy[0] - COL / 2 - 0.05, cy[1] + COL / 2 + 0.05
+    mb.box((x0, y0, z1 - SLAB), (x1, y1, z1), "concrete", bevel=0.015, seg=2)
+    for (a, b) in (((x0, y0), (x1, y0 + 0.12)), ((x0, y1 - 0.12), (x1, y1)), ((x0, y0 + 0.12), (x0 + 0.12, y1 - 0.12)), ((x1 - 0.12, y0 + 0.12), (x1, y1 - 0.12))):
+        mb.box((a[0], a[1], z1), (b[0], b[1], z1 + 0.35), "concrete", bevel=0.01, seg=1)
+    H = PENT_H - 0.40
+    # muros norte y sur (ciegos)
+    for sg, y in ((-1, cy[0]), (1, cy[1])):
+        face = y + sg * (COL / 2 - RECESS)
+        m = m_wall_x(cx[0] + COL / 2, face, z0, +1) if sg < 0 else m_wall_x(cx[1] - COL / 2, face, z0, -1)
+        wall_with_openings(mb, (cx[1] - cx[0]) - COL, H, INFILL, [], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
+    # muro oeste con puerta al ático (se viste en dress)
+    L = (cy[1] - cy[0]) - COL
+    mw = m_wall_y(cy[1] - COL / 2, cx[0] - (COL / 2 - RECESS), z0, +1)
+    door = (round((L - 0.9) / 2, 4), round((L + 0.9) / 2, 4), 0.0, 2.05)
+    wall_with_openings(mb, L, H, INFILL, [door], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=mw)
+    # muro este: jambas + vano de celosía (como la fachada)
+    me = m_wall_y(cy[0] + COL / 2, cx[1] + (COL / 2 - RECESS), z0, -1)
+    w = 2.4
+    breeze = (round((L - w) / 2, 4), round((L + w) / 2, 4), 0.0, round(H, 4))
+    wall_with_openings(mb, L, H, INFILL, [breeze], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=me)
+    return dict(door=(mw, door), breeze=(me, breeze), top_z=z1, rect=(x0, y0, x1, y1))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -372,23 +413,28 @@ def dress_interior_doors(cfg, doors, interior):
 
 
 def dress_stairs(cfg, interior):
-    """Escalera en U por entrepiso (PB con huella 0,25 para compartir el núcleo de 3,443 m) + guarda en el último nivel."""
+    """Escalera en U por entrepiso, de PB hasta el casetón de azotea (PB con huella 0,25 para compartir el núcleo de 3,443 m)."""
     from kit import circulation as circ
     st = cfg["stair"]
     zl = level_z(cfg)
-    nlv = len(cfg["h"])
-    for lv in range(nlv - 1):                        # la última planta no sube (acceso al ático por escotilla)
+    for lv in range(len(cfg["h"])):
         fh = cfg["h"][lv]
         kw = dict(width=1.4, floor_h=fh, landing_depth=1.2, gap=0.15, seed=cfg["seed"] * 10 + lv, broken=0.08,
-                  rail="tube_metal", debris=(lv == 0))
+                  rail="tube_metal", debris=(lv in (0, len(cfg["h"]) - 1)))
         if fh > 3.0:
             kw.update(going=0.25, landing_depth=1.19)
         fp = circ.stair_u_footprint(**{k: kw[k] for k in ("width", "floor_h", "landing_depth", "gap")}, going=kw.get("going", 0.28))
         assert fp["L"] <= st["w"] + 0.003 and fp["W"] <= st["l"] + 0.003, fp
         interior.join(circ.stair_u(**kw), _T(st["x0"], st["y0"], zl[lv]))
-    # guarda sobre el hueco en la última planta (donde ya no arranca el tramo 1)
-    interior.join(circ.railing("tube_metal", 1.4, h=1.0, seed=cfg["seed"] + 5, missing=0.05),
-                  _T(st["x0"] - 0.06, st["y0"], zl[nlv - 1]) @ ROT_Z90)
+
+
+def dress_penthouse(cfg, pent, details):
+    from kit import openings as op
+    mw, d = pent["door"]
+    details.join(op.door("metal", d[1] - d[0], d[3] - d[2], INFILL, seed=cfg["seed"] + 77, open_angle=35), mw @ _T(d[0], 0, d[2]))
+    me, b = pent["breeze"]
+    details.join(op.breeze_block_screen(b[1] - b[0], b[3] - b[2], seed=cfg["seed"] + 78, pattern="cross", bevel=0.0, y0=0.025,
+                                        missing=0.1), me @ _T(b[0], 0, b[2]))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -407,7 +453,9 @@ def build_apt_a(collection_root=None, dress=True):
     placed = {}
     for side in ("front", "back", "west", "east"):
         placed[side] = build_facade(cfg, shell, side)
+    pent = build_penthouse(cfg, shell)
     out["Shell"].append(shell.finish(f"{cid}_Shell", cols["Shell"], uv_size=3.0, merge=0))
+    out["pent"] = pent
     inter = MB()
     doors = []
     build_interior_apt_a(cfg, inter, out=doors)
@@ -416,6 +464,7 @@ def build_apt_a(collection_root=None, dress=True):
         stats = dict(openings=dress_openings(cfg, placed, det, inter))
         stats["interior_doors"] = dress_interior_doors(cfg, doors, inter)
         dress_stairs(cfg, inter)
+        dress_penthouse(cfg, pent, det)
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
         out["stats"] = stats
     out["Interior"].append(inter.finish(f"{cid}_Interior", cols["Interior"], uv_size=3.0, merge=0))
