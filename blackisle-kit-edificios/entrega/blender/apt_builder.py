@@ -67,7 +67,7 @@ def cfg_apt_a():
     # 'back' se lista de oeste a este igual que 'front'
     west = {0: ["window_high", "solid", "window_high"]}
     west.update({k: ["window", "vent", "window"] for k in (1, 2, 3, 4)})
-    east = {0: ["window_high", "breeze", "window_high"]}
+    east = {0: ["window_high", "vent", "window_high"]}       # PB cerrada por seguridad; la celosía arranca en el 1.er piso
     east.update({k: ["window", "breeze", "window"] for k in (1, 2, 3, 4)})
     return dict(id="APT_A_5p", xs=xs, ys=ys, h=h, stair=stair, front=front, back=back, west=west, east=east,
                 loggia_depth=1.2, seed=11)
@@ -174,10 +174,9 @@ def build_penthouse(cfg, mb, details=None):
     wall_with_openings(mb, L, H, INFILL, [door], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=mw)
     # muro este: jambas + vano de celosía (como la fachada)
     me = m_wall_y(cy[0] + COL / 2, cx[1] + (COL / 2 - RECESS), z0, -1)
-    w = 2.4
-    breeze = (round((L - w) / 2, 4), round((L + w) / 2, 4), 0.0, round(H, 4))
-    wall_with_openings(mb, L, H, INFILL, [breeze], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=me)
-    return dict(door=(mw, door), breeze=(me, breeze), top_z=z1, rect=(x0, y0, x1, y1))
+    vents = [(round(L / 2 - 0.9, 4), round(L / 2 - 0.3, 4), 1.5, 2.0), (round(L / 2 + 0.3, 4), round(L / 2 + 0.9, 4), 1.5, 2.0)]
+    wall_with_openings(mb, L, H, INFILL, vents, mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=me)
+    return dict(door=(mw, door), vents=(me, vents), top_z=z1, rect=(x0, y0, x1, y1))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -403,7 +402,7 @@ def dress_interior_doors(cfg, doors, interior):
     r = rng(cfg["seed"] + 202)
     n = 0
     for d in doors:
-        keep = 0.65 if d["tag"] == "entry" else 0.3          # saqueo: muchas hojas arrancadas (queda el vano con su derrame)
+        keep = 0.55 if d["tag"] == "entry" else 0.12         # saqueo: casi todas las hojas interiores arrancadas (queda el vano)
         if r.random() > keep:
             continue
         M = d["m"] @ _T(d["u0"], 0, 0)
@@ -419,7 +418,7 @@ def dress_stairs(cfg, interior):
     zl = level_z(cfg)
     for lv in range(len(cfg["h"])):
         fh = cfg["h"][lv]
-        kw = dict(width=1.4, floor_h=fh, landing_depth=1.2, gap=0.15, seed=cfg["seed"] * 10 + lv, broken=0.08,
+        kw = dict(width=1.4, floor_h=fh, landing_depth=1.2, gap=0.15, seed=cfg["seed"] * 10 + lv, broken=0.05,
                   rail="tube_metal", debris=(lv in (0, len(cfg["h"]) - 1)))
         if fh > 3.0:
             kw.update(going=0.25, landing_depth=1.19)
@@ -432,9 +431,10 @@ def dress_penthouse(cfg, pent, details):
     from kit import openings as op
     mw, d = pent["door"]
     details.join(op.door("metal", d[1] - d[0], d[3] - d[2], INFILL, seed=cfg["seed"] + 77, open_angle=35), mw @ _T(d[0], 0, d[2]))
-    me, b = pent["breeze"]
-    details.join(op.breeze_block_screen(b[1] - b[0], b[3] - b[2], seed=cfg["seed"] + 78, pattern="cross", bevel=0.0, y0=0.025,
-                                        missing=0.1), me @ _T(b[0], 0, b[2]))
+    me, vents = pent["vents"]
+    for i, v in enumerate(vents):
+        details.join(op.window("casement", v[1] - v[0], v[3] - v[2], INFILL, seed=cfg["seed"] + 79 + i, broken=1.0, curtain=False),
+                     me @ _T(v[0], 0, v[2]))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -509,15 +509,112 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
 
 
 # ----------------------------------------------------------------------------------------------
+# techo (G3), servicios y daño (G4)
+# ----------------------------------------------------------------------------------------------
+ROOF_PITCH, ROOF_OVH = 26.0, 0.6
+
+
+def _rot_z(deg):
+    return Matrix.Rotation(math.radians(deg), 4, "Z")
+
+
+def cull_faces(mb, boxes):
+    """Quita las caras cuyo centro cae dentro de alguna caja (x0, y0, z0, x1, y1, z1). Para mallas soldadas (teja)."""
+    import bmesh
+    kill = [f for f in mb.bm.faces if any(b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] <= c.z <= b[5]
+                                          for c in (f.calc_center_median(),) for b in boxes)]
+    bmesh.ops.delete(mb.bm, geom=kill, context="FACES")
+    return len(kill)
+
+
+def cull_components(mb, boxes, mode="center"):
+    """Quita de un MB las piezas sueltas (componentes conexas) cuyo centro ('center') o caja ('touch') cae dentro de alguna caja
+    (x0, y0, z0, x1, y1, z1). Sirve para vaciar el volumen del casetón dentro del techo sin booleanos."""
+    import bmesh
+    bm = mb.bm
+    bm.faces.ensure_lookup_table()
+    seen = set()
+    kill = []
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        stack, comp = [f], []
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            comp.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        vs = {v for g in comp for v in g.verts}
+        mn = Vector((min(v.co.x for v in vs), min(v.co.y for v in vs), min(v.co.z for v in vs)))
+        mx = Vector((max(v.co.x for v in vs), max(v.co.y for v in vs), max(v.co.z for v in vs)))
+        c = (mn + mx) / 2
+        for b in boxes:
+            if mode == "center":
+                hit = b[0] <= c.x <= b[3] and b[1] <= c.y <= b[4] and b[2] <= c.z <= b[5]
+            else:
+                hit = not (mx.x < b[0] or mn.x > b[3] or mx.y < b[1] or mn.y > b[4] or mx.z < b[2] or mn.z > b[5])
+            if hit:
+                kill.extend(comp)
+                break
+    bmesh.ops.delete(bm, geom=list(set(kill)), context="FACES")
+    return len(kill)
+
+
+def dress_roof(cfg, pent, roof, details, detail="low"):
+    from kit import circulation as circ
+    from kit import roofing as rf
+    xs, ys = cfg["xs"], cfg["ys"]
+    W = xs[-1] - xs[0] + COL_CORNER
+    D = ys[-1] - ys[0] + COL_CORNER
+    z0 = level_z(cfg)[-1]
+    seed = cfg["seed"] + 404
+    spot = rf.damage_spot("hip", W, D, ROOF_PITCH, ROOF_OVH, seed=seed, damage=0.55)
+    frame = rf.roof_frame("hip", W, D, ROOF_PITCH, ROOF_OVH, seed=seed, cover="tile", damage=0.55, spot=spot)
+    tiles = rf.barrel_tiles(W, D, "hip", ROOF_PITCH, ROOF_OVH, seed=seed, missing=0.04, hole=spot, detail=detail)
+    x0, y0, x1, y1 = pent["rect"]
+    vol = (x0 + 0.02, y0 + 0.02, -1.0, x1 - 0.02, y1 - 0.02, PENT_H + 0.5)      # en coordenadas del techo (z relativo)
+    k_frame = cull_components(frame, [vol], mode="touch")
+    k_tiles = cull_faces(tiles, [vol])
+    roof.join(frame, _T(0, 0, z0))
+    roof.join(tiles, _T(0, 0, z0))
+    # canalón perimetral (recorrido antihorario: fascia a la izquierda) + 4 bajantes junto a las columnas de esquina
+    ex, ey = W / 2 + ROOF_OVH, D / 2 + ROOF_OVH
+    ze = rf.roof_top("hip", W, D, ROOF_PITCH, ROOF_OVH, x=ex - 0.01, y=0.0)
+    off = 0.0865
+    gx, gy = ex + off, ey + off
+    path = [(-gx, -gy, ze - 0.06), (gx, -gy, ze - 0.06), (gx, gy, ze - 0.06), (-gx, gy, ze - 0.06), (-gx, -gy + 0.001, ze - 0.06)]
+    Lf, Le = 2 * gx, 2 * gy
+    xo = 6.6
+    outlets = [gx - xo, Lf - (gx - xo), Lf + Le + (gx - xo), 2 * Lf + Le - (gx - xo)]
+    g = circ.gutter([Vector(p) for p in path], seed=seed + 1, outlets=outlets)
+    roof.join(g, _T(0, 0, z0))
+    tops = [Vector(t) + Vector((0, 0, z0)) for t in g.meta["outlets"]] if hasattr(g, "meta") and "outlets" in g.meta else []
+    yf = ys[0] - (COL / 2 - RECESS)          # cara del relleno de fachada
+    for i, t in enumerate(tops):
+        front = t.y < 0
+        if front:
+            dp = circ.downpipe(t, Vector((t.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i)
+            details.join(dp)
+        else:
+            R = _rot_z(180)
+            tl = R.inverted() @ t
+            dp = circ.downpipe(tl, Vector((tl.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i)
+            details.join(dp, R)
+    return dict(spot=spot, culled_frame=k_frame, culled_tiles=k_tiles, downpipes=len(tops))
+# ----------------------------------------------------------------------------------------------
 # ensamblado
 # ----------------------------------------------------------------------------------------------
-def build_apt_a(collection_root=None, dress=True):
+def build_apt_a(collection_root=None, dress=True, roof_detail="low"):
     """APT_A_5p completo hasta donde llega el kit aprobado. Devuelve dict colección -> [objetos]."""
     from kit.common import get_collection
     cfg = cfg_apt_a()
     cid = cfg["id"]
     root = collection_root or get_collection(cid)
-    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt")}
+    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof")}
     out = {k: [] for k in cols}
     shell = MB()
     build_frame(cfg, shell)
@@ -536,6 +633,9 @@ def build_apt_a(collection_root=None, dress=True):
         stats["interior_doors"] = dress_interior_doors(cfg, doors, inter)
         dress_stairs(cfg, inter)
         dress_penthouse(cfg, pent, det)
+        roof = MB()
+        stats["roof"] = dress_roof(cfg, pent, roof, det, detail=roof_detail)
+        out["Roof"].append(roof.finish(f"{cid}_Roof", cols["Roof"], uv_size=2.0, merge=0))
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
         out["stats"] = stats
     out["Interior"].append(inter.finish(f"{cid}_Interior", cols["Interior"], uv_size=3.0, merge=0))

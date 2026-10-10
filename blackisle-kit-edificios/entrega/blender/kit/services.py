@@ -1379,8 +1379,9 @@ def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0)
             top = S - up * 0.036 + out * 0.004
             hang = rr.uniform(1.0, 2.2)
             sw = Xl * rr.uniform(-0.3, 0.3)
-            pts = _spline([top + Xl * 0.02, top - up * 0.05 + out * 0.04, top - up * hang * 0.5 + out * 0.12 + sw * 0.5,
-                           top - up * hang + out * 0.06 + sw], 0.04)
+            # punto intermedio a 18 cm: sin él la spline sube 2–5 cm al salir del amarre (gancho que se autointersecaba)
+            pts = _spline([top + Xl * 0.02, top - up * 0.05 + out * 0.04, top - up * 0.18 + out * 0.07 + sw * 0.08,
+                           top - up * hang * 0.5 + out * 0.12 + sw * 0.5, top - up * hang + out * 0.06 + sw], 0.04)
             _tube(mb, pts, r * 0.9, seg=6, mat="cable")
             _frayed(mb, pts[-1], pts[-1] - pts[-2], rr)
             _torus(mb, top + Xl * 0.004, Xl, 0.007, 0.0016, n=10, seg=4, mat="aluminium")

@@ -60,7 +60,7 @@ TILE_S = 0.225                          # separación entre ejes de canales
 TILE_V0 = -0.05                         # la 1.ª hilada vuela 5 cm sobre el alero
 # elevación del borde bajo de cada tablón (apoya sobre el inferior, a la fracción f de su ancho): n_b = BOARD_N + (T + 2 mm) / f
 _f = BOARD_EXP / BOARD_W
-BOARD_LB = BOARD_N + (BOARD_T + 0.002) / _f
+BOARD_LB = BOARD_N + (BOARD_T + 0.003) / _f
 
 
 # =====================================================================================================================
@@ -171,9 +171,10 @@ def _box(mb, mn, mx, mat, bevel=0.004, seg=1, m=None):
 
 
 def _nail(mb, p, axis, r=0.0055, h=0.004, mat="metal_rust", seg=6):
-    """Cabeza de clavo / tornillo: disco corto que sobresale de la superficie p a lo largo de axis (sin tocarla)."""
+    """Cabeza de clavo / tornillo: disco que sobresale h de la superficie p a lo largo de axis y entra 4 mm en la pieza
+    (sólidos que se cruzan: ni flota ni queda una base coplanar con la madera, que tiene vetas y alabeo de hasta 3 mm)."""
     p, a = _vec(p), _vec(axis).normalized()
-    mb.cyl(p + a * 0.0008, p + a * (0.0008 + h), r, seg=seg, mat=mat, r1=r * 0.8)
+    mb.cyl(p - a * 0.004, p + a * h, r, seg=seg, mat=mat, r1=r * 0.8)
 
 
 # =====================================================================================================================
@@ -424,8 +425,8 @@ def _blocking(mb, occ, lo, hi, at, z0, z1, gap=0.0015, t=0.04):
     cur = lo
     spans = []
     for a, b in cuts:
-        if a > cur:
-            spans.append((cur, a))
+        if min(a, hi) > cur:
+            spans.append((cur, min(a, hi)))
         cur = max(cur, b)
     if hi > cur:
         spans.append((cur, hi))
@@ -748,7 +749,7 @@ _MODES = {"closed": _FULL, "sides": frozenset(("sides",)), "lip": frozenset()}
 
 
 def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0, jag1=0.0, rn=TILE_RN, rw=TILE_RW,
-                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile", mode="closed", angles=None, lip_c=False):
+                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile", mode="closed", angles=None, lip_c=False, taper=1.0):
     """Teja troncocónica en local: X = largo (0..L, x = 0 es la boca de ABAJO), arco en YZ con centro en el eje X.
     x0/x1 recortan (pieza rota); jag0/jag1 astillan esos extremos con `r` (rng propio de la pieza). El cono es recto, así que
     bastan dos anillos (un anillo intermedio no añade forma, solo triángulos).
@@ -756,7 +757,8 @@ def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0,
     alta) · 'lip' cara vista + labio · 'prism' (solo canal) franja central cerrada de 8 tris (fondo plano de ±25° a la
     profundidad del intradós y quilla en el trasdós: queda DENTRO del volumen del canal real, así que conserva sus holguras)
     · o un conjunto con los grupos que se añaden a cara vista + labio: {'sides', 'hid' (cara oculta), 'cap' (testa alta)}.
-    lip_c (solo con 'lip'): labio solo en los tramos centrales (|ángulo| < 45°).
+    lip_c (solo con 'lip'): labio solo en los tramos centrales (|ángulo| < 45°). taper < 1: el arco se cierra en la boca
+    estrecha (ángulos x taper): los cantos de dos piezas anidadas nunca quedan coplanares.
     La cara vista es el trasdós de la cobija (convex) y el intradós del canal. Los modos abiertos se orientan bien con el
     recálculo de normales de MB.finish (el vértice más alejado del centro siempre pertenece a una cara con la normal hacia
     fuera); lo verifica el test con rayos."""
@@ -787,7 +789,9 @@ def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0,
     s = 1.0 if convex else -1.0
 
     def arc(x, rad):
-        return [Vector((x, rad * math.sin(a), s * rad * math.cos(a))) for a in A]
+        f = (1.0 - x / L) if wide_bottom else x / L
+        k = taper + (1.0 - taper) * f
+        return [Vector((x, rad * math.sin(a * k), s * rad * math.cos(a * k))) for a in A]
     o0, i0 = arc(x0, ri(x0) + t), arc(x0, ri(x0))
     o1, i1 = arc(x1, ri(x1) + t), arc(x1, ri(x1))
     if jag0:
@@ -1203,7 +1207,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
         M = Ms @ _tile_m(u, vb + dv, nb, nt) @ _about((TILE_L / 2, 0, 0), _R("X", roll) @ _R("Z", yaw))
         _tile_piece(mb, M, lod["can"] if is_canal else lod["cob"], rng(jseed) if jag0 else None, not is_canal, not is_canal,
                     x0=x0, jag0=jag0, mode=mode, angles=_CAN_LOW if (is_canal and detail == "low") else None,
-                    lip_c=detail == "low")
+                    lip_c=detail == "low", taper=0.975)
         if boq:
             # boquilla de mortero en la boca de la cobija del alero
             rr = TILE_RW - 0.004
@@ -1728,11 +1732,11 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
         params = []
         for k, vb in enumerate(courses):
             if k == 0:
-                nb = nt = BOARD_N + BOARD_T + 0.002          # la 1.ª hilada apoya plana sobre la de arranque
+                nb = nt = BOARD_N + BOARD_T + 0.003          # la 1.ª hilada apoya plana sobre la de arranque
             else:
                 pv, pnb, pnt = prev
                 f = min(max((vb - pv) / BOARD_W, 0.0), 1.0)
-                nb, nt = pnb + (pnt - pnb) * f + BOARD_T + 0.002, BOARD_N
+                nb, nt = pnb + (pnt - pnb) * f + BOARD_T + 0.003, BOARD_N      # 3 mm: el levantamiento aleatorio llega a 1,5
             prev = (vb, nb, nt)
             params.append(prev)
             ext0 = (0.10 if k % 2 == 0 else 0.035) + r.uniform(-0.015, 0.012)
@@ -1756,7 +1760,7 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
                     dv = -r.uniform(0.065, 0.09)
                     pv, pnb, pnt = params[k - 1]
                     f = min(max((vb + dv - pv) / BOARD_W, 0.0), 1.0)
-                    nbs = pnb + (pnt - pnb) * f + BOARD_T + 0.003
+                    nbs = pnb + (pnt - pnb) * f + BOARD_T + 0.004
                     _board(mb, R, s, a2, b2, vb, nbs, nt, r, lift_end=r.uniform(0.015, 0.04), dv=dv, yaw=r.uniform(-0.006, 0.006))
                     continue
                 if roll < missing + 0.07:

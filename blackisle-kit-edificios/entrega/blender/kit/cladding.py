@@ -9,7 +9,7 @@ Todas las funciones públicas devuelven un `MB` con el MISMO sistema que `wall_w
                   ('concrete') de 3 hiladas y alféizares inclinados; ladrillos faltantes (agujero pasante), descascarados y caídos
                   al pie del muro (y < 0, z = 0); parches de revoque viejo (y -0,016..-0,004). ~20 triángulos por ladrillo.
   board_and_batten tablones verticales 0,22 (rendija 0,04) con cara exterior en y = 0 (y 0..0,022), junquillos 0,05 x 0,02 encima
-                  (y -0,021..-0,001); bastidor de postes y largueros 0,05 x 0,10 detrás (y 0,023..0,123).
+                  (y -0,021..-0,001); bastidor de postes y largueros 0,05 x 0,10 detrás (y 0,024..0,124).
   clapboard       tablas traslapadas de perfil cuña (0,016 -> 0,006, 0,18 de ancho, 0,15 de exposición), testa vista en y ~ 0;
                   pies derechos cada 0,6 en y 0,026..0,126; esquineros y tapajuntas de vano 6 mm por delante de las tablas.
 Todo son sólidos cerrados (0 aristas no-manifold); no hay láminas en este módulo.
@@ -233,13 +233,27 @@ def _framing(mb, L, H, y0, depth, openings, r, style="studs", spacing=0.6, mat="
 # =====================================================================================================================
 # 1) LADRILLO A SOGA
 # =====================================================================================================================
-def _brick(mb, u0, u1, v0, v1, yf, yb, r, bev=0.004, chip=0, tilt=(0.0, 0.0), jag=0.0, mat="brick"):
-    """Ladrillo de 12 vértices / 10 quads (20 tris): cara vista con bisel de 1 segmento, costados hasta yb, cara trasera."""
-    b = max(0.0015, min(bev, 0.3 * (u1 - u0), 0.3 * (v1 - v0)))
+def _brick(mb, u0, u1, v0, v1, yf, yb, r, bev=0.004, chip=0, tilt=(0.0, 0.0), jag=0.0, mat="brick", mode="bevel"):
+    """Ladrillo. mode 'bevel': 12 vértices / 10 quads (20 tris), cara vista con bisel de 1 segmento, costados hasta yb y
+    cara trasera. 'box5': cara vista + 4 costados sin bisel (10 tris; la trasera queda enterrada en el núcleo).
+    'front3': cara vista + tabla y sardinel (6 tris; los costados verticales de la llaga se dejan: de lejos manda la sombra de
+    las hiladas). Los modos abiertos tienen sus bordes DENTRO del núcleo de mortero (yb > REC), así que se ven cerrados."""
     uc, vc = (u0 + u1) / 2, (v0 + v1) / 2
 
     def Y(u, v, y):
         return y + tilt[0] * (u - uc) + tilt[1] * (v - vc)
+    if mode != "bevel":
+        fy = yf + (r.uniform(0.0, jag) if jag else 0.0)
+        c = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        Fv = [mb.bm.verts.new((u, Y(u, v, fy), v)) for u, v in c]
+        Bv = [mb.bm.verts.new((u, yb, v)) for u, v in c]
+        mb.face(Fv, mat)
+        sides = (0, 1, 2, 3) if mode == "box5" else (0, 2)          # 0 = sardinel (abajo), 2 = tabla (arriba)
+        for i in sides:
+            j = (i + 1) % 4
+            mb.face([Fv[j], Fv[i], Bv[i], Bv[j]], mat)
+        return
+    b = max(0.0015, min(bev, 0.3 * (u1 - u0), 0.3 * (v1 - v0)))
     front = [[u0 + b, v0 + b], [u1 - b, v0 + b], [u1 - b, v1 - b], [u0 + b, v1 - b]]
     fy = [Y(u, v, yf) for u, v in front]
     if chip:
@@ -301,9 +315,25 @@ def _bond_pieces(p, q, off):
     return [tuple(x) for x in out]
 
 
+BRICK_LOD = {
+    # modo del ladrillo corriente / de jamba, puntos del contorno de los parches de revoque, bisel de los caídos
+    "high": dict(brick="bevel", jamb="bevel", plaster_pts=22, fallen_bev=0.006),
+    "mid": dict(brick="box5", jamb="box5", plaster_pts=14, fallen_bev=0.0),
+    "low": dict(brick="front3", jamb="box5", plaster_pts=10, fallen_bev=0.0),
+}
+
+
 def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14, plaster=0.12, lintel_courses=3,
-               fallen=True):
-    """Muro de ladrillo individual a soga sobre núcleo de mortero (ver cabecera). openings como wall_with_openings."""
+               fallen=True, detail="high"):
+    """Muro de ladrillo individual a soga sobre núcleo de mortero (ver cabecera). openings como wall_with_openings.
+    detail = 'high' | 'mid' | 'low' (BRICK_LOD); la disposición (aparejo, faltantes, descascarados, caídos, revoque) es la
+    misma en los tres niveles. Ladrillo de 20 / 10 / 6 tris (bisel / caja sin trasera / cara + tabla + sardinel; los de
+    jamba, que se ven en el derrame, son caja sin trasera en mid y low). Medido con test_G3 (--budget) en un muro de
+    6,5 x 2,8 con 2 ventanas y 1 puerta (13,6 m² de ladrillo, 57 ladrillos/m²), núcleo, dinteles, caídos y revoque incluidos:
+      high ~18,8 k tris (~1380 tris/m²) · mid ~10,6 k (~780/m²) · low ~7,3 k (~535/m²)."""
+    if detail not in BRICK_LOD:
+        raise ValueError("detail debe ser 'high', 'mid' o 'low'")
+    lod = BRICK_LOD[detail]
     r = rng(seed + 2024)
     mb = MB()
     L, H = float(length), float(height)
@@ -362,6 +392,11 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
             else:
                 runs.append([a, b, key])
         open_edges = {round(o[0], 6) for o in obst if o[4] == "open"} | {round(o[1], 6) for o in obst if o[4] == "open"}
+        # tramos contiguos de distinta altura (junto a un dintel o alféizar): llaga de 1 cm entre ellos
+        for q in range(len(runs) - 1):
+            if abs(runs[q][1] - runs[q + 1][0]) < 1e-6:
+                runs[q][1] -= JOINT / 2
+                runs[q + 1][0] += JOINT / 2
         for a, b, (lo, hi) in runs:
             for (pa, pb) in _bond_pieces(a, b, off):
                 jamb = (round(pa, 6) in open_edges and pa > 0.001) or (round(pb, 6) in open_edges and pb < L - 0.001)
@@ -391,7 +426,7 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 if r.uniform() < 0.06:
                     chip = 1 + int(r.uniform() < 0.25)
                 yb = BRICK_D - 0.002 if jamb else 0.02
-                _brick(mb, ua, ub, va, vb, yf, yb, r, bev=bev, chip=chip, tilt=tilt)
+                _brick(mb, ua, ub, va, vb, yf, yb, r, bev=bev, chip=chip, tilt=tilt, mode=lod["jamb"] if jamb else lod["brick"])
                 bricks_tris += 20
 
     # ---- núcleo de mortero con los vanos y los agujeros de ladrillos faltantes ----
@@ -417,16 +452,16 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
             mb.box((a, -0.045, v0 - 0.075), (b, 0.07, v0 - 0.004), "concrete", bevel=0.008, seg=1, m=m)
 
     # ---- ladrillos caídos al pie del muro ----
-    for (lw, lh) in fallen_list[:12]:
+    for idf, (lw, lh) in enumerate(fallen_list[:12]):
         x = r.uniform(0.2, L - 0.2)
         a = r.uniform(0, 360)
         half = r.uniform() < 0.4
         ln = BRICK_L * (r.uniform(0.4, 0.6) if half else 1.0)
         lay = r.uniform() < 0.7
         dims = (ln, BRICK_D, BRICK_H) if lay else (ln, BRICK_H, BRICK_D)
-        m = _T(x, -r.uniform(0.08, 0.7), 0.0) @ _R("Z", a) @ _R("X", r.uniform(-4, 4))
-        mb.box((-dims[0] / 2, -dims[1] / 2, 0.001), (dims[0] / 2, dims[1] / 2, dims[2] + 0.001), "brick", bevel=0.006, seg=1,
-               m=m)
+        m = _T(x, -r.uniform(0.08, 0.7), 0.0013 * (idf % 5)) @ _R("Z", a) @ _R("X", r.uniform(-4, 4))
+        mb.box((-dims[0] / 2, -dims[1] / 2, 0.001), (dims[0] / 2, dims[1] / 2, dims[2] + 0.001), "brick", bevel=lod["fallen_bev"],
+               seg=1, m=m)
 
     # ---- restos de revoque ----
     if plaster > 0:
@@ -441,9 +476,11 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 continue
             nn = _N1(r, wl=1.0, n=4)
             pts = []
-            for i in range(22):
-                a = 2 * PI * i / 22
-                k = 1.0 + 0.32 * nn(a * 2.0) + r.uniform(-0.06, 0.06)
+            jit = [r.uniform(-0.06, 0.06) for _ in range(22)]
+            npp = lod["plaster_pts"]
+            for i in range(npp):
+                a = 2 * PI * i / npp
+                k = 1.0 + 0.32 * nn(a * 2.0) + jit[int(i * 22 / npp)]
                 pts.append((min(max(pu + ru * k * math.cos(a), 0.01), L - 0.01), min(max(pv + rv * k * math.sin(a), 0.01), H - 0.01)))
             t = r.uniform(0.008, 0.013)
             m = Matrix(((1, 0, 0, 0), (0, 0, -1, -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
@@ -567,9 +604,9 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
     BT = 0.022
     girts_v = []
     if frame:
-        _, hm = _framing(mb, L, H, BT + 0.001, 0.10, ops, r, style="girts")
+        _, hm = _framing(mb, L, H, BT + 0.002, 0.10, ops, r, style="girts")      # el alabeo de la tabla llega a +0,8 mm
         girts_v = sorted({round((h[2] + h[3]) / 2, 3) for h in hm})
-    trims = _trims(mb, ops, -0.024, -0.001, r, H=H)
+    trims = _trims(mb, ops, -0.0245, -0.0015, r, H=H)
     rotn = _N1(r, wl=1.6)
     # ---- tablones ----
     cols, u = [], 0.004
@@ -601,10 +638,13 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
                 if sb - sa < 0.08:
                     continue
                 _vboard(mb, uc, b - a, BT, sa, sb, r, jag0=j0, jag1=j1)
-                # clavos en cada larguero
+                # clavos en cada larguero (no bajo los tapajuntas)
                 for gv in girts_v:
                     if sa + 0.04 < gv < sb - 0.04:
-                        _nail(mb, (uc + r.uniform(-0.01, 0.01), 0.0, gv + r.uniform(-0.01, 0.01)), (0, -1, 0), r=0.005, h=0.003)
+                        pu, pv = uc + r.uniform(-0.01, 0.01), gv + r.uniform(-0.01, 0.01)
+                        if any(t[0] - 0.01 < pu < t[1] + 0.01 and t[2] - 0.01 < pv < t[3] + 0.01 for t in trims):
+                            continue
+                        _nail(mb, (pu, 0.0, pv), (0, -1, 0), r=0.005, h=0.003)
     # ---- junquillos ----
     for (c0, c1) in zip(cols[:-1], cols[1:]):
         um = (c0[1] + c1[0]) / 2
@@ -638,7 +678,7 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
             tmp.bm.free()
             for gv in girts_v:
                 if c + 0.04 < gv < d - 0.04 and M is None:
-                    _nail(mb, (um, -0.021, gv), (0, -1, 0), r=0.0048, h=0.003)
+                    _nail(mb, (um, yo, gv), (0, -1, 0), r=0.0048, h=0.003)
     return mb
 
 
@@ -680,11 +720,15 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
             ua = 0.102
         else:
             ub = L - 0.102
-    # tabla de arranque
-    _member(mb, (ua, ub, 0.03, 0.07), ybb + 0.001, ytb, r, "wood_grey", vertical=False)
+    # tabla de arranque (cortada en las puertas y tapajuntas: antes cruzaba el umbral)
+    for (a, b, lo, hi) in _segments(ua, ub, 0.03, 0.07, obst, gap=0.002, min_h=0.03):
+        if b - a > 0.08:
+            _member(mb, (a, b, 0.03, 0.07), ybb + 0.001, ytb - 0.0015, r, "wood_grey", vertical=False)
     lz = _N1(r, wl=2.0)
 
-    def ring(u, vk, f0, f1, kick=0.0, drop=0.0):
+    fk = (CLAP_EXP - 0.012) / CLAP_W               # línea donde apoya el canto de la tabla de arriba
+
+    def ring(u, vk, f0, f1, kick=0.0, drop=0.0, bend=False):
         def yb(f):
             return ybb + (ytb - ybb) * f
 
@@ -694,8 +738,16 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
         kick = kick + r.uniform(0.0, 0.0018)          # canto bajo irregular (tabla vieja, alabeada)
         v0 -= r.uniform(0.0, 0.002)
         ch = min(0.004, 0.3 * (v1 - v0))
-        pts = [(yb(f0) - kick, v0), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(f0) - th(f0) - kick, v0 + ch),
-               (yb(f0) - th(f0) + 0.004 - kick, v0)]
+        if bend:
+            # tabla suelta: se despega por debajo de la línea fk y conserva la parte que tapa la tabla de arriba, así no se
+            # mete en ella (antes giraba entera alrededor del canto alto)
+            fm = min(max(fk, f0 + 0.05), f1 - 0.02)
+            vm_ = vk + CLAP_W * fm
+            pts = [(yb(f0) - kick, v0), (yb(fm), vm_), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(fm) - th(fm), vm_),
+                   (yb(f0) - th(f0) - kick, v0 + ch), (yb(f0) - th(f0) + 0.004 - kick, v0)]
+        else:
+            pts = [(yb(f0) - kick, v0), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(f0) - th(f0) - kick, v0 + ch),
+                   (yb(f0) - th(f0) + 0.004 - kick, v0)]
         return [Vector((u, y, v)) for y, v in pts]
 
     k, vk = 0, 0.03
@@ -741,7 +793,7 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
                     t = i / (n - 1)
                     kk = kick0 * (1 - t) ** 2 + kick1 * t ** 2
                     dd = drop * ((1 - t) ** 2 if kick0 else t ** 2)
-                    rg = ring(pa2 + (pb2 - pa2) * t, vk, f0, f1, kick=kk, drop=dd)
+                    rg = ring(pa2 + (pb2 - pa2) * t, vk, f0, f1, kick=kk, drop=dd, bend=bool(kick0 or kick1))
                     if (i == 0 and j0) or (i == n - 1 and j1):
                         jj = j0 if i == 0 else j1
                         sg = 1 if i == 0 else -1
