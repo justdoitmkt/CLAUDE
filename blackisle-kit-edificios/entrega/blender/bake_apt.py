@@ -215,6 +215,36 @@ def vertex_ao(obj, samples):
     bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
 
 
+def fix_vertex_ao(obj, floor=0.25, neutral=0.85, dead=0.04):
+    """Los vértices incrustados en otra pieza (muro que entra en la losa, marco dentro del vano) hornean AO = 0 (negro) y esa
+    oscuridad se interpola por toda la cara. Se descartan esas esquinas: toman el promedio de las esquinas válidas de su cara o
+    un valor neutro si no hay ninguna; después se aplica un piso para que nada quede negro puro."""
+    import numpy as np
+    me = obj.data
+    ca = me.color_attributes["AO"]
+    col = np.zeros(len(ca.data) * 4, dtype=np.float32)
+    ca.data.foreach_get("color", col)
+    col = col.reshape(-1, 4)
+    ao = col[:, 0].copy()
+    n = len(me.polygons)
+    ls = np.zeros(n, dtype=np.int32)
+    lt = np.zeros(n, dtype=np.int32)
+    me.polygons.foreach_get("loop_start", ls)
+    me.polygons.foreach_get("loop_total", lt)
+    face = np.repeat(np.arange(n), lt)
+    valid = ao > dead
+    s = np.bincount(face, weights=np.where(valid, ao, 0.0), minlength=n)
+    c = np.bincount(face, weights=valid.astype(np.float64), minlength=n)
+    mean = np.where(c > 0, s / np.maximum(c, 1), neutral)
+    bad = ~valid
+    ao[bad] = mean[face[bad]]
+    ao = floor + (1.0 - floor) * ao
+    col[:, 0] = col[:, 1] = col[:, 2] = ao
+    col[:, 3] = 1.0
+    ca.data.foreach_set("color", col.ravel())
+    return int(bad.sum())
+
+
 def tileable_materials(objs, prefix, uv_unit):
     """Sustituye los materiales de `objs` por repetibles a escala real (canal 'UVMap' de caja a `uv_unit` m por unidad) y funde
     los de color liso en un solo material 'liso' cuyo color va en COLOR_0 (color x AO). COLOR_0 multiplica el color base en glTF."""
@@ -309,7 +339,16 @@ def main():
     inter = join(g("Interior") + [dmg.get("Interior")], f"{prefix}_Interior")
     skirt = g("Skirt")[0]
     log("construido", round(time.time() - t0), "s; tris", tri_count([shell, det, inter, roof, skirt]))
-    ext, intr = ld.split_exterior(shell, others=[det, inter, roof])
+    # caras apoyadas en el terreno (cara inferior de la losa de desplante, pies de columna): nunca se ven y ocupaban medio atlas
+    bm = bmesh.new()
+    bm.from_mesh(shell.data)
+    kill = [f for f in bm.faces if f.normal.z < -0.9 and f.calc_center_median().z < 0.02]
+    bmesh.ops.delete(bm, geom=kill, context="FACES")
+    bm.to_mesh(shell.data)
+    bm.free()
+    log("caras de apoyo retiradas:", len(kill))
+    # solo el techo cuenta como oclusor: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
+    ext, intr = ld.split_exterior(shell, others=[roof])
     bpy.data.objects.remove(shell)
     short = "_".join(bid.split("_")[:2])
     gfile = os.path.join(ld.TEX, "graffiti", f"G_{short}_mapa.json")
@@ -341,7 +380,8 @@ def main():
     for o in loose:
         t = time.time()
         vertex_ao(o, 8 if quick else 32)
-        log("AO por vértice", o.name, round(time.time() - t), "s")
+        nfix = fix_vertex_ao(o)
+        log("AO por vértice", o.name, round(time.time() - t), "s; esquinas incrustadas corregidas:", nfix)
     # el interior se reproyecta a 2 m por unidad para compartir materiales con los detalles (techo de 14 materiales)
     bm = bmesh.new()
     bm.from_mesh(inter.data)

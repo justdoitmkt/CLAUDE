@@ -202,7 +202,7 @@ def build_interior(cfg, mb, out):
             xc = sg * 5.4
             if lv == 0:
                 partition(mb, (xc, yi0), (xc, yi1), z0, H, t=0.15, doors=[(-2.3, 1.4)], out=out, tag="open")   # vestíbulo | escalera
-                partition(mb, (sg * 4.0, yi0), (sg * 4.0, yi1), z0, H, doors=[(0.0, 0.9)], out=out)             # vestíbulo | cuarto
+                partition(mb, (sg * 3.2, yi0), (sg * 3.2, yi1), z0, H, doors=[(0.0, 0.9)], out=out)             # vestíbulo | cuarto
                 continue
             partition(mb, (xc, yi0), (xc, yi1), z0, H, t=0.15, doors=[(-1.25, 0.9)], out=out, tag="entry")
             # depto: frente y-3,9..-1,6 · vestíbulo -1,6..0,6 · fondo 0,6..3,9
@@ -383,12 +383,12 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far), _T(0.5 * (xs[3] + xs[4]) + 0.9, ys[0] - FO, zl[lv] + 1.7))
     # accesos: arbotantes, medidores, buzones
     for sg in (-1, 1):
-        x = sg * 4.675
-        add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=near), _T(x + 0.95, ys[0] - FO, zl[0] + 2.65))
+        x = sg * 4.05                                   # centro del módulo 1 / 4 = eje de las puertas de PB
+        add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=near), _T(x + 1.1, ys[0] - FO, zl[0] + 2.65))
         add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=far),
             _T(x - 0.95, ys[-1] + FO, zl[0] + 2.45) @ ac._rot_z(180))
         add("mailboxes", sv.mailboxes(n=6, seed=int(r.integers(1e6)), detail=near),
-            _T(sg * 4.0 - sg * 0.051, -2.6, zl[0] + 1.05) @ ac._rot_z(90 if sg < 0 else -90), inter)
+            _T(sg * (3.2 + 0.051), -1.2, zl[0] + 1.05) @ ac._rot_z(-90 if sg < 0 else 90), inter)
     for i, x in enumerate((-2.0, -1.55)):
         add("meter_box", sv.meter_box(seed=int(r.integers(1e6)), open_door=bool(i), detail=near), _T(x, ys[0] - FO, 1.2))
     add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.01, zl[1] - 0.3), (-2.4, ys[0] - FO - 0.01, zl[1] - 0.25)], n=3, sag=0.2,
@@ -396,7 +396,7 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
     add("conduit", sv.conduit([(0, 0, 1.7), (0, 0, 2.8)], seed=int(r.integers(1e6)), detail=near), _T(-1.75, ys[0] - FO, 0.0))
     for lv in (1, 3):
         add("extinguisher_cabinet", sv.extinguisher_cabinet(seed=int(r.integers(1e6)), detail=near),
-            _T(-5.4 - 0.075 - 0.001, -2.9, zl[lv] + 1.05) @ ac._rot_z(90), inter)
+            _T(-5.4 - 0.075 - 0.001, -2.9, zl[lv] + 1.05) @ ac._rot_z(-90), inter)
     from kit import roofing as rf
     R = roof_dims(cfg)
     for x in (-3.0, 4.2):
@@ -443,7 +443,7 @@ def build_apt_d(collection_root=None, dress_all=True):
     stats = dict(joints=build_joints(cfg, shell))
     zl = level_z(cfg)
     for sg in (-1, 1):
-        x = sg * 4.675
+        x = sg * 4.05
         canopy(shell, x - 1.05, x + 1.05, cfg["ys"][0] - FO, -1, zl[0] + 2.6)
         canopy(shell, x - 0.85, x + 0.85, cfg["ys"][-1] + FO, 1, zl[0] + 2.45, depth=0.9)
     doors = []
@@ -464,8 +464,8 @@ def build_apt_d(collection_root=None, dress_all=True):
         out["Roof"].append(roof.finish(f"{cid}_Roof", cols["Roof"], uv_size=2.0, merge=0))
         stats["services"] = dress_services(cfg, P, det, inter)
     out["Shell"].append(shell.finish(f"{cid}_Shell", cols["Shell"], uv_size=3.0, merge=0))
-    keep = [(sg * 4.675 - 1.2, cfg["ys"][0] - 3.0, sg * 4.675 + 1.2, cfg["ys"][0]) for sg in (-1, 1)] + \
-           [(sg * 4.675 - 1.0, cfg["ys"][-1], sg * 4.675 + 1.0, cfg["ys"][-1] + 3.0) for sg in (-1, 1)]
+    keep = [(sg * 4.05 - 1.2, cfg["ys"][0] - 3.0, sg * 4.05 + 1.2, cfg["ys"][0]) for sg in (-1, 1)] + \
+           [(sg * 4.05 - 1.0, cfg["ys"][-1], sg * 4.05 + 1.0, cfg["ys"][-1] + 3.0) for sg in (-1, 1)]
     out["stats_skirt"] = ab.build_skirt(cfg, sk, margin=3.0, keep_clear=keep)
     if dress_all:
         dmg = {k: MB() for k in ("Shell", "Details", "Interior")}

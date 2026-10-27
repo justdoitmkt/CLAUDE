@@ -1,0 +1,30 @@
+{
+ "tris": 742152,
+ "stats": {
+  "joints": 28,
+  "openings": 63,
+  "interior_doors": 5,
+  "balconies": 9,
+  "roof": {
+   "downpipes": 4,
+   "dormers": 3
+  },
+  "services": {
+   "ac_split_outdoor": 3,
+   "ac_box_old": 2,
+   "laundry_line": 3,
+   "satellite_dish": 2,
+   "light_fixture": 4,
+   "mailboxes": 2,
+   "meter_box": 2,
+   "cable_bundle": 1,
+   "conduit": 1,
+   "extinguisher_cabinet": 2,
+   "tv_antenna": 2
+  },
+  "damage": {
+   "rubble_pile": 4,
+   "chunk": 21
+  }
+ }
+}
