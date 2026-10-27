@@ -1,8 +1,8 @@
 {
  "id": "APT_A_5p",
  "glb": "export/APT_A_5p.glb",
- "size_mb": 66.12,
- "tris_glb": 829779,
+ "size_mb": 66.93,
+ "tris_glb": 821362,
  "objects": 7,
  "materials": [
   "APT_A_5p_skirt",
@@ -22,7 +22,7 @@
  ],
  "n_materials": 14,
  "images": 17,
- "texture_mem_mb": 204.8,
+ "texture_mem_mb": 220.8,
  "bbox_min": [
   -10.425,
   -8.625,
