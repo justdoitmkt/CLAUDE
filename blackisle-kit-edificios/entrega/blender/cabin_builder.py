@@ -310,6 +310,33 @@ def build_cabin(bid, collection_root=None, dress_all=True):
                 for (a, b) in (((-w / 2 - 0.03, yf - 0.035), (w / 2 + 0.03, yf - 0.005)), ((-w / 2 - 0.03, d / 2 + 0.005), (w / 2 + 0.03, d / 2 + 0.035)),
                                ((-w / 2 - 0.035, yf), (-w / 2 - 0.005, d / 2)), ((w / 2 + 0.005, yf), (w / 2 + 0.035, d / 2))):
                     shell.box((a[0], a[1], zl - 0.12), (b[0], b[1], zl + 0.06), "wood_dark" if bid == "CAB_1_tablones" else "wood_grey", bevel=0.005, seg=1)
+    # ---------------- esquineros (y sillares en la PB de ladrillo) ----------------
+    # los testeros van entre las caras interiores de frente y fondo: sin esquinero quedaría una rendija por la que se ve el interior
+    trim_mat = "wood_dark" if bid == "CAB_1_tablones" else "wood_grey"
+    for sx in (-1, 1):
+        for (yc, sy) in ((yf, -1), (d / 2, 1)):
+            xo = sx * w / 2
+            for lv in range(nl):
+                zl, zh = z0 + lv * fh, z0 + (lv + 1) * fh
+                if lv == 0 and cfg.get("ground") == "brick":
+                    k = 0
+                    z = zl
+                    while z < zh - 0.05:                                  # sillares alternos de 0,28 de alto
+                        hq = min(0.28, zh - z)
+                        lq = 0.42 if k % 2 == 0 else 0.26
+                        shell.box((min(xo, xo + sx * 0.035), min(yc, yc - sy * lq), z + 0.005),
+                                  (max(xo, xo + sx * 0.035), max(yc, yc - sy * lq), z + hq - 0.005), "concrete", bevel=0.012, seg=1)
+                        lq2 = 0.26 if k % 2 == 0 else 0.42
+                        shell.box((min(xo, xo - sx * lq2), min(yc, yc + sy * 0.035), z + 0.005),
+                                  (max(xo, xo - sx * lq2), max(yc, yc + sy * 0.035), z + hq - 0.005), "concrete", bevel=0.012, seg=1)
+                        z += 0.28
+                        k += 1
+                    continue
+                # tabla en la cara del testero (cubre el canto del muro de frente/fondo) y tabla en la cara de frente/fondo
+                shell.box((min(xo, xo + sx * 0.026), min(yc + sy * 0.026, yc - sy * (t + 0.12)), zl),
+                          (max(xo, xo + sx * 0.026), max(yc + sy * 0.026, yc - sy * (t + 0.12)), zh), trim_mat, bevel=0.004, seg=1)
+                shell.box((min(xo + sx * 0.026, xo - sx * 0.15), min(yc, yc + sy * 0.026), zl),
+                          (max(xo + sx * 0.026, xo - sx * 0.15), max(yc, yc + sy * 0.026), zh), trim_mat, bevel=0.004, seg=1)
     # ---------------- entrepiso ----------------
     if nl > 1:
         z1 = z0 + fh

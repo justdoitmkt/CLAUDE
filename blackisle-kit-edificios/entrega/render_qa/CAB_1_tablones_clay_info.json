@@ -1,0 +1,12 @@
+{
+ "tris": 307243,
+ "stats": {
+  "stair_N": 16,
+  "interior_doors": 1,
+  "openings": 15,
+  "porch": {
+   "posts": 3
+  },
+  "tufts": 320
+ }
+}
