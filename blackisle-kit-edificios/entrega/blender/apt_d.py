@@ -30,6 +30,8 @@ TW = 0.30                 # muro de panel
 FO = TW / 2               # la cara exterior va 0,15 fuera de la línea de módulo
 PITCH, OVH = 28.0, 0.5
 STAIR_W, STAIR_LANDING, STAIR_GOING = 1.1, 1.1, 0.27
+STAIR_GAP = 0.275
+AC_HOLES = {("front", 2): 6, ("back", 2): 5}   # (fachada, nivel) → índice de la ventana bajo la que entra un equipo viejo
 DORMERS = (-5.4, 0.0, 5.4)
 
 
@@ -38,9 +40,9 @@ def cfg_apt_d():
     ys = [-4.05, -1.35, 1.35, 4.05]
     h = [3.0, 2.9, 2.9, 2.9]
     L = 8 * STAIR_GOING + STAIR_LANDING + 0.003
-    sw = 2 * STAIR_W + 0.10
+    sw = 2 * STAIR_W + STAIR_GAP                # de la cara de la partición (±5,475) a la cara interior del testero (±7,95)
     y0 = -0.9
-    stairs = [dict(x0=-5.5 - sw, y0=y0, w=sw, l=L, origin=(-5.5, y0)), dict(x0=7.8 - sw, y0=y0, w=sw, l=L, origin=(7.8, y0))]
+    stairs = [dict(x0=-5.475 - sw, y0=y0, w=sw, l=L, origin=(-5.475, y0)), dict(x0=7.95 - sw, y0=y0, w=sw, l=L, origin=(7.95, y0))]
     holes = {k: [(s["x0"], s["x0"] + s["w"], s["y0"], s["y0"] + s["l"]) for s in stairs] for k in (1, 2, 3)}
     return dict(id="APT_D_4p", xs=xs, ys=ys, h=h, cells=set(), stair=stairs[0], stairs=stairs, stair_levels=set(), holes=holes,
                 slab_rects=[(xs[0], xs[-1], ys[0], ys[-1], (0.12, 0.12, 0.12, 0.12))], seed=41, loggia_depth=0.0,
@@ -78,6 +80,10 @@ def facade_wall(cfg, mb, side, lv, ops_by_bay, P):
         u_a, u_b = max(u_a, 0.0), min(u_b, L)
         for kind, (o0, o1, v0, v1) in ac.layout_openings(kinds, u_b - u_a, H - 0.25):
             ops.append((kind, (round(u_a + o0, 4), round(u_a + o1, 4), v0, v1)))
+    if (side, lv) in AC_HOLES:
+        _, (o0, o1, v0, _v1) = ops[AC_HOLES[(side, lv)]]
+        uc = 0.5 * (o0 + o1)
+        ops.append(("ac_box", (round(uc - 0.333, 4), round(uc + 0.333, 4), round(v0 - 0.596, 4), round(v0 - 0.15, 4))))
     m = ac.panel_matrix(side, a0, a1, face, z0)
     wall_with_openings(mb, L, H, TW, [o for _, o in ops], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
     p = dict(side=side, line=0, bay=-1, level=lv, a0=a0, a1=a1, L=L, z0=z0, H=H, face=face, recess=0.0, m=m, ops=ops, tag="panel")
@@ -125,8 +131,8 @@ FRONT = {0: {0: [("window", 0.5)], 1: [("lobby_door", 0.5)], 2: [("window", 0.5)
                 3: [("window_narrow", 0.22), ("door_balcony", 0.7)], 4: [("window", 0.5)], 5: [("window_small", 0.5)]}}
 BACK = {0: {0: [("window_small", 0.5)], 1: [("door_service", 0.5)], 2: [("window", 0.5)], 3: [("window", 0.5)],
             4: [("door_service", 0.5)], 5: [("window_small", 0.5)]},
-        "up": {0: [("window_stair", 0.5)], 1: [("door_balcony", 0.3), ("window_narrow", 0.78)], 2: [("window", 0.5)],
-               3: [("window", 0.5)], 4: [("window", 0.5)], 5: [("window_stair", 0.5)]}}
+        "up": {0: [("window_small", 0.5)], 1: [("door_balcony", 0.3), ("window_narrow", 0.78)], 2: [("window", 0.5)],
+               3: [("window", 0.5)], 4: [("window", 0.5)], 5: [("window_small", 0.5)]}}
 ac.OPENING.setdefault("lobby_door", (1.4, 2.3, 0.0))
 ac.OPENING.setdefault("vent_sq", (0.2, 0.2, 1.0))
 
@@ -141,7 +147,21 @@ def build_walls(cfg, shell):
     return P
 
 
-def build_joints(cfg, shell):
+def _minus(a, b, holes):
+    """Tramos de [a, b] fuera de los intervalos holes."""
+    segs, cur = [], a
+    for h0, h1 in sorted(holes):
+        if h1 <= cur or h0 >= b:
+            continue
+        if h0 > cur:
+            segs.append((cur, h0))
+        cur = max(cur, h1)
+    if cur < b:
+        segs.append((cur, b))
+    return segs
+
+
+def build_joints(cfg, shell, P):
     """Cordones de sellado de las juntas de panel (verticales en cada módulo, horizontales en cada losa) y zócalo corrido."""
     xs, ys = cfg["xs"], cfg["ys"]
     zl = level_z(cfg)
@@ -153,13 +173,21 @@ def build_joints(cfg, shell):
             y0, y1 = sorted((face, face + sgn * jp))
             shell.box((x - jw / 2, y0, 0.5), (x + jw / 2, y1, top), "mortar")
             n += 1
-        for z in zl[1:-1] + [zl[0] + 0.45]:
+        p0 = next(p for p in P if p["side"] == side and p["level"] == 0)
+        to_x = (lambda u: p0["a0"] + u) if side == "front" else (lambda u: p0["a1"] - u)
+        doors = [tuple(sorted((to_x(o[0]), to_x(o[1])))) for k, o in p0["ops"] if "door" in k]
+        for z in zl[1:-1]:
             y0, y1 = sorted((face, face + sgn * jp))
             shell.box((coords[0] - FO, y0, z - jw / 2), (coords[-1] + FO, y1, z + jw / 2), "mortar")
             n += 1
-        # zócalo
+        y0, y1 = sorted((face, face + sgn * jp))
+        for a, b in _minus(coords[0] - FO, coords[-1] + FO, doors):                  # junta de PB, cortada en las puertas
+            shell.box((a, y0, zl[0] + 0.45 - jw / 2), (b, y1, zl[0] + 0.45 + jw / 2), "mortar")
+            n += 1
+        # zócalo (no pasa por las puertas: el umbral queda al nivel del escalón de llegada)
         y0, y1 = sorted((face, face + sgn * 0.03))
-        shell.box((coords[0] - FO - 0.03, y0, -0.05), (coords[-1] + FO + 0.03, y1, 0.5), "concrete", bevel=0.008, seg=1)
+        for a, b in _minus(coords[0] - FO - 0.03, coords[-1] + FO + 0.03, doors):
+            shell.box((a, y0, -0.05), (b, y1, 0.5), "concrete", bevel=0.008, seg=1)
     for side, face, sgn in (("west", xs[0] - FO, -1), ("east", xs[-1] + FO, 1)):
         for y in ys[1:-1]:
             x0, x1 = sorted((face, face + sgn * jp))
@@ -204,16 +232,18 @@ def build_interior(cfg, mb, out):
                 partition(mb, (xc, yi0), (xc, yi1), z0, H, t=0.15, doors=[(-2.3, 1.4)], out=out, tag="open")   # vestíbulo | escalera
                 partition(mb, (sg * 3.2, yi0), (sg * 3.2, yi1), z0, H, doors=[(0.0, 0.9)], out=out)             # vestíbulo | cuarto
                 continue
-            partition(mb, (xc, yi0), (xc, yi1), z0, H, t=0.15, doors=[(-1.25, 0.9)], out=out, tag="entry")
-            # depto: frente y-3,9..-1,6 · vestíbulo -1,6..0,6 · fondo 0,6..3,9
+            partition(mb, (xc, yi0), (xc, yi1), z0, H, t=0.15, doors=[(-1.4, 0.9)], out=out, tag="entry")
+            # depto: frente y-3,9..-1,9 · vestíbulo -1,9..0,6 · fondo 0,6..3,9
             xa, xb = sg * 5.325, sg * 0.075
             lo, hi = min(xa, xb), max(xa, xb)
-            partition(mb, (lo, -1.6), (hi, -1.6), z0, H, doors=[(sg * 4.0, 0.8), (sg * 1.35, 0.8)], out=out)
+            partition(mb, (lo, -1.9), (hi, -1.9), z0, H, doors=[(sg * 4.0, 0.8), (sg * 2.05, 0.8)], out=out)   # libre del muro del baño
             partition(mb, (lo, 0.6), (hi, 0.6), z0, H, doors=[(sg * 4.0, 0.8), (sg * 1.9, 0.8)], out=out)
-            partition(mb, (sg * 2.7, yi0), (sg * 2.7, -1.6), z0, H)
+            partition(mb, (sg * 2.7, yi0), (sg * 2.7, -1.9), z0, H)
             partition(mb, (sg * 2.7, 0.6), (sg * 2.7, yi1), z0, H)
-            partition(mb, (sg * 1.4, -1.6), (sg * 1.4, 0.6), z0, H, doors=[(-0.5, 0.7)], out=out)                 # baño
+            partition(mb, (sg * 1.4, -1.9), (sg * 1.4, 0.6), z0, H, doors=[(-0.5, 0.7)], out=out)                 # baño
         partition(mb, (0.0, yi0), (0.0, yi1), z0, H, t=0.15)                                                       # medianera
+        for sg in (-1, 1):                         # cierre del núcleo tras el descanso: sin caída a la bodega trasera
+            partition(mb, (sg * 7.95, 2.443), (sg * 5.475, 2.443), z0, H, t=0.10)
     return mb
 
 
@@ -369,31 +399,35 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         o = p["ops"][kind_idx][1]
         return (o[0] + o[1]) / 2, o
     # A/C bajo ventanas: frente lejano, trasera
-    for side, lv, k, kind in (("front", 1, 1, "split_outdoor"), ("front", 2, 5, "box_old"), ("back", 1, 3, "split_outdoor"),
-                              ("back", 3, 4, "split_outdoor"), ("back", 2, 2, "box_old")):
+    for side, lv, k, kind in (("front", 1, 1, "split_outdoor"), ("front", 2, -1, "box_old"), ("back", 1, 3, "split_outdoor"),
+                              ("back", 3, 4, "split_outdoor"), ("back", 2, -1, "box_old")):
         p = wall(side, lv)
-        u, o = op_mid(p, k)
-        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=far), p["m"] @ _T(u, 0, o[2] - 0.6))
+        u, o = op_mid(p, k)                       # box_old: el último vano del panel es su hueco (AC_HOLES)
+        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=far), p["m"] @ _T(u, 0, o[2] if kind == "box_old" else o[2] - 0.6))
     # parabólicas en los balcones y tendederos
     for lv in (1, 2, 3):
         xc = 0.5 * (xs[2] + xs[3])
-        add("laundry_line", sv.laundry_line(length=2.0, seed=int(r.integers(1e6)), detail=near if lv == 1 else far),
-            _T(xc - 1.0, ys[0] - FO - 0.6, zl[lv] + 1.9))
+        posts = MB()                              # dos postes de tubo sobre los barandales laterales del balcón
+        for x in (xc - 1.08, xc + 1.08):
+            posts.box((x - 0.02, ys[0] - FO - 0.62, zl[lv]), (x + 0.02, ys[0] - FO - 0.58, zl[lv] + 2.05), "metal_rust", bevel=0.004, seg=1)
+        add("laundry_post", posts, Matrix())
+        add("laundry_line", sv.laundry_line(length=2.12, seed=int(r.integers(1e6)), detail=near if lv == 1 else far),
+            _T(xc - 1.06, ys[0] - FO - 0.6, zl[lv] + 1.9))
     for lv in (2, 3):
-        add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far), _T(0.5 * (xs[3] + xs[4]) + 0.9, ys[0] - FO, zl[lv] + 1.7))
+        add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far), _T(0.5 * (xs[3] + xs[4]) - 0.16, ys[0] - FO, zl[lv] + 1.7))   # sobre el machón entre ventana y puerta
     # accesos: arbotantes, medidores, buzones
     for sg in (-1, 1):
         x = sg * 4.05                                   # centro del módulo 1 / 4 = eje de las puertas de PB
-        add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=near), _T(x + 1.1, ys[0] - FO, zl[0] + 2.65))
+        add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=near), _T(x + 1.25, ys[0] - FO, zl[0] + 2.65))
         add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=far),
             _T(x - 0.95, ys[-1] + FO, zl[0] + 2.45) @ ac._rot_z(180))
         add("mailboxes", sv.mailboxes(n=6, seed=int(r.integers(1e6)), detail=near),
             _T(sg * (3.2 + 0.051), -1.2, zl[0] + 1.05) @ ac._rot_z(-90 if sg < 0 else 90), inter)
-    for i, x in enumerate((-2.0, -1.55)):
+    for i, x in enumerate((-3.05, -2.55)):              # machón entre la puerta del vestíbulo y la ventana
         add("meter_box", sv.meter_box(seed=int(r.integers(1e6)), open_door=bool(i), detail=near), _T(x, ys[0] - FO, 1.2))
-    add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.01, zl[1] - 0.3), (-2.4, ys[0] - FO - 0.01, zl[1] - 0.25)], n=3, sag=0.2,
+    add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.03, zl[1] + 0.15), (-2.45, ys[0] - FO - 0.03, zl[1] + 0.15)], n=3, sag=0.2,
                                         seed=int(r.integers(1e6)), detail=near), Matrix())
-    add("conduit", sv.conduit([(0, 0, 1.7), (0, 0, 2.8)], seed=int(r.integers(1e6)), detail=near), _T(-1.75, ys[0] - FO, 0.0))
+    add("conduit", sv.conduit([(0, 0, 1.7), (0, 0, zl[1] + 0.12)], seed=int(r.integers(1e6)), detail=near), _T(-2.45, ys[0] - FO, 0.0))
     for lv in (1, 3):
         add("extinguisher_cabinet", sv.extinguisher_cabinet(seed=int(r.integers(1e6)), detail=near),
             _T(-5.4 - 0.075 - 0.001, -2.9, zl[lv] + 1.05) @ ac._rot_z(-90), inter)
@@ -440,7 +474,7 @@ def build_apt_d(collection_root=None, dress_all=True):
     shell, det, inter, sk = MB(), MB(), MB(), MB()
     ab.build_frame(cfg, shell)                       # solo losas (sin columnas ni vigas a la vista)
     P = build_walls(cfg, shell)
-    stats = dict(joints=build_joints(cfg, shell))
+    stats = dict(joints=build_joints(cfg, shell, P))
     zl = level_z(cfg)
     for sg in (-1, 1):
         x = sg * 4.05
@@ -455,7 +489,8 @@ def build_apt_d(collection_root=None, dress_all=True):
         stats["interior_doors"] = ab.dress_interior_doors(cfg, doors, inter)
         for k, st in enumerate(cfg["stairs"]):
             c2 = dict(cfg, seed=cfg["seed"] + 13 * k)
-            ac.stair_core(c2, inter, st["origin"], "+y", STAIR_W, STAIR_LANDING, levels=[0, 1, 2], going=STAIR_GOING, limit=(st["l"], st["w"]))
+            ac.stair_core(c2, inter, st["origin"], "+y", STAIR_W, STAIR_LANDING, levels=[0, 1, 2], gap=STAIR_GAP, going=STAIR_GOING,
+                          limit=(st["l"], st["w"]))
             ac.rail_along(inter, "tube_metal", (st["origin"][0] - STAIR_W, st["y0"]), (st["origin"][0], st["y0"]), zl[3], "+y",
                           seed=cfg["seed"] + 5 + k, missing=0.15)
         stats["balconies"] = build_balconies(cfg, shell, det)
