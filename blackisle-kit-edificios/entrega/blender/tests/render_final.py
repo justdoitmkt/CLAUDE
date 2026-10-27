@@ -25,10 +25,10 @@ mx = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)
 ctr = (mn + mx) / 2
 front_y = mn.y + 3.0                       # la base (arena) sobresale 3 m: la fachada está ~3 m dentro de la caja
 shots = {
-    "50m_sol45": dict(azim=-32, elev=14, dist=58.0, target=Vector((ctr.x, ctr.y, ctr.z * 0.55)), fov=40, sun_elev=45, sun_azim=40),
+    "50m_sol45": dict(azim=-32, elev=14, dist=58.0, target=Vector((ctr.x, ctr.y, ctr.z)), fov=46, sun_elev=45, sun_azim=40),
     "15m_sol45": dict(azim=-25, elev=4, dist=15.0, target=Vector((ctr.x - 1.0, front_y, 4.0)), fov=70, sun_elev=45, sun_azim=40),
     "2m_pb": dict(azim=-10, elev=2, dist=2.2, target=Vector((ctr.x - 3.0, front_y, 1.5)), fov=70, sun_elev=45, sun_azim=40),
-    "50m_nublado": dict(azim=145, elev=14, dist=58.0, target=Vector((ctr.x, ctr.y, ctr.z * 0.55)), fov=40, sun_elev=80, sun_azim=0,
+    "50m_nublado": dict(azim=145, elev=14, dist=58.0, target=Vector((ctr.x, ctr.y, ctr.z)), fov=46, sun_elev=80, sun_azim=0,
                         sun_energy=0.4, sky=1.1),
 }
 only = argv[argv.index("--only") + 1].split(",") if "--only" in argv else list(shots)
