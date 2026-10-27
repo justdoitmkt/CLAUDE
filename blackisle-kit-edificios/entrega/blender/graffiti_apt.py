@@ -35,8 +35,9 @@ HEROES = {
         "east": [dict(png=c("C04_por_vida.png"), w=1.5), dict(png=c("S03_nova.png"), w=1.8)],
     },
     "APT_D_4p": {
-        "front": [dict(png=c("C08_puro_corazon.png"), w=1.9), dict(png=c("S01_kaos.png"), w=2.2, rot=-2), dict(png=c("C03_con_safos.png"), w=1.7)],
-        "back": [dict(png=c("S02_zoro.png"), w=2.4), dict(png=c("C05_familia.png"), w=1.8, rot=3)],
+        # PB de paneles con un vano por módulo: las piezas van bajo los antepechos (0,9 m) y entre vanos
+        "front": [dict(png=c("S01_kaos.png"), w=1.25, rot=-2), dict(png=c("C08_puro_corazon.png"), w=1.1), dict(png=c("C03_con_safos.png"), w=1.2)],
+        "back": [dict(png=c("S02_zoro.png"), w=1.5), dict(png=c("C05_familia.png"), w=1.2, rot=3)],
         "west": [dict(png=c("S04_rexo.png"), w=1.8)],
         "east": [dict(png=c("C07_sin_miedo.png"), w=2.0), dict(png=c("S03_nova.png"), w=1.6)],
     },

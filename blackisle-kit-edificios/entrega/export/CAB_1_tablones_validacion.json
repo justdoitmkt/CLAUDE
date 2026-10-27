@@ -1,0 +1,52 @@
+{
+ "id": "CAB_1_tablones",
+ "glb": "export/CAB_1_tablones.glb",
+ "size_mb": 25.18,
+ "tris_glb": 311881,
+ "objects": 7,
+ "materials": [
+  "CAB_1_tablones_skirt",
+  "CAB_1_tablones_t_concrete",
+  "CAB_1_tablones_t_liso",
+  "CAB_1_tablones_t_liso_2c",
+  "CAB_1_tablones_t_metal_paint",
+  "CAB_1_tablones_t_metal_rust",
+  "CAB_1_tablones_t_roof_metal",
+  "CAB_1_tablones_t_wood",
+  "CAB_1_tablones_t_wood_dark",
+  "CAB_1_tablones_t_wood_grey",
+  "CAB_1_tablones_walls_main",
+  "CAB_1_tablones_walls_rest"
+ ],
+ "n_materials": 12,
+ "images": 15,
+ "texture_mem_mb": 119.7,
+ "bbox_min": [
+  -7.725,
+  -6.225,
+  -0.1
+ ],
+ "bbox_max": [
+  7.725,
+  6.225,
+  8.966
+ ],
+ "dims_m": [
+  15.45,
+  12.45,
+  9.066
+ ],
+ "base_z": -0.1,
+ "center_xy": [
+  0.0,
+  0.0
+ ],
+ "meshes_without_uv": [],
+ "checks": {
+  "tris_ge_100k": true,
+  "size_le_100mb": true,
+  "base_on_ground": true,
+  "materials_le_14": true,
+  "all_have_uv": true
+ }
+}

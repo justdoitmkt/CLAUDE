@@ -85,7 +85,7 @@ def dress_ops(det, M, ops, t, r):
             k = "shutter" if r.random() < 0.6 else ("boarded" if r.random() < 0.3 else "casement")
             det.join(op.window(k, w, h, t, seed=s, broken=float(r.uniform(0.5, 1.0)), curtain=r.random() < 0.35), Mi)
         elif kind == "door":
-            det.join(op.door("plank", w, h, t, seed=s, open_angle=float(r.uniform(10, 70))), Mi)
+            det.join(op.door("plank", w, h, t, seed=s, open_angle=max(60.0, float(r.uniform(10, 70)))), Mi)
         else:
             continue
         n += 1
@@ -376,7 +376,7 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     n_id = 0
     for dd in idoors:
         if r.random() < 0.35:
-            inter.join(op.door("plank", dd["w"], dd["h"], dd["t"], seed=int(r.integers(1e6)), open_angle=float(r.uniform(0, 90))),
+            inter.join(op.door("plank", dd["w"], dd["h"], dd["t"], seed=int(r.integers(1e6)), open_angle=max(80.0, float(r.uniform(0, 90)))),
                        dd["m"] @ T(dd["u0"], 0, 0))
             n_id += 1
     stats["interior_doors"] = n_id
@@ -452,7 +452,7 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if cfg["base"] == "stilts":
         acfg["footprint"] = [(-w / 2 + 0.12 + dx - 0.3, -w / 2 + 0.12 + dx + 0.3, y - 0.3, y + 0.3) for dx in (0, w / 3 - 0.12, 2 * w / 3 - 0.12, w - 0.24)
                              for y in (-d / 2 + 0.12, 0.0, d / 2 - 0.12)]
-    stats["tufts"] = ab.build_skirt(acfg, sk, margin=3.0, keep_clear=((-1.0, -d / 2 - 3.0, 1.0, -d / 2),))
+    stats["tufts"] = ab.build_skirt(acfg, sk, margin=3.0, keep_clear=((-1.0, -d / 2 - 3.0, 1.0, -d / 2),), inset=0.05)
     for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Skirt", sk)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))

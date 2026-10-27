@@ -19,7 +19,7 @@ from kit.common import rng, wall_with_openings
 OPENING = dict(ab.OPENING)
 OPENING.update({
     # tipo: (ancho, alto, antepecho)
-    "door_apt": (0.9, 2.1, 0.0), "hall_door": (1.2, 2.2, 0.0), "portico": (1.8, 2.4, 0.0),
+    "door_apt": (0.9, 2.1, 0.0), "door_service_n": (0.85, 2.1, 0.0), "hall_door": (1.2, 2.2, 0.0), "portico": (1.8, 2.4, 0.0),
     "window_narrow": (0.8, 1.6, 0.6), "window_wide": (2.0, 1.3, 0.9), "window_stair": (1.0, 0.6, 1.75),
     "door_balcony": (1.0, 2.1, 0.0), "gallery_end": None, "solid": None, "open": None,
 })
@@ -117,12 +117,12 @@ def dress_panel(p, details, interior, r, primary=False, depth=INFILL):
         elif kind == "loggia":
             details.join(op.window("sliding", w, h, depth, seed=seed, broken=float(r.uniform(0.5, 1.0)), curtain=True, sill=False), M)
         elif kind in ("lobby", "portico", "lobby_door"):
-            details.join(op.door("double_glazed", w, h, depth, seed=seed, open_angle=float(r.uniform(15, 70))), M)
-        elif kind in ("door_rear", "door_service", "hall_door"):
-            details.join(op.door("metal", w, h, depth, seed=seed, open_angle=float(r.uniform(0, 80))), M)
+            details.join(op.door("double_glazed", w, h, depth, seed=seed, open_angle=max(58.0, float(r.uniform(15, 70)))), M)   # tope de la barra de empuje ~60°
+        elif kind in ("door_rear", "door_service", "door_service_n", "hall_door"):
+            details.join(op.door("metal", w, h, depth, seed=seed, open_angle=max(75.0, float(r.uniform(0, 80)))), M)
         elif kind in ("door_apt", "door_balcony"):
             if r.random() < 0.7:          # muchas hojas arrancadas: queda el vano
-                details.join(op.door("flush", w, h, depth, seed=seed, open_angle=float(r.uniform(0, 95))), M)
+                details.join(op.door("flush", w, h, depth, seed=seed, open_angle=max(80.0, float(r.uniform(0, 95)))), M)
         elif kind == "shutter":
             details.join(op.rolling_shutter(w, h, seed=seed, dent=float(r.uniform(0.4, 0.9)),
                                             open_frac=float(r.choice([0.0, 0.0, 0.35]))), M)

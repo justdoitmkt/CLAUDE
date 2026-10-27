@@ -359,6 +359,15 @@ def main():
     # la base: el terreno de arena va a su propio atlas; hierba, escombro y varillas pasan al grupo de detalles
     sand_idx = [i for i, m in enumerate(skirt.data.materials) if m and m.name.split(".")[0] == "sand"]
     sand_o, loose_o = _split_by_material(skirt, sand_idx, f"{prefix}_Sand", f"{prefix}_SkirtLoose")
+    # el terreno es un campo de alturas: el recálculo de normales de una malla abierta deja islas boca abajo, que en glTF
+    # (una sola cara) se verían como agujeros desde arriba
+    bm = bmesh.new()
+    bm.from_mesh(sand_o.data)
+    down = [f for f in bm.faces if f.normal.z < -0.05]
+    bmesh.ops.reverse_faces(bm, faces=down)
+    bm.to_mesh(sand_o.data)
+    bm.free()
+    log("arena: caras volteadas hacia arriba", len(down))
     log("split ok", round(time.time() - t0), "s")
     gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)),
                            cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,

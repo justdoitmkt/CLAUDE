@@ -27,6 +27,7 @@ from apt_builder import (BEAM_W, COL, COL_CORNER, GROUND, INFILL, RECESS, SLAB, 
 from kit.common import MB, rng  # noqa: E402
 
 STAIR_W, STAIR_LANDING = 1.0, 1.3
+STAIR_Y0 = 0.53                               # el descanso de media planta llega a 2 mm del muro trasero
 COLLAPSE = (-7.75, -1.6, -6.1, -4.35)        # planta (x0, x1, y0, y1) sin losa de azotea
 
 
@@ -39,7 +40,7 @@ def cfg_apt_b():
         zl.append(zl[-1] + hh)
     # núcleo: arranque en la esquina SE de la mitad trasera de la crujía 2 (cara de columna x 3,425; y 0,30)
     sw = 2 * STAIR_W + 0.10
-    stair = dict(x0=3.425 - sw, y0=0.30, w=sw, l=3.543, origin=(3.425, 0.30))
+    stair = dict(x0=3.425 - sw, y0=STAIR_Y0, w=sw, l=3.543, origin=(3.425, STAIR_Y0))
 
     def skip_beam(k, ax, i, j):
         if k != len(h):
@@ -72,31 +73,31 @@ def build_facades(cfg, shell):
         pan("front", 1, 3, lv, [("window", 0.32), ("door_apt", 0.78)], tag="gallery")
         pan("east", 1, 0, lv, [("door_apt", 0.5)], tag="gallery_return")   # retorno: entrada del depto oeste
     # TRASERA (fracciones medidas desde el ESTE: así se ve desde afuera) -----------------------
-    for b, kinds in enumerate(([("window_high", 0.5)], [("window_small", 0.5)], [("door_service", 0.838)], [("window_high", 0.5)])):
+    for b, kinds in enumerate(([("window_small", 0.35)], [("window_small", 0.5)], [("door_service_n", 0.84)], [("window_high", 0.5)])):
         pan("back", 3, b, 0, kinds, tag="pb")
     for lv in range(1, top + 1):
         pan("back", 3, 0, lv, [("window", 0.5)])
         pan("back", 3, 1, lv, [("window", 0.4)])
-        pan("back", 3, 2, lv, [("window_stair", 0.3), ("window_small", 0.84)])
+        pan("back", 3, 2, lv, [("window_stair", 0.3), ("window_narrow", 0.86)])
         pan("back", 3, 3, lv, [("window", 0.6)])
     # OESTE (u de norte a sur) -----------------------------------------------------------------
     pan("west", 0, 0, 0, [], tag="pb")
     pan("west", 0, 1, 0, [("window_high", 0.5)], tag="pb")
-    pan("west", 0, 2, 0, [("window_high", 0.5)], tag="pb")
+    pan("west", 0, 2, 0, [("window_high", 0.75)], tag="pb")
     for lv in range(1, top + 1):
         if lv == top:
             pan("west", 0, 0, lv, [], H=0.8, tag="broken")
         else:
             pan("west", 0, 0, lv, [("window_narrow", 0.5)])
-        pan("west", 0, 1, lv, [("window", 0.5)])
-        pan("west", 0, 2, lv, [("window_small", 0.5)])
+        pan("west", 0, 1, lv, [("window", 0.66)])
+        pan("west", 0, 2, lv, [("window_small", 0.27)])
     # ESTE (u de sur a norte); la crujía de galería queda abierta en los pisos -----------------
     pan("east", 4, 0, 0, [], tag="pb")
     pan("east", 4, 1, 0, [("window_high", 0.5)], tag="pb")
     pan("east", 4, 2, 0, [("vent", 0.3), ("window_small", 0.72)], tag="pb")
     for lv in range(1, top + 1):
         pan("east", 4, 1, lv, [("window", 0.5)])
-        pan("east", 4, 2, lv, [("window_small", 0.5)])
+        pan("east", 4, 2, lv, [("window_small", 0.72)])
     return P
 
 
@@ -131,7 +132,7 @@ def build_interior(cfg, mb, out):
         partition(mb, (xs_part, st["y0"]), (xs_part, yin1), z0, H)                     # núcleo | pasillo de servicio
         if lv == 0:
             partition(mb, (0.0, yin0), (0.0, yin1), z0, H, t=0.15)                    # locales oeste | vestíbulo
-            partition(mb, (3.6, yin0), (3.6, yin1), z0, H, t=0.15)                    # vestíbulo | local este
+            partition(mb, (3.6, yin0), (3.6, yin1), z0, H, t=0.15, doors=[(-3.0, 0.9)], out=out)   # vestíbulo | local este
             partition(mb, (xin0, -0.8), (-0.075, -0.8), z0, H, doors=[(-3.0, 1.0)], out=out)
             partition(mb, (-3.6, -0.8), (-3.6, yin1), z0, H, doors=[(1.6, 0.9)], out=out)
             partition(mb, (xin0, 2.6), (-5.6, 2.6), z0, H, doors=[(-6.4, 0.7)], out=out)
@@ -233,8 +234,8 @@ def dress_roof(cfg, roof, det):
         if hasattr(g, "meta") and "outlets" in g.meta:
             tops += [Vector(t) + Vector((0, yc, z0)) for t in g.meta["outlets"]]
     n = 0
-    yf = ys[0] - COL / 2                                  # cara frontal de las columnas de galería
-    yb = ys[-1] + (COL / 2 - RECESS)
+    yf = ys[0] - COL_CORNER / 2                           # cara frontal de las columnas de galería (la de esquina es la más saliente)
+    yb = ys[-1] + COL / 2                                 # cara exterior de las columnas traseras
     for i, t in enumerate(tops):
         if t.y < 0:
             det.join(circ.downpipe(t, Vector((t.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i))
@@ -278,10 +279,10 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         p = _p(P, "front", lv, bay, line=1)
         o = at_op(p, 0 if bay == 3 else 1)
         add("ac_split_outdoor", sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail=near), p["m"] @ _T((o[0] + o[1]) / 2, 0, 0.30))
-    yl = ys[0] + 0.55
+    yl = ys[0] + 0.10                                     # dentro del canto de la columna: las armellas entran en ella
     for lv, bay in ((1, 1), (2, 3), (3, 3)):
-        a0 = xs[bay] + COL / 2 + 0.02
-        L = 3.6 - COL - 0.04 - (0.1 if bay == 3 else 0.0)
+        a0 = xs[bay] + COL / 2
+        L = (xs[bay + 1] - ab.col_size(bay + 1, 0, cfg) / 2) - a0
         add("laundry_line", sv.laundry_line(length=L, seed=int(r.integers(1e6)), detail=near), _T(a0, yl, zl[lv] + 1.95))
     for lv, x in ((1, 0.0), (2, 3.6), (3, 0.0)):
         add("light_fixture", sv.light_fixture("bracket", seed=int(r.integers(1e6)), detail=near),

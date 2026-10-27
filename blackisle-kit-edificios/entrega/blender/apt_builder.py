@@ -67,7 +67,7 @@ def cfg_apt_a():
     # 'back' se lista de oeste a este igual que 'front'
     west = {0: ["window_high", "solid", "window_high"]}
     west.update({k: ["window", "vent", "window"] for k in (1, 2, 3, 4)})
-    east = {0: ["window_high", "vent", "window_high"]}       # PB cerrada por seguridad; la celosía arranca en el 1.er piso
+    east = {0: ["window_high", "window_high", "window_high"]}  # PB cerrada; ventana alta sobre el descanso; la celosía arranca en el 1.er piso
     east.update({k: ["window", "breeze", "window"] for k in (1, 2, 3, 4)})
     return dict(id="APT_A_5p", xs=xs, ys=ys, h=h, stair=stair, front=front, back=back, west=west, east=east,
                 loggia_depth=1.2, seed=11)
@@ -176,37 +176,47 @@ def build_frame(cfg, mb):
 PENT_H = 2.7          # casetón de escalera sobre la losa de azotea
 
 
+PENT_XW = 2.30        # cara exterior del muro oeste del casetón: deja un descanso de llegada x 2,45..3,70 como en los pisos
+
+
 def build_penthouse(cfg, mb, details=None):
     """Casetón sobre el núcleo: prolonga las 4 columnas (3.6/7.2, ±1.8), vigas perimetrales, losa de techo con pretil,
-    muros norte/sur ciegos, muro oeste con puerta metálica al ático y celosía al este (continúa la de la fachada)."""
+    muros norte/sur ciegos, muro este con ventilas. Se alarga al oeste hasta x = PENT_XW para que la escalera llegue a un
+    descanso (auditoría: antes llegaba contra el muro); el muro oeste, con la puerta metálica al ático, va en ese extremo."""
     zl = level_z(cfg)
     z0, z1 = zl[-1], zl[-1] + PENT_H
     cx, cy = (3.6, 7.2), (-1.8, 1.8)
+    xw = PENT_XW
     for x in cx:
         for y in cy:
             c = COL / 2
             mb.box((x - c, y - c, z0 - SLAB), (x + c, y + c, z1 - SLAB), "concrete", bevel=0.012, seg=2)
     for y in cy:
         mb.box((cx[0] + COL / 2, y - BEAM_W / 2, z1 - 0.40), (cx[1] - COL / 2, y + BEAM_W / 2, z1 - SLAB), "concrete", bevel=0.01, seg=1)
+        mb.box((xw + INFILL, y - BEAM_W / 2, z1 - 0.40), (cx[0] - COL / 2, y + BEAM_W / 2, z1 - SLAB), "concrete", bevel=0.01, seg=1)
     for x in cx:
         mb.box((x - BEAM_W / 2, cy[0] + COL / 2, z1 - 0.40), (x + BEAM_W / 2, cy[1] - COL / 2, z1 - SLAB), "concrete", bevel=0.01, seg=1)
     # losa de techo del casetón + pretil bajo
-    x0, x1, y0, y1 = cx[0] - COL / 2 - 0.05, cx[1] + COL / 2 + 0.05, cy[0] - COL / 2 - 0.05, cy[1] + COL / 2 + 0.05
+    x0, x1, y0, y1 = xw - 0.05, cx[1] + COL / 2 + 0.05, cy[0] - COL / 2 - 0.05, cy[1] + COL / 2 + 0.05
     mb.box((x0, y0, z1 - SLAB), (x1, y1, z1), "concrete", bevel=0.015, seg=2)
     for (a, b) in (((x0, y0), (x1, y0 + 0.12)), ((x0, y1 - 0.12), (x1, y1)), ((x0, y0 + 0.12), (x0 + 0.12, y1 - 0.12)), ((x1 - 0.12, y0 + 0.12), (x1, y1 - 0.12))):
         mb.box((a[0], a[1], z1), (b[0], b[1], z1 + 0.35), "concrete", bevel=0.01, seg=1)
     H = PENT_H - 0.40
-    # muros norte y sur (ciegos)
+    # muros norte y sur (ciegos), tramo entre columnas + prolongación hasta el muro oeste
     for sg, y in ((-1, cy[0]), (1, cy[1])):
         face = y + sg * (COL / 2 - RECESS)
         m = m_wall_x(cx[0] + COL / 2, face, z0, +1) if sg < 0 else m_wall_x(cx[1] - COL / 2, face, z0, -1)
         wall_with_openings(mb, (cx[1] - cx[0]) - COL, H, INFILL, [], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
+        Le = (cx[0] - COL / 2) - (xw + INFILL)
+        m = m_wall_x(xw + INFILL, face, z0, +1) if sg < 0 else m_wall_x(cx[0] - COL / 2, face, z0, -1)
+        wall_with_openings(mb, Le, H + 0.2, INFILL, [], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
     # muro oeste con puerta al ático (se viste en dress)
-    L = (cy[1] - cy[0]) - COL
-    mw = m_wall_y(cy[1] - COL / 2, cx[0] - (COL / 2 - RECESS), z0, +1)
-    door = (round((L - 0.9) / 2, 4), round((L + 0.9) / 2, 4), 0.0, 2.05)
-    wall_with_openings(mb, L, H, INFILL, [door], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=mw)
+    Lw = (cy[1] - cy[0]) + 2 * (COL / 2 - RECESS)
+    mw = m_wall_y(cy[1] + (COL / 2 - RECESS), xw, z0, +1)
+    door = (round((Lw - 0.9) / 2, 4), round((Lw + 0.9) / 2, 4), 0.0, 2.05)
+    wall_with_openings(mb, Lw, H + 0.2, INFILL, [door], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=mw)
     # muro este: jambas + vano de celosía (como la fachada)
+    L = (cy[1] - cy[0]) - COL
     me = m_wall_y(cy[0] + COL / 2, cx[1] + (COL / 2 - RECESS), z0, -1)
     vents = [(round(L / 2 - 0.9, 4), round(L / 2 - 0.3, 4), 1.5, 2.0), (round(L / 2 + 0.3, 4), round(L / 2 + 0.9, 4), 1.5, 2.0)]
     wall_with_openings(mb, L, H, INFILL, vents, mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=me)
@@ -356,7 +366,7 @@ def build_interior_apt_a(cfg, mb, out=None):
             partition(mb, (xh, sg * wy), (3.625, sg * wy), z0, H, t=0.15)                  # vestíbulo de escalera
             partition(mb, (0.0, yo), (0.0, yc), z0, H)                                       # medianera A1|A2
             # A1/A3: estancia x -3.6..0 · recámara x xin0..-3.6 (lado fachada) · cocina x -5.4..-3.6 y baño x xin0..-5.4 (lado corredor)
-            partition(mb, (-3.6, yo), (-3.6, yc), z0, H, doors=[(sg * 3.8, 0.8), (sg * 1.6, 0.8)], out=out)
+            partition(mb, (-3.6, yo), (-3.6, yc), z0, H, doors=[(sg * 3.8, 0.8), (sg * 1.2, 0.8)], out=out)
             partition(mb, (xin0, sg * 2.4), (-3.6, sg * 2.4), z0, H)
             partition(mb, (-5.4, sg * 2.4), (-5.4, yc), z0, H, doors=[(sg * 1.6, 0.7)], out=out)
             # A2/A4: estancia x 0..3.6 · recámara de esquina x 3.6..xin1 · cocina-acceso x 1.2..2.4 y baño x 0..1.2 (lado corredor)
@@ -410,12 +420,11 @@ def dress_openings(cfg, placed, details, interior):
                 if r.random() < 0.6:
                     details.join(op.security_grille(w, h, seed=seed + 1), M)
             elif kind == "loggia":
-                details.join(op.window("sliding", w, h, INFILL, seed=seed, broken=float(r.uniform(0.5, 1.0)), curtain=True,
-                                       sill=False), M)
+                details.join(op.door("double_glazed", w, h, INFILL, seed=seed, open_angle=max(58.0, float(r.uniform(15, 70)))), M)
             elif kind == "lobby":
-                details.join(op.door("double_glazed", w, h, INFILL, seed=seed, open_angle=float(r.uniform(15, 70))), M)
+                details.join(op.door("double_glazed", w, h, INFILL, seed=seed, open_angle=max(58.0, float(r.uniform(15, 70)))), M)
             elif kind in ("door_rear", "door_service"):
-                details.join(op.door("metal", w, h, INFILL, seed=seed, open_angle=float(r.uniform(0, 80))), M)
+                details.join(op.door("metal", w, h, INFILL, seed=seed, open_angle=max(75.0, float(r.uniform(0, 80)))), M)
             elif kind == "shutter":
                 details.join(op.rolling_shutter(w, h, seed=seed, dent=float(r.uniform(0.4, 0.9)),
                                                 open_frac=float(r.choice([0.0, 0.0, 0.35]))), M)
@@ -440,7 +449,7 @@ def dress_interior_doors(cfg, doors, interior):
         if r.random() > keep:
             continue
         M = d["m"] @ _T(d["u0"], 0, 0)
-        interior.join(op.door("flush", d["w"], d["h"], d["t"], seed=int(r.integers(0, 10**6)), open_angle=float(r.uniform(0, 95))), M)
+        interior.join(op.door("flush", d["w"], d["h"], d["t"], seed=int(r.integers(0, 10**6)), open_angle=max(80.0, float(r.uniform(0, 95)))), M)   # nunca casi cerrada: se debe poder pasar
         n += 1
     return n
 
@@ -459,12 +468,14 @@ def dress_stairs(cfg, interior):
         fp = circ.stair_u_footprint(**{k: kw[k] for k in ("width", "floor_h", "landing_depth", "gap")}, going=kw.get("going", 0.28))
         assert fp["L"] <= st["w"] + 0.003 and fp["W"] <= st["l"] + 0.003, fp
         interior.join(circ.stair_u(**kw), _T(st["x0"], st["y0"], zl[lv]))
+    # en la losa de azotea el hueco del primer tramo queda abierto: barandal de remate (exterior = +X, el lado del hueco)
+    interior.join(circ.railing("tube_metal", 1.4, h=1.0, seed=cfg["seed"] + 9, missing=0.1), _T(st["x0"] + 0.03, st["y0"], zl[-1]) @ ROT_Z90)
 
 
 def dress_penthouse(cfg, pent, details):
     from kit import openings as op
     mw, d = pent["door"]
-    details.join(op.door("metal", d[1] - d[0], d[3] - d[2], INFILL, seed=cfg["seed"] + 77, open_angle=35), mw @ _T(d[0], 0, d[2]))
+    details.join(op.door("metal", d[1] - d[0], d[3] - d[2], INFILL, seed=cfg["seed"] + 77, open_angle=82), mw @ _T(d[0], 0, d[2]))
     me, vents = pent["vents"]
     for i, v in enumerate(vents):
         details.join(op.window("casement", v[1] - v[0], v[3] - v[2], INFILL, seed=cfg["seed"] + 79 + i, broken=1.0, curtain=False),
@@ -474,7 +485,7 @@ def dress_penthouse(cfg, pent, details):
 # ----------------------------------------------------------------------------------------------
 # base y entorno inmediato: arena acumulada + hierba seca
 # ----------------------------------------------------------------------------------------------
-def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
+def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15):
     """Terreno de arena alrededor de la planta: deriva contra los muros (hasta ~0,32 m sobre el desplante, tapando el zócalo),
     ondulación de dunas y borde que muere en z=0. Hierba seca en matas de hojas finas (láminas 'vegetation', DoubleSide),
     más densas junto a los muros y en esquinas. keep_clear: rectángulos (x0, y0, x1, y1) libres de hierba (accesos)."""
@@ -495,7 +506,7 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
         dx = np.maximum(np.maximum(rx0 - GX, GX - rx1), 0)
         dy = np.maximum(np.maximum(ry0 - GY, GY - ry1), 0)
         d = np.minimum(d, np.hypot(dx, dy))                # distancia a la planta (0 dentro)
-        inside |= (GX > rx0) & (GX < rx1) & (GY > ry0) & (GY < ry1)
+        inside |= (GX > rx0 + inset) & (GX < rx1 - inset) & (GY > ry0 + inset) & (GY < ry1 - inset)
     ph = r.uniform(0, 6.28, 4)
     dune = (0.06 * np.sin(GX * 0.9 + ph[0]) * np.cos(GY * 0.7 + ph[1]) + 0.04 * np.sin(GX * 2.3 + GY * 1.7 + ph[2])
             + 0.025 * np.sin(GX * 5.1 - GY * 4.3 + ph[3]))
@@ -614,7 +625,7 @@ def dress_roof(cfg, pent, roof, details, detail="low"):
     tiles = rf.barrel_tiles(W, D, "hip", ROOF_PITCH, ROOF_OVH, seed=seed, missing=0.04, hole=spot, detail=detail)
     x0, y0, x1, y1 = pent["rect"]
     vol = (x0 + 0.02, y0 + 0.02, -1.0, x1 - 0.02, y1 - 0.02, PENT_H + 0.5)      # en coordenadas del techo (z relativo)
-    k_frame = cull_components(frame, [vol], mode="touch")
+    k_frame = cull_components(frame, [vol], mode="center") + cull_faces(frame, [vol])
     k_tiles = cull_faces(tiles, [vol])
     roof.join(frame, _T(0, 0, z0))
     roof.join(tiles, _T(0, 0, z0))
@@ -727,7 +738,7 @@ def dress_damage(cfg, shell, details, interior, skirt, detail="low"):
                        detail=detail)
         add("spalled_column", mbx, Matrix(), shell)
     # varillas de espera: castillos en las 4 esquinas de la azotea del casetón + ruinas de una ampliación demolida atrás
-    for (xx, yy) in ((3.6, -1.8), (7.2, -1.8), (3.6, 1.8), (7.2, 1.8)):
+    for (xx, yy) in ((PENT_XW + 0.15, -1.65), (7.2, -1.8), (PENT_XW + 0.15, 1.65), (7.2, 1.8)):
         add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 8)), length=0.7, stump=(0.25, 0.25, 0.25), detail=detail),
             _T(xx, yy, zl[-1] + PENT_H + 0.35), details)
     for (xx, yy) in ((-6.0, 8.6), (-2.4, 8.6), (1.2, 8.6), (-6.0, 11.0), (-2.4, 11.0), (1.2, 11.0)):

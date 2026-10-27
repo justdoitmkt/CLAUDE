@@ -1,0 +1,15 @@
+{
+ "tris": 311881,
+ "mem_mb": 141.0,
+ "materials": [
+  "CAB_1_tablones_t_concrete",
+  "CAB_1_tablones_t_liso",
+  "CAB_1_tablones_t_liso_2c",
+  "CAB_1_tablones_t_metal_paint",
+  "CAB_1_tablones_t_metal_rust",
+  "CAB_1_tablones_t_roof_metal",
+  "CAB_1_tablones_t_wood",
+  "CAB_1_tablones_t_wood_dark",
+  "CAB_1_tablones_t_wood_grey"
+ ]
+}
