@@ -56,7 +56,7 @@ def build_facades(cfg, shell):
     pan = lambda *a, **k: ac.panel(cfg, shell, *a, collect=P, **k)  # noqa: E731
     up = (1, 2)
     # frente: ala A (crujías 0 y 3 sobre la línea y = -0,6) y hastial del ala B (línea y = -6,0)
-    pan("front", 2, 0, 0, [("window", 0.3), ("window_small", 0.8)], tag="pb")
+    pan("front", 2, 0, 0, [("window", 0.3), ("vent", 0.85)], tag="pb")
     pan("front", 2, 3, 0, [("window_small", 0.5)], tag="pb")
     pan("front", 0, 1, 0, [("shutter", 0.5)], tag="pb")
     pan("front", 0, 2, 0, [("window_high", 0.5)], tag="pb")
