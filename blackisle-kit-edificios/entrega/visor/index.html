@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visor kit BLACKISLE</title>
+<style>
+  :root { --bg: #a9bccf; --panel: rgba(20, 22, 26, 0.82); --fg: #eef1f4; --muted: #aab3bd; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  #ui { position: fixed; top: 12px; left: 12px; background: var(--panel); padding: 10px 12px; border-radius: 8px; max-width: calc(100vw - 48px); }
+  #ui select, #ui button { font: inherit; margin: 2px 4px 2px 0; }
+  #info { color: var(--muted); font-size: 12px; margin-top: 6px; white-space: pre-line; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+               "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="ui">
+  <select id="model">
+    <option>APT_A_5p</option><option>APT_B_4p</option><option>APT_C_3p</option><option>APT_D_4p</option>
+    <option>CAB_1_tablones</option><option>CAB_2_pilotes</option><option>CAB_3_ladrillo</option>
+  </select>
+  <button id="sun">Sol / nublado</button>
+  <div id="info">Abre esta carpeta con un servidor local (los módulos no cargan desde file://):
+  python -m http.server 8000  →  http://localhost:8000/visor/</div>
+</div>
+<script type="module">
+// Visor de revisión: carga ../export/<ID>.glb tal como lo haría mapa.html (GLTFLoader estándar, sin extensiones extra).
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const r = new THREE.WebGLRenderer({ antialias: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2));
+r.setSize(innerWidth, innerHeight);
+r.outputColorSpace = THREE.SRGBColorSpace;
+r.toneMapping = THREE.ACESFilmicToneMapping;
+r.shadowMap.enabled = true;
+r.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xa9bccf);
+const hemi = new THREE.HemisphereLight(0xe2ecff, 0x8a7a60, 1.1);
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6);
+sun.position.set(35, 45, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25, near: 1, far: 150 });
+scene.add(hemi, sun);
+
+const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 1000);
+cam.position.set(-20, 12, 28);
+const ctl = new OrbitControls(cam, r.domElement);
+ctl.target.set(0, 5, 0);
+
+const loader = new GLTFLoader();
+const info = document.getElementById('info');
+let current = null;
+
+function load(id) {
+  if (current) { scene.remove(current); current = null; }
+  info.textContent = 'Cargando ' + id + '…';
+  const t0 = performance.now();
+  loader.load(`../export/${id}.glb`, g => {
+    current = g.scene;
+    let tris = 0, meshes = 0;
+    const mats = new Set();
+    current.traverse(m => {
+      if (!m.isMesh) return;
+      m.castShadow = m.receiveShadow = true;
+      meshes++;
+      tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+      (Array.isArray(m.material) ? m.material : [m.material]).forEach(x => mats.add(x.name));
+    });
+    scene.add(current);
+    const box = new THREE.Box3().setFromObject(current);
+    const s = box.getSize(new THREE.Vector3());
+    ctl.target.copy(box.getCenter(new THREE.Vector3()));
+    info.textContent = `${id}: ${Math.round(tris).toLocaleString('es')} triángulos · ${meshes} mallas · ${mats.size} materiales\n` +
+      `${s.x.toFixed(1)} × ${s.z.toFixed(1)} m en planta (con la base de arena) · ${s.y.toFixed(1)} m de alto · ` +
+      `carga ${Math.round(performance.now() - t0)} ms`;
+  }, undefined, e => { info.textContent = 'Error: ' + e.message; });
+}
+
+document.getElementById('model').addEventListener('change', e => load(e.target.value));
+let overcast = false;
+document.getElementById('sun').addEventListener('click', () => {
+  overcast = !overcast;
+  sun.intensity = overcast ? 0.35 : 2.6;
+  hemi.intensity = overcast ? 2.2 : 1.1;
+});
+addEventListener('resize', () => {
+  cam.aspect = innerWidth / innerHeight;
+  cam.updateProjectionMatrix();
+  r.setSize(innerWidth, innerHeight);
+});
+r.setAnimationLoop(() => { ctl.update(); r.render(scene, cam); });
+load('APT_A_5p');
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+ "id": "APT_A_5p",
+ "glb": "export/APT_A_5p.glb",
+ "size_mb": 66.12,
+ "tris_glb": 829779,
+ "objects": 7,
+ "materials": [
+  "APT_A_5p_skirt",
+  "APT_A_5p_t_brick",
+  "APT_A_5p_t_concrete",
+  "APT_A_5p_t_liso",
+  "APT_A_5p_t_liso_2c",
+  "APT_A_5p_t_metal_paint",
+  "APT_A_5p_t_metal_rust",
+  "APT_A_5p_t_plaster",
+  "APT_A_5p_t_tile",
+  "APT_A_5p_t_wood",
+  "APT_A_5p_t_wood_dark",
+  "APT_A_5p_t_wood_grey",
+  "APT_A_5p_walls_main",
+  "APT_A_5p_walls_rest"
+ ],
+ "n_materials": 14,
+ "images": 17,
+ "texture_mem_mb": 204.8,
+ "bbox_min": [
+  -10.425,
+  -8.625,
+  -0.071
+ ],
+ "bbox_max": [
+  10.425,
+  11.569,
+  20.229
+ ],
+ "dims_m": [
+  20.85,
+  20.194,
+  20.3
+ ],
+ "base_z": -0.071,
+ "center_xy": [
+  0.0,
+  1.472
+ ],
+ "meshes_without_uv": [],
+ "checks": {
+  "tris_ge_100k": true,
+  "size_le_100mb": true,
+  "base_on_ground": true,
+  "materials_le_14": true,
+  "all_have_uv": true
+ }
+}

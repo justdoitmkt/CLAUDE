@@ -516,7 +516,7 @@ def build_porch(cfg, shell, det, roof, r):
     if pc["side"] == "west":
         Lr, depth = (y1 - y0) + 0.4, dep
         frame = rf.roof_frame("gable", Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30, cover="sheet", tails=True, ties=False, blocking=False)
-        sheet = rf.corrugated_roof(Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30, detail="mid")
+        sheet = rf.corrugated_roof(Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30, detail="low")
         for mb in (frame, sheet):
             ac.cull_pred(mb, lambda c: c.y > 0.0)
         M = T(-w / 2, (y0 + y1) / 2, zpost + 0.16) @ RZ(-90)

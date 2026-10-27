@@ -210,7 +210,6 @@ def build_interior(cfg, mb, out):
             partition(mb, (1.275, -3.0), (xb_in1, -3.0), z0, H)                           # local sur | cuarto este
             partition(mb, (1.2, 3.0), (1.2, ya_in1), z0, H, t=0.15)                       # vestíbulo trasero | cuartos este
             partition(mb, (1.275, 1.2), (xa_in1, 1.2), z0, H, doors=[(3.0, 0.9)], out=out)
-            partition(mb, (-2.325, 3.0), (xsw, 3.0), z0, H)                               # cierre bajo la viga, junto al pasillo
             continue
         # vestíbulo de piso (al sur del núcleo, dentro del ala B) y pasillo al oeste del núcleo
         partition(mb, (xb_in0, -1.8), (1.2, -1.8), z0, H, doors=[(0.3, 0.9)], out=out, tag="entry")      # → depto sur

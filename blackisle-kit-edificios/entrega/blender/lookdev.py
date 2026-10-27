@@ -218,7 +218,7 @@ def _graffiti_layer(nb, coord_obj, gmap, band_top):
     return col_acc, a_acc
 
 
-def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.97, 0.92, 0.82), under="concrete"):
+def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete"):
     """Material de look-dev para `name` (nombre canónico del kit). Concreto/aplanado llevan todas las capas; el resto, capas reducidas."""
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     nb = NB(mat)
@@ -262,7 +262,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.97, 0
         # under: lo que asoma bajo la pintura ('concrete' = losa/columna colada; 'brick' = relleno de tabique, APT_B/APT_C)
         conc = nb.tex(os.path.join(TEX, "S1_brick_red_worn.png" if under == "brick" else "T1_concrete.png"),
                       2.0 if under == "brick" else 3.0, co, offset=off).outputs[0]
-        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=0.5, in_Value=1.08)
+        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=0.28, in_Value=1.05)     # pintura vieja casi gris (brief: concreto gris gastado)
         nb.link(color, hsv.inputs["Color"])
         tinted = nb.mix(0.6, hsv.outputs[0], (*paint_tint, 1.0), "MULTIPLY")
         k1a = k("K1_peel.png", 3.2, 0.3)

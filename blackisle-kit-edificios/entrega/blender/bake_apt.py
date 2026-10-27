@@ -27,11 +27,11 @@ ENT = os.path.abspath(os.path.join(HERE, ".."))
 
 SIZES = {   # atlas: (albedo, normal, orm)
     "walls_main": (4096, 1024, 1024), "walls_rest": (3072, 1024, 1024), "details": (2048, 2048, 1024),
-    "roof": (2048, 1024, 1024), "skirt": (1024, 512, 512),
+    "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
 }
 SIZES_CAB = {   # cabañas: superficie ~1/4 de un edificio -> mitad de resolución en el atlas principal
     "walls_main": (2048, 1024, 1024), "walls_rest": (2048, 1024, 1024), "details": (2048, 1024, 1024),
-    "roof": (2048, 1024, 1024), "skirt": (1024, 512, 512),
+    "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
 }
 INTERIOR_AO = 1024
 BAND_SCALE = 1.4
