@@ -1,0 +1,15 @@
+{
+ "tris": 185650,
+ "mem_mb": 141.0,
+ "materials": [
+  "CAB_2_pilotes_t_concrete",
+  "CAB_2_pilotes_t_liso",
+  "CAB_2_pilotes_t_liso_2c",
+  "CAB_2_pilotes_t_metal_paint",
+  "CAB_2_pilotes_t_metal_rust",
+  "CAB_2_pilotes_t_roof_metal_light",
+  "CAB_2_pilotes_t_wood",
+  "CAB_2_pilotes_t_wood_dark",
+  "CAB_2_pilotes_t_wood_grey"
+ ]
+}

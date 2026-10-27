@@ -362,7 +362,12 @@ def compose_graffiti_dense(width_m, height_m, px_per_m, keepout, out, *, seed, h
     for _ in range(int(width_m * 0.8)):
         p = drips[int(r.integers(len(drips)))]
         arr = _load_piece(p, float(r.uniform(0.25, 0.6)), px_per_m, rgb=PAL[int(r.integers(4))] if r.random() < 0.5 else None)
-        _stamp(cv, arr, *to_px(float(r.uniform(0, width_m)), float(r.uniform(0.3, 1.8))), op=float(r.uniform(0.5, 0.9)))
+        hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m
+        for _ in range(30):                                          # manchas y goteos no tapan la lectura de los héroes
+            x, y = float(r.uniform(0, width_m)), float(r.uniform(0.3, 1.8))
+            if not _hits((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2), taken):
+                _stamp(cv, arr, *to_px(x, y), op=float(r.uniform(0.5, 0.9)))
+                break
     # 4) borrados grises irregulares (rodillo), y unos tags encima
     for _ in range(n_buffs):
         bw, bh = float(r.uniform(0.9, 2.0)), float(r.uniform(0.6, 1.3))

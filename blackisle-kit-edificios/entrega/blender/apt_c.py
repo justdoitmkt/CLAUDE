@@ -84,7 +84,7 @@ def build_facades(cfg, shell):
         pan("east", 4, 2, lv, [("window", 0.5)])
         pan("east", 4, 3, lv, [("window", 0.5)])
         pan("east", 3, 0, lv, [("window", 0.5)])
-        pan("east", 3, 1, lv, [("window_small", 0.5)])
+        pan("east", 3, 1, lv, [("window_narrow", 0.25)])          # libre de la partición y = -1,8
     # trasera (fracciones desde el ESTE): puerta trasera bajo una pila de ventanas angostas (vestíbulo)
     pan("back", 4, 0, 0, [("window", 0.5)], tag="pb")
     pan("back", 4, 1, 0, [("window_small", 0.3), ("door_service", 0.84)], tag="pb")
@@ -201,20 +201,21 @@ def build_interior(cfg, mb, out):
     for lv in range(len(cfg["h"])):
         z0 = zl[lv]
         H = cfg["h"][lv] - SLAB
-        partition(mb, (xsw, st["y0"]), (xsw, 2.825), z0, H)                               # núcleo | pasillo
+        partition(mb, (xsw, st["y0"]), (xsw, 2.825 if lv == 0 else 2.95), z0, H)           # núcleo | pasillo
         partition(mb, (1.2, -0.6), (1.2, 3.0), z0, H, t=0.15)                             # núcleo | ala A este
         if lv == 0:
-            partition(mb, (-2.4, ya_in0), (-2.4, ya_in1), z0, H, t=0.15)                  # local oeste | pasillo
-            partition(mb, (xb_in0, -2.4), (1.2, -2.4), z0, H, t=0.15)                     # vestíbulo | local sur
-            partition(mb, (1.2, -2.4), (1.2, -0.6), z0, H, t=0.15)
+            partition(mb, (-2.4, ya_in0), (-2.4, ya_in1), z0, H, t=0.15, doors=[(1.5, 0.9)], out=out)  # local oeste | pasillo
+            partition(mb, (xb_in0, -2.4), (1.2, -2.4), z0, H, t=0.15, doors=[(0.5, 0.9)], out=out)  # vestíbulo | local sur
+            partition(mb, (1.2, -3.0), (1.2, -0.6), z0, H, t=0.15)
             partition(mb, (1.275, -3.0), (xb_in1, -3.0), z0, H)                           # local sur | cuarto este
             partition(mb, (1.2, 3.0), (1.2, ya_in1), z0, H, t=0.15)                       # vestíbulo trasero | cuartos este
-            partition(mb, (1.275, 1.2), (xa_in1, 1.2), z0, H, doors=[(3.0, 0.9)], out=out)
+            partition(mb, (1.275, 2.3), (xa_in1, 2.3), z0, H, doors=[(3.0, 0.9)], out=out)   # libre de la ventana alta este
             continue
         # vestíbulo de piso (al sur del núcleo, dentro del ala B) y pasillo al oeste del núcleo
-        partition(mb, (xb_in0, -1.8), (1.2, -1.8), z0, H, doors=[(0.3, 0.9)], out=out, tag="entry")      # → depto sur
+        partition(mb, (xb_in0, -1.6), (1.2, -1.6), z0, H, doors=[(0.3, 0.9)], out=out, tag="entry")      # → depto sur (libre de la puerta del balcón oeste)
+        partition(mb, (1.2, -1.6), (1.2, -0.6), z0, H, t=0.15)                            # vestíbulo | depto norte (lleva el extintor)
         partition(mb, (-2.4, ya_in0), (-2.4, 3.0), z0, H, t=0.15, doors=[(1.5, 0.9)], out=out, tag="entry")  # → depto oeste
-        partition(mb, (-2.4, 3.0), (xsw + 0.05, 3.0), z0, H, doors=[(-1.7, 0.9)], out=out, tag="entry")      # → depto norte
+        partition(mb, (-2.4, 3.0), (1.2, 3.0), z0, H, doors=[(-1.7, 0.9)], out=out, tag="entry")      # → depto norte; cierra el núcleo
         partition(mb, (-2.4, 3.0), (-2.4, ya_in1), z0, H, t=0.15)
         # depto oeste (ala A, crujía 0)
         partition(mb, (xa_in0, 2.2), (-2.475, 2.2), z0, H, doors=[(-3.4, 0.8)], out=out)
@@ -226,8 +227,8 @@ def build_interior(cfg, mb, out):
         partition(mb, (4.2, -0.545), (4.2, 3.0), z0, H, doors=[(1.2, 0.7)], out=out)
         # depto sur (ala B)
         partition(mb, (xb_in0, -3.6), (xb_in1, -3.6), z0, H, doors=[(-0.6, 0.8), (2.6, 0.8)], out=out)
-        partition(mb, (1.2, yb_in0), (1.2, -1.8), z0, H, t=0.15, doors=[(-2.7, 0.8)], out=out)
-        partition(mb, (1.275, -1.8), (xb_in1, -1.8), z0, H, doors=[(2.0, 0.7)], out=out)
+        partition(mb, (1.2, yb_in0), (1.2, -1.6), z0, H, t=0.15, doors=[(-2.35, 0.8)], out=out)   # libre de la columna (1,2, -3)
+        partition(mb, (1.275, -1.8), (xb_in1, -1.8), z0, H)                                # depto sur | depto norte
     return mb
 
 
@@ -279,8 +280,8 @@ def build_roof(cfg, roof, det):
     yAs, yAn = yA_eave - off, A["cy"] + A["d"] / 2 + OVH + off
     xBw, xBe = xB0 - off, xB1 + off
     yBs = B["cy"] - B["w"] / 2 - 0.4
-    gut = [("A_sur", [(A["cx"] - A["w"] / 2 - 0.4, yAs, zeA), (xB0 - 0.15, yAs, zeA)], [-5.6 - (A["cx"] - A["w"] / 2 - 0.4)], "front", ys_face(cfg, "front_A")),
-           ("A_norte", [(A["cx"] + A["w"] / 2 + 0.4, yAn, zeA), (A["cx"] - A["w"] / 2 - 0.4, yAn, zeA)], [1.2, A["w"] - 0.4], "back",
+    gut = [("A_sur", [(A["cx"] - A["w"] / 2 - 0.4, yAs, zeA), (xB0 - 0.15, yAs, zeA)], [-5.7 - (A["cx"] - A["w"] / 2 - 0.4)], "front", ys_face(cfg, "front_A")),
+           ("A_norte", [(A["cx"] + A["w"] / 2 + 0.4, yAn, zeA), (A["cx"] - A["w"] / 2 - 0.4, yAn, zeA)], [0.925, A["w"] - 0.4], "back",
             ys_face(cfg, "back")),
            ("B_oeste", [(xBw, yA_eave - 0.15, zeB), (xBw, yBs, zeB)], [(yA_eave - 0.15) - (-5.65)], "west", ys_face(cfg, "west_B")),
            ("B_este", [(xBe, yBs, zeB), (xBe, yA_eave - 0.15, zeB)], [-5.65 - yBs], "east", ys_face(cfg, "east_B"))]
@@ -358,7 +359,7 @@ def dress_services(cfg, P, bal, det, inter, far="low", near="mid"):
     zr = rf.roof_top("gable", A["w"], A["d"], PITCH, OVH, x=2.0, y=0.0)
     add("tv_antenna", sv.tv_antenna(seed=int(r.integers(1e6)), detail=far), _T(2.0, A["cy"], level_z(cfg)[-1] + zr + 0.05))
     add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far),
-        _T(cfg["xs"][0] - (COL / 2 - RECESS), 1.4, zl[2] + 1.6) @ ac._rot_z(-90))
+        _T(cfg["xs"][0] - (COL / 2 - RECESS), 2.4, zl[2] + 1.6) @ ac._rot_z(-90))     # sobre muro macizo, no sobre la ventana
     return n
 
 

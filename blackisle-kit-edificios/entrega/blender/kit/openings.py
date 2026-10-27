@@ -1184,7 +1184,7 @@ def _door_glazed(mb, w, h, depth, r, ang):
     Wl = (xin1 - xin0) / 2 - 0.003
     Hl = top - 0.003 - 0.014
     yf = y0 + 0.014
-    angs = (ang, min(95.0, ang * r.uniform(0.2, 1.6)) if r.random() < 0.6 else 0.0)
+    angs = (ang, min(85.0, ang * r.uniform(0.2, 1.6)) if r.random() < 0.6 else 0.0)   # tope antes del muro a escuadra
     for k in range(2):
         lf = MB()
         lf.sweep(_rprof(0.0, 0.062, 0.0, T, 0.003), _rect_path(0, 0, Wl, Hl, c=0.075), mat="aluminium", normal=(0, 1, 0))

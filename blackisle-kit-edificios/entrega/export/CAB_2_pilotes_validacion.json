@@ -1,8 +1,8 @@
 {
  "id": "CAB_2_pilotes",
  "glb": "export/CAB_2_pilotes.glb",
- "size_mb": 14.56,
- "tris_glb": 185772,
+ "size_mb": 18.04,
+ "tris_glb": 185650,
  "objects": 7,
  "materials": [
   "CAB_2_pilotes_skirt",
@@ -20,7 +20,7 @@
  ],
  "n_materials": 12,
  "images": 15,
- "texture_mem_mb": 36.9,
+ "texture_mem_mb": 119.7,
  "bbox_min": [
   -6.725,
   -6.225,
@@ -45,7 +45,7 @@
  "checks": {
   "tris_ge_100k": true,
   "size_le_100mb": true,
-  "base_on_ground": false,
+  "base_on_ground": true,
   "materials_le_14": true,
   "all_have_uv": true
  }
