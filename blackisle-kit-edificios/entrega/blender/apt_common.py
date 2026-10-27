@@ -65,6 +65,9 @@ def layout_openings(kinds, L, H):
         w = min(w, L - 0.3)
         h = min(h, H - sill - 0.1) if sill > 0 else min(h, H - 0.05)
         u0 = min(max(frac * L - w / 2, max(0.15, last + 0.25 if out else 0.15)), L - 0.15 - w)
+        if out and u0 < last + 0.12:                      # no cabe junto al anterior: se omite (avisa)
+            print(f"[panel] AVISO: vano {kind} omitido (claro {L:.2f} m)", flush=True)
+            continue
         out.append((kind, (round(u0, 4), round(u0 + w, 4), round(sill, 4), round(sill + h, 4))))
         last = u0 + w
     return out
@@ -113,7 +116,7 @@ def dress_panel(p, details, interior, r, primary=False, depth=INFILL):
                 details.join(op.security_grille(w, h, seed=seed + 1), M)
         elif kind == "loggia":
             details.join(op.window("sliding", w, h, depth, seed=seed, broken=float(r.uniform(0.5, 1.0)), curtain=True, sill=False), M)
-        elif kind in ("lobby", "portico"):
+        elif kind in ("lobby", "portico", "lobby_door"):
             details.join(op.door("double_glazed", w, h, depth, seed=seed, open_angle=float(r.uniform(15, 70))), M)
         elif kind in ("door_rear", "door_service", "hall_door"):
             details.join(op.door("metal", w, h, depth, seed=seed, open_angle=float(r.uniform(0, 80))), M)
@@ -178,3 +181,24 @@ def stair_core(cfg, interior, origin, axis, width, landing, levels, gap=0.10, go
 
 def counter(n, key, k=1):
     n[key] = n.get(key, 0) + k
+
+
+def cull_pred(mb, fn):
+    """Quita las caras de un MB cuyo centro cumple fn(Vector) (limahoyas, chimeneas, volúmenes ocultos)."""
+    import bmesh
+    kill = [f for f in mb.bm.faces if fn(f.calc_center_median())]
+    bmesh.ops.delete(mb.bm, geom=kill, context="FACES")
+    return len(kill)
+
+
+def downpipe_on(det, top, side, wall, seed, offset=0.06):
+    """Bajante desde `top` (salida del canalón, mundo) hasta el suelo, pegada al muro de la fachada `side` cuya cara está en
+    la coordenada `wall` (y para front/back, x para west/east). Se construye en el marco local de downpipe (muro hacia +Y)."""
+    from kit import circulation as circ
+    from mathutils import Vector
+    R = {"front": Matrix(), "back": _rot_z(180), "west": _rot_z(-90), "east": _rot_z(90)}[side]
+    Ri = R.inverted()
+    tl = Ri @ Vector(top)
+    wp = Vector((top[0], wall, 0.0)) if side in ("front", "back") else Vector((wall, top[1], 0.0))
+    wl = Ri @ wp
+    det.join(circ.downpipe(tl, Vector((tl.x, wl.y - offset, 0.05)), wall_offset=offset, seed=seed), R)

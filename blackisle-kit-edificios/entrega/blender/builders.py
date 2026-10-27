@@ -8,6 +8,9 @@ def build(bid, **kw):
     if bid == "APT_B_4p":
         import apt_b
         return apt_b.build_apt_b(**kw)
+    if bid == "APT_C_3p":
+        import apt_c
+        return apt_c.build_apt_c(**kw)
     raise KeyError(f"sin constructor para {bid}")
 
 

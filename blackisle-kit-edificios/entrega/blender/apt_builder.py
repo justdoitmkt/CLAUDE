@@ -85,6 +85,8 @@ def level_z(cfg):
 
 
 def col_size(i, j, cfg):
+    if "corner_nodes" in cfg:                     # plantas en L: esquinas reales dadas por el constructor
+        return COL_CORNER if (i, j) in cfg["corner_nodes"] else COL
     corner = i in (0, len(cfg["xs"]) - 1) and j in (0, len(cfg["ys"]) - 1)
     return COL_CORNER if corner else COL
 
@@ -486,10 +488,14 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
     gx = np.linspace(X0, X1, nx)
     gy = np.linspace(Y0, Y1, ny)
     GX, GY = np.meshgrid(gx, gy, indexing="ij")
-    dx = np.maximum(np.maximum(fx0 - GX, GX - fx1), 0)
-    dy = np.maximum(np.maximum(fy0 - GY, GY - fy1), 0)
-    d = np.hypot(dx, dy)                                   # distancia a la planta (0 dentro)
-    inside = (GX > fx0) & (GX < fx1) & (GY > fy0) & (GY < fy1)
+    rects = cfg.get("footprint", [(fx0, fx1, fy0, fy1)])  # plantas en L: unión de rectángulos
+    d = np.full(GX.shape, np.inf)
+    inside = np.zeros(GX.shape, dtype=bool)
+    for (rx0, rx1, ry0, ry1) in rects:
+        dx = np.maximum(np.maximum(rx0 - GX, GX - rx1), 0)
+        dy = np.maximum(np.maximum(ry0 - GY, GY - ry1), 0)
+        d = np.minimum(d, np.hypot(dx, dy))                # distancia a la planta (0 dentro)
+        inside |= (GX > rx0) & (GX < rx1) & (GY > ry0) & (GY < ry1)
     ph = r.uniform(0, 6.28, 4)
     dune = (0.06 * np.sin(GX * 0.9 + ph[0]) * np.cos(GY * 0.7 + ph[1]) + 0.04 * np.sin(GX * 2.3 + GY * 1.7 + ph[2])
             + 0.025 * np.sin(GX * 5.1 - GY * 4.3 + ph[3]))
@@ -514,8 +520,7 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=()):
     n_tufts = 0
     for _ in range(4000):
         x, y = float(r.uniform(X0 + 0.3, X1 - 0.3)), float(r.uniform(Y0 + 0.3, Y1 - 0.3))
-        ddx = max(fx0 - x, x - fx1, 0); ddy = max(fy0 - y, y - fy1, 0)
-        dd = math.hypot(ddx, ddy)
+        dd = min(math.hypot(max(rx0 - x, x - rx1, 0), max(ry0 - y, y - ry1, 0)) for (rx0, rx1, ry0, ry1) in rects)
         if dd <= 0.05 or any(k[0] <= x <= k[2] and k[1] <= y <= k[3] for k in keep_clear):
             continue
         if r.random() > 0.85 * math.exp(-dd / 1.1) + 0.06:

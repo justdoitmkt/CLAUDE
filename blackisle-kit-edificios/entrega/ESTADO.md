@@ -1,6 +1,6 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-27 · Fase actual: **E → PC3 (revisión en arcilla del piloto APT_A_5p)**
+Última actualización: 2026-10-27 · Fase actual: **F/G de APT_A (horneado final en curso) · E de APT_B / APT_C**
 
 ## Resumen
 | Fase | Estado |
@@ -10,14 +10,17 @@
 | C · Lettering (Higgsfield) | **Hecha.** 15 piezas, ortografía verificada; 31 recortes RGBA en `lettering/cutouts/` |
 | PC1 · Aprobación del usuario | **Aprobado** ("dale", 2026-10-09). Se usan los heroes v2/v3 |
 | D · Biblioteca de materiales | **Entradas hechas:** 16 texturas 1024² repetibles en `texturas/`. Paneles de grafiti pendientes (dependen de los vanos del modelo) |
+| PC3 · Arcilla del piloto | **Hecha** (8 tomas + plantas seccionadas; checklist R12 sin rechazos; ver «PC3 · resultados») |
 | E · Modelado | En curso. Kit: G1 y G2 aprobados tras revisión adversarial; G3 y G4 en revisión (con niveles de detalle). APT_A: estructura + interior + vestido G1/G2 |
 | PC2 · Biblioteca + panel | Hecho (informativo): `render_qa/PC2_*.jpg`; paneles `texturas/graffiti/G_APT_A_{front,back,west,east}.png` (capa RGBA) + `.jpg` sobre T1 |
 | D–G | Pendientes |
 
 | Modelo | Estado |
 |---|---|
-| APT_A_5p (piloto) | modelado completo: estructura, 4 deptos/piso, escalera interna PB→casetón, 69 vanos, techo de 4 aguas con daño, canalones y bajantes, 34 servicios (13 tipos), daño, base. **829 779 tris**. PC3 en render |
-| APT_B_4p · APT_C_3p · APT_D_4p | no iniciados |
+| APT_A_5p (piloto) | modelado completo: estructura, 4 deptos/piso, escalera interna PB→casetón, 69 vanos, techo de 4 aguas con daño, canalones y bajantes, 34 servicios (13 tipos), daño, base. **829 779 tris**. PC3 hecho; horneado final y exportación GLB en curso |
+| APT_B_4p | constructor `apt_b.py`: galería de acceso con balaustrada, 3 deptos pasantes/piso, escalera en U interior, pórtico, colapso SO; grafiti de PB hecho. 727 k tris (medido) |
+| APT_C_3p | constructor `apt_c.py`: planta en L, núcleo en la junta, balcones en L sobre postes (marquesina del acceso), 2 techos a dos aguas con limahoyas, hastiales, chimenea. 597 k tris (medido) |
+| APT_D_4p | no iniciado |
 | CAB_1_tablones · CAB_2_pilotes · CAB_3_ladrillo | no iniciados |
 
 ## Fase A · resultados medidos
@@ -189,3 +192,22 @@ Tienes que construir literalmente toda la estructura del edificio, incluso por d
 ## Problemas abiertos
 - ~~Red~~ **Resuelto:** el usuario habilitó `d8j0ntlcm91z4.cloudfront.net`. Las 52 imágenes de B/C se descargaron (52/52) y se revisaron.
 - **Red:** hosts de Higgsfield bloqueados en el entorno cloud.
+
+## PC3 · resultados (2026-10-27)
+Tomas en `render_qa/APT_A_5p_PC3_clay_*.png` (Cycles 128 muestras, 1920×1080): 4 esquinas, altura de ojos a 19 m, techo, detalle de PB.
+La toma interior del corredor quedó negra (corredor cerrado, sin luz natural): se sustituye por **plantas seccionadas**
+(`tests/render_plan.py`: cámara ortográfica cenital con plano de recorte a 1,4 m sobre cada losa y luz de área bajo el corte) →
+`render_qa/APT_A_5p_planta_N0.png` y `_N1.png`: PB pasante entrada delantera → vestíbulo → puerta trasera, locales, bodega con WC;
+piso tipo con corredor central, 4 departamentos, loggias y escalera en U dentro del núcleo con celosía.
+Checklist R12: fachada con relieve (malla de columnas y vigas, rellenos rehundidos 8 cm, loggias de 1,2 m) · repetición a 15 m rota
+(ventanas rotas/tapiadas/con cortina variadas, A/C, tendederos) · aristas biseladas · 35 tipos de elementos secundarios · escala humana
+(puertas, barandales, buzones, medidores) · sin z-fighting ni piezas flotando visibles · se parece al concepto, no a las capturas. Sin rechazos.
+
+## Cambios de código para B/C/D (APT_A sin cambios, verificado: mismo conteo 829 779 antes del horneado)
+- `apt_builder.build_frame`: plantas en L (`cells`, `slab_rects` con vuelo por lado), columnas truncadas (`col_top`), vigas omitidas
+  (`skip_beam`), losas con hueco de escalera seleccionables (`stair_levels`) y huecos extra (`holes`); `col_size` con `corner_nodes`;
+  `build_skirt` con `footprint` (unión de rectángulos).
+- `apt_common.py`: paneles en cualquier línea de malla con varios vanos, vestido genérico, barandales orientados, escalera en U girada,
+  recorte por predicado (limahoyas), bajantes en cualquier fachada. `builders.py` (registro por ID), `tests/render_clay.py`,
+  `tests/render_plan.py`, `graffiti_apt.py` (grafiti por ID; el compositor avisa si una pieza no cabe).
+- `kit/circulation.BAL_SEG`: lados del balaustre configurables (8 en la galería de APT_B: −21 k tris).
