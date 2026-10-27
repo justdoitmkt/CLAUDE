@@ -1,0 +1,17 @@
+{
+ "tris": 727252,
+ "mem_mb": 231.4,
+ "materials": [
+  "APT_B_4p_t_brick",
+  "APT_B_4p_t_concrete",
+  "APT_B_4p_t_liso",
+  "APT_B_4p_t_liso_2c",
+  "APT_B_4p_t_metal_paint",
+  "APT_B_4p_t_metal_rust",
+  "APT_B_4p_t_plaster",
+  "APT_B_4p_t_tile",
+  "APT_B_4p_t_wood",
+  "APT_B_4p_t_wood_dark",
+  "APT_B_4p_t_wood_grey"
+ ]
+}
