@@ -97,45 +97,77 @@ def bay_span(coords, k, sizes):
 # ----------------------------------------------------------------------------------------------
 # estructura
 # ----------------------------------------------------------------------------------------------
+def _cell_on(cfg, i, j):
+    cells = cfg.get("cells")
+    return cells is None or (i, j) in cells
+
+
+def _node_on(cfg, i, j):
+    """Hay columna en el nodo (i, j) si toca alguna crujía activa (plantas en L: cfg['cells'])."""
+    return any(_cell_on(cfg, a, b) for a in (i - 1, i) for b in (j - 1, j)
+               if 0 <= a < len(cfg["xs"]) - 1 and 0 <= b < len(cfg["ys"]) - 1)
+
+
 def build_frame(cfg, mb):
+    """Opcionales (APT_B/C/D; APT_A no usa ninguno y su resultado no cambia):
+    cells = {(i, j)} crujías activas (planta en L) · col_top = {(i, j): z} columnas truncadas (colapso) ·
+    skip_beam(k, eje, i, j) -> bool · stair_levels = losas k con hueco de escalera · holes = {k: [(x0, x1, y0, y1)]} huecos
+    extra en coordenadas absolutas · slab_rects = [(x0, x1, y0, y1)] losas por rectángulos (absolutas, antes del vuelo de viga)."""
     xs, ys = cfg["xs"], cfg["ys"]
     zl = level_z(cfg)
     r = rng(cfg["seed"])
     top = zl[-1]
+    col_top = cfg.get("col_top", {})
+    skip = cfg.get("skip_beam", lambda k, ax, i, j: False)
     # columnas continuas desde el desplante hasta la losa de azotea (desplome leve aleatorio en la sección, no en el eje)
     for i, x in enumerate(xs):
         for j, y in enumerate(ys):
+            if not _node_on(cfg, i, j):
+                continue
             c = col_size(i, j, cfg) / 2
-            mb.box((x - c, y - c, 0.0), (x + c, y + c, top - SLAB), "concrete", bevel=0.012, seg=2)
+            mb.box((x - c, y - c, 0.0), (x + c, y + c, col_top.get((i, j), top - SLAB)), "concrete", bevel=0.012, seg=2)
     # vigas en todas las líneas de la malla (descuelgue BEAM_D - SLAB bajo la losa)
     for k in range(1, len(zl)):
         zt = zl[k] - SLAB
         zb = zl[k] - BEAM_D
         for j, y in enumerate(ys):
             for i in range(len(xs) - 1):
+                if not (_cell_on(cfg, i, j) or _cell_on(cfg, i, j - 1)) or skip(k, "x", i, j):
+                    continue
                 x0 = xs[i] + col_size(i, j, cfg) / 2
                 x1 = xs[i + 1] - col_size(i + 1, j, cfg) / 2
                 sag = float(r.uniform(0.0, 0.012))
                 mb.box((x0, y - BEAM_W / 2, zb - sag), (x1, y + BEAM_W / 2, zt), "concrete", bevel=0.01, seg=1)
         for i, x in enumerate(xs):
             for j in range(len(ys) - 1):
+                if not (_cell_on(cfg, i, j) or _cell_on(cfg, i - 1, j)) or skip(k, "y", i, j):
+                    continue
                 y0 = ys[j] + col_size(i, j, cfg) / 2
                 y1 = ys[j + 1] - col_size(i, j + 1, cfg) / 2
                 mb.box((x - BEAM_W / 2, y0, zb), (x + BEAM_W / 2, y1, zt), "concrete", bevel=0.01, seg=1)
     # losas: desplante + entrepisos + azotea; las de entrepiso llevan el hueco de escalera
     ex = BEAM_W / 2
-    x0, x1 = xs[0] - ex, xs[-1] + ex
-    y0, y1 = ys[0] - ex, ys[-1] + ex
     st = cfg["stair"]
-    hole = (st["x0"] - x0, st["x0"] + st["w"] - x0, st["y0"] - y0, st["y0"] + st["l"] - y0)
-    for k, zt in enumerate(zl):
-        openings = [hole] if k > 0 else []                    # la escalera sigue hasta el casetón de azotea
-        if k == 0:
-            wall_with_openings(mb, x1 - x0, y1 - y0, GROUND, openings, mat_out="concrete", mat_in="concrete",
-                               mat_reveal="concrete", m=m_slab(x0, y0, zt))
-        else:
-            wall_with_openings(mb, x1 - x0, y1 - y0, SLAB, openings, mat_out="concrete", mat_in="plaster",
-                               mat_reveal="concrete", m=m_slab(x0, y0, zt))
+    st_levels = cfg.get("stair_levels", range(1, len(zl)))      # APT_A: la escalera sigue hasta el casetón de azotea
+    rects = cfg.get("slab_rects", [(xs[0], xs[-1], ys[0], ys[-1])])
+    for rect in rects:
+        rx0, rx1, ry0, ry1 = rect[:4]
+        e = rect[4] if len(rect) > 4 else (ex, ex, ex, ex)   # vuelo por lado (0 en la junta de dos losas de una planta en L)
+        x0, x1 = rx0 - e[0], rx1 + e[1]
+        y0, y1 = ry0 - e[2], ry1 + e[3]
+        for k, zt in enumerate(zl):
+            holes = []
+            if k in st_levels:
+                holes.append((st["x0"], st["x0"] + st["w"], st["y0"], st["y0"] + st["l"]))
+            holes += cfg.get("holes", {}).get(k, [])
+            openings = [(hx0 - x0, hx1 - x0, hy0 - y0, hy1 - y0) for (hx0, hx1, hy0, hy1) in holes
+                        if hx0 < x1 and hx1 > x0 and hy0 < y1 and hy1 > y0]
+            if k == 0:
+                wall_with_openings(mb, x1 - x0, y1 - y0, GROUND, openings, mat_out="concrete", mat_in="concrete",
+                                   mat_reveal="concrete", m=m_slab(x0, y0, zt))
+            else:
+                wall_with_openings(mb, x1 - x0, y1 - y0, SLAB, openings, mat_out="concrete", mat_in="plaster",
+                                   mat_reveal="concrete", m=m_slab(x0, y0, zt))
     return mb
 
 

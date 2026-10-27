@@ -1,5 +1,6 @@
 """texture_tools.py - utilidades de textura para el edificio BLACKISLE (numpy + Pillow)."""
 import json
+import os
 import struct
 
 import numpy as np
@@ -341,6 +342,7 @@ def compose_graffiti_dense(width_m, height_m, px_per_m, keepout, out, *, seed, h
                 if not _hits(rect, keepout) and not _hits(rect, taken, pad=0.12):
                     break
             else:
+                print(f"[grafiti] AVISO: sin lugar para {os.path.basename(hp['png'])} (w {hp['w']} m) en {os.path.basename(out)}", flush=True)
                 continue
         taken.append((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2))
         _stamp(cv, arr, *to_px(x, y), op=float(r.uniform(0.88, 1.0)), overspray=0.35)

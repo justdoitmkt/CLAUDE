@@ -1277,6 +1277,9 @@ _BAL = [(0.0, 0.046), (0.035, 0.050), (0.07, 0.046), (0.095, 0.036), (0.12, 0.03
         (0.80, 0.040), (0.83, 0.037), (0.86, 0.031), (0.92, 0.034), (0.97, 0.040), (1.0, 0.043)]
 
 
+BAL_SEG = 12   # lados del fuste torneado (los constructores lo bajan a 8 para galerías vistas a > 10 m)
+
+
 def _baluster(mb, base, z0, z1, ang, rs, part=None, rod=False):
     """Balaustre de concreto: dado inferior + fuste torneado (12 lados) + dado superior, entre z0 y z1 (absolutos).
     part=None completo; ('low', t) muñón inferior roto en t; ('high', t) muñón colgante superior roto en t."""
@@ -1291,19 +1294,19 @@ def _baluster(mb, base, z0, z1, ang, rs, part=None, rod=False):
     rot = Matrix.Translation((base.x, base.y, zt0)) @ Matrix.Rotation(ang + rs.uniform(0, 0.5), 4, "Z")
     if part is None:
         prof = [(r, t * H) for t, r in _BAL]
-        _revolve(mb, prof, rot, seg=12)
+        _revolve(mb, prof, rot, seg=BAL_SEG)
         return
     kind, tb = part
     rint = float(np.interp(tb, [p[0] for p in _BAL], [p[1] for p in _BAL]))
     if kind == "low":
         prof = [(r, t * H) for t, r in _BAL if t < tb - 0.02] + [(rint, tb * H)]
-        _revolve(mb, prof, rot, seg=12, jag_top=0.035, rs=rs)
+        _revolve(mb, prof, rot, seg=BAL_SEG, jag_top=0.035, rs=rs)
         if rod:
             _rebar_run(mb, [rot @ Vector((0.004, 0.0, 0.0)), rot @ Vector((0.004, 0.0, tb * H)),
                             rot @ Vector((rs.normal(0, 0.03), rs.normal(0, 0.03), tb * H + rs.uniform(0.05, 0.2)))], rs, r=0.004)
     else:
         prof = [(rint, tb * H)] + [(r, t * H) for t, r in _BAL if t > tb + 0.02]
-        _revolve(mb, prof, rot, seg=12, jag_bot=0.035, rs=rs)
+        _revolve(mb, prof, rot, seg=BAL_SEG, jag_bot=0.035, rs=rs)
 
 
 def _concrete_sweep(mb, path, s0, s1, prof, rs, *, dz=0.0, step=0.08, corners=(), rate=0.0, end_jag=(0.0, 0.0),

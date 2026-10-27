@@ -19,6 +19,7 @@ import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 import apt_builder as ab  # noqa: E402
+import builders  # noqa: E402
 import lookdev as ld  # noqa: E402
 from kit.common import reset_scene, tri_count  # noqa: E402
 
@@ -230,7 +231,7 @@ def main():
     os.makedirs(out_tex, exist_ok=True)
     reset_scene()
     t0 = time.time()
-    res = ab.build_apt_a()
+    res = builders.build(bid)
     cfg = res["cfg"]
     prefix = bid
     g = lambda k: res.get(k, [])
