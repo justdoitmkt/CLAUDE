@@ -55,7 +55,7 @@ def wall_m(cfg, side, z0, t):
     return T(w / 2, yf + t, z0) @ RZ(90), L
 
 
-def siding(kind, L, H, seed, ops, rot=0.15):
+def siding(kind, L, H, seed, ops, rot=0.08):
     from kit import cladding as cl
     o = [x for _, x in ops]
     if kind == "board_and_batten":
