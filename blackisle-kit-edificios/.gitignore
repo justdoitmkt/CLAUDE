@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+*.blend1
+*_quick.blend
+entrega/texturas/*_quick/
