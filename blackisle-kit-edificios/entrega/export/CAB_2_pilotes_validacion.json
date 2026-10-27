@@ -1,0 +1,52 @@
+{
+ "id": "CAB_2_pilotes",
+ "glb": "export/CAB_2_pilotes.glb",
+ "size_mb": 14.56,
+ "tris_glb": 185772,
+ "objects": 7,
+ "materials": [
+  "CAB_2_pilotes_skirt",
+  "CAB_2_pilotes_t_concrete",
+  "CAB_2_pilotes_t_liso",
+  "CAB_2_pilotes_t_liso_2c",
+  "CAB_2_pilotes_t_metal_paint",
+  "CAB_2_pilotes_t_metal_rust",
+  "CAB_2_pilotes_t_roof_metal_light",
+  "CAB_2_pilotes_t_wood",
+  "CAB_2_pilotes_t_wood_dark",
+  "CAB_2_pilotes_t_wood_grey",
+  "CAB_2_pilotes_walls_main",
+  "CAB_2_pilotes_walls_rest"
+ ],
+ "n_materials": 12,
+ "images": 15,
+ "texture_mem_mb": 36.9,
+ "bbox_min": [
+  -6.725,
+  -6.225,
+  -0.15
+ ],
+ "bbox_max": [
+  6.725,
+  6.225,
+  6.488
+ ],
+ "dims_m": [
+  13.45,
+  12.45,
+  6.638
+ ],
+ "base_z": -0.15,
+ "center_xy": [
+  0.0,
+  0.0
+ ],
+ "meshes_without_uv": [],
+ "checks": {
+  "tris_ge_100k": true,
+  "size_le_100mb": true,
+  "base_on_ground": false,
+  "materials_le_14": true,
+  "all_have_uv": true
+ }
+}

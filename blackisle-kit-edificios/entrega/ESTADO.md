@@ -211,3 +211,18 @@ Checklist R12: fachada con relieve (malla de columnas y vigas, rellenos rehundid
   recorte por predicado (limahoyas), bajantes en cualquier fachada. `builders.py` (registro por ID), `tests/render_clay.py`,
   `tests/render_plan.py`, `graffiti_apt.py` (grafiti por ID; el compositor avisa si una pieza no cabe).
 - `kit/circulation.BAL_SEG`: lados del balaustre configurables (8 en la galería de APT_B: −21 k tris).
+
+## Fase F · cambio de estrategia de horneado (2026-10-27, verificado con mis ojos)
+El primer horneado completo de APT_A produjo atlas de **muros** correctos (`walls_main` 4096, `walls_rest` 3072: pintura descascarada,
+grafiti, AO) pero el atlas de **detalles** salió inservible: ~400 k triángulos en decenas de miles de piezas sueltas = decenas de miles de
+islas UV; con el margen de empaquetado cada isla queda en 1–3 píxeles (manchas sueltas sobre negro). Lo mismo en techo (teja suelta) y en
+la base (hierba). Además falló al final por el nombre de la capa UV de caja (`Float2` en Blender 5.2, no `UVMap`).
+Nueva estrategia (R8):
+- **Atlas únicos** solo donde hay superficies continuas: muros exteriores (`walls_main`, `walls_rest`) y terreno de arena (`skirt`).
+- **Detalles, techo, interior, hierba y escombro:** materiales PBR repetibles a escala real (canal de caja a 2 m/unidad + KHR_texture_transform)
+  y **oclusión ambiental horneada por vértice** en el atributo de color `AO` → glTF `COLOR_0`, que por especificación multiplica el color base
+  (Three.js lo aplica solo). Los materiales de color liso (vidrio, tela, plástico, cable, escombro, hierba…) se funden en uno o dos
+  materiales (`liso`, `liso_2c` de doble cara) con su color × AO en `COLOR_0`. Resultado: ≤ 14 materiales y mucha menos memoria.
+- Probado de punta a punta con CAB_2 (`--quick`): GLB con `POSITION/NORMAL/TEXCOORD_0/COLOR_0`, 12 materiales, render con materiales correcto.
+- `bake_apt.py --reuse` reutiliza los PNG de atlas ya horneados (misma geometría y desenvuelto deterministas).
+- Lámina clara de CAB_2: nueva textura `R2_roof_corrugated_light.png` derivada de R1 (gris galvanizado con el óxido intenso conservado).

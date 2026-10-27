@@ -15,7 +15,7 @@ argv = sys.argv
 bid = argv[argv.index("--id") + 1]
 S = int(argv[argv.index("--samples") + 1]) if "--samples" in argv else 64
 HERE = os.path.dirname(os.path.abspath(__file__))
-blend = os.path.join(HERE, "..", f"{bid}.blend")
+blend = os.path.join(HERE, "..", argv[argv.index("--blend") + 1] if "--blend" in argv else f"{bid}.blend")
 bpy.ops.wm.open_mainfile(filepath=os.path.abspath(blend))
 objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name.startswith(bid)]
 out = os.path.abspath(os.path.join(HERE, "..", "..", "render_qa"))

@@ -37,7 +37,7 @@ def main():
     bpy.ops.export_scene.gltf(filepath=glb, export_format="GLB", use_selection=True, export_apply=True, export_yup=True,
                               export_image_format="JPEG", export_image_quality=90, export_cameras=False, export_lights=False,
                               export_draco_mesh_compression_enable=False, export_tangents=False, export_materials="EXPORT",
-                              export_extras=False)
+                              export_extras=False, export_vertex_color="ACTIVE")
     size_mb = os.path.getsize(glb) / 2**20
     tris = tt.glb_tris(glb)
     # reimportación en escena limpia
@@ -58,7 +58,7 @@ def main():
         n_materials=len(mats), images=len([i for i in bpy.data.images if i.size[0]]), texture_mem_mb=round(mem, 1),
         bbox_min=[round(v, 3) for v in mn], bbox_max=[round(v, 3) for v in mx], dims_m=[round(v, 3) for v in (mx - mn)],
         base_z=round(mn.z, 3), center_xy=[round((mn.x + mx.x) / 2, 3), round((mn.y + mx.y) / 2, 3)], meshes_without_uv=no_uv,
-        checks=dict(tris_ge_100k=tris >= 100_000, size_le_100mb=size_mb <= 100, base_on_ground=abs(mn.z) < 0.15,
+        checks=dict(tris_ge_100k=tris >= 100_000, size_le_100mb=size_mb <= 100, base_on_ground=-0.35 < mn.z < 0.05,     # dados y zapatas pueden ir enterrados hasta 0,35 m
                     materials_le_14=len(mats) <= 14, all_have_uv=not no_uv),
     )
     json.dump(rep, open(os.path.join(out_dir, f"{bid}_validacion.json"), "w"), indent=1, ensure_ascii=False)

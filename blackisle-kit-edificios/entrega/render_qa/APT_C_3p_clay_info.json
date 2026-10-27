@@ -1,0 +1,32 @@
+{
+ "tris": 596660,
+ "stats": {
+  "openings": 55,
+  "interior_doors": 7,
+  "roof": {
+   "culled_A": 8201,
+   "culled_B": 10591,
+   "culled_chimney": 134,
+   "downpipes": 4
+  },
+  "services": {
+   "ac_split_outdoor": 4,
+   "ac_box_old": 1,
+   "laundry_line": 2,
+   "light_fixture": 1,
+   "meter_box": 2,
+   "conduit": 1,
+   "sign_torn": 1,
+   "cable_bundle": 1,
+   "mailboxes": 1,
+   "extinguisher_cabinet": 1,
+   "tv_antenna": 1,
+   "satellite_dish": 1
+  },
+  "damage": {
+   "rubble_pile": 4,
+   "chunk": 18,
+   "rebar_nest": 4
+  }
+ }
+}
