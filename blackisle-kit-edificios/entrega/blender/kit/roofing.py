@@ -506,7 +506,9 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
     else:
         k = int((hw + ov - 0.08) / spacing)
         raf_x = [i * spacing for i in range(-k, k + 1)]
-    raf_x = [x + r.uniform(-0.008, 0.008) if abs(abs(x) - hw) > 0.05 else x for x in raf_x]
+    # jitter solo en los cabios interiores (los de remate quedan a 2 mm de la tabla de remate)
+    raf_x = [x + r.uniform(-0.008, 0.008) * (1.0 if abs(x) < hw - 0.05 else 0.0) if abs(abs(x) - hw) > 0.05 else x
+             for x in raf_x]
     commons = [x for x in raf_x if abs(x) < xr - 0.05 and abs(abs(x) - hw) > 0.06 and abs(x) < hw]
     tie_x = {x: (1 if (i // 2) % 2 == 0 else -1) for i, x in enumerate(commons) if i % 2 == 0} if ties else {}
 
@@ -1134,8 +1136,10 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                         continue
                 elif not (u0 + 0.03 <= u_line <= u1 - 0.03):
                     continue
-                du_f = 0.010 * fu(u_line * 0.37 + vm * 0.9 + (0 if s in ("front", "back") else 7.0))
-                u = u_line + du_f + line_off + r.uniform(-0.0015, 0.0015)
+                # deriva de las líneas: lenta a lo largo del faldón (entre hiladas seguidas cambia < 1,5 mm y el anidado conserva
+                # su holgura de 3 mm; con la deriva rápida anterior las piezas anidadas se cruzaban)
+                du_f = 0.010 * fu(u_line * 0.37 + vm * 0.15 + (0 if s in ("front", "back") else 7.0))
+                u = u_line + du_f + line_off + 0.3 * r.uniform(-0.0015, 0.0015)
                 px, py = R.to_plan(s, u, vm)
                 if in_hole(px, py):
                     grid[(s, j, k)] = 1
@@ -1153,8 +1157,9 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                     if r.uniform() < 0.3:
                         frags.append((s, u, vm, is_canal))
                     continue
-                lift = 0.006 * max(0.0, fn(px * 0.6 + py * 0.9)) + r.uniform(0.0, 0.0015)
-                roll, yaw, dv = r.uniform(-2.5, 2.5), r.uniform(-0.3, 0.3), r.uniform(-0.004, 0.004)
+                # abultamiento suave de la capa y jitter por pieza, acotados para que dos piezas anidadas no se crucen
+                lift = 0.005 * max(0.0, fn(px * 0.2 + py * 0.3)) + 0.5 * r.uniform(0.0, 0.0015)
+                roll, yaw, dv = 0.25 * r.uniform(-2.5, 2.5), 0.5 * r.uniform(-0.3, 0.3), r.uniform(-0.004, 0.004)
                 x0, jag0, slid, lb, lt = 0.0, 0.0, 0.0, 0.0, 0.0
                 if near and r.uniform() < 0.5 or r.uniform() < 0.012:
                     a_dv, a_lift, a_roll, a_yaw = r.uniform(0.03, 0.09), r.uniform(0.012, 0.025), r.uniform(-7, 7), r.uniform(-3.5, 3.5)
@@ -1607,12 +1612,12 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
     for pc in range(npc):
         xa = xs0 + pc * (Lp - ridge_lap)
         xb = xa + Lp
-        lift = 0.003 * (pc % 2)
+        lift = 0.004 * (pc % 2)                  # piezas alternas 4 mm más altas (el bamboleo es de ±0,8 mm: nunca se tocan)
         nx = max(2, int(math.ceil((xb - xa) / 0.15)))
         P = []
         for kx in range(nx + 1):
             x = xa + (xb - xa) * kx / nx
-            wob = r.uniform(-0.0015, 0.0015)
+            wob = 0.55 * r.uniform(-0.0015, 0.0015)
             prof = []
             for sgn in (-1, 1):
                 sname = "front" if sgn < 0 else "back"
@@ -1747,7 +1752,9 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
             else:
                 pv, pnb, pnt = prev
                 f = min(max((vb - pv) / BOARD_W, 0.0), 1.0)
-                nb, nt = pnb + (pnt - pnb) * f + BOARD_T + 0.003, BOARD_N      # 3 mm: el levantamiento aleatorio llega a 1,5
+                # 3 mm sobre la tabla de abajo en el canto bajo Y en el canto alto de la de abajo (cuña: en las primeras hiladas
+                # las tablas aún no son paralelas); el levantamiento aleatorio llega a 1,5 mm
+                nb, nt = max(pnb + (pnt - pnb) * f + BOARD_T + 0.003, BOARD_LB), BOARD_N
             prev = (vb, nb, nt)
             params.append(prev)
             ext0 = (0.10 if k % 2 == 0 else 0.035) + r.uniform(-0.015, 0.012)
@@ -1771,7 +1778,7 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
                     dv = -r.uniform(0.065, 0.09)
                     pv, pnb, pnt = params[k - 1]
                     f = min(max((vb + dv - pv) / BOARD_W, 0.0), 1.0)
-                    nbs = pnb + (pnt - pnb) * f + BOARD_T + 0.004
+                    nbs = max(pnb + (pnt - pnb) * f + BOARD_T + 0.004, BOARD_N + (BOARD_T + 0.004) / max(f, 0.3))
                     _board(mb, R, s, a2, b2, vb, nbs, nt, r, lift_end=r.uniform(0.015, 0.04), dv=dv, yaw=r.uniform(-0.006, 0.006))
                     continue
                 if roll < missing + 0.07:

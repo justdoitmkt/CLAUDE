@@ -402,7 +402,7 @@ def dress_interior_doors(cfg, doors, interior):
     r = rng(cfg["seed"] + 202)
     n = 0
     for d in doors:
-        keep = 0.55 if d["tag"] == "entry" else 0.12         # saqueo: casi todas las hojas interiores arrancadas (queda el vano)
+        keep = 0.45 if d["tag"] == "entry" else 0.06         # saqueo: casi todas las hojas interiores arrancadas (queda el vano)
         if r.random() > keep:
             continue
         M = d["m"] @ _T(d["u0"], 0, 0)
@@ -581,29 +581,28 @@ def dress_roof(cfg, pent, roof, details, detail="low"):
     k_tiles = cull_faces(tiles, [vol])
     roof.join(frame, _T(0, 0, z0))
     roof.join(tiles, _T(0, 0, z0))
-    # canalón perimetral (recorrido antihorario: fascia a la izquierda) + 4 bajantes junto a las columnas de esquina
+    # canalones solo en los aleros delantero y trasero (los de las limatesas laterales se perdieron) + 4 bajantes
     ex, ey = W / 2 + ROOF_OVH, D / 2 + ROOF_OVH
-    ze = rf.roof_top("hip", W, D, ROOF_PITCH, ROOF_OVH, x=ex - 0.01, y=0.0)
+    ze = rf.roof_top("hip", W, D, ROOF_PITCH, ROOF_OVH, x=0.0, y=-ey + 0.01)
     off = 0.0865
-    gx, gy = ex + off, ey + off
-    path = [(-gx, -gy, ze - 0.06), (gx, -gy, ze - 0.06), (gx, gy, ze - 0.06), (-gx, gy, ze - 0.06), (-gx, -gy + 0.001, ze - 0.06)]
-    Lf, Le = 2 * gx, 2 * gy
+    gx, gy = ex - 0.15, ey + off
     xo = 6.6
-    outlets = [gx - xo, Lf - (gx - xo), Lf + Le + (gx - xo), 2 * Lf + Le - (gx - xo)]
-    g = circ.gutter([Vector(p) for p in path], seed=seed + 1, outlets=outlets)
-    roof.join(g, _T(0, 0, z0))
-    tops = [Vector(t) + Vector((0, 0, z0)) for t in g.meta["outlets"]] if hasattr(g, "meta") and "outlets" in g.meta else []
-    yf = ys[0] - (COL / 2 - RECESS)          # cara del relleno de fachada
+    tops = []
+    for side, path, outs in (("front", [(-gx, -gy, ze - 0.06), (gx, -gy, ze - 0.06)], [gx - xo, gx + xo]),
+                             ("back", [(gx, gy, ze - 0.06), (-gx, gy, ze - 0.06)], [gx - xo, gx + xo])):
+        g = circ.gutter([Vector(p) for p in path], seed=seed + (1 if side == "front" else 2), outlets=outs, dirt=False,
+                        hanger_step=1.0, fault="fallen" if side == "back" else "none")
+        roof.join(g, _T(0, 0, z0))
+        if hasattr(g, "meta") and "outlets" in g.meta:
+            tops += [Vector(t) + Vector((0, 0, z0)) for t in g.meta["outlets"]]
+    yf = cfg["ys"][0] - (COL / 2 - RECESS)          # cara del relleno de fachada
     for i, t in enumerate(tops):
-        front = t.y < 0
-        if front:
-            dp = circ.downpipe(t, Vector((t.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i)
-            details.join(dp)
+        if t.y < 0:
+            details.join(circ.downpipe(t, Vector((t.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i))
         else:
             R = _rot_z(180)
             tl = R.inverted() @ t
-            dp = circ.downpipe(tl, Vector((tl.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i)
-            details.join(dp, R)
+            details.join(circ.downpipe(tl, Vector((tl.x, yf - 0.06, 0.05)), wall_offset=0.06, seed=seed + 10 + i), R)
     return dict(spot=spot, culled_frame=k_frame, culled_tiles=k_tiles, downpipes=len(tops))
 def _panel(placed, side, level, bay):
     for p in placed[side]:

@@ -546,8 +546,9 @@ def _trims(mb, ops, y0, y1, r, mat="wood_grey", H=99.0):
                    m=_about(((u0 + u1) / 2, y1, top), _R("X", -r.uniform(4, 9))))
             rects.append((u0 - 0.11, u1 + 0.11, top, top + 0.035))
         if win:
-            mb.box((u0 - 0.08, y0 - 0.045, v0 - 0.039), (u1 + 0.08, y1 + 0.04, v0 - 0.003), mat, bevel=0.005, seg=1,
-                   m=_about(((u0 + u1) / 2, y1, v0 - 0.003), _R("X", r.uniform(2, 6))))
+            # repisa por delante del revestimiento (antes se metía 4 cm en tablas y montantes)
+            mb.box((u0 - 0.08, y0 - 0.045, v0 - 0.039), (u1 + 0.08, y1 - 0.002, v0 - 0.003), mat, bevel=0.005, seg=1,
+                   m=_about(((u0 + u1) / 2, y1 - 0.002, v0 - 0.003), _R("X", r.uniform(2, 6))))
             rects.append((u0 - 0.08, u1 + 0.08, v0 - 0.045, v0))
     return rects
 

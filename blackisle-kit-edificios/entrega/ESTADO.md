@@ -1,6 +1,6 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-09 · Fase actual: **E · modelado (kit modular + piloto APT_A_5p)**
+Última actualización: 2026-10-27 · Fase actual: **E → PC3 (revisión en arcilla del piloto APT_A_5p)**
 
 ## Resumen
 | Fase | Estado |
@@ -16,7 +16,7 @@
 
 | Modelo | Estado |
 |---|---|
-| APT_A_5p (piloto) | estructura + 4 deptos/piso + escaleras internas + 69 vanos vestidos + 27 puertas interiores (523 882 tris sin techo/servicios/daño) |
+| APT_A_5p (piloto) | modelado completo: estructura, 4 deptos/piso, escalera interna PB→casetón, 69 vanos, techo de 4 aguas con daño, canalones y bajantes, 34 servicios (13 tipos), daño, base. **829 779 tris**. PC3 en render |
 | APT_B_4p · APT_C_3p · APT_D_4p | no iniciados |
 | CAB_1_tablones · CAB_2_pilotes · CAB_3_ladrillo | no iniciados |
 
@@ -170,6 +170,21 @@ Tienes que construir literalmente toda la estructura del edificio, incluso por d
   propio grafiti en el atlas de detalles.
 - **Reinicio del contenedor (2026-10-09 ~23:45):** se perdió el workflow del kit. Los 4 módulos construidos sobrevivieron en disco (commit ffaa3a3);
   las revisiones de G1/G2 ya estaban completas; las de G3/G4 se relanzaron.
+
+## Presupuesto de APT_A (2026-10-27, medido)
+| Grupo | Tris | Nota |
+|---|---|---|
+| Carcasa (estructura + fachadas + casetón) | 15 172 | |
+| Detalles (vanos, celosía, barandales, servicios, bajantes) | 413 174 | ventanas ~126 k · loggias ~72 k · celosía ~71 k · servicios ~100 k |
+| Interior (muros, 12 puertas, 5 tramos de escalera, buzones, extintores) | 166 270 | |
+| Techo (estructura dañada 50 k + teja `low` 118 k + canalones frente/fondo) | 186 189 | |
+| Base (arena, hierba, escombro, varillas de espera) | 36 202 | |
+| Daño (mordidas, nidos, escombro interior) | 12 772 | |
+| **Total** | **829 779** | +17 % sobre el techo de 700 k: se presenta al usuario en PC3 con palancas para bajarlo |
+- Palancas disponibles: teja ya en `low` (high = 351 k); canalón solo frente/fondo (perimetral = 76 k); A/C `low` (2–3 k vs 17–28 k);
+  hojas de puertas interiores (12 de 43 vanos). Siguientes recortes posibles: barandales de loggia, celosía más estrecha, ventanas traseras más simples.
+- Las revisiones adversariales de G3/G4 se cortaron dos veces (reinicio del contenedor; luego límite semanal de subagentes).
+  Los niveles de detalle quedaron implementados y medidos; las pruebas de G3/G4 se re-ejecutan en local para verificar salud y renders.
 
 ## Problemas abiertos
 - ~~Red~~ **Resuelto:** el usuario habilitó `d8j0ntlcm91z4.cloudfront.net`. Las 52 imágenes de B/C se descargaron (52/52) y se revisaron.
