@@ -1,0 +1,12 @@
+{
+ "tris": 185772,
+ "stats": {
+  "interior_doors": 0,
+  "openings": 10,
+  "veranda": {
+   "posts": 4,
+   "stair_run": 2.86
+  },
+  "tufts": 320
+ }
+}
