@@ -152,10 +152,10 @@ def bake_atlas(obj, aid, prefix, out_dir, sizes, quick, metal=0.0, reuse=False):
     if quick:
         a_size, n_size, o_size = max(a_size // 4, 256), max(n_size // 4, 256), max(o_size // 4, 256)
     t = time.time()
-    alb, r1 = _load_or_bake(obj, f"{prefix}_{aid}_albedo", "DIFFUSE", a_size, out_dir, reuse, samples=4 if quick else 16, pass_filter={"COLOR"})
+    alb, r1 = _load_or_bake(obj, f"{prefix}_{aid}_albedo", "DIFFUSE", a_size, out_dir, reuse, samples=4 if quick else 8, pass_filter={"COLOR"})
     rough, _ = _load_or_bake(obj, f"{prefix}_{aid}_rough", "ROUGHNESS", o_size, out_dir, reuse, samples=1 if quick else 4, colorspace="Non-Color")
-    nrm, _ = _load_or_bake(obj, f"{prefix}_{aid}_normal", "NORMAL", n_size, out_dir, reuse, samples=4 if quick else 16, colorspace="Non-Color")
-    ao, _ = _load_or_bake(obj, f"{prefix}_{aid}_ao", "AO", o_size, out_dir, reuse, samples=8 if quick else 48, colorspace="Non-Color")
+    nrm, _ = _load_or_bake(obj, f"{prefix}_{aid}_normal", "NORMAL", n_size, out_dir, reuse, samples=4 if quick else 8, colorspace="Non-Color")
+    ao, _ = _load_or_bake(obj, f"{prefix}_{aid}_ao", "AO", o_size, out_dir, reuse, samples=8 if quick else 32, colorspace="Non-Color")
     orm = ld.pack_orm(ao, rough, metal, os.path.join(out_dir, f"{prefix}_{aid}_orm.png"))
     if not r1:                                  # el AO al 35 % multiplicado en el albedo (brief F-3), solo al hornear de nuevo
         _mix_ao_into_albedo(alb, ao, 0.35)
