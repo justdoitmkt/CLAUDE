@@ -1,0 +1,53 @@
+{
+ "id": "CAB_3_ladrillo",
+ "glb": "export/CAB_3_ladrillo.glb",
+ "size_mb": 24.6,
+ "tris_glb": 261749,
+ "objects": 7,
+ "materials": [
+  "CAB_3_ladrillo_skirt",
+  "CAB_3_ladrillo_t_brick",
+  "CAB_3_ladrillo_t_concrete",
+  "CAB_3_ladrillo_t_liso",
+  "CAB_3_ladrillo_t_liso_2c",
+  "CAB_3_ladrillo_t_metal_paint",
+  "CAB_3_ladrillo_t_metal_rust",
+  "CAB_3_ladrillo_t_plaster",
+  "CAB_3_ladrillo_t_wood",
+  "CAB_3_ladrillo_t_wood_dark",
+  "CAB_3_ladrillo_t_wood_grey",
+  "CAB_3_ladrillo_walls_main",
+  "CAB_3_ladrillo_walls_rest"
+ ],
+ "n_materials": 13,
+ "images": 16,
+ "texture_mem_mb": 125.0,
+ "bbox_min": [
+  -7.225,
+  -6.475,
+  -0.12
+ ],
+ "bbox_max": [
+  7.225,
+  6.475,
+  8.63
+ ],
+ "dims_m": [
+  14.45,
+  12.95,
+  8.75
+ ],
+ "base_z": -0.12,
+ "center_xy": [
+  0.0,
+  0.0
+ ],
+ "meshes_without_uv": [],
+ "checks": {
+  "tris_ge_100k": true,
+  "size_le_100mb": true,
+  "base_on_ground": true,
+  "materials_le_14": true,
+  "all_have_uv": true
+ }
+}
