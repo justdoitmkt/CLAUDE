@@ -338,7 +338,7 @@ def mesh_health(obj):
 
 # ---------------- vista de arcilla ----------------
 def clay_render(objs, out_path, res=(960, 540), samples=24, azim=35.0, elev=18.0, fov=40.0, margin=1.15, target=None, dist=None,
-                ground=True, sun_azim=50.0, sun_elev=35.0, clay=True):
+                ground=True, sun_azim=50.0, sun_elev=35.0, clay=True, sun_energy=3.2, sky=0.28):
     """Render de arcilla en Cycles CPU: material gris uniforme, cielo tenue + sol con sombras, piso opcional.
     Encuadra automáticamente los `objs` (azim 0 = vista desde -Y, la fachada principal). clay=False usa los materiales reales."""
     use_clay = bool(clay)
@@ -371,12 +371,12 @@ def clay_render(objs, out_path, res=(960, 540), samples=24, azim=35.0, elev=18.0
         out = next((n for n in w.node_tree.nodes if n.type == "OUTPUT_WORLD"), None) or w.node_tree.nodes.new("ShaderNodeOutputWorld")
         w.node_tree.links.new(bg.outputs[0], out.inputs[0])
     bg.inputs[0].default_value = (0.55, 0.62, 0.72, 1.0)
-    bg.inputs[1].default_value = 0.28
+    bg.inputs[1].default_value = sky
     sun = bpy.data.objects.get("_sun")
     if sun is None:
         sun = bpy.data.objects.new("_sun", bpy.data.lights.new("_sun", "SUN"))
         sc.collection.objects.link(sun)
-    sun.data.energy = 3.2
+    sun.data.energy = sun_energy
     sun.data.angle = math.radians(1.5)
     sun.rotation_euler = (math.radians(90 - sun_elev), 0, math.radians(sun_azim))  # luz viniendo desde -Y (lado de la fachada)
     pts = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]

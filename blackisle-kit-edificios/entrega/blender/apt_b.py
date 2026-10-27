@@ -46,7 +46,7 @@ def cfg_apt_b():
             return False
         return (ax == "x" and j == 0 and i in (0, 1)) or (ax == "y" and j == 0 and i in (0, 1))
 
-    return dict(id="APT_B_4p", xs=xs, ys=ys, h=h, stair=stair, seed=23, loggia_depth=0.0,
+    return dict(id="APT_B_4p", xs=xs, ys=ys, h=h, stair=stair, seed=23, loggia_depth=0.0, lookdev=dict(under="brick"),
                 stair_levels={1, 2, 3}, holes={len(h): [COLLAPSE]}, skip_beam=skip_beam,
                 col_top={(0, 0): zl[3] + 1.25, (1, 0): zl[3] + 1.9})
 

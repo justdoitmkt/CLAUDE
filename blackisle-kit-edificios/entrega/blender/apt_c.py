@@ -44,6 +44,7 @@ def cfg_apt_c():
     stair = dict(x0=1.025 - sw, y0=2.825 - L, w=sw, l=L, origin=(1.025, 2.825 - L))
     rects = [(-6.0, 6.0, -0.6, 6.0), (-2.4, 4.2, -6.0, -0.6, (EX, EX, EX, -EX))]
     return dict(id="APT_C_3p", xs=xs, ys=ys, h=h, cells=cells, corner_nodes=corners, stair=stair, seed=37, loggia_depth=0.0,
+                lookdev=dict(under="brick", paint_tint=(0.90, 0.89, 0.86)),
                 stair_levels={1, 2}, slab_rects=rects)
 
 
@@ -55,7 +56,7 @@ def build_facades(cfg, shell):
     pan = lambda *a, **k: ac.panel(cfg, shell, *a, collect=P, **k)  # noqa: E731
     up = (1, 2)
     # frente: ala A (crujías 0 y 3 sobre la línea y = -0,6) y hastial del ala B (línea y = -6,0)
-    pan("front", 2, 0, 0, [("window", 0.3), ("window_high", 0.78)], tag="pb")
+    pan("front", 2, 0, 0, [("window", 0.3), ("window_small", 0.8)], tag="pb")
     pan("front", 2, 3, 0, [("window_small", 0.5)], tag="pb")
     pan("front", 0, 1, 0, [("shutter", 0.5)], tag="pb")
     pan("front", 0, 2, 0, [("window_high", 0.5)], tag="pb")

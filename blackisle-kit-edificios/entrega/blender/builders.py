@@ -11,6 +11,13 @@ def build(bid, **kw):
     if bid == "APT_C_3p":
         import apt_c
         return apt_c.build_apt_c(**kw)
+    if bid == "APT_D_4p":
+        import apt_d
+        return apt_d.build_apt_d(**kw)
+    if bid.startswith("CAB_"):
+        import cabin_builder
+        kw.pop("dress_all", None)
+        return cabin_builder.build_cabin(bid, **kw)
     raise KeyError(f"sin constructor para {bid}")
 
 

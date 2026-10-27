@@ -30,6 +30,14 @@ SHOTS_EXTRA = {
         "detalle_colapso": dict(azim=-40, elev=18, dist=9.0, target=Vector((-5.0, -5.0, 10.0)), fov=55),
         "interior_galeria": dict(azim=-90, elev=1.0, dist=6.2, target=Vector((3.0, -4.95, 6.25 + 1.4)), fov=75, ground=False),
     },
+    "APT_C_3p": {
+        "esquina": dict(azim=-45, elev=8, dist=22.0, target=Vector((-1.0, -1.0, 4.5)), fov=55),
+        "ojo_acceso": dict(azim=-60, elev=-6, dist=10.0, target=Vector((-3.2, -1.8, 2.2)), fov=60),
+    },
+    "APT_D_4p": {
+        "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
+        "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),
+    },
 }
 shots.update(SHOTS_EXTRA.get(bid, {}))
 only = argv[argv.index("--only") + 1].split(",") if "--only" in argv else list(shots)

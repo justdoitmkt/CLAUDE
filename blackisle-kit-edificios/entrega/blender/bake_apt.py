@@ -255,7 +255,7 @@ def main():
                            cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
                            cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2)
     for nm in sorted({m.name for o in (main_o, rest_o, det, roof, skirt, inter) for m in o.data.materials}):
-        ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top)
+        ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top, **cfg.get("lookdev", {}))
     # UV únicas
     for o in (main_o, rest_o, det, roof, skirt):
         t = time.time()
