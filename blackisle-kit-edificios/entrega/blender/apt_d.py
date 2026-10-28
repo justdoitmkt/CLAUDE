@@ -199,8 +199,13 @@ def build_joints(cfg, shell, P):
             n += 1
         x0, x1 = sorted((face, face + sgn * 0.03))
         shell.box((x0, ys[0] - FO, -0.05), (x1, ys[-1] + FO, 0.5), "concrete", bevel=0.008, seg=1)
-    # cornisa: losa de azotea con canto visible y gotero
-    shell.box((xs[0] - FO - 0.06, ys[0] - FO - 0.06, top - SLAB), (xs[-1] + FO + 0.06, ys[-1] + FO + 0.06, top), "concrete", bevel=0.012, seg=2)
+    # cornisa: anillo alrededor del canto de la losa de azotea (antes un bloque macizo que duplicaba la losa: el techo del
+    # último piso y la azotea quedaban con caras coplanares -> z-fighting)
+    ex = 0.12                                                    # vuelo de la losa (slab_rects)
+    ox0, ox1, oy0, oy1 = xs[0] - FO - 0.06, xs[-1] + FO + 0.06, ys[0] - FO - 0.06, ys[-1] + FO + 0.06
+    ix0, ix1, iy0, iy1 = xs[0] - ex, xs[-1] + ex, ys[0] - ex, ys[-1] + ex
+    for (a0, b0, a1, b1) in ((ox0, oy0, ox1, iy0), (ox0, iy1, ox1, oy1), (ox0, iy0, ix0, iy1), (ix1, iy0, ox1, iy1)):
+        shell.box((a0, b0, top - SLAB), (a1, b1, top), "concrete", bevel=0.012, seg=2)
     return n
 
 
