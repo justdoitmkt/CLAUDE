@@ -190,7 +190,7 @@ def _mix_ao_into_albedo(alb, ao, k):
 # detalles, techo, interior, hierba y escombro: materiales repetibles + oclusión en colores de vértice (glTF COLOR_0)
 # ----------------------------------------------------------------------------------------------
 TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, tinte)
-    "concrete": ("T1_concrete.png", 3.0, 0.9, 0.0, (0.92, 0.92, 0.9)), "plaster": ("T2_old_plaster_paint.png", 2.4, 0.88, 0.0, (1.0, 0.97, 0.92)),
+    "concrete": ("T1_concrete.png", 3.0, 0.9, 0.0, (0.92, 0.92, 0.9)), "plaster": ("T2_old_plaster_paint_int.png", 1.2, 0.88, 0.0, (0.97, 0.96, 0.93)),
     "wood": ("T4_wood_weathered.png", 1.6, 0.8, 0.0, (1, 1, 1)), "wood_dark": ("W1_wood_dark_planks.png", 1.8, 0.8, 0.0, (1, 1, 1)),
     "wood_grey": ("W2_wood_grey_clapboard.png", 1.8, 0.82, 0.0, (1, 1, 1)), "brick": ("S1_brick_red_worn.png", 2.0, 0.85, 0.0, (1, 1, 1)),
     "tile": ("T3_roof_tile.png", 2.0, 0.75, 0.0, (1, 1, 1)), "metal_rust": ("M1_rust_metal.png", 1.2, 0.7, 0.3, (1, 1, 1)),
@@ -216,33 +216,50 @@ def vertex_ao(obj, samples):
 
 
 def fix_vertex_ao(obj, floor=0.25, neutral=0.85, dead=0.04):
-    """Los vértices incrustados en otra pieza (muro que entra en la losa, marco dentro del vano) hornean AO = 0 (negro) y esa
-    oscuridad se interpola por toda la cara. Se descartan esas esquinas: toman el promedio de las esquinas válidas de su cara o
-    un valor neutro si no hay ninguna; después se aplica un piso para que nada quede negro puro."""
+    """AO por esquina -> por posición. Las esquinas que comparten posición (±1 mm) y orientación de cara (6 sentidos) toman el
+    promedio de las válidas del grupo: sin bordes duros entre caras coplanares ni entre piezas que se tocan (antes cada cara
+    reemplazaba sus esquinas incrustadas con su propio promedio y un mismo vértice quedaba con valores distintos: cuadros).
+    Las esquinas incrustadas en otra pieza (AO <= dead) se descartan; un grupo sin esquinas válidas toma el promedio de su cara
+    o un neutro; al final, un piso para que nada quede negro puro."""
     import numpy as np
     me = obj.data
     ca = me.color_attributes["AO"]
     col = np.zeros(len(ca.data) * 4, dtype=np.float32)
     ca.data.foreach_get("color", col)
     col = col.reshape(-1, 4)
-    ao = col[:, 0].copy()
+    ao = col[:, 0].astype(np.float64)
     n = len(me.polygons)
-    ls = np.zeros(n, dtype=np.int32)
     lt = np.zeros(n, dtype=np.int32)
-    me.polygons.foreach_get("loop_start", ls)
     me.polygons.foreach_get("loop_total", lt)
     face = np.repeat(np.arange(n), lt)
+    vi = np.zeros(len(me.loops), dtype=np.int32)
+    me.loops.foreach_get("vertex_index", vi)
+    co = np.zeros(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    fn = np.zeros(n * 3, dtype=np.float64)
+    me.polygons.foreach_get("normal", fn)
+    fn = fn.reshape(-1, 3)
+    ax = np.abs(fn).argmax(axis=1)
+    obin = (ax * 2 + (fn[np.arange(n), ax] > 0))[face].astype(np.int64)
+    q = np.round(co[vi] / 0.002).astype(np.int64)
+    _, gid = np.unique(np.column_stack([q, obin]), axis=0, return_inverse=True)
+    gid = gid.ravel()
     valid = ao > dead
-    s = np.bincount(face, weights=np.where(valid, ao, 0.0), minlength=n)
-    c = np.bincount(face, weights=valid.astype(np.float64), minlength=n)
-    mean = np.where(c > 0, s / np.maximum(c, 1), neutral)
-    bad = ~valid
-    ao[bad] = mean[face[bad]]
-    ao = floor + (1.0 - floor) * ao
-    col[:, 0] = col[:, 1] = col[:, 2] = ao
+    ng = int(gid.max()) + 1
+    s = np.bincount(gid, weights=np.where(valid, ao, 0.0), minlength=ng)
+    c = np.bincount(gid, weights=valid.astype(np.float64), minlength=ng)
+    out = np.where(c > 0, s / np.maximum(c, 1), np.nan)[gid]
+    bad = np.isnan(out)
+    if bad.any():
+        fs = np.bincount(face, weights=np.where(bad, 0.0, out), minlength=n)
+        fc = np.bincount(face, weights=(~bad).astype(np.float64), minlength=n)
+        out[bad] = np.where(fc > 0, fs / np.maximum(fc, 1), neutral)[face[bad]]
+    out = floor + (1.0 - floor) * out
+    col[:, 0] = col[:, 1] = col[:, 2] = out
     col[:, 3] = 1.0
     ca.data.foreach_set("color", col.ravel())
-    return int(bad.sum())
+    return int((~valid).sum())
 
 
 def tileable_materials(objs, prefix, uv_unit):
@@ -388,7 +405,7 @@ def main():
     loose = [o for o in (det, roof, inter, loose_o) if o is not None and len(o.data.polygons)]
     for o in loose:
         t = time.time()
-        vertex_ao(o, 8 if quick else 32)
+        vertex_ao(o, 8 if quick else 64)
         nfix = fix_vertex_ao(o)
         log("AO por vértice", o.name, round(time.time() - t), "s; esquinas incrustadas corregidas:", nfix)
     # el interior se reproyecta a 2 m por unidad para compartir materiales con los detalles (techo de 14 materiales)
