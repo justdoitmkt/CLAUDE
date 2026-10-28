@@ -485,17 +485,22 @@ def dress_penthouse(cfg, pent, details):
 # ----------------------------------------------------------------------------------------------
 # base y entorno inmediato: arena acumulada + hierba seca
 # ----------------------------------------------------------------------------------------------
-def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15, fill_inside=False, tuft_clear=0.05):
+def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15, fill_inside=False, tuft_clear=0.05, caps=(),
+                cap_inside=None):
     """Terreno de arena alrededor de la planta: deriva contra los muros (hasta ~0,32 m sobre el desplante, tapando el zócalo),
     ondulación de dunas y borde que muere en z=0. Hierba seca en matas de hojas finas (láminas 'vegetation', DoubleSide),
     más densas junto a los muros y en esquinas. keep_clear: rectángulos (x0, y0, x1, y1) libres de hierba (accesos).
     fill_inside: conserva la arena bajo la planta a z = -0,05 (pisos elevados con duela suelta: no se ve el vacío).
-    tuft_clear: distancia mínima de las matas a la planta (las hojas se inclinan hasta ~0,33 m)."""
+    tuft_clear: distancia mínima de las matas a la planta (las hojas se inclinan hasta ~0,33 m).
+    caps: [(x0, x1, y0, y1, zmax)] la arena no sube de zmax ahí (bajo escalones). cap_inside: tope de la arena dentro de la
+    planta (bajo pisos elevados y decks). El parche abarca la unión de la planta (porches incluidos) + margin."""
     import numpy as np
     r = rng(cfg["seed"] + 303)
     xs, ys = cfg["xs"], cfg["ys"]
     fx0, fx1 = xs[0] - COL_CORNER / 2, xs[-1] + COL_CORNER / 2
     fy0, fy1 = ys[0] - COL_CORNER / 2, ys[-1] + COL_CORNER / 2
+    for (rx0, rx1, ry0, ry1) in cfg.get("footprint", []):  # porches y alas fuera de la malla: el parche los abarca
+        fx0, fx1, fy0, fy1 = min(fx0, rx0), max(fx1, rx1), min(fy0, ry0), max(fy1, ry1)
     X0, X1, Y0, Y1 = fx0 - margin, fx1 + margin, fy0 - margin, fy1 + margin
     nx, ny = int((X1 - X0) / cell) + 1, int((Y1 - Y0) / cell) + 1
     gx = np.linspace(X0, X1, nx)
@@ -515,6 +520,10 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15, fill_
     drift = 0.32 * np.exp(-d / 0.9) * (0.7 + 0.3 * np.sin(GX * 1.3 + GY * 0.8 + ph[0]))
     edge = np.clip((margin - d) / 1.2, 0, 1)               # muere en z=0 en el borde del parche
     Z = np.where(inside, -0.05, (drift + dune + 0.03) * edge)
+    if cap_inside is not None:
+        Z = np.where(d <= 0, np.minimum(Z, cap_inside), Z)
+    for (cx0, cx1, cy0, cy1, zmax) in caps:
+        Z = np.where((GX >= cx0) & (GX <= cx1) & (GY >= cy0) & (GY <= cy1), np.minimum(Z, zmax), Z)
     # malla en rejilla; se omiten las celdas totalmente dentro de la planta (bajo el edificio)
     vid = {}
     def V(i, j):

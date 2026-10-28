@@ -62,7 +62,7 @@ def siding(kind, L, H, seed, ops, rot=0.08):
         return cl.board_and_batten(L, H, seed=seed, openings=o, rot=rot)
     if kind == "clapboard":
         return cl.clapboard(L, H, seed=seed, openings=o, loose=0.08)
-    return cl.brick_wall(L, H, seed=seed, openings=o, missing=0.03, detail="mid")
+    return cl.brick_wall(L, H, seed=seed, openings=o, missing=0.03, detail="mid", fallen=False)
 
 
 def place_ops(L, H, spec):
@@ -83,7 +83,8 @@ def dress_ops(det, M, ops, t, r):
         s = int(r.integers(1e6))
         if kind == "win":
             k = "shutter" if r.random() < 0.6 else ("boarded" if r.random() < 0.3 else "casement")
-            det.join(op.window(k, w, h, t, seed=s, broken=float(r.uniform(0.5, 1.0)), curtain=r.random() < 0.35), Mi)
+            cur = r.random() < 0.35 and v0 < 1.5                          # ventana alta (sobre escalera): sin cortina
+            det.join(op.window(k, w, h, t, seed=s, broken=float(r.uniform(0.5, 1.0)), curtain=cur), Mi)
         elif kind == "door":
             det.join(op.door("plank", w, h, t, seed=s, open_angle=max(60.0, float(r.uniform(10, 70)))), Mi)
         else:
@@ -132,7 +133,7 @@ def joists(mb, x0, x1, y0, y1, z_top, step=0.45, h=0.20, b=0.05, skip=(), mat="w
     x = x0 + b / 2
     n = 0
     while x < x1:
-        cut = [s for s in skip if s[0] < x < s[1]]
+        cut = [s for s in skip if s[0] - b <= x <= s[1] + b]
         if cut:
             hx0, hx1, hy0, hy1 = cut[0]
             if hy0 - y0 > 0.1:
@@ -254,9 +255,9 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if cfg["base"] == "piers":
         for x in (-w / 2 + 0.15, -w / 2 + w / 3, w / 2 - w / 3, w / 2 - 0.15):
             for y in (yf + 0.15, 0.0, d / 2 - 0.15):
-                shell.box((x - 0.18, y - 0.18, -0.1), (x + 0.18, y + 0.18, z0 - 0.25), "concrete", bevel=0.02, seg=2)
-        for y in (yf + 0.15, 0.0, d / 2 - 0.15):                                   # durmientes
-            shell.box((-w / 2, y - 0.08, z0 - 0.25), (w / 2, y + 0.08, z0 - 0.03), "wood_dark", bevel=0.006, seg=1)
+                shell.box((x - 0.18, y - 0.18, -0.1), (x + 0.18, y + 0.18, z0 - 0.35), "concrete", bevel=0.02, seg=2)
+        for y in (yf + 0.15, 0.0, d / 2 - 0.15):                                   # durmientes: bajo las vigas, no a su altura
+            shell.box((-w / 2, y - 0.08, z0 - 0.35), (w / 2, y + 0.08, z0 - 0.232), "wood_dark", bevel=0.006, seg=1)
     elif cfg["base"] == "stilts":
         xs = [-w / 2 + 0.12, -w / 6, w / 6, w / 2 - 0.12]
         ys = [-d / 2 + 0.12, 0.0, d / 2 - 0.12]
@@ -273,9 +274,10 @@ def build_cabin(bid, collection_root=None, dress_all=True):
             shell.box((a[0], a[1], z0 - 0.23), (b[0], b[1], z0 - 0.002), "wood_dark", bevel=0.006, seg=1)
         for i in range(len(xs) - 1):                                               # cruces de San Andrés
             for y in (ys[0], ys[-1]):
-                for (a, b) in (((xs[i], 0.35), (xs[i + 1], z0 - 0.6)), ((xs[i], z0 - 0.6), (xs[i + 1], 0.35))):
-                    p0 = Vector((a[0], y + (0.12 if y < 0 else -0.12), a[1]))
-                    p1 = Vector((b[0], y + (0.12 if y < 0 else -0.12), b[1]))
+                for kd, (a, b) in enumerate((((xs[i], 0.35), (xs[i + 1], z0 - 0.6)), ((xs[i], z0 - 0.6), (xs[i + 1], 0.35)))):
+                    off = 0.12 + 0.045 * kd                                        # la segunda tabla, por fuera de la primera
+                    p0 = Vector((a[0], y + (off if y < 0 else -off), a[1]))
+                    p1 = Vector((b[0], y + (off if y < 0 else -off), b[1]))
                     _plank(shell, p0, p1, 0.12, 0.04)
         for j in range(len(ys) - 1):
             for x in (xs[0], xs[-1]):
@@ -295,7 +297,8 @@ def build_cabin(bid, collection_root=None, dress_all=True):
         run = (N - 1) * going
         y_st = d / 2 - t - sw - 0.02
         hole = (st["x"] + 0.6, st["x"] + run, y_st - 0.05, d / 2 - t)
-    boards_floor(inter, -w / 2 + t, w / 2 - t, yf + t, d / 2 - t, z0, r, missing=0.03)
+    zb0 = z0 + (0.028 if cfg["base"] == "slab" else 0.0)                      # sobre la losa: sin caras coplanares
+    boards_floor(inter, -w / 2 + t - 0.02, w / 2 - t + 0.02, yf + t - 0.02, d / 2 - t + 0.02, zb0, r, missing=0.03)
     # ---------------- muros ----------------
     P = []
     spec = SPECS[bid]
@@ -340,8 +343,8 @@ def build_cabin(bid, collection_root=None, dress_all=True):
                 # tabla en la cara del testero (cubre el canto del muro de frente/fondo) y tabla en la cara de frente/fondo
                 shell.box((min(xo, xo + sx * 0.026), min(yc + sy * 0.026, yc - sy * (t + 0.12)), zl),
                           (max(xo, xo + sx * 0.026), max(yc + sy * 0.026, yc - sy * (t + 0.12)), zh), trim_mat, bevel=0.004, seg=1)
-                shell.box((min(xo + sx * 0.026, xo - sx * 0.15), min(yc, yc + sy * 0.026), zl),
-                          (max(xo + sx * 0.026, xo - sx * 0.15), max(yc, yc + sy * 0.026), zh), trim_mat, bevel=0.004, seg=1)
+                shell.box((min(xo - sx * 0.001, xo - sx * 0.15), min(yc, yc + sy * 0.026), zl),
+                          (max(xo - sx * 0.001, xo - sx * 0.15), max(yc, yc + sy * 0.026), zh), trim_mat, bevel=0.004, seg=1)
     # ---------------- entrepiso ----------------
     if nl > 1:
         z1 = z0 + fh
@@ -403,7 +406,7 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     spot = None
     if cfg.get("torn"):
         spot = rf.damage_spot("gable", w, D, P_, O_, seed=seed, damage=0.4)
-        spot = (w / 2 - 1.6, -0.65, spot[2])          # junto al hastial este, vertiente delantera, sin cruzar la faja del muro
+        spot = (w / 2 - 1.6, -0.95, 0.45)             # junto al hastial este, entre la faja del muro y la cumbrera
     # sin losa a la altura de la solera: ni pendolones ni escombro en z = 0; en CAB_2 tampoco tirantes (los ata el tapanco)
     fr = rf.roof_frame("gable", w, D, P_, O_, seed=seed, cover=cover, tails=cfg["roof"] != "boards", damage=0.4 if spot else 0.0, spot=spot,
                        ties=not cfg.get("loft"), kingposts=False, debris=False)
@@ -461,13 +464,23 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if cfg.get("torn"):                                                          # trozos de cabio y correa caídos al piso
         rd = rng(cfg["seed"] + 77)
         for k in range(5):
-            L = float(rd.uniform(0.5, 1.0))
-            a = float(rd.uniform(0, 180))
-            px, py = float(rd.uniform(0.6, 1.9)), float(rd.uniform(-1.1, 0.3))
+            L = float(rd.uniform(0.5, 0.9))
+            a = float(rd.uniform(-12, 12))
+            px, py = float(rd.uniform(1.2, 1.9)), -1.45 + 0.28 * k                  # una franja por trozo, bajo el desgarro
             wd, ht = (0.05, 0.12) if k % 2 else (0.06, 0.04)
             pl = MB()
             pl.box((-L / 2, -wd / 2, 0.0), (L / 2, wd / 2, ht), "wood", bevel=0.004, seg=1)
-            inter.join(pl, T(px, py, z0 + 0.002 + 0.0015 * k) @ RZ(a) @ Matrix.Rotation(math.radians(float(rd.uniform(-4, 4))), 4, "X"))
+            inter.join(pl, T(px, py, z0 - 0.003) @ RZ(a))                          # asentado en la duela (tope 1,994..2,004)
+    back_steps = []
+    if cfg["base"] == "slab" and z0 > 0.25:                                      # escalón de madera en las puertas traseras
+        for kind, uc, dw, dh, sill in SPECS[bid].get(("back", 0), []):
+            if kind != "door":
+                continue
+            xc = w / 2 - uc
+            stb = circ.stair_straight(width=1.0, rise_total=z0, seed=cfg["seed"] + 25, kind="wood", going=0.28, broken=0.1)
+            runb = (stb.meta["N"] - 1) * 0.28 if hasattr(stb, "meta") and "N" in stb.meta else 0.56
+            det.join(stb, T(xc - 0.5, d / 2 + 0.05 + runb, 0.0) @ RZ(-90))
+            back_steps.append((xc - 0.55, xc + 0.55, d / 2, d / 2 + 0.1 + runb))
     if cfg.get("gutter"):
         stats["gutters"] = build_gutters(cfg, roof, det, top, z_crown, yf, yc, D)
     if bid == "CAB_1_tablones":
@@ -477,6 +490,19 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     acfg = dict(id=cid, xs=[-w / 2, w / 2], ys=[yf if not cfg.get("veranda") else -d / 2, d / 2], seed=cfg["seed"],
                 footprint=[(-w / 2, w / 2, (yf if not cfg.get("veranda") else -d / 2), d / 2)])
     keep = [(-1.0, -d / 2 - 3.0, 1.0, -d / 2)]
+    caps = [(a - 0.05, b + 0.05, c0 - 0.05, c1, 0.08) for (a, b, c0, c1) in back_steps]
+    keep += [(a - 0.3, c0, b + 0.3, c1 + 1.0) for (a, b, c0, c1) in back_steps]
+    for kind, uc, dw, dh, sill in SPECS[bid].get(("back", 0), []):               # puertas traseras: umbral sin hierba
+        if kind == "door":
+            keep.append((w / 2 - uc - dw / 2 - 0.35, d / 2, w / 2 - uc + dw / 2 + 0.35, d / 2 + 1.6))
+    if cfg.get("cistern"):
+        keep.append((-1.55, -0.03, 0.95, 2.07))
+    if cfg["base"] == "stilts":                                                 # cruces de San Andrés de los pilotes
+        keep += [(sx * (w / 2 - 0.24) - 0.4, -d / 2, sx * (w / 2 - 0.24) + 0.4, d / 2) for sx in (-1, 1)]
+        keep += [(-w / 2, sy * (d / 2 - 0.24) - 0.4, w / 2, sy * (d / 2 - 0.24) + 0.4) for sy in (-1, 1)]
+    sr = stats.get("porch", {}).get("stair_rect")
+    if sr:                                                                       # la arena no tapa los escalones del porche
+        caps.append((sr[0] - 0.05, sr[1] + 0.05, sr[2] - 0.05, sr[3] + 0.05, 0.03))
     if cfg.get("porch") and cfg["porch"]["side"] == "west":
         acfg["footprint"].append((-w / 2 - cfg["porch"]["depth"], -w / 2, yf + 0.3, d / 2 - 0.3))
         keep.append((-w / 2 - cfg["porch"]["depth"] - 1.2, 1.2, -w / 2 - cfg["porch"]["depth"], 2.7))
@@ -491,7 +517,8 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if cfg["base"] == "stilts":
         acfg["footprint"] = [(-w / 2 + 0.12 + dx - 0.3, -w / 2 + 0.12 + dx + 0.3, y - 0.3, y + 0.3) for dx in (0, w / 3 - 0.12, 2 * w / 3 - 0.12, w - 0.24)
                              for y in (-d / 2 + 0.12, 0.0, d / 2 - 0.12)]
-    stats["tufts"] = ab.build_skirt(acfg, sk, margin=3.0, keep_clear=keep, inset=0.05, fill_inside=True, tuft_clear=0.35)
+    stats["tufts"] = ab.build_skirt(acfg, sk, margin=3.0, keep_clear=keep, inset=0.05, fill_inside=True, tuft_clear=0.35, caps=caps,
+                                     cap_inside=0.15)
     for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Skirt", sk)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
@@ -551,7 +578,7 @@ def build_porch(cfg, shell, det, roof, r):
         x0, x1, y0, y1 = -w / 2 - dep, -w / 2, yf + 0.3, d / 2 - 0.3
     else:
         x0, x1, y0, y1 = pc["x0"], pc["x1"], yf - dep, yf
-    zdeck = z0                                    # deck al nivel del piso interior: umbral sin escalón
+    zdeck = z0 + (0.012 if cfg["base"] == "slab" else 0.0)   # al nivel del piso (sobre el canto de la losa, sin z-fighting)
     if pc["side"] == "west":                    # duela completa donde llegan los escalones
         boards_floor(shell, x0 + 0.02, x1 - 0.02, y0, y1 - 1.4, zdeck, r, missing=0.08, mat="wood_grey")
         boards_floor(shell, x0 + 0.02, x1 - 0.02, y1 - 1.4, y1, zdeck, r, missing=0.0, mat="wood_grey")
@@ -579,6 +606,7 @@ def build_porch(cfg, shell, det, roof, r):
         st = circ.stair_straight(width=1.0, rise_total=zdeck, seed=cfg["seed"] + 24, kind="wood", going=0.28, broken=0.15)
         run = (st.meta["N"] - 1) * 0.28 if hasattr(st, "meta") and "N" in st.meta else 0.56
         det.join(st, T(x0 - run, y1 - 1.25, 0.0))                # escalones a la arena en el claro del barandal
+        stair_rect = (x0 - run, x0, y1 - 1.25, y1 - 0.25)
     else:
         shell.box((x0, y0 + 0.02, zpost), (x1, y0 + 0.18, zpost + 0.16), "wood_grey", bevel=0.006, seg=1)
         shell.box((x0 + 0.02, y0, 0.0), (x1 - 0.02, y0 + 0.12, zdeck - 0.18), "wood_grey", bevel=0.006, seg=1)   # viga de borde del deck
@@ -588,6 +616,7 @@ def build_porch(cfg, shell, det, roof, r):
         st = circ.stair_straight(width=sx1 - sx0, rise_total=zdeck, seed=cfg["seed"] + 23, kind="wood", going=0.28, broken=0.15)
         run = (st.meta["N"] - 1) * 0.28 if hasattr(st, "meta") and "N" in st.meta else 0.56
         det.join(st, T(sx1, y0 - run, 0.0) @ RZ(90))           # centrado en la puerta
+        stair_rect = (sx0, sx1, y0 - run, y0)
     # cubierta de un agua: media cubierta a dos aguas del kit (cumbrera contra el muro) + su estructura
     if pc["side"] == "west":
         Lr, depth = (y1 - y0) + 0.4, dep
@@ -595,17 +624,17 @@ def build_porch(cfg, shell, det, roof, r):
         sheet = rf.corrugated_roof(Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30, detail="low")
         for mb in (frame, sheet):
             ac.cull_pred(mb, lambda c: c.y > 0.0)
-        M = T(-w / 2, (y0 + y1) / 2, zpost + 0.16) @ RZ(-90)
+        M = T(-w / 2 - 0.045, (y0 + y1) / 2, zpost + 0.16) @ RZ(-90)          # separada de cinta y esquineros
     else:
         Lr, depth = (x1 - x0) + 0.4, dep
         frame = rf.roof_frame("gable", Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30, cover="boards", tails=False, ties=False, blocking=False)
         sheet = rf.board_roof_stepped(Lr, 2 * depth, pitch, 0.35, seed=cfg["seed"] + 30)
         for mb in (frame, sheet):
             ac.cull_pred(mb, lambda c: c.y > 0.0)
-        M = T((x0 + x1) / 2, yf, zpost + 0.16)
+        M = T((x0 + x1) / 2, yf - 0.045, zpost + 0.16)                        # separada de cinta, esquineros y sillares
     roof.join(frame, M)
     roof.join(sheet, M)
-    return dict(posts=len(posts))
+    return dict(posts=len(posts), stair_rect=stair_rect)
 
 
 def build_veranda(cfg, shell, det, r, top, z_crown):
@@ -615,8 +644,7 @@ def build_veranda(cfg, shell, det, r, top, z_crown):
     yf = cfg["front_y"]
     z0 = cfg["z0"]
     y0 = -d / 2
-    boards_floor(shell, -w / 2, w / 2, y0, y0 + 0.42, z0, r, missing=0.0, mat="wood_grey")          # llegada de la escalera: sin huecos
-    boards_floor(shell, -w / 2, w / 2, y0 + 0.42, yf, z0, r, missing=0.07, mat="wood_grey")
+    boards_floor(shell, -w / 2, w / 2, y0, yf, z0, r, missing=0.0, mat="wood_grey")               # sin claros en el paso
     joists(shell, -w / 2 + 0.05, w / 2 - 0.05, y0 + 0.02, yf, z0 - 0.03, step=0.5, h=0.20)
     xs = [-w / 2 + 0.08, -w / 6, w / 6, w / 2 - 0.08]
     for x in xs:
@@ -662,25 +690,25 @@ def build_gutters(cfg, roof, det, top, z_crown, yf, yc, D):
 # vanos por muro y nivel: (tipo, u_centro, ancho, alto, antepecho) — u medida mirando el muro desde afuera
 SPECS = {
     "CAB_1_tablones": {
-        ("front", 0): [("win", 3.4, 0.8, 1.1, 0.9), ("door", 4.9, 0.95, 2.05, 0.0), ("win", 7.6, 0.6, 0.9, 1.0)],   # puerta libre de la partición
+        ("front", 0): [("win", 3.4, 0.8, 1.1, 0.9), ("door", 4.9, 0.95, 2.15, 0.0), ("win", 7.6, 0.6, 0.9, 1.0)],   # puerta libre de la partición
         ("front", 1): [("win", 1.6, 0.6, 0.9, 1.0), ("win", 3.4, 0.8, 1.1, 0.9), ("win", 7.0, 0.8, 1.1, 0.9)],
-        ("back", 0): [("win", 2.0, 0.8, 1.1, 0.9), ("door", 4.0, 0.9, 2.0, 0.0)],                               # al este de la escalera
+        ("back", 0): [("win", 2.0, 0.8, 1.1, 0.9), ("door", 4.0, 0.9, 2.15, 0.0)],                              # al este de la escalera
         ("back", 1): [("win", 2.5, 0.8, 1.1, 0.9), ("win", 6.5, 0.8, 1.1, 0.9)],
-        ("west", 0): [("door", 2.9, 0.9, 2.0, 0.0), ("win", 4.5, 0.7, 1.0, 1.0)],
+        ("west", 0): [("door", 2.9, 0.9, 2.15, 0.0), ("win", 4.5, 0.7, 1.0, 1.0)],
         ("west", 1): [("win", 2.9, 0.7, 1.0, 1.0)],
         ("east", 0): [("win", 2.9, 0.8, 1.1, 0.9)],
         ("east", 1): [("win", 2.9, 0.8, 1.1, 0.9)],
     },
     "CAB_2_pilotes": {
-        ("front", 0): [("win", 1.2, 0.8, 1.1, 0.9), ("door", 2.6, 0.9, 2.0, 0.0), ("door", 4.4, 0.9, 2.0, 0.0), ("win", 5.8, 0.8, 1.1, 0.9)],
-        ("back", 0): [("win", 1.8, 0.8, 1.1, 0.9), ("win", 3.6, 0.7, 1.0, 1.0), ("win", 5.4, 0.8, 1.1, 0.9)],   # sin puerta: atrás no hay escalera
+        ("front", 0): [("win", 1.2, 0.8, 1.1, 0.9), ("door", 2.6, 0.9, 2.12, 0.0), ("door", 4.4, 0.9, 2.12, 0.0), ("win", 5.8, 0.8, 1.1, 0.9)],
+        ("back", 0): [("win", 1.8, 0.8, 1.1, 0.9), ("win", 2.95, 0.7, 1.0, 1.0), ("win", 5.4, 0.8, 1.1, 0.9)],  # sin puerta: atrás no hay escalera
         ("west", 0): [("win", 2.4, 0.8, 1.1, 0.9)],
         ("east", 0): [("win", 1.4, 0.8, 1.1, 0.9), ("win", 3.4, 0.8, 1.1, 0.9)],
     },
     "CAB_3_ladrillo": {
-        ("front", 0): [("win", 1.2, 0.8, 1.3, 0.85), ("win", 3.8, 0.8, 1.3, 0.85), ("door", 5.9, 0.95, 2.1, 0.0), ("win", 7.2, 0.7, 1.2, 0.9)],
+        ("front", 0): [("win", 1.2, 0.8, 1.3, 0.85), ("win", 3.8, 0.8, 1.3, 0.85), ("door", 5.9, 0.95, 2.15, 0.0), ("win", 7.2, 0.7, 1.2, 0.9)],
         ("front", 1): [("win", 1.0, 0.75, 1.2, 0.85), ("win", 2.8, 0.75, 1.2, 0.85), ("win", 5.2, 0.75, 1.2, 0.85), ("win", 7.0, 0.75, 1.2, 0.85)],
-        ("back", 0): [("win", 1.6, 0.8, 1.2, 0.9), ("door", 4.0, 0.9, 2.05, 0.0), ("win", 6.4, 0.8, 0.6, 1.75)],   # alta: sobre la escalera
+        ("back", 0): [("win", 1.6, 0.8, 1.2, 0.9), ("door", 4.0, 0.9, 2.15, 0.0), ("win", 6.4, 0.8, 0.6, 1.75)],   # alta: sobre la escalera
         ("back", 1): [("win", 2.0, 0.75, 1.2, 0.85), ("win", 6.0, 0.75, 1.2, 0.85)],
         ("west", 0): [("win", 3.2, 0.8, 1.2, 0.9)],
         ("west", 1): [("win", 2.0, 0.7, 1.1, 0.9), ("win", 4.4, 0.7, 1.1, 0.9)],
