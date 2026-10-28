@@ -200,19 +200,57 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
 DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light")
 
 
-def vertex_ao(obj, samples):
-    """Hornea la oclusión ambiental a un atributo de color por esquina 'AO' (todos los objetos de la escena ocluyen)."""
+def vertex_ao(obj, samples, dist=0.5, inset=0.03, lift=0.001):
+    """Hornea la oclusión ambiental a un atributo de color por esquina 'AO' (todos los objetos visibles ocluyen).
+    - Distancia de AO corta (`dist`, en un world propio): la AO mide rincones y juntas. Sin world, dentro de un edificio cerrado
+      todos los rayos chocaban con algún muro y el 95 % de las esquinas salía negro (el arreglo posterior las volvía cuadros).
+    - Se hornea sobre una copia con las caras separadas, cada esquina movida `inset` m hacia el centro de su cara (máx. 25 %)
+      y levantada `lift`: la esquina real suele caer en una unión (pie del muro contra la losa) y nacía tapada. Los valores se
+      copian esquina por esquina a la malla original (mismo orden de esquinas)."""
     me = obj.data
     if "AO" not in me.color_attributes:
         me.color_attributes.new("AO", "BYTE_COLOR", "CORNER")
-    me.color_attributes.active_color = me.color_attributes["AO"]
     sc = bpy.context.scene
+    if sc.world is None:
+        sc.world = bpy.data.worlds.new("_ao")
+    sc.world.light_settings.distance = dist
+    tmp_me = me.copy()
+    bm = bmesh.new()
+    bm.from_mesh(tmp_me)
+    bmesh.ops.split_edges(bm, edges=bm.edges[:])
+    for f in bm.faces:
+        c = f.calc_center_median()
+        n = f.normal.copy()
+        for v in f.verts:
+            d = c - v.co
+            ln = d.length
+            if ln > 1e-6:
+                v.co += d * (min(inset, 0.25 * ln) / ln)
+            v.co += n * lift
+    bm.to_mesh(tmp_me)
+    bm.free()
+    tmp = bpy.data.objects.new(obj.name + "_aotmp", tmp_me)
+    tmp.matrix_world = obj.matrix_world
+    for c in obj.users_collection:
+        c.objects.link(tmp)
+    hid = obj.hide_render
+    obj.hide_render = True
+    tmp_me.color_attributes.active_color = tmp_me.color_attributes["AO"]
     sc.render.engine = "CYCLES"
     sc.cycles.samples = samples
     bpy.ops.object.select_all(action="DESELECT")
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
+    tmp.select_set(True)
+    bpy.context.view_layer.objects.active = tmp
     bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
+    import numpy as np
+    src = tmp_me.color_attributes["AO"]
+    col = np.zeros(len(src.data) * 4, dtype=np.float32)
+    src.data.foreach_get("color", col)
+    me.color_attributes["AO"].data.foreach_set("color", col)
+    me.color_attributes.active_color = me.color_attributes["AO"]
+    obj.hide_render = hid
+    bpy.data.objects.remove(tmp)
+    bpy.data.meshes.remove(tmp_me)
 
 
 def fix_vertex_ao(obj, floor=0.25, neutral=0.85, dead=0.04):
