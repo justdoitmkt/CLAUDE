@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><title>loading</title></head><body style="margin:0;background:#888">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+// Recorrido interior: el GLB se carga una vez; window.go(shot) coloca cámara y lámparas y renderiza.
+// Coordenadas de las tomas en el sistema de Blender (x, y, z arriba); glTF/Three: (x, z, -y).
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const W = 1600, H = 900;
+const r = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0xa9bccf);
+const hemi = new THREE.HemisphereLight(0xe2ecff, 0x8a7a60, 1.0); sc.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6); sun.position.set(30, 40, 25); sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+Object.assign(sun.shadow.camera, {left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 120}); sc.add(sun);
+// lámparas interiores (bombillas desnudas): una cerca de la cámara y otra al fondo de la toma
+const lampA = new THREE.PointLight(0xffe2b8, 14, 0, 2), lampB = new THREE.PointLight(0xffe2b8, 10, 0, 2);
+lampA.castShadow = lampB.castShadow = true;
+for (const l of [lampA, lampB]) { l.shadow.mapSize.set(1024, 1024); l.shadow.bias = -0.002; l.shadow.camera.near = 0.1; sc.add(l); }
+const cam = new THREE.PerspectiveCamera(70, W / H, 0.05, 500);
+const T = p => new THREE.Vector3(p[0], p[2], -p[1]);
+new GLTFLoader().load(q.get('glb'), g => {
+  g.scene.traverse(m => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; } });
+  sc.add(g.scene);
+  window.go = s => {
+    cam.fov = s.fov || 70; cam.updateProjectionMatrix();
+    cam.position.copy(T(s.cam)); cam.lookAt(T(s.tgt));
+    lampA.position.copy(T(s.lampA || s.cam)); lampA.intensity = s.iA ?? 14;
+    lampB.position.copy(T(s.lampB || s.tgt)); lampB.intensity = s.iB ?? 10;
+    hemi.intensity = s.hemi ?? 1.0; r.toneMappingExposure = s.exp ?? 1.0;
+    sun.position.copy(T(s.sunDir || [25, -30, 40])).add(T(s.cam).setY(0));
+    sun.target.position.copy(T(s.cam)).setY(0); sun.target.updateMatrixWorld();
+    r.render(sc, cam);
+    return {calls: r.info.render.calls, tris: r.info.render.triangles};
+  };
+  document.title = 'ready';
+}, undefined, e => { document.title = 'error: ' + e; });
+</script></body></html>
