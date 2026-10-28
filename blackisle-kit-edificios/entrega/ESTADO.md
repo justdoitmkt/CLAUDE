@@ -235,3 +235,36 @@ Nueva estrategia (R8):
   (`graffiti_apt_a.py`, `graffiti_apt.py`), paneles de A/B/C/D regenerados y revisados uno por uno (16 caras): sin coronas ni estrellas.
   Íconos vigentes: calavera con rosas, corazón, ojo, máscaras. Se re-hornea el atlas `walls_main` de los 4 departamentos.
 - Compositor: los goteos y manchas ya no caen sobre los héroes (antes una mancha azul tapaba "Puro" en APT_A este).
+
+## Auditorías de circulación y geometría (2026-10-27/28, workflows con verificación adversarial)
+Un auditor por modelo (código + plantas seccionadas + sondas `bpy` con rayos, BVH y cápsula de jugador r 0,25 · h 1,8 · escalón 0,35);
+cada hallazgo grave pasa por un verificador independiente que intenta refutarlo con su propia sonda. Todo lo aplicado se re-comprobó
+con sondas y plantas nuevas (`render_qa/*_planta_N*.png`).
+- **APT_A:** casetón con descanso de llegada (muro oeste a x = 2,30), loggias con puertas abiertas, puerta de cocina libre de la
+  columna, barandal en azotea, ventila de PB sobre el descanso, recorte del armazón del techo sin teja suelta.
+- **APT_B:** hojas de puerta que sellaban vestíbulo y deptos, local este sin acceso, particiones que cruzaban ventanas, rendija perimetral,
+  tendederos flotando, bajantes metidos en columnas.
+- **APT_C (11):** núcleo abierto al depto norte sin barandal (grave), muro x = 1,2 faltante en pisos altos (grave), local oeste sin puerta
+  (grave), local sur sin acceso, puerta de balcón partida por una partición, puerta tapada por columna, ventanas, parabólica, bajantes.
+- **APT_D (10):** cuartos de los balcones sellados por el muro del baño (grave), zócalo y junta cruzando las 4 puertas de PB (grave),
+  caída del descanso a la bodega trasera, puerta de entrada partida, parabólica/medidores/A/C/tendederos/arbotantes mal anclados,
+  ranura de 13 cm junto a la escalera.
+- **Cabañas (26 + re-auditoría):** 7 graves verificados (CAB_1: puerta delantera partida por la partición y trasera contra el bajo de
+  la escalera; CAB_2: escombro y pendolones flotando, escalera de mano atravesando el tapanco; CAB_3: escalera inaccesible por el
+  barandal, cuarto alto sin puerta, porche 0,30 m sobre el piso con 1,72 m bajo el dintel y escalones contra poste y viga a 1,40 m).
+  Re-auditoría: todos corregidos; 19 regresiones/pendientes menores resueltos en una segunda ronda (puertas con paso ≥ 2,0 m, escalón
+  trasero de CAB_3, arena que no tapa escalones, hierba fuera de umbrales, etc.).
+
+## Recorrido interior en Three.js y defectos que destapó (2026-10-28, revisado con mis ojos)
+`visor/recorrido/walk.html` + `walk.mjs`: el GLB final con GLTFLoader (r169) en Chromium, cámara a 1,65 m, sol con sombras, cielo y
+bombillas; tomas en `render_qa/recorrido/`. Defectos encontrados y corregidos en el pipeline (afectan a los 7 modelos):
+1. **Aplanado interior naranja saturado y a escala de ~1 m** (T2 sin tinte en el repetible): variante `T2_old_plaster_paint_int.png`
+   (pintura gris sucia sobre concreto) a 1,2 m por repetición.
+2. **AO por vértice rota (causa raíz de los "cuadros")**: la escena del horneado no tenía world y Cycles medía la AO sin distancia corta;
+   dentro de un edificio cerrado todos los rayos chocaban y el **95 %** de las esquinas salía en 0; el arreglo por cara las volvía
+   cuadros. Ahora: distancia 0,5 m y horneado sobre una copia con caras separadas y esquinas movidas 3 cm hacia su cara → esquinas
+   muertas 9 % (interior) / 15 % (detalles), que son piezas realmente encerradas; después se promedia por posición y orientación.
+3. **Mosaico en piezas giradas**: el mapeo de caja elegía eje por cara en ejes del mundo; ahora se alinea por pieza conexa.
+4. **z-fighting** (`tests/zfight.py`, caras coplanares superpuestas visibles): CAB_3 interior 6,9 → 0,08 m² (duela sobre la losa),
+   CAB_1 4,1 → 0,7 (durmientes bajo las vigas), CAB_2 3,8 → 0,2 (diagonales de las cruces), esquineros sin solape, APT_D 308 → 30 m²
+   (la cornisa era un bloque que duplicaba la losa de azotea; lo restante son tapas de muro encerradas).
