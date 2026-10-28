@@ -1,6 +1,6 @@
 """export_validate.py — fase G: exporta el GLB de un modelo horneado y lo valida.
 
-Uso: /root/blk-venv/bin/python export_validate.py --id APT_A_5p [--blend ruta.blend]
+Uso: /root/blk-venv/bin/python export_validate.py --id APT_A_5p [--blend ruta.blend] [--out carpeta]
 Exporta solo las mallas cuyo nombre empieza por el ID (sin maniquí, cámara, sol ni piso de render), transformaciones aplicadas,
 +Y arriba, sin cámaras/luces/Draco, texturas embebidas en JPEG 90. Valida: triángulos del GLB (glb_tris), tamaño, dimensiones,
 origen en la base, escala y una reimportación en escena limpia (materiales, UV, memoria de texturas). Escribe export/<ID>_validacion.json.
@@ -24,7 +24,7 @@ def main():
     argv = sys.argv
     bid = argv[argv.index("--id") + 1]
     blend = argv[argv.index("--blend") + 1] if "--blend" in argv else os.path.join(HERE, f"{bid}.blend")
-    out_dir = os.path.join(ENT, "export")
+    out_dir = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ENT, "export")   # --out: pruebas sin pisar export/
     os.makedirs(out_dir, exist_ok=True)
     glb = os.path.join(out_dir, f"{bid}.glb")
     bpy.ops.wm.open_mainfile(filepath=blend)

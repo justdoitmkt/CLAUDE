@@ -26,7 +26,8 @@ from kit.common import box_uv_bm, reset_scene, tri_count  # noqa: E402
 ENT = os.path.abspath(os.path.join(HERE, ".."))
 
 SIZES = {   # atlas: (albedo, normal, orm)
-    "walls_main": (4096, 1024, 1024), "walls_rest": (3072, 1024, 1024), "details": (2048, 2048, 1024),
+    # walls_main: normal a 2048 (a 1024 eran ~35 px/m; revisión de aceptación de A: muro blando a 2 m)
+    "walls_main": (4096, 2048, 1024), "walls_rest": (3072, 1024, 1024), "details": (2048, 2048, 1024),
     "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
 }
 SIZES_CAB = {   # cabañas: superficie ~1/4 de un edificio -> mitad de resolución en el atlas principal
@@ -34,7 +35,7 @@ SIZES_CAB = {   # cabañas: superficie ~1/4 de un edificio -> mitad de resoluci�
     "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
 }
 INTERIOR_AO = 1024
-BAND_SCALE = 1.4
+BAND_SCALE = 2.0   # islas de la banda de PB (grafiti, lo que el jugador ve de cerca) ampliadas dentro de walls_main; antes 1,4
 
 
 def log(*a):
@@ -155,7 +156,9 @@ def bake_atlas(obj, aid, prefix, out_dir, sizes, quick, metal=0.0, reuse=False):
     alb, r1 = _load_or_bake(obj, f"{prefix}_{aid}_albedo", "DIFFUSE", a_size, out_dir, reuse, samples=4 if quick else 8, pass_filter={"COLOR"})
     rough, _ = _load_or_bake(obj, f"{prefix}_{aid}_rough", "ROUGHNESS", o_size, out_dir, reuse, samples=1 if quick else 4, colorspace="Non-Color")
     nrm, _ = _load_or_bake(obj, f"{prefix}_{aid}_normal", "NORMAL", n_size, out_dir, reuse, samples=4 if quick else 8, colorspace="Non-Color")
-    ao, _ = _load_or_bake(obj, f"{prefix}_{aid}_ao", "AO", o_size, out_dir, reuse, samples=8 if quick else 32, colorspace="Non-Color")
+    ao, r_ao = _load_or_bake(obj, f"{prefix}_{aid}_ao", "AO", o_size, out_dir, reuse, samples=8 if quick else 32, colorspace="Non-Color")
+    if not r_ao:
+        _ao_floor(ao, AO_FLOOR)
     orm = ld.pack_orm(ao, rough, metal, os.path.join(out_dir, f"{prefix}_{aid}_orm.png"))
     if not r1:                                  # el AO al 35 % multiplicado en el albedo (brief F-3), solo al hornear de nuevo
         _mix_ao_into_albedo(alb, ao, 0.35)
@@ -169,6 +172,17 @@ def bake_atlas(obj, aid, prefix, out_dir, sizes, quick, metal=0.0, reuse=False):
     mem = mem_mb(a_size, a_size) + mem_mb(n_size, n_size) + mem_mb(o_size, o_size)
     log(f"{aid}: {round(time.time() - t)} s, {a_size}/{n_size}/{o_size}, {mem:.1f} MB{' (reutilizado)' if r1 else ''}")
     return mem
+
+
+AO_FLOOR = 0.35   # mínimo de la AO de los atlas: Three.js multiplica la luz ambiente por ella; con 0 una cara en sombra sale negra
+
+
+def _ao_floor(ao, lo):
+    import numpy as np
+    px = np.array(ao.pixels[:], dtype=np.float32).reshape(-1, 4)
+    px[:, :3] = lo + (1.0 - lo) * px[:, :3]
+    ao.pixels[:] = px.ravel()
+    ao.save()
 
 
 def _mix_ao_into_albedo(alb, ao, k):
@@ -190,14 +204,19 @@ def _mix_ao_into_albedo(alb, ao, k):
 # detalles, techo, interior, hierba y escombro: materiales repetibles + oclusión en colores de vértice (glTF COLOR_0)
 # ----------------------------------------------------------------------------------------------
 TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, tinte)
-    "concrete": ("T1_concrete.png", 3.0, 0.9, 0.0, (0.92, 0.92, 0.9)), "plaster": ("T2_old_plaster_paint_int.png", 1.2, 0.88, 0.0, (0.97, 0.96, 0.93)),
+    "concrete": ("T1_concrete.png", 3.0, 0.9, 0.0, (0.92, 0.92, 0.9)), "plaster": ("T2_plaster_int_2k.png", 2.4, 0.88, 0.0, (0.97, 0.96, 0.93)),
     "wood": ("T4_wood_weathered.png", 1.6, 0.8, 0.0, (1, 1, 1)), "wood_dark": ("W1_wood_dark_planks.png", 1.8, 0.8, 0.0, (1, 1, 1)),
     "wood_grey": ("W2_wood_grey_clapboard.png", 1.8, 0.82, 0.0, (1, 1, 1)), "brick": ("S1_brick_red_worn.png", 2.0, 0.85, 0.0, (1, 1, 1)),
     "tile": ("T3_roof_tile.png", 2.0, 0.75, 0.0, (1, 1, 1)), "metal_rust": ("M1_rust_metal.png", 1.2, 0.7, 0.3, (1, 1, 1)),
     "metal_paint": ("M1_rust_metal.png", 1.2, 0.6, 0.3, (0.62, 0.66, 0.62)), "roof_metal": ("R1_roof_corrugated_rust.png", 2.0, 0.65, 0.35, (1, 1, 1)),
     "roof_metal_light": ("R2_roof_corrugated_light.png", 2.0, 0.55, 0.4, (1, 1, 1)),
 }
-DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light")
+# materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
+# y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)
+TILE_ALIAS = {"rubble": "concrete"}
+# doble cara: láminas (lámina ondulada, tela, hierba) y la teja (piezas sueltas sin cara inferior: desde el ático se veía el cielo
+# y el sol pasaba, porque Three.js no dibuja la cara trasera ni la usa para la sombra)
+DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile")
 
 
 def vertex_ao(obj, samples, dist=0.5, inset=0.03, lift=0.001):
@@ -300,6 +319,40 @@ def fix_vertex_ao(obj, floor=0.25, neutral=0.85, dead=0.04):
     return int((~valid).sum())
 
 
+FABRIC_PALETTE = ((0.62, 0.60, 0.55), (0.36, 0.42, 0.52), (0.55, 0.31, 0.27), (0.46, 0.48, 0.36), (0.58, 0.52, 0.40),
+                  (0.32, 0.32, 0.34), (0.60, 0.50, 0.30), (0.50, 0.44, 0.48))
+
+
+def _fabric_tints(me, mat_idx, ls, lt):
+    """Color por esquina para las caras de tela: cada pieza conexa (sábana, cortina, camisa) toma un color de FABRIC_PALETTE
+    según su posición (determinista). Antes toda la tela era del mismo canela liso."""
+    import numpy as np
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.faces.ensure_lookup_table()
+    out = np.ones((sum(lt), 3), dtype=np.float32)
+    seen = set()
+    for f in bm.faces:
+        if f.material_index != mat_idx or f.index in seen:
+            continue
+        comp, stack = [], [f]
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            comp.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.material_index == mat_idx and h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        c = sum((g.calc_center_median() for g in comp), Vector()) / len(comp)
+        tint = FABRIC_PALETTE[int(abs(c.x * 7.31 + c.y * 3.17 + c.z * 5.53) * 10) % len(FABRIC_PALETTE)]
+        for g in comp:
+            out[ls[g.index]:ls[g.index] + lt[g.index]] = tint
+    bm.free()
+    return out
+
+
 def tileable_materials(objs, prefix, uv_unit):
     """Sustituye los materiales de `objs` por repetibles a escala real (canal 'UVMap' de caja a `uv_unit` m por unidad) y funde
     los de color liso en un solo material 'liso' cuyo color va en COLOR_0 (color x AO). COLOR_0 multiplica el color base en glTF."""
@@ -307,7 +360,10 @@ def tileable_materials(objs, prefix, uv_unit):
     cache = {}
 
     def mat_for(name):
-        key = name if name in TILE_TEX else ("liso_2c" if name in DOUBLE_SIDED else "liso")
+        # colores lisos: 'glass' aparte (oscuro, rugosidad 0,1: con la del liso las esquirlas parecían cartulina blanca); el resto en
+        # un solo 'liso' de doble cara (tela, ropa tendida y hierba lo necesitan; en piezas cerradas la cara trasera no se ve)
+        name = TILE_ALIAS.get(name, name)
+        key = name if name in TILE_TEX else ("glass" if name == "glass" else "liso")
         if key in cache:
             return cache[key]
         mat = bpy.data.materials.new(f"{prefix}_t_{key}")
@@ -329,11 +385,11 @@ def tileable_materials(objs, prefix, uv_unit):
             col = nb.mix(1.0, col, (*[min(c, 1.0) for c in tint], 1.0), "MULTIPLY")
             nb.link(col, bsdf.inputs["Base Color"])
         else:
-            rough, metal = 0.8, 0.0
+            rough, metal = (0.1, 0.0) if key == "glass" else (0.8, 0.0)
             nb.link(vc.outputs[0], bsdf.inputs["Base Color"])
         bsdf.inputs["Roughness"].default_value = rough
         bsdf.inputs["Metallic"].default_value = metal
-        mat.use_backface_culling = key != "liso_2c" and key not in DOUBLE_SIDED     # láminas (lámina ondulada, tela, hierba)
+        mat.use_backface_culling = key in TILE_TEX and key not in DOUBLE_SIDED
         cache[key] = mat
         return mat
     for obj in objs:
@@ -354,10 +410,13 @@ def tileable_materials(objs, prefix, uv_unit):
         me.polygons.foreach_get("loop_total", lt)
         loop_mat = np.repeat(mi, lt)
         for k, nm in enumerate(old):
-            if nm in TILE_TEX:
+            if TILE_ALIAS.get(nm, nm) in TILE_TEX:
                 continue
             c, _, _ = ld.BASE_COLORS.get(nm, ((0.5, 0.5, 0.5), 0.8, 0.0))
             sel = loop_mat == k
+            if nm == "fabric":                         # ropa tendida, cortinas, colchones: un color desteñido por pieza
+                cols[sel, :3] *= _fabric_tints(me, k, ls, lt)[sel]
+                continue
             cols[sel, :3] *= np.array(c, dtype=np.float32)
         ca.data.foreach_set("color", cols.ravel())
         new = [mat_for(nm) for nm in old]
@@ -402,8 +461,12 @@ def main():
     bm.to_mesh(shell.data)
     bm.free()
     log("caras de apoyo retiradas:", len(kill))
-    # solo el techo cuenta como oclusor: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
-    ext, intr = ld.split_exterior(shell, others=[roof])
+    import coplanar                                   # z-fighting: borra caras cubiertas por otra coplanar, hunde 3 mm las parciales
+    log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof) if o is not None], log=log))
+    # oclusores: techo e interior (tabiques, puertas, escaleras). Sin el interior, la cara interior de un muro exterior veía el cielo
+    # cruzando el cuarto y las ventanas de enfrente, iba al atlas exterior y salía con AO ~0 (cuartos negros en Three.js) o con la
+    # textura de fachada. Los detalles no tapan: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
+    ext, intr = ld.split_exterior(shell, others=[roof, inter])
     bpy.data.objects.remove(shell)
     short = "_".join(bid.split("_")[:2])
     gfile = os.path.join(ld.TEX, "graffiti", f"G_{short}_mapa.json")
@@ -455,7 +518,9 @@ def main():
     mats = tileable_materials(loose, prefix, 2.0)
     mats_i = []
     tex_used = {TILE_TEX[k][0] for k in TILE_TEX}
-    mem += len(tex_used) * mem_mb(1024, 1024)
+    for fn in tex_used:                               # tamaño real de cada repetible (el aplanado interior es de 2048²)
+        w, h = ld._img(os.path.join(ld.TEX, fn)).size
+        mem += mem_mb(w, h)
     log("materiales repetibles:", mats, mats_i)
     log(f"memoria de texturas decodificada ≈ {mem:.0f} MB")
     blend = os.path.join(ENT, "blender", f"{bid}{'_quick' if quick else ''}.blend")

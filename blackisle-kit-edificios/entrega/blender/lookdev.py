@@ -171,7 +171,7 @@ class NB:
 
 
 BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + metal
-    "aluminium": ((0.55, 0.56, 0.56), 0.45, 1.0), "glass": ((0.25, 0.30, 0.30), 0.08, 0.0), "fabric": ((0.55, 0.50, 0.42), 0.95, 0.0),
+    "aluminium": ((0.55, 0.56, 0.56), 0.45, 1.0), "glass": ((0.10, 0.125, 0.125), 0.08, 0.0), "fabric": ((0.55, 0.50, 0.42), 0.95, 0.0),
     "cable": ((0.03, 0.03, 0.03), 0.6, 0.0), "plastic": ((0.70, 0.69, 0.64), 0.55, 0.0), "metal_paint": ((0.24, 0.27, 0.24), 0.6, 0.3),
     "rubble": ((0.46, 0.44, 0.40), 0.95, 0.0), "sand": ((0.74, 0.68, 0.54), 0.97, 0.0), "vegetation": ((0.22, 0.28, 0.12), 0.8, 0.0),
     "mortar": ((0.58, 0.56, 0.52), 0.95, 0.0),
@@ -260,9 +260,10 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
     if name == "plaster":
         # L1: pintura vieja (crema/ocre apagado) que se descascara mostrando el concreto (L0); dos escalas de K1 contra repetición
         # under: lo que asoma bajo la pintura ('concrete' = losa/columna colada; 'brick' = relleno de tabique, APT_B/APT_C)
-        conc = nb.tex(os.path.join(TEX, "S1_brick_red_worn.png" if under == "brick" else "T1_concrete.png"),
-                      2.0 if under == "brick" else 3.0, co, offset=off).outputs[0]
-        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=0.28, in_Value=1.05)     # pintura vieja casi gris (brief: concreto gris gastado)
+        conc = nb.tex(os.path.join(TEX, "T1_concrete.png"), 3.0, co, offset=off).outputs[0]
+        # pintura vieja casi gris (brief: concreto gris gastado). 0,15: con 0,28 el ocre de T2 dejaba manchas canela parejas en todas
+        # las caras y en Three.js los muros derivaban a marrón grisáceo (revisiones de aceptación de A y D)
+        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=0.15, in_Value=1.05)
         nb.link(color, hsv.inputs["Color"])
         tinted = nb.mix(0.6, hsv.outputs[0], (*paint_tint, 1.0), "MULTIPLY")
         k1a = k("K1_peel.png", 3.2, 0.3)
@@ -271,24 +272,45 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         nb.link(co, nz3.inputs["Vector"])
         peel_v = nb.math("ADD", nb.math("MULTIPLY", k1a, 0.6), nb.math("MULTIPLY", k1b, 0.4))
         peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", nb.math("SUBTRACT", nz3.outputs["Fac"], 0.5), 0.5))
-        peel = nb.math("GREATER_THAN", peel_v, 0.48)
+        # por zonas, no parejo: manchas grandes de humedad (ruido a ~14 m), más en el zócalo y junto a esquinas y juntas (AO);
+        # umbral 0,52 (antes 0,48): menos descascarado a media placa
+        zone = nb.n("ShaderNodeTexNoise", in_Scale=0.07, in_Detail=2.0)
+        nb.link(co, zone.inputs["Vector"])
+        peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", nb.math("SUBTRACT", zone.outputs["Fac"], 0.5), 0.7))
+        plinth = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 1.6), clamp=True)
+        peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", plinth, 0.12))
+        ao_p = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.5)
+        peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, ao_p.outputs["AO"], clamp=True), 0.35))
+        peel = nb.math("GREATER_THAN", peel_v, 0.52)
+        if under == "brick":
+            # bajo la pintura queda el repellado gris; el tabique solo asoma donde se cayó también el repellado: parches grandes y
+            # escasos, más en PB que arriba (conceptos de B y C: muros grises, ladrillo en PB, esquinas y bajo el alero)
+            brick = nb.tex(os.path.join(TEX, "S1_brick_red_worn.png"), 2.0, co, offset=off).outputs[0]
+            nzb = nb.n("ShaderNodeTexNoise", in_Scale=0.22, in_Detail=3.0, in_Roughness=0.55)
+            nb.link(co, nzb.inputs["Vector"])
+            hz = nb.math("DIVIDE", nb.math("SUBTRACT", sep_p.outputs[2], 2.8), 2.5, clamp=True)
+            thr = nb.math("ADD", 0.57, nb.math("MULTIPLY", hz, 0.11))
+            bfield = nb.math("ADD", nzb.outputs["Fac"], nb.math("MULTIPLY", nb.math("SUBTRACT", peel_v, 0.52), 0.35))
+            bmask = nb.math("MULTIPLY", nb.math("GREATER_THAN", bfield, thr), peel)
+            conc = nb.mix(bmask, conc, brick)
         color = nb.mix(peel, tinted, conc)
     if name in ("concrete", "plaster", "brick", "tile", "wood", "wood_dark", "wood_grey"):
         # L2: suciedad por cavidades (AO)
         ao = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.6)
         dirt = nb.math("SUBTRACT", 1.0, ao.outputs["AO"], clamp=True)
-        color = nb.mix(nb.math("MULTIPLY", dirt, 0.75), color, (0.12, 0.11, 0.09, 1.0), "MULTIPLY")
+        color = nb.mix(nb.math("MULTIPLY", dirt, 0.75), color, (0.12, 0.115, 0.105, 1.0), "MULTIPLY")
         vertical = nb.math("LESS_THAN", nb.math("ABSOLUTE", sep_n.outputs[2]), 0.5)
         # L3: chorreados de lluvia en verticales
         streak = nb.math("MULTIPLY", k("K2_rain_streaks.png", 3.6), vertical)
-        color = nb.mix(nb.math("MULTIPLY", streak, 0.8), color, (0.18, 0.17, 0.15, 1.0), "MULTIPLY")
+        color = nb.mix(nb.math("MULTIPLY", streak, 0.8), color, (0.17, 0.168, 0.16, 1.0), "MULTIPLY")
         # L4: eflorescencia (más abajo)
         low = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 6.0), clamp=True)
         eff = nb.math("MULTIPLY", nb.math("MULTIPLY", k("K3_efflorescence.png", 2.3, 1.1), low), 0.55)
         color = nb.mix(eff, color, (0.86, 0.85, 0.80, 1.0))
         # L5: óxido sangrando (manchas grandes, escasas)
-        rustm = nb.math("MULTIPLY", nb.math("GREATER_THAN", k("K6_rust_bleed.png", 4.1, 2.0), 0.6), 0.5)
-        color = nb.mix(nb.math("MULTIPLY", rustm, vertical), color, (0.36, 0.17, 0.07, 1.0), "MULTIPLY")
+        # (umbral 0,72 y tono pardo apagado: con 0,6 y naranja saturado los muros se leían marrón camuflaje en Three.js)
+        rustm = nb.math("MULTIPLY", nb.math("GREATER_THAN", k("K6_rust_bleed.png", 4.1, 2.0), 0.72), 0.4)
+        color = nb.mix(nb.math("MULTIPLY", rustm, vertical), color, (0.42, 0.31, 0.22, 1.0), "MULTIPLY")
         # L6: musgo/algas en la base (z < 1,4) y en la cara norte (+Y)
         base_z = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 1.4), clamp=True)
         north = nb.math("MULTIPLY", nb.math("GREATER_THAN", sep_n.outputs[1], 0.5), 0.45)
@@ -312,7 +334,8 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
     if gmap and name in ("concrete", "plaster"):
         # L9: grafiti de PB (capa RGBA por cara) con el relieve del soporte atravesando la pintura
         gcol, ga = _graffiti_layer(nb, co, gmap, band_top)
-        color = nb.mix(nb.math("MULTIPLY", ga, 0.95), color, gcol)
+        # alfa x1,3 (tope 1): el desgaste del panel ya rompe la pintura; con 0,95 las piezas se perdían a 15 m en Three.js
+        color = nb.mix(nb.math("MINIMUM", nb.math("MULTIPLY", ga, 1.3), 1.0), color, gcol)
     nb.link(color, bsdf.inputs["Base Color"])
     rough = nb.n("ShaderNodeMapRange", in_From_Min=0.0, in_From_Max=1.0, in_To_Min=rough_base - 0.12, in_To_Max=min(rough_base + 0.1, 1.0))
     if t1 is not None:

@@ -29,10 +29,11 @@ HEROES = {
         "east": [dict(png=c("C06_respeto.png"), w=2.0), dict(png=c("C08_puro_corazon.png"), w=1.7)],
     },
     "APT_C_3p": {   # segundo (y último) edificio con "Mi Vida Loca" de protagonista, en la cara principal
-        "front": [dict(png=c("C01_mi_vida_loca_blanco.png"), w=2.4, rot=-3), dict(png=c("S04_rexo.png"), w=1.2)],
-        "back": [dict(png=c("C02_isla_negra.png"), w=1.5, rot=2), dict(png=c("S01_kaos.png"), w=1.15)],
-        "west": [dict(png=c("C06_respeto.png"), w=1.9), dict(png=c("S02_zoro.png"), w=1.6, rot=4)],
-        "east": [dict(png=c("C04_por_vida.png"), w=1.5), dict(png=c("S03_nova.png"), w=1.8)],
+        # piezas más grandes donde caben (revisión de aceptación: con 1,15–1,9 m no se leían a 15 m sobre el muro descascarado)
+        "front": [dict(png=c("C01_mi_vida_loca_blanco.png"), w=3.0, rot=-3), dict(png=c("S04_rexo.png"), w=1.5)],
+        "back": [dict(png=c("C02_isla_negra.png"), w=1.7, rot=2), dict(png=c("S01_kaos.png"), w=1.4)],
+        "west": [dict(png=c("C06_respeto.png"), w=2.3), dict(png=c("S02_zoro.png"), w=2.1, rot=4)],
+        "east": [dict(png=c("C04_por_vida.png"), w=2.0), dict(png=c("S03_nova.png"), w=2.3)],
     },
     "APT_D_4p": {
         # PB de paneles con un vano por módulo: las piezas van bajo los antepechos (0,9 m) y entre vanos

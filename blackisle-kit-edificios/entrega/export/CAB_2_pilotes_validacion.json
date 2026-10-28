@@ -1,8 +1,8 @@
 {
  "id": "CAB_2_pilotes",
  "glb": "export/CAB_2_pilotes.glb",
- "size_mb": 18.04,
- "tris_glb": 185650,
+ "size_mb": 15.36,
+ "tris_glb": 183392,
  "objects": 7,
  "materials": [
   "CAB_2_pilotes_skirt",

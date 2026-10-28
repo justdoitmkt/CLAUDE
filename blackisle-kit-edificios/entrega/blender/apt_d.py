@@ -427,7 +427,7 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         add("light_fixture", sv.light_fixture("wall", seed=int(r.integers(1e6)), detail=far),
             _T(x - 0.95, ys[-1] + FO, zl[0] + 2.45) @ ac._rot_z(180))
         add("mailboxes", sv.mailboxes(n=6, seed=int(r.integers(1e6)), detail=near),
-            _T(sg * (3.2 + 0.051), -1.2, zl[0] + 1.05) @ ac._rot_z(-90 if sg < 0 else 90), inter)
+            _T(sg * (3.2 + 0.051), -2.1, zl[0] + 1.05) @ ac._rot_z(-90 if sg < 0 else 90), inter)   # 1,6 m libre del vano (y = 0)
     for i, x in enumerate((-3.05, -2.55)):              # machón entre la puerta del vestíbulo y la ventana
         add("meter_box", sv.meter_box(seed=int(r.integers(1e6)), open_door=bool(i), detail=near), _T(x, ys[0] - FO, 1.2))
     add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.03, zl[1] + 0.15), (-2.45, ys[0] - FO - 0.03, zl[1] + 0.15)], n=3, sag=0.2,

@@ -2,10 +2,13 @@
 objetos, que en un rasterizador (Three.js) se pelean y dan mosaicos. Para cada cara (área > 1 cm²):
   1) rayo desde 0,5 mm delante de su centro hacia atrás (-normal), en todos los objetos: si golpea OTRA cara casi paralela
      (mismo sentido) a menos de `tol`, hay superposición;
-  2) solo cuenta si la cara se ve: desde 3 mm delante, el primer impacto hacia adelante no puede ser la cara trasera de un
-     sólido (normal en el mismo sentido que el rayo = el punto está dentro de un volumen: tapa pegada al techo, canto metido
-     en otro muro).
-Uso: python tests/zfight.py --blend APT_A_5p.blend [--tol 0.0012] [--out informe.json]   |   --id CAB_1_tablones (construye)"""
+  2) solo cuenta si la cara se ve: desde 3 mm delante salen 5 rayos (la normal y 4 inclinados 55°, hasta 100 m); si la mayoría
+     choca primero con la cara trasera de un sólido (normal en el mismo sentido que el rayo), el punto está dentro de un volumen
+     y no se ve: tapa pegada al techo, canto metido en otro muro, cabeza de muro dentro del muro del piso de arriba (los muros
+     apilados no llevan tapas de apoyo, así que el rayo vertical puede recorrer el muro entero sin chocar);
+  3) las caras que miran hacia abajo a la altura del suelo (z ≤ 2 cm) no cuentan: la cámara no puede ponerse bajo la arena.
+Uso: python tests/zfight.py --blend APT_A_5p.blend [--tol 0.0012] [--out informe.json]   |   --id CAB_1_tablones (construye)
+     [--dedupe: aplica coplanar.dedupe como el horneado]"""
 import json
 import os
 import sys
@@ -27,6 +30,9 @@ else:
     reset_scene()
     res = builders.build(argv[argv.index("--id") + 1])
     objs = [o for k in builders.KEYS for o in res.get(k, [])]
+    if "--dedupe" in argv:                                   # misma depuración que hace bake_apt.py antes de hornear
+        import coplanar
+        print("dedupe:", coplanar.dedupe([o for o in objs if o not in res.get("Skirt", [])]), flush=True)
 
 bms, trees = [], []
 for o in objs:
@@ -56,6 +62,8 @@ for k, (o, bm) in enumerate(zip(objs, bms)):
             continue
         n = f.normal
         c = f.calc_center_median()
+        if n.z < -0.9 and c.z <= 0.02:                 # bajo el suelo
+            continue
         twin = None
         for j, t in enumerate(trees):
             for start, dist in ((c + n * 0.0005, tol + 0.0005), (c - n * 0.00002, tol)):
@@ -69,8 +77,15 @@ for k, (o, bm) in enumerate(zip(objs, bms)):
                 break
         if twin is None:
             continue
-        h = first_hit(c + n * 0.003, n, 1.0)
-        if h is not None and h[2].dot(n) > 0.0:          # dentro de un sólido: no se ve
+        t = n.orthogonal().normalized()
+        b = n.cross(t)
+        dirs = [n] + [(n * 0.574 + (t * ca + b * sa) * 0.819).normalized() for ca, sa in ((1, 0), (0, 1), (-1, 0), (0, -1))]
+        inside = 0
+        for d in dirs:
+            h = first_hit(c + n * 0.003, d, 100.0)
+            if h is not None and h[2].dot(d) > 0.0:
+                inside += 1
+        if inside >= 3:                                    # dentro de un sólido: no se ve
             continue
         hits.append((round(c.x, 2), round(c.y, 2), round(c.z, 2)))
         area += a
