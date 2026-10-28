@@ -56,10 +56,47 @@ new GLTFLoader().load('modelos/APT_A_5p.glb', (g) => {
   excepción a R1 (la cuota ilimitada de la web no está expuesta al MCP).
 - Gasto atribuible a este trabajo: **105,0 créditos** (fases B y C: 81,0 incluido 1,5 de atribución incierta; fase D: 24,0).
   62 + 16 imágenes enviadas; 9 falsos positivos del filtro nsfw, reembolsados.
-- Saldo consultado al cierre: <!-- SALDO -->.
+- Saldo consultado al cierre: **1 008,25 créditos, plan `plus`** (2026-10-28 02:54 UTC). No se compara con el saldo esperado tras la fase D (411,26): entretanto la cuenta cambió de plan y tiene recargas y generaciones propias del usuario en la web (GPT Image 2.5 y Nano Banana 2.1, del 25 al 28 de octubre). Revisé las transcripciones de esta sesión y de sus subagentes: **ninguna llamada de generación después de la fase D**.
 
 ## 5. Desviaciones del brief (y por qué)
-<!-- DESVIACIONES -->
+1. **R1 (cuota ilimitada):** el MCP de Higgsfield no expone la cuota ilimitada de la web (`unlim.available = false` en todos los
+   modelos). Se usó **Nano Banana 2.1 a 1k (1,5 créditos)** con autorización expresa del usuario (2026-10-09). Total: 105,0 créditos.
+2. **Presupuesto de triángulos:** el brief pedía 200–450 k por departamento (techo 600 k) y 150–300 k por cabaña. La orden del usuario
+   de construir **todo el interior** (cuartos, corredores, núcleos de escalera, puertas) no cabe ahí. Decisión R8 registrada (2026-10-10):
+   techo de **700 k** por departamento. Medido en el GLB: APT_C 596 k (dentro); APT_B 740 k y APT_D 742 k (+6 %); **APT_A 821 k (+17 %)**,
+   el piloto, con fachada y celosía más densas. CAB_TRIS_NOTE
+   Palancas ya aplicadas: teja en nivel `low`, A/C en `low`, canalón solo frente/fondo, hojas de puerta saqueadas. Para el juego hacen falta
+   LOD (ver §6).
+3. **Horneado (§4.7):** un atlas único para todo el modelo dejaba decenas de miles de islas de 1–3 px (piezas sueltas). Atlas únicos solo en
+   superficies continuas (muros exteriores `walls_main`/`walls_rest` y terreno `skirt`). Detalles, techo, interior, hierba y escombro llevan
+   **PBR repetible a escala real** (`KHR_texture_transform`) + **oclusión por vértice** en `COLOR_0`. También se quitaron el atlas `interior`
+   previsto y la AO en un 2.º canal UV: `COLOR_0` lo resuelve sin texturas extra.
+4. **Aplanado interior:** el repetible T2 (pintura naranja descascarada) se veía saturado y a escala de juguete dentro de los cuartos.
+   El interior usa la variante `T2_old_plaster_paint_int.png` (saturación × 0,2, gris sucio) a 1,2 m por repetición.
+5. **Conceptos de APT_B y APT_D rehechos (v3):** la regla del usuario (cero escaleras exteriores) invalidó la torre de escalera de B y la
+   escalera de emergencia de D. Los modelos siguen los heroes v3. La pieza firma de D pasó a ser los balcones colgados, las buhardillas y
+   las celosías de escalera.
+6. **R4 en el grafiti:** la corona y la estrella de 5 puntas de la hoja de íconos y la corona de `C02_isla_negra` salían de la
+   biblioteca generada. Juntas forman simbología de una alianza de pandillas real, así que se borraron y los paneles de los 4 departamentos
+   se regeneraron. Palabras y crews: solo los de la lista (crews ficticios KAOS, ZORO, NOVA, REXO).
+7. **Tamaño de archivo:** los GLB de departamento pesan 44–59 MiB (sin Draco, como pide el brief). Están por debajo del límite de 100 MB
+   de GitHub, pero por encima del aviso de 50 MB.
+8. **Validación en Three.js por software:** el contenedor no tiene GPU. Carga, sombras, texturas y recorridos se probaron con three r169 en
+   Chromium + SwiftShader. No hay medición de FPS en GPU real.
 
 ## 6. Problemas conocidos
-<!-- PROBLEMAS -->
+1. **Memoria de texturas:** ~221 MB por departamento y ~120–125 MB por cabaña (PNG sin comprimir en GPU). Los 11 repetibles son las mismas
+   imágenes en los 7 GLB, pero van embebidos en cada archivo y three.js no los comparte: con los 7 cargados, ≈ 1,25 GB.
+   Recomendado: convertir a **KTX2/Basis** (p. ej. `gltf-transform etc1s/uastc`, 4–6× menos) y/o cachear las texturas repetibles por nombre
+   en `mapa.html`.
+2. **Atlas de muros suave de cerca:** 4096² para ~800 m² de fachada dan ≈ 1,4 px/cm. A 2 m, el grafiti y la pintura descascarada se ven
+   blandos. Se nota sobre todo en APT_A y APT_D. Mejora posible: mapa de detalle repetible encima del atlas o atlas de 8192 para la PB.
+3. **z-fighting residual** (medido con `blender/tests/zfight.py`, caras coplanares visibles a < 1,2 mm): ZF_NOTE
+4. **Sin LOD ni colisionadores:** 600–820 k triángulos por departamento a distancia de mapa. Para el juego conviene un LOD a ~30 % y otro
+   de caja, más colisionadores simplificados por nivel (muros, losas, rampas de escalera). Unas 30 llamadas de dibujo por modelo.
+5. **Interiores a oscuras sin iluminación de juego:** solo entra luz por ventanas y puertas. Las capturas de `render_qa/recorrido/` usan
+   dos bombillas puntuales por toma. En el mapa hacen falta luces interiores o una sonda de luz/irradiancia.
+6. **CAB_2 (tapanco):** altura libre baja bajo la cumbrera y acceso por escalera de mano. El juego necesita una mecánica de trepar (o un
+   volumen de escalera).
+7. **Daños y escombro interior** son geometría estática; ninguna pieza está separada para destrucción.
+8. **Validación visual en SwiftShader** (sin GPU): sombras PCF y antialias pueden verse distintos en GPU real.
