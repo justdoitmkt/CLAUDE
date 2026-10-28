@@ -485,10 +485,12 @@ def dress_penthouse(cfg, pent, details):
 # ----------------------------------------------------------------------------------------------
 # base y entorno inmediato: arena acumulada + hierba seca
 # ----------------------------------------------------------------------------------------------
-def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15):
+def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15, fill_inside=False, tuft_clear=0.05):
     """Terreno de arena alrededor de la planta: deriva contra los muros (hasta ~0,32 m sobre el desplante, tapando el zócalo),
     ondulación de dunas y borde que muere en z=0. Hierba seca en matas de hojas finas (láminas 'vegetation', DoubleSide),
-    más densas junto a los muros y en esquinas. keep_clear: rectángulos (x0, y0, x1, y1) libres de hierba (accesos)."""
+    más densas junto a los muros y en esquinas. keep_clear: rectángulos (x0, y0, x1, y1) libres de hierba (accesos).
+    fill_inside: conserva la arena bajo la planta a z = -0,05 (pisos elevados con duela suelta: no se ve el vacío).
+    tuft_clear: distancia mínima de las matas a la planta (las hojas se inclinan hasta ~0,33 m)."""
     import numpy as np
     r = rng(cfg["seed"] + 303)
     xs, ys = cfg["xs"], cfg["ys"]
@@ -521,7 +523,7 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15):
         return vid[(i, j)]
     for i in range(nx - 1):
         for j in range(ny - 1):
-            if inside[i, j] and inside[i + 1, j] and inside[i, j + 1] and inside[i + 1, j + 1]:
+            if not fill_inside and inside[i, j] and inside[i + 1, j] and inside[i, j + 1] and inside[i + 1, j + 1]:
                 continue
             mb.face([V(i, j), V(i + 1, j), V(i + 1, j + 1), V(i, j + 1)], "sand")
     # hierba seca
@@ -532,7 +534,7 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15):
     for _ in range(4000):
         x, y = float(r.uniform(X0 + 0.3, X1 - 0.3)), float(r.uniform(Y0 + 0.3, Y1 - 0.3))
         dd = min(math.hypot(max(rx0 - x, x - rx1, 0), max(ry0 - y, y - ry1, 0)) for (rx0, rx1, ry0, ry1) in rects)
-        if dd <= 0.05 or any(k[0] <= x <= k[2] and k[1] <= y <= k[3] for k in keep_clear):
+        if dd <= tuft_clear or any(k[0] <= x <= k[2] and k[1] <= y <= k[3] for k in keep_clear):
             continue
         if r.random() > 0.85 * math.exp(-dd / 1.1) + 0.06:
             continue

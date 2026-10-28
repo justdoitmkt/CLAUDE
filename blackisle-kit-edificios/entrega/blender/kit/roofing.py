@@ -453,7 +453,7 @@ def _hip_side_plane(R, sx, sy, jack_pt, off=0.026):
 # 1) ESTRUCTURA DE MADERA
 # =====================================================================================================================
 def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=True, damage=0.0, cover="tile", spot=None,
-               rake=None, ties=True, blocking=True):
+               rake=None, ties=True, blocking=True, kingposts=True, debris=True):
     """Estructura de cubierta de madera (ver cabecera del módulo para medidas y cotas).
     cover: 'tile' (rastreles para teja curva a paso de hilada), 'sheet' (correas para lámina ondulada) o 'boards'
     (sin rastreles: los tablones de board_roof_stepped se clavan directo a los cabios).
@@ -461,7 +461,8 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
     cortados y colgando, cabios partidos (la pieza superior cuelga de la cumbrera) o faltantes, y escombro de madera en z = 0.
     blocking: frisos (tablas de 0,04 entre cabios sobre la solera, en la cara exterior de los muros de alero) que cierran el
     desván por el alero: desde abajo solo se ve el vuelo, nunca el intradós de las tejas interiores (lo aprovechan los niveles
-    'mid'/'low' de barrel_tiles)."""
+    'mid'/'low' de barrel_tiles).
+    kingposts/debris=False: sin pendolones ni escombro en z = 0 (cabañas: no hay losa a la altura de la solera)."""
     R = _Roof(kind, w, d, pitch_deg, overhang, rake)
     r = rng(seed)
     mb = MB()
@@ -691,7 +692,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 _beam(mb, [(xt, -ac - 0.3, 0), (xt, ac + 0.3, 0)], Z, 0.05, zc, zc + 0.12, "wood", c=0.004,
                       cut0=((0, -hd, R.zt0 - 0.012), Vector((0, -R.sp, R.cp))), cut1=((0, hd, R.zt0 - 0.012), Vector((0, R.sp, R.cp))))
             # pendolón bajo la cumbrera en luces grandes
-            if d > 5.0 and i % 4 == 0:
+            if kingposts and d > 5.0 and i % 4 == 0:
                 xp = x - side * 0.08
                 _box(mb, (xp - 0.05, -0.05, 0.001), (xp + 0.05, 0.05, ridge_bot - 0.012), "wood", bevel=0.006)
 
@@ -709,7 +710,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 _blocking(mb, occ, -lim, lim, lambda u, sg=sg: (sg * (hw - 0.025), u, 0.0), PLATE_H + 0.001, zt_w)
 
     # ---------------- escombro de madera bajo el hueco ----------------
-    if sp is not None:
+    if sp is not None and debris:
         for idb in range(int(2 + 4 * damage)):
             L = r.uniform(0.3, 1.4)
             a = r.uniform(0, 2 * PI)

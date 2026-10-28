@@ -181,7 +181,13 @@ def _framing(mb, L, H, y0, depth, openings, r, style="studs", spacing=0.6, mat="
     y1 = y0 + depth
     P = 0.05
     mem = []                    # (rect, vertical)
-    mem.append(((0.0, L, 0.0, P), False))
+    cur = 0.0                    # solera inferior en tramos: no pasa por los vanos de puerta (umbral libre)
+    for (u0, u1, v0, v1) in sorted(o for o in openings if o[2] <= 0.05):
+        if u0 - 0.003 > cur:
+            mem.append(((cur, u0 - 0.003, 0.0, P), False))
+        cur = max(cur, u1 + 0.003)
+    if cur < L:
+        mem.append(((cur, L, 0.0, P), False))
     mem.append(((0.0, L, H - P, H), False))
     zones = []
     for (u0, u1, v0, v1) in openings:
