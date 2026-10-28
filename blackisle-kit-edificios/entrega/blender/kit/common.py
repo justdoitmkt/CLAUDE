@@ -294,20 +294,54 @@ def wall_with_openings(mb, length, height, thickness, openings=(), mat_out="conc
 
 # ---------------- UV ----------------
 def box_uv_bm(bm, size=2.0, offset=(0.0, 0.0)):
-    """Proyección de caja en espacio del objeto, sin espejo (texto legible), `size` m por unidad UV."""
+    """Proyección de caja en espacio del objeto, sin espejo (texto legible), `size` m por unidad UV.
+    La caja se alinea por pieza conexa a su orientación dominante en planta: una pieza girada (puerta abierta 40°, hoja de
+    ventana, escombro) se proyecta en su propio marco y sus caras vecinas no saltan entre las proyecciones X e Y (mosaico).
+    Las piezas alineadas a los ejes (casi todo) quedan exactamente igual que antes."""
+    import numpy as np
     uv = bm.loops.layers.uv.verify()
-    for f in bm.faces:
+    nf = len(bm.faces)
+    if nf == 0:
+        return
+    bm.verts.index_update()
+    ev = np.fromiter((v.index for e in bm.edges for v in e.verts), dtype=np.int64, count=2 * len(bm.edges)).reshape(-1, 2)
+    lab = np.arange(len(bm.verts))
+    for _ in range(1000):                                  # componentes conexas: propagación de etiquetas + salto de punteros
+        prev = lab.copy()
+        m = np.minimum(lab[ev[:, 0]], lab[ev[:, 1]])
+        np.minimum.at(lab, ev[:, 0], m)
+        np.minimum.at(lab, ev[:, 1], m)
+        lab = lab[lab]
+        if np.array_equal(lab, prev):
+            break
+    comp = np.fromiter((lab[f.verts[0].index] for f in bm.faces), dtype=np.int64, count=nf)
+    nrm = np.array([f.normal[:] for f in bm.faces], dtype=np.float64).reshape(-1, 3)
+    area = np.fromiter((f.calc_area() for f in bm.faces), dtype=np.float64, count=nf)
+    w = area * (np.abs(nrm[:, 2]) < 0.7)                   # solo caras verticales definen el giro en planta
+    th = np.arctan2(nrm[:, 1], nrm[:, 0])
+    _, ci = np.unique(comp, return_inverse=True)
+    S = np.bincount(ci, w * np.sin(4 * th))
+    C = np.bincount(ci, w * np.cos(4 * th))
+    W = np.bincount(ci, w)
+    phi = np.arctan2(S, C) / 4.0                            # media circular con simetría de 90°
+    phi[(np.hypot(S, C) < 0.3 * np.maximum(W, 1e-12)) | (np.abs(phi) < np.radians(2.0))] = 0.0
+    pf = phi[ci.ravel()]
+    cs, sn = np.cos(pf), np.sin(pf)
+    for i, f in enumerate(bm.faces):
+        c_, s_ = cs[i], sn[i]
         n = f.normal
-        ax = max(range(3), key=lambda i: abs(n[i]))
-        s = 1 if n[ax] > 0 else -1
+        nr = (n.x * c_ + n.y * s_, -n.x * s_ + n.y * c_, n.z)
+        ax = max(range(3), key=lambda k: abs(nr[k]))
+        sg = 1 if nr[ax] > 0 else -1
         for lp in f.loops:
-            c = lp.vert.co
+            co = lp.vert.co
+            x, y, z = co.x * c_ + co.y * s_, -co.x * s_ + co.y * c_, co.z
             if ax == 0:
-                u, v = (c.y if s > 0 else -c.y), c.z
+                u, v = (y if sg > 0 else -y), z
             elif ax == 1:
-                u, v = (-c.x if s > 0 else c.x), c.z
+                u, v = (-x if sg > 0 else x), z
             else:
-                u, v = c.x, c.y
+                u, v = x, y
             lp[uv].uv = (u / size + offset[0], v / size + offset[1])
 
 
