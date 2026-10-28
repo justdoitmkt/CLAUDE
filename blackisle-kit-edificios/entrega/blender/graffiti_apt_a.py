@@ -43,7 +43,7 @@ for side, panels in res['placed'].items():
 c = lambda n: os.path.join(CUT, n)
 # composición densa por capas (R10: semilla y subconjunto propios de APT_A; "Mi Vida Loca" protagonista aquí)
 TAGS = [c(f'S05_hoja_tags_0{i}.png') for i in range(1, 7)] + [c('S04_rexo.png')]
-ICONS = [c(f'S06_hoja_iconos_0{i}.png') for i in (1, 2, 3, 5, 6)]
+ICONS = [c(f'S06_hoja_iconos_0{i}.png') for i in (1, 3, 5, 6)]   # sin corona ni estrella de 5 puntas (R4)
 DRIPS = [c(f'S07_hoja_goteos_0{i}.png') for i in range(1, 7)]
 HERO = {
  'front': [dict(png=c('C01_mi_vida_loca.png'), w=2.9, rot=-4), dict(png=c('S01_kaos.png'), w=1.6)],

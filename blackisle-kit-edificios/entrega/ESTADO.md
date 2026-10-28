@@ -226,3 +226,12 @@ Nueva estrategia (R8):
 - Probado de punta a punta con CAB_2 (`--quick`): GLB con `POSITION/NORMAL/TEXCOORD_0/COLOR_0`, 12 materiales, render con materiales correcto.
 - `bake_apt.py --reuse` reutiliza los PNG de atlas ya horneados (misma geometría y desenvuelto deterministas).
 - Lámina clara de CAB_2: nueva textura `R2_roof_corrugated_light.png` derivada de R1 (gris galvanizado con el óxido intenso conservado).
+
+## Corrección R4 en el grafiti (2026-10-27, revisado con mis ojos)
+- Al revisar los paneles de APT_B vi que el ícono `S06_hoja_iconos_02` es una **corona de 5 puntas** y que el héroe `C02_isla_negra`
+  llevaba encima una corona de 5 puntas en negro y dorado. Junto con la **estrella de 5 puntas** (`S06_hoja_iconos_04`), es simbología
+  de una alianza de pandillas real: R4 lo prohíbe aunque cada pieza por separado parezca genérica.
+- Corregido: corona borrada del recorte `C02_isla_negra.png` (queda solo el lettering gótico), íconos 02 y 04 fuera de todos los sets
+  (`graffiti_apt_a.py`, `graffiti_apt.py`), paneles de A/B/C/D regenerados y revisados uno por uno (16 caras): sin coronas ni estrellas.
+  Íconos vigentes: calavera con rosas, corazón, ojo, máscaras. Se re-hornea el atlas `walls_main` de los 4 departamentos.
+- Compositor: los goteos y manchas ya no caen sobre los héroes (antes una mancha azul tapaba "Puro" en APT_A este).

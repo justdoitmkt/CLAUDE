@@ -42,7 +42,8 @@ HEROES = {
         "east": [dict(png=c("C07_sin_miedo.png"), w=2.0), dict(png=c("S03_nova.png"), w=1.6)],
     },
 }
-ICON_SETS = {"APT_B_4p": (2, 3, 4, 6), "APT_C_3p": (1, 4, 5), "APT_D_4p": (1, 2, 3, 6)}
+# sin 02 (corona de 5 puntas) ni 04 (estrella de 5 puntas): juntas leen como simbología de pandilla real (R4)
+ICON_SETS = {"APT_B_4p": (3, 5, 6), "APT_C_3p": (1, 5, 6), "APT_D_4p": (1, 3, 6)}
 PXM = 276.0
 
 
