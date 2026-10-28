@@ -1,8 +1,8 @@
 {
  "id": "APT_B_4p",
  "glb": "export/APT_B_4p.glb",
- "size_mb": 60.67,
- "tris_glb": 727252,
+ "size_mb": 53.86,
+ "tris_glb": 739884,
  "objects": 7,
  "materials": [
   "APT_B_4p_skirt",
