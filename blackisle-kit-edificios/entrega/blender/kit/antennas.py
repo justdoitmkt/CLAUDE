@@ -342,7 +342,7 @@ def _ground_lug(mb, M, mat="copper"):
     revolve(mb, [(0.0085, -0.0004), (0.0085, 0.0018), (0.0068, 0.0026), (0.0, 0.0026)], mat, seg=16, M=M)       # ojo
     mb.box((-0.0055, -0.024, -0.0004), (0.0055, -0.0072, 0.0016), mat, bevel=0.0006, seg=1, m=M)              # lengüeta
     revolve(mb, [(0.0045, -0.0215), (0.0062, -0.0225), (0.0062, -0.036), (0.0048, -0.037)], mat, seg=16,
-            M=M @ _T(0, 0, 0.0058) @ _Rx(90))                                                                  # barril
+            M=M @ _T(0, 0, 0.0058) @ _Rx(-90))                                                                 # barril
     _hex(mb, M @ _T(0, 0, 0.0022), 0.006, h=0.005)
     _rod(mb, M @ Vector((0, 0, -0.003)), M @ Vector((0, 0, 0.0095)), 0.003)
 
@@ -408,4 +408,74 @@ def aau(seed=0, tilt_deg=2.0, tails=True):
               mat="cable", bend=0.08)
     xs = -(W - 0.006) / 2
     mb.box((xs - 0.0016, -0.140, 0.30), (xs + 0.0006, -0.112, 0.36), "sign_white", bevel=0.0005, seg=1, m=MA)
+    return mb
+
+
+# ======================================================================================================== RRU 4T4R
+def rru(seed=0, tails=True):
+    """Radio remota 4T4R (Huawei RRU3256: 480 × 270 × 140 mm, ≤ 19,5 kg). Cuerpo fundido de cantos redondos, 23 aletas
+    verticales afiladas en el frente con extremos en chaflán, tapa superior con asa abatible de solera, en la base 4 puertos
+    RF 4.3-10 y un AISG con tapa, bahía de mantenimiento con tapa atornillada, pasacables y colas de alimentación (negra) y
+    fibra (amarilla), terminal de tierra en el costado, placa de datos; atrás placa adaptadora con ganchos sobre el soporte
+    principal galvanizado (canal) con dos abrazaderas en V al tubo.
+
+    Origen: EJE DEL TUBO Ø 76 = eje Z (x = 0, y = 0); z = 0 = base del cuerpo (los puertos bajan ~30 mm y las colas ~0,3 m).
+    Aletas (frente) hacia -Y; espalda del cuerpo a 78 mm del eje del tubo.
+    Extremos libres de las colas: alimentación ≈ (-0.06, -0.10, -0.30), fibra ≈ (-0.03, -0.10, -0.30), tierra ≈ (0.12, -0.10, -0.30)."""
+    from kit.clinic_servicios import slab
+    r = rng(seed)
+    mb = MB()
+    H, W, D = 0.480, 0.270, 0.140
+    yb = -0.078
+    MC = _T(0, yb, 0)
+    Dc = 0.086                                         # cuerpo macizo (sin aletas)
+    slab(mb, MC @ _T(0, 0.0, H / 2) @ _Rx(90), W, H, Dc, rc=0.016, re=0.006, re0=0.008, mat="aluminium", nc=4, ne=2)
+    # aletas del frente
+    n = 23
+    for k in range(n):
+        x = (k - (n - 1) / 2) * 0.0104
+        _fin(mb, MC, x, -Dc + 0.001, -D, 0.075, H - 0.03, t0=0.0036, t1=0.002, taper=0.03)
+    # tapa superior moldeada (más ancha que el cuerpo, ceja de 3 mm) y asa abatible
+    slab(mb, MC @ _T(0, -0.044, H - 0.008), W + 0.006, Dc + 0.008, 0.022, rc=0.018, re=0.006, re0=0.002, mat="aluminium", nc=4, ne=2)
+    yh = -0.044
+    for sx in (-1, 1):
+        revolve(mb, [(0.011, -0.001), (0.011, 0.012), (0.009, 0.016), (0.0, 0.0165)], "aluminium", seg=20,
+                M=MC @ _T(sx * 0.075, yh, H + 0.012) @ _Ry(90 * sx))
+    mb.sweep(rr_profile(0.024, 0.006, 0.0025, n=2), [MC @ _V(p) for p in fillet(
+        [(-0.085, yh, H + 0.023), (-0.085, yh - 0.045, H + 0.036), (0.085, yh - 0.045, H + 0.036), (0.085, yh, H + 0.023)], 0.018, 4)],
+        mat=SS, normal=(1e-4, 0.276, 0.961))
+    # base: puertos RF y AISG (fila delantera), bahía de mantenimiento con tapa (atrás)
+    for x in (-0.096, -0.048, 0.048, 0.096):
+        _port_43_10(mb, MC @ _T(x, -0.060, 0.0) @ _Rx(180))
+    _aisg_port(mb, MC @ _T(0.0, -0.060, 0.0) @ _Rx(180) @ _Rz(float(r.uniform(0, 360))))
+    slab(mb, MC @ _T(0, -0.022, 0.002) @ _Rx(180), 0.236, 0.034, 0.022, rc=0.008, re=0.004, re0=0.0, mat="aluminium", nc=3, ne=2)
+    for sx in (-1, 1):
+        revolve(mb, [(0.0065, -0.0004), (0.0065, 0.003), (0.004, 0.0055), (0.0, 0.006)], SS, seg=16,
+                M=MC @ _T(sx * 0.095, -0.039, -0.010) @ _Rx(90))
+    cab = [(-0.06, 0.0075, "cable"), (-0.03, 0.0035, "paint_yellow")]
+    for (x, rc, mat) in cab:
+        _grommet(mb, MC @ _T(x, -0.022, -0.020) @ _Rx(180), rc)
+        if tails:
+            _tail(mb, MC, [(x, -0.022, -0.026), (x, -0.022, -0.12), (x + float(r.uniform(-0.006, 0.006)), -0.022, -0.30 + yb + 0.078)],
+                  rc, mat=mat, bend=0.06)
+    # tierra en el costado derecho y placa de datos en el izquierdo
+    _ground_lug(mb, MC @ _T(W / 2 - 0.0005, -0.040, 0.075) @ _Ry(90) @ _Rz(90))
+    if tails:
+        _tail(mb, MC, [(W / 2 + 0.0053, -0.040, 0.0405), (W / 2 + 0.0053, -0.040, -0.04), (W / 2 - 0.015, -0.022, -0.30)], 0.004,
+              mat="cable", bend=0.07)
+    mb.box((-W / 2 - 0.0012, -0.065, 0.22), (-W / 2 + 0.0006, -0.022, 0.30), "sign_white", bevel=0.0005, seg=1, m=MC)
+    # placa adaptadora en la espalda con dos ganchos y soporte principal (canal galvanizado) con dos abrazaderas
+    slab(mb, MC @ _T(0, -0.002, H / 2) @ _Rx(-90), 0.17, 0.36, 0.008, rc=0.01, re=0.002, re0=0.0, mat=GALV, nc=2, ne=1)
+    ych = 0.012                                        # cara trasera del canal (cuerpo)
+    prof = [(-0.085, 0.0), (0.085, 0.0), (0.085, 0.022), (0.079, 0.022), (0.079, 0.005), (-0.079, 0.005), (-0.079, 0.022), (-0.085, 0.022)]
+    prof = [(x, y + 0.006) for (x, y) in prof]
+    loft_rings(mb, [[MC @ Vector((x, y, z)) for (x, y) in prof] for z in (0.06, H - 0.06)], GALV)
+    for sx in (-1, 1):                                 # ganchos: la placa del equipo cuelga del borde superior del canal
+        _bar(mb, (0.004, H - 0.05), (0.0145, H - 0.05), 0.012, 0.006 * sx, sx * 0.05, M=MC, round0=False)
+        _bar(mb, (0.0145, H - 0.05), (0.0145, H - 0.075), 0.005, 0.006 * sx, sx * 0.05, M=MC, round0=True)
+    for zc in (0.13, H - 0.13):
+        _clamp(mb, _T(0, 0, zc), w=0.15)
+        for sx in (-1, 1):
+            _hex(mb, MC @ _T(sx * 0.05, 0.006, zc) @ _Rx(-90), 0.008, h=0.0055, z=-0.0004)
+    del ych
     return mb
