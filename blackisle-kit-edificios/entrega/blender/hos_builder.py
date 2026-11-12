@@ -264,7 +264,10 @@ ROOMS = {   # nombre: (x0, x1, y0, y1, acabado)  caras interiores
 }
 
 
-def _gaps_on(axis, line, a, b, tol=0.16):
+def _gaps_on(axis, line, a, b, tol=0.26):
+    # 0,26 > grueso del muro exterior (0,20): las puertas exteriores se registran en la cara exterior (Y0, X0...) y los cuartos
+    # corren por la cara interior; con 0,16 el lambrín y el zoclo tapaban el metro inferior de las 4 puertas exteriores (y
+    # entraban a la colisión: no se podía entrar por la puerta principal)
     out = []
     for (ax, ln, g0, g1) in GAPS:
         if ax == axis and abs(ln - line) < tol and g1 > a and g0 < b:
