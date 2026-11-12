@@ -384,3 +384,11 @@ Revisadas con mis ojos; en `refs_higgsfield/HOS_1_pueblo/`:
   modelo porque el usuario pidió todo el texto en inglés. Textos que fallan en las imágenes ("WASN YOUR HANDS", "PHADMACY",
   marca ilegible en un tinaco) se corrigen o se omiten al modelar. Sin cruz roja, estrella de la vida ni logos.
 - Las ambulancias de las imágenes son solo contexto: un vehículo no va dentro de la malla estática del edificio.
+
+## REGLA R-AAA (orden del usuario, 2026-11-12) — prevalece
+Cita: "Tiene estrictamente prohibido pasar por alto detalles que se vean rápidos o hechos de forma rápida. No quiero un escenario
+low poly. Quiero un escenario AAA. Con un chingo de triángulos, no menos de 100,000 triángulos... Tu cama parece una cama de
+Roblox... tu almohada parece una piedra... Si se ven como cajas de cartón, no sirven."
+Registrada en `CLAUDE.md` (raíz del repo) con sus 6 puntos: sin piezas rápidas, lo blando subdividido con arrugas y costuras,
+bisel y curvas reales en lo rígido, ≥ 100 k triángulos por modelo, revisión de primer plano a < 2 m antes de integrar y reporte
+honesto de lo que quede por debajo. La primera lámina del mobiliario del hospital (cama, almohada, asientos) queda rechazada.

@@ -227,6 +227,12 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     "cable": ((0.03, 0.03, 0.03), 0.6, 0.0), "plastic": ((0.70, 0.69, 0.64), 0.55, 0.0), "metal_paint": ((0.24, 0.27, 0.24), 0.6, 0.3),
     "rubble": ((0.46, 0.44, 0.40), 0.95, 0.0), "sand": ((0.74, 0.68, 0.54), 0.97, 0.0), "vegetation": ((0.22, 0.28, 0.12), 0.8, 0.0),
     "mortar": ((0.58, 0.56, 0.52), 0.95, 0.0), "paper": ((0.70, 0.67, 0.58), 0.9, 0.0),
+    # hospital (HOS_1)
+    "plastic_blue": ((0.05, 0.17, 0.50), 0.45, 0.0), "linen": ((0.80, 0.80, 0.78), 0.9, 0.0),
+    "sign_red": ((0.55, 0.04, 0.04), 0.5, 0.0), "sign_white": ((0.84, 0.84, 0.82), 0.45, 0.0),
+    "sign_blue": ((0.02, 0.15, 0.52), 0.45, 0.0), "sign_green": ((0.02, 0.38, 0.11), 0.45, 0.0),
+    "paint_yellow": ((0.72, 0.50, 0.04), 0.6, 0.0), "vinyl": ((0.07, 0.20, 0.19), 0.5, 0.0),
+    "steel": ((0.60, 0.61, 0.62), 0.35, 1.0), "rubber": ((0.025, 0.025, 0.025), 0.8, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),
@@ -277,10 +283,13 @@ CLAD_PAINT = {   # lámina pintada sobre óxido (muelle): color de la pintura vi
 
 
 def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete", dust_h=0.35,
-                     base_z=0.0, graffiti_mats=("concrete", "plaster")):
+                     base_z=0.0, graffiti_mats=("concrete", "plaster"), wear=1.0, band=None, paint_sat=0.15):
     """Material de look-dev para `name` (nombre canónico del kit). Concreto/aplanado llevan todas las capas; el resto, capas reducidas.
     base_z: cota del piso del modelo (musgo, polvo y salpicaduras se miden desde ahí; 0 en edificios, la cubierta en el muelle).
-    graffiti_mats: materiales que reciben la capa de grafiti."""
+    graffiti_mats: materiales que reciben la capa de grafiti.
+    wear: 1 = abandono (departamentos, cabañas, muelle); < 1 = edificio en uso: menos descascarado, chorreado, eflorescencia,
+    óxido y musgo (hospital 0,35). band: (altura sobre base_z, color lineal) del zoclo pintado del aplanado.
+    paint_sat: saturación que conserva la pintura del aplanado (0,15 = casi gris; el hospital usa 1 para su crema)."""
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     nb = NB(mat)
     out = nb.n("ShaderNodeOutputMaterial")
@@ -344,9 +353,19 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         conc = nb.tex(os.path.join(TEX, "T1_concrete.png"), 3.0, co, offset=off).outputs[0]
         # pintura vieja casi gris (brief: concreto gris gastado). 0,15: con 0,28 el ocre de T2 dejaba manchas canela parejas en todas
         # las caras y en Three.js los muros derivaban a marrón grisáceo (revisiones de aceptación de A y D)
-        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=0.15, in_Value=1.05)
+        hsv = nb.n("ShaderNodeHueSaturation", in_Saturation=paint_sat, in_Value=1.05)
         nb.link(color, hsv.inputs["Color"])
         tinted = nb.mix(0.6, hsv.outputs[0], (*paint_tint, 1.0), "MULTIPLY")
+        if wear < 1.0:                     # pintura mantenida: el tinte manda sobre la mancha del aplanado viejo
+            tinted = nb.mix(0.55, tinted, (*paint_tint, 1.0))
+        if band is not None:
+            bh, bc = band
+            nzb = nb.n("ShaderNodeTexNoise", in_Scale=40.0, in_Detail=2.0)
+            nb.link(co, nzb.inputs["Vector"])
+            zb = nb.math("ADD", nb.math("SUBTRACT", sep_p.outputs[2], base_z), nb.math("MULTIPLY", nb.math("SUBTRACT", nzb.outputs["Fac"], 0.5), 0.006))
+            inband = nb.math("LESS_THAN", zb, bh)
+            bcol = nb.mix(nb.math("MULTIPLY", nzb.outputs["Fac"], 0.3), (*bc, 1.0), (bc[0] * 0.8, bc[1] * 0.8, bc[2] * 0.8, 1.0))
+            tinted = nb.mix(inband, tinted, bcol)
         k1a = k("K1_peel.png", 3.2, 0.3)
         k1b = k("K1_peel.png", 7.9, 1.9)
         nz3 = nb.n("ShaderNodeTexNoise", in_Scale=0.35, in_Detail=2.0)
@@ -362,7 +381,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", plinth, 0.12))
         ao_p = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.5)
         peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, ao_p.outputs["AO"], clamp=True), 0.35))
-        peel = nb.math("GREATER_THAN", peel_v, 0.52)
+        peel = nb.math("GREATER_THAN", peel_v, 0.52 + (1.0 - wear) * 0.32)
         if under == "brick":
             # bajo la pintura queda el repellado gris; el tabique solo asoma donde se cayó también el repellado: parches grandes y
             # escasos, más en PB que arriba (conceptos de B y C: muros grises, ladrillo en PB, esquinas y bajo el alero)
@@ -380,24 +399,24 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         # L2: suciedad por cavidades (AO)
         ao = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.6)
         dirt = nb.math("SUBTRACT", 1.0, ao.outputs["AO"], clamp=True)
-        color = nb.mix(nb.math("MULTIPLY", dirt, 0.75), color, (0.12, 0.115, 0.105, 1.0), "MULTIPLY")
+        color = nb.mix(nb.math("MULTIPLY", dirt, 0.75 * (0.5 + 0.5 * wear)), color, (0.12, 0.115, 0.105, 1.0), "MULTIPLY")
         vertical = nb.math("LESS_THAN", nb.math("ABSOLUTE", sep_n.outputs[2]), 0.5)
         # L3: chorreados de lluvia en verticales
         streak = nb.math("MULTIPLY", k("K2_rain_streaks.png", 3.6), vertical)
-        color = nb.mix(nb.math("MULTIPLY", streak, 0.8), color, (0.17, 0.168, 0.16, 1.0), "MULTIPLY")
+        color = nb.mix(nb.math("MULTIPLY", streak, 0.8 * (0.35 + 0.65 * wear)), color, (0.17, 0.168, 0.16, 1.0), "MULTIPLY")
         # L4: eflorescencia (más abajo)
         low = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, 6.0), clamp=True)
-        eff = nb.math("MULTIPLY", nb.math("MULTIPLY", k("K3_efflorescence.png", 2.3, 1.1), low), 0.55)
+        eff = nb.math("MULTIPLY", nb.math("MULTIPLY", k("K3_efflorescence.png", 2.3, 1.1), low), 0.55 * wear)
         color = nb.mix(eff, color, (0.86, 0.85, 0.80, 1.0))
         # L5: óxido sangrando (manchas grandes, escasas)
         # (umbral 0,72 y tono pardo apagado: con 0,6 y naranja saturado los muros se leían marrón camuflaje en Three.js)
-        rustm = nb.math("MULTIPLY", nb.math("GREATER_THAN", k("K6_rust_bleed.png", 4.1, 2.0), 0.72), 0.4)
+        rustm = nb.math("MULTIPLY", nb.math("GREATER_THAN", k("K6_rust_bleed.png", 4.1, 2.0), 0.72), 0.4 * wear)
         color = nb.mix(nb.math("MULTIPLY", rustm, vertical), color, (0.42, 0.31, 0.22, 1.0), "MULTIPLY")
         # L6: musgo/algas en la base (z < 1,4) y en la cara norte (+Y)
         base_zz = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, 1.4), clamp=True)
         north = nb.math("MULTIPLY", nb.math("GREATER_THAN", sep_n.outputs[1], 0.5), 0.45)
         moss = nb.math("MULTIPLY", k("K4_moss.png", 1.9, 0.7), nb.math("MAXIMUM", base_zz, north))
-        color = nb.mix(nb.math("MULTIPLY", moss, 0.85), color, (0.20, 0.25, 0.11, 1.0))
+        color = nb.mix(nb.math("MULTIPLY", moss, 0.85 * wear), color, (0.20, 0.25, 0.11, 1.0))
         # L7: arena y polvo en horizontales hacia arriba y en la base
         up = nb.math("GREATER_THAN", sep_n.outputs[2], 0.7)
         ground = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, dust_h), clamp=True)   # 0,35 m con duna; 0,12 sin

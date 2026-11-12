@@ -217,6 +217,12 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
     "tile": ("T3_roof_tile.png", 2.0, 0.75, 0.0, (1, 1, 1)), "metal_rust": ("M1_rust_metal.png", 1.2, 0.7, 0.3, (1, 1, 1)),
     "metal_paint": ("M1_rust_metal.png", 1.2, 0.6, 0.3, (0.62, 0.66, 0.62)), "roof_metal": ("R1_roof_corrugated_rust.png", 2.0, 0.65, 0.35, (1, 1, 1)),
     "roof_metal_light": ("R2_roof_corrugated_light.png", 2.0, 0.55, 0.4, (1, 1, 1)),
+    # hospital (HOS_1): terrazo, azulejo, plafón y muros pintados (la pintura es el aplanado interior teñido)
+    "terrazzo": ("T5_terrazo.png", 1.5, 0.32, 0.0, (1, 1, 1)), "tile_white": ("T6_azulejo_blanco.png", 0.6, 0.22, 0.0, (1, 1, 1)),
+    "ceiling_tile": ("T7_plafon.png", 1.22, 0.92, 0.0, (1, 1, 1)),
+    "paint_mint": ("T2_plaster_int_2k.png", 2.4, 0.72, 0.0, (0.66, 0.84, 0.70)),
+    "paint_green": ("T2_plaster_int_2k.png", 2.4, 0.66, 0.0, (0.11, 0.33, 0.20)),
+    "paint_white": ("T2_plaster_int_2k.png", 2.4, 0.78, 0.0, (1.02, 1.02, 1.0)),
 }
 # materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
 # y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)
