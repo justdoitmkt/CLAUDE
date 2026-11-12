@@ -59,7 +59,7 @@ def cfg_hos(bid="HOS_1_pueblo"):
     return dict(id=bid, seed=83, xs=[SIDE_WALL_XW, SIDE_WALL_XE], ys=[-14.5, BACK_WALL_Y], h=[FFL], band_top=2.4,
                 graffiti_bounds=(SIDE_WALL_XW - 0.5, SIDE_WALL_XE + 0.5, -15.0, BACK_WALL_Y + 0.5), graffiti_px_per_m=150.0,
                 exterior_footprint=fp,
-                lookdev=dict(base_z=0.0, graffiti_mats=("plaster", "concrete"), paint_tint=(0.95, 0.91, 0.80), wear=0.35,
+                lookdev=dict(base_z=0.0, graffiti_mats=("plaster", "concrete"), paint_tint=(0.95, 0.91, 0.80), wear=0.08,
                              band=(1.35, (0.03, 0.16, 0.075)), paint_sat=1.0))
 
 
