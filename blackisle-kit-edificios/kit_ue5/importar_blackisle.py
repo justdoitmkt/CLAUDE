@@ -83,13 +83,22 @@ def _texture(path_png, dest, kind):
     return tex
 
 
+def presentes():
+    """Modelos del manifiesto cuya carpeta está en el disco (se pueden descomprimir solo algunos ZIP de modelo)."""
+    out = [b for b in MAN["modelos"] if os.path.isdir(os.path.join(KIT, "modelos", b))]
+    falta = [b for b in MAN["modelos"] if b not in out]
+    if falta:
+        warn("modelos sin carpeta (no se importan):", falta)
+    return out
+
+
 def importar_texturas():
     d = os.path.join(KIT, "comun", "texturas")
     for f in sorted(os.listdir(d)):
         if f.endswith(".png"):
             kind = "N" if f.endswith("_N.png") else ("ORM" if f.endswith("_ORM.png") else ("MASK" if "suciedad" in f else "BC"))
             _texture(os.path.join(d, f), f"{ROOT}/Texturas/Comun", kind)
-    for bid in MAN["modelos"]:
+    for bid in presentes():
         d = os.path.join(KIT, "modelos", bid, "texturas")
         for f in sorted(os.listdir(d)):
             kind = "N" if "_N." in f else ("ORM" if "_ORM." in f else "BC")
@@ -292,8 +301,8 @@ def materiales():
     M = maestros()
     for name, spec in MAN["materiales"].items():
         _mi_set(name, M[spec["maestro"]], spec)
-    for bid, d in MAN["modelos"].items():
-        for name, spec in d["materiales_atlas"].items():
+    for bid in presentes():
+        for name, spec in MAN["modelos"][bid]["materiales_atlas"].items():
             _mi_set(name, M[spec["maestro"]], spec)
     log("instancias de material:", len(_mi))
 
@@ -377,7 +386,7 @@ def importar_modelo(bid):
 def importar_todo(modelos=None):
     importar_texturas()
     materiales()
-    for bid in (modelos or MAN["modelos"]):
+    for bid in (modelos or presentes()):
         importar_modelo(bid)
     ejes()
     log("listo. Siguiente: ib.verificar()")
@@ -424,7 +433,8 @@ def frente(bid=None):
 
 def verificar():
     ok_all = True
-    for bid, d in MAN["modelos"].items():
+    for bid in presentes():
+        d = MAN["modelos"][bid]
         sm = EAL.load_asset(f"{ROOT}/Modelos/{bid}/{d['mallas']['Estructura']['nombre']}")
         if sm is None:
             warn(bid, "falta la malla de Estructura"); ok_all = False
