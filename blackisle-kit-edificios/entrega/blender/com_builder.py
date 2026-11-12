@@ -29,7 +29,7 @@ CX0, CX1, CY0, CY1 = -8.0, 8.0, -8.0, 8.0          # eje de la malla
 CURB_W, CURB_TOP = 0.30, 0.18                       # guarnición bajo la malla
 Z_GRAVEL = 0.10
 Z_WALK = 0.12                                       # banquetas 2 cm sobre la grava
-GATE_X0, GATE_X1 = -7.6, -3.6                       # vano del portón (ejes de los postes del portón)
+GATE_X0, GATE_X1 = -8.0, -4.0                       # vano del portón (ejes de los postes; el poniente es el de la esquina)
 # ------------------------------------------------------------------------------------------------------------ caseta
 SH_X0, SH_X1, SH_Y0, SH_Y1 = -6.4, -0.6, 2.35, 5.65
 SH_T = 0.10                                         # muro prefabricado
@@ -349,16 +349,20 @@ def wall_services(det, r):
         # desagüe del condensado
         det.tube(cl.fillet([(x - 0.25, y0 - 0.18, 0.80), (x - 0.25, y0 - 0.18, 0.60), (x - 0.25, y0 - 0.26, Z_PAD + 0.12),
                             (x - 0.25, y0 - 0.34, Z_PAD + 0.12)], 0.04, 6), 0.008, seg=12, mat="plastic")
-    # arbotante LED sobre la puerta (carcasa de aluminio fundido con aletas, difusor)
+    # arbotante LED sobre la puerta: carcasa de aluminio fundido de corte total (trapecio con aletas arriba, difusor plano abajo)
     wz = Z_FLOOR + DOOR_H + 0.32
     wp = cl.MB()
-    cl.zloft(wp, [(0.000, 0.26, 0.14, 0.02), (0.012, 0.26, 0.14, 0.02), (0.020, 0.25, 0.13, 0.02), (0.120, 0.22, 0.10, 0.02),
-                  (0.140, 0.20, 0.09, 0.02)], seg=24, mat="aluminium")
-    wp.transform(_Rx(90))
-    for k in range(7):
-        x = -0.09 + k * 0.03
-        wp.box((x - 0.002, -0.13, 0.04), (x + 0.002, -0.02, 0.07), "aluminium", bevel=0.0008)
-    wp.box((-0.10, -0.13, -0.065), (0.10, -0.03, -0.055), "plastic", bevel=0.003)
+    cl.zloft(wp, [(-0.100, 0.280, 0.150, -0.077), (-0.094, 0.286, 0.156, -0.078), (-0.070, 0.286, 0.156, -0.078),
+                  (0.020, 0.262, 0.120, -0.060), (0.058, 0.250, 0.080, -0.040), (0.066, 0.244, 0.072, -0.036)],
+             seg=32, mat="aluminium", ex=5.0)
+    cl.rbox(wp, (-0.150, -0.012, -0.110), (0.150, -0.001, 0.090), "aluminium", r=0.004)        # placa de montaje
+    for k in range(9):                                                                       # aletas de disipación
+        x = -0.104 + k * 0.026
+        wp.box((x - 0.0018, -0.068, 0.060), (x + 0.0018, -0.012, 0.084), "aluminium", bevel=0.0007)
+    cl.rbox(wp, (-0.118, -0.140, -0.108), (0.118, -0.016, -0.098), "plastic", r=0.004)      # difusor
+    for x in (-0.12, 0.12):
+        ce.screw(wp, _T(x, -0.012, 0.075) @ _Rx(90), d=0.008, mat="steel")
+    wp.cyl((0.0, -0.001, -0.02), (0.0, 0.004, -0.02), 0.012, seg=24, mat="rubber")           # pasacables al muro
     det.join(wp, _T(DOOR_CX, y0, wz))
     LIGHTS.append([DOOR_CX, y0 - 0.12, round(wz - 0.08, 3)])
     # estrobo de alarma
@@ -526,8 +530,8 @@ def compound(det, r):
             else:
                 cl.rbox(det, (c - CURB_W / 2, u0, -0.05), (c + CURB_W / 2, u1, CURB_TOP), "concrete", r=0.012)
     h = CURB_W / 2
-    curb_run(CX0 - h, GATE_X0 - 0.10, "x", CY0)
-    curb_run(GATE_X1 + 0.10, CX1 + h, "x", CY0)
+    curb_run(CX0 - h, GATE_X0 + h, "x", CY0)          # dado de esquina bajo el poste del portón
+    curb_run(GATE_X1 - h, CX1 + h, "x", CY0)
     curb_run(CX0 - h, CX1 + h, "x", CY1)
     curb_run(CY0 + h, CY1 - h, "y", CX0)
     curb_run(CY0 + h, CY1 - h, "y", CX1)
@@ -688,6 +692,8 @@ def dress(det, furn, r):
     put(tel.light_pole(6.0, seed=int(r.integers(1e6)), cctv=False), 0, 0, M=_T(7.35, 7.0, Z_GRAVEL) @ _Rz(135))
     LIGHTS.append([-6.9, -1.0, 6.0])
     LIGHTS.append([7.0, 6.65, 6.0])
+    # malla ciclónica perimetral con brazos y púas (lado público hacia afuera: perímetro en sentido antihorario) y portón doble
+    fence(furn, tel, r)
     # torre, equipo RF y puente de cables a la caseta
     tw, an = _mod("tower"), _mod("antennas")
     if tw is not None:
@@ -698,6 +704,35 @@ def dress(det, furn, r):
         det.join(sg["AUTHORIZED PERSONNEL ONLY"], DOOR_M @ _T(0.45, -0.0012, 1.42))
     det.join(sg["SITE ID 2047"], _T(DX1 + FRAME + 0.30, SH_Y0 - 0.001, 1.55))
     det.join(sg["DANGER HIGH VOLTAGE"], _T(SH_X0 - 0.001, 3.30, 1.82) @ _Rz(-90))
+
+
+def fence(furn, tel, r):
+    """Cerca de malla ciclónica de 2,4 m + brazos a 45° con 3 hilos de púas sobre la guarnición, en sentido antihorario (lado
+    público -Y local hacia afuera), y portón doble de 4 m en el lado sur con sus postes de 4" (el poniente en la esquina)."""
+    try:
+        tel.fence_run(1.0, fabric="lite")
+    except TypeError:
+        return                                            # versión sin modo realizado ligero: no se puede unir al pipeline
+    z = CURB_TOP
+    gx = (GATE_X0 + GATE_X1) / 2
+    furn.join(tel.fence_gate(w=GATE_X1 - GATE_X0, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite"), _T(gx, CY0, z))
+    runs = [  # (origen, giro, largo, postes de los extremos)
+        ((GATE_X1, CY0), 0, CX1 - GATE_X1, (None, True)),          # sur, del portón a la esquina SE
+        ((CX1, CY0), 90, CY1 - CY0, (False, False)),               # oriente
+        ((CX1, CY1), 180, CX1 - CX0, (True, True)),                # norte
+        ((CX0, CY1), -90, CY1 - CY0, (False, None)),               # poniente, remata en el poste del portón
+    ]
+    for (o, rot, L, ends) in runs:
+        furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite"), _T(o[0], o[1], z) @ _Rz(rot))
+    for (a, b) in (((CX0 - 0.08, CY0 - 0.35), (CX1 + 0.08, CY0 + 0.25)), ((CX0 - 0.08, CY1 - 0.25), (CX1 + 0.08, CY1 + 0.35)),
+                   ((CX0 - 0.35, CY0), (CX0 + 0.25, CY1)), ((CX1 - 0.25, CY0), (CX1 + 0.35, CY1))):
+        _proxy_box((a[0], a[1], 0.0), (b[0], b[1], z + 2.75))
+    # letreros en la malla: junto al portón y en los costados
+    sg = tel.signs()
+    for (nm, x, y, rot) in (("NO TRESPASSING", GATE_X1 + 0.9, CY0, 0), ("SITE ID 2047", GATE_X1 + 2.0, CY0, 0),
+                            ("RF EXPOSURE: DO NOT CLIMB", 3.5, CY0, 0), ("DANGER HIGH VOLTAGE", CX1, -2.0, 90),
+                            ("NO TRESPASSING", CX0, 2.0, -90), ("NO TRESPASSING", 1.5, CY1, 180)):
+        furn.join(sg[nm], _T(x, y, z + 1.45) @ _Rz(rot) @ _T(0, -0.03, 0))
 
 
 def _sfillet(pts, rad, n=6):

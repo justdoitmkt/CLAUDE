@@ -66,6 +66,17 @@ SHOTS_EXTRA = {
         "tienda_int": dict(azim=-43.6, elev=3.9, dist=5.95, target=Vector((14.5, -3.0, 1.2)), fov=75, ground=False),
         "mostrador": dict(azim=-68.2, elev=3.5, dist=3.24, target=Vector((15.2, -4.4, 1.3)), fov=70, ground=False),
     },
+    "COM_1_antena": {
+        "porton": dict(azim=-20, elev=4, dist=18.0, target=Vector((-1.0, -2.0, 3.0)), fov=60),
+        "torre": dict(azim=-40, elev=-2, dist=60.0, target=Vector((4.0, 4.3, 21.0)), fov=55),
+        "caseta": dict(azim=-20, elev=6, dist=6.5, target=Vector((-4.0, 2.4, 1.6)), fov=60),
+        "equipo": dict(azim=-35, elev=10, dist=8.0, target=Vector((4.2, -3.6, 1.0)), fov=60),
+        "trasera": dict(azim=170, elev=6, dist=9.0, target=Vector((-3.5, 5.6, 1.5)), fov=60),
+        "puente": dict(azim=10, elev=6, dist=5.5, target=Vector((1.0, 4.6, 2.0)), fov=55),
+        "sectores": dict(azim=-30, elev=10, dist=7.0, target=Vector((4.0, 4.3, 40.5)), fov=55),
+        "microondas": dict(azim=150, elev=8, dist=5.0, target=Vector((4.0, 4.3, 33.0)), fov=55),
+        "interior": dict(azim=150, elev=5, dist=1.0, target=Vector((-4.5, 3.4, 1.5)), fov=85, ground=False),
+    },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
         "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),

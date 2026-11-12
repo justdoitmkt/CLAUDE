@@ -19,7 +19,7 @@ from mathutils import Vector  # noqa: E402
 ENT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "CAB_1_tablones": "CAB_1",
           "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3", "MUE_1_carga": "MUE_1",
-          "HOS_1_pueblo": "HOS_1", "GRA_1_tienda": "GRA_1"}
+          "HOS_1_pueblo": "HOS_1", "GRA_1_tienda": "GRA_1", "COM_1_antena": "COM_1"}
 
 
 EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
@@ -31,6 +31,10 @@ EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
     "GRA_1_tienda": [("patio", (-4.0, -24.0, 1.7), (5.0, -4.0, 3.0), 26), ("tienda", (16.5, -15.0, 1.7), (12.5, -8.0, 1.8), 28),
                      ("costado", (8.6, -11.5, 1.7), (6.0, 0.0, 2.6), 24), ("tejaban", (-14.0, -10.0, 1.7), (-8.0, -2.0, 2.0), 24),
                      ("trasera", (6.0, 24.0, 2.0), (2.0, 6.0, 2.5), 26), ("granero", (0.5, -6.8, 1.6), (0.0, 4.0, 2.4), 18)],
+    "COM_1_antena": [("porton", (-7.5, -17.0, 1.7), (-1.0, 0.0, 4.5), 22), ("torre", (-0.6, -1.8, 1.6), (4.0, 4.3, 24.0), 14),
+                     ("caseta", (-1.6, -3.2, 1.6), (-4.2, 2.4, 1.7), 22), ("equipo", (0.0, -4.2, 1.7), (4.2, -3.6, 0.9), 22),
+                     ("trasera", (-6.5, 13.0, 1.8), (-3.5, 5.6, 1.5), 28), ("interior", (-5.6, 2.9, 1.65), (-1.6, 4.9, 1.3), 14),
+                     ("sectores", (9.5, -8.0, 30.0), (4.0, 4.3, 40.8), 40)],
 }
 
 
@@ -274,7 +278,7 @@ def main():
     if solo is None or "exterior" in solo:
         bpy.ops.render.render(write_still=True)
         print("[preview] exterior", sc.render.filepath, flush=True)
-    if bid.startswith(("HOS_", "GRA_")):        # en uso: luminarias encendidas (focos de la ficha)
+    if bid.startswith(("HOS_", "GRA_", "COM_")):        # en uso: luminarias encendidas (focos de la ficha)
         for i, p in enumerate(d.get("focos_m_blender", [])):
             gra = bid.startswith("GRA_")
             Lf = bpy.data.lights.new(f"foco{i}", "POINT" if gra else "AREA")   # granero: foco desnudo de 100 W

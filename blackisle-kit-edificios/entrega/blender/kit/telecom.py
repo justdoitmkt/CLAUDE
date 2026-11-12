@@ -1101,7 +1101,8 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
     return R, yfl
 
 
-def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), fabric="instance", base="footing", lite_sides=3):
+def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), fabric="instance", base="footing", lite_sides=3,
+               fence_lift=0.0):
     """Puerta doble abatible de malla ciclónica (origen: piso al centro del claro; claro libre `w` entre caras de los postes
     a lo largo de X; lado público -Y, abre hacia el recinto +Y). open_deg = (hoja izquierda, hoja derecha) en grados (0 =
     cerrada, + = abre hacia +Y; hasta 90).
@@ -1112,7 +1113,10 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
     de caída en la hoja izquierda (con receptáculo de tubo en dado de concreto al centro), horquilla con seguro en la derecha
     y cadena de 6 mm con candado laminado (cerrada: abraza ambos montantes; abierta: cuelga de la hoja derecha).
     fabric="lite": MB normal de una sola malla sin instancias (tela y púas ligeras como en fence_run, herrajes ligeros).
-    base: "footing" (dados en tierra) o "curb" (postes en guarnición)."""
+    base: "footing" (dados en tierra) o "curb" (postes en guarnición).
+    fence_lift: cuánto más alta está la base de la cerca vecina que el piso del portón (p. ej. 0,18 si la cerca va sobre
+    guarnición y el portón sobre el arroyo): sube la copa del larguero, la barra de tensión y el brazo de púas de los postes
+    para que casen con fence_run(..., end_posts=(..., None)) colocado a +fence_lift; las hojas quedan al piso del portón."""
     r = rng(seed)
     lite = fabric == "lite"
     mb = TelMB()
@@ -1122,8 +1126,9 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
     Xl, Xr = -(w / 2 + R_GATEPOST), w / 2 + R_GATEPOST
     for X, sd, fs in ((Xl, -1, fence_sides[0]), (Xr, 1, fence_sides[1])):
-        _terminal(mb, X, sd, R_GATEPOST, z_b, z_top, zr, zt, x_brace=None, fabric=fs and fabric != "none", rail=fs, foot=0.27,
-                  lite=lite, base=base)
+        fl = fence_lift
+        _terminal(mb, X, sd, R_GATEPOST, z_b + fl, z_top + fl, zr + fl, zt + fl, x_brace=None, fabric=fs and fabric != "none", rail=fs,
+                  foot=0.27, lite=lite, base=base)
     z_lb, z_lt = 0.11, zr
     n_fab = int((z_lt - z_lb - 0.012) / CL_D)
     L = w / 2 - 0.032 - 0.025 - R_GFRAME              # perno -> eje del montante libre
