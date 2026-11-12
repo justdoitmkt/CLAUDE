@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "be71c32",
+ "version_repo": "a908ff7",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -1282,6 +1282,260 @@
       "BC": "T_APT_C_3p_walls_rest_BC",
       "N": "T_APT_C_3p_walls_rest_N",
       "ORM": "T_APT_C_3p_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
+  "APT_D_4p": {
+   "id": "APT_D_4p",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_APT_D_4p_Estructura",
+     "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Estructura.glb",
+     "triangulos": 464824,
+     "ranuras": [
+      "APT_D_4p_walls_main",
+      "APT_D_4p_walls_rest",
+      "BLK_plaster",
+      "BLK_wood",
+      "BLK_concrete",
+      "BLK_metal_paint",
+      "BLK_metal_rust",
+      "BLK_sand",
+      "BLK_aluminium",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_fabric",
+      "BLK_paper",
+      "BLK_brick",
+      "BLK_mortar",
+      "BLK_wood_dark",
+      "BLK_wood_grey",
+      "BLK_tile"
+     ],
+     "mib": 26.28
+    },
+    "Detalle": {
+     "nombre": "SM_APT_D_4p_Detalle",
+     "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Detalle.glb",
+     "triangulos": 244812,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_wood",
+      "BLK_mortar",
+      "BLK_metal_rust",
+      "BLK_wood_grey",
+      "BLK_metal_paint",
+      "BLK_fabric",
+      "BLK_aluminium",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_wood_dark"
+     ],
+     "mib": 15.04
+    },
+    "Escombro": {
+     "nombre": "SM_APT_D_4p_Escombro",
+     "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Escombro.glb",
+     "triangulos": 9136,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_sand",
+      "BLK_metal_rust",
+      "BLK_brick"
+     ],
+     "mib": 0.49
+    },
+    "Vidrio": {
+     "nombre": "SM_APT_D_4p_Vidrio",
+     "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Vidrio.glb",
+     "triangulos": 26963,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 1.91
+    },
+    "Colision": {
+     "nombre": "SM_APT_D_4p_Colision",
+     "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Colision.glb",
+     "triangulos": 140585,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 6.1
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_APT_D_4p_walls_main_BC",
+     "N": "T_APT_D_4p_walls_main_N",
+     "ORM": "T_APT_D_4p_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_APT_D_4p_walls_rest_BC",
+     "N": "T_APT_D_4p_walls_rest_N",
+     "ORM": "T_APT_D_4p_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [
+    [
+     -3.092,
+     0.009,
+     2.536
+    ],
+    [
+     3.338,
+     -0.075,
+     2.386
+    ],
+    [
+     -1.639,
+     -2.632,
+     2.607
+    ],
+    [
+     6.484,
+     -2.653,
+     2.495
+    ],
+    [
+     3.879,
+     -0.556,
+     5.372
+    ],
+    [
+     -3.625,
+     -0.44,
+     5.321
+    ],
+    [
+     -6.701,
+     -1.565,
+     5.295
+    ],
+    [
+     1.292,
+     2.373,
+     5.478
+    ],
+    [
+     6.814,
+     -2.471,
+     5.294
+    ],
+    [
+     -3.607,
+     -0.509,
+     8.273
+    ],
+    [
+     3.875,
+     0.464,
+     8.242
+    ],
+    [
+     6.488,
+     -1.649,
+     8.182
+    ],
+    [
+     -6.59,
+     -1.471,
+     8.159
+    ],
+    [
+     -6.484,
+     -1.59,
+     11.199
+    ],
+    [
+     3.905,
+     0.456,
+     11.16
+    ],
+    [
+     1.293,
+     2.431,
+     11.096
+    ],
+    [
+     -4.113,
+     2.569,
+     11.237
+    ]
+   ],
+   "medidas_m": {
+    "x": 17.525,
+    "y": 10.98,
+    "z": 16.884,
+    "min": [
+     -8.762,
+     -5.605,
+     -0.05
+    ],
+    "max": [
+     8.763,
+     5.375,
+     16.834
+    ],
+    "escombro_min": [
+     -8.486,
+     -6.851,
+     -0.194
+    ],
+    "escombro_max": [
+     8.124,
+     7.104,
+     0.928
+    ],
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Escombro_presente": true,
+    "Escombro_ranuras": true,
+    "Escombro_un_uv": true,
+    "Escombro_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 49.82,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "balcones colgados y las dos puertas de PB con marquesina"
+   },
+   "materiales_atlas": {
+    "APT_D_4p_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_APT_D_4p_walls_main_BC",
+      "N": "T_APT_D_4p_walls_main_N",
+      "ORM": "T_APT_D_4p_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "APT_D_4p_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_APT_D_4p_walls_rest_BC",
+      "N": "T_APT_D_4p_walls_rest_N",
+      "ORM": "T_APT_D_4p_walls_rest_ORM"
      },
      "AOFuerza": 1.0
     }
