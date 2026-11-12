@@ -1,0 +1,26 @@
+{
+ "tris": 1868460,
+ "mem_mb": 356.4,
+ "materials": [
+  "BLK_aluminium",
+  "BLK_cable",
+  "BLK_concrete",
+  "BLK_copper",
+  "BLK_enamel",
+  "BLK_galvanized",
+  "BLK_glass",
+  "BLK_gravel",
+  "BLK_paint_white",
+  "BLK_paint_yellow",
+  "BLK_plastic",
+  "BLK_plastic_blue",
+  "BLK_radome",
+  "BLK_rubber",
+  "BLK_sign_blue",
+  "BLK_sign_green",
+  "BLK_sign_red",
+  "BLK_sign_white",
+  "BLK_steel",
+  "BLK_vinyl"
+ ]
+}
