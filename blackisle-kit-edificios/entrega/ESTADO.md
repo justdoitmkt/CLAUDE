@@ -363,3 +363,24 @@ en la orilla de la cubierta. Ajustes pedidos por el usuario sobre el primer pase
   (exterior, playa, mar, atraque, interior), revisadas con mis ojos. ZIP `kit_ue5_descargas/BLACKISLE_UE5_MUE_1_carga.zip`
   (28,8 MiB); el común se rehízo (LEEME, manifiesto e importador con el muelle).
 - Pendiente menor: los tragaluces usan el vidrio del kit (transparente); en la realidad serían de fibra translúcida.
+
+## Nuevo modelo: HOS_1_pueblo (hospital rural) · referencias (2026-11-12)
+Pedido: hospital sencillo de una sola planta, de pueblo mexicano pequeño (no avanzado), con cochera para ambulancias al lado,
+exterior e interior completos, grafiti moderado (está en funcionamiento: menos descuidado que cabañas y departamentos) y todo
+texto en inglés. Generado con `nano_banana_2_1` a 1k; ancla de grafiti `ref_grafiti_planta_baja_1` en las vistas exteriores.
+7 imágenes, 0 rechazos, **10,5 créditos** (saldo 241,25 → 230,75, plan plus; entre el cierre del muelle y este lote el saldo
+ya había bajado de 250,25 a 241,25 sin generaciones mías en esta parte de la sesión: se informa tal cual).
+Revisadas con mis ojos; en `refs_higgsfield/HOS_1_pueblo/`:
+| Vista | job | Qué fija |
+|---|---|---|
+| hero | 9d79cacc | fachada de block aplanado crema con zoclo verde, pórtico de columnas cuadradas, rampa con barandal, ventanas con herrería verde, letrero pintado COMMUNITY HOSPITAL en el pretil, placa azul con H, tinacos, cochera de 2 cortinas a la derecha, barda con tags |
+| cochera | 15d922bd | cochera de 2 bahías con cortinas, plataforma con NO PARKING, marquesina de lámina hacia la puerta EMERGENCY, tags parcialmente tapados con parches de pintura |
+| trasera | 4b2c5cfb | puerta STAFF ONLY, medidores, condensadoras en ménsulas, jaula de cilindros de gas, botes, tendedero, tinacos sobre base metálica, barda de block con tags |
+| aérea | 11f967c4 | planta rectangular con patio interior y árbol, pórtico al frente, cochera a un lado con plataforma, barda perimetral con portón, estacionamiento |
+| recepción | 1cd8578f | muros a dos tonos (verde claro / blanco), terrazo, sillas azules en viga, ventanilla RECEPTION, WAITING ROOM, EXIT, oficina con cancel, plafón de placas, ventilador de techo |
+| pasillo | 4552b24b | pasillo con pasamanos de madera, puertas de tablero verdes con letreros EXAM, NURSES, PHARMACY, X-RAY, WARD; sala con camas de tubo, cortinas en riel, portasueros, silla de ruedas y camilla |
+| materiales | bb04c380 | aplanado con zoclo, terrazo, herrería verde, cortina con tag tapado, rotulado EMERGENCY, muro a dos tonos, rampa con borde amarillo, azotea con tinaco, azulejo blanco |
+- R4: tags solo KAOS, ZORO, NOVA, REXO, corazones y ojos. La cochera trae "Mi Vida Loca" (frase en español): no se usará en el
+  modelo porque el usuario pidió todo el texto en inglés. Textos que fallan en las imágenes ("WASN YOUR HANDS", "PHADMACY",
+  marca ilegible en un tinaco) se corrigen o se omiten al modelar. Sin cruz roja, estrella de la vida ni logos.
+- Las ambulancias de las imágenes son solo contexto: un vehículo no va dentro de la malla estática del edificio.
