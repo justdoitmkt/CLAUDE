@@ -882,8 +882,9 @@ def dress(furn, r):
         # afuera, frente: pacas, tarimas, bebedero, costales
         put(farm.hay_stack(2, 2, 2, seed=14), -3.6, -9.3, 0.0)
         put(farm.hay_bale(seed=15), -2.3, -9.6, 0.0, M=_T(-2.3, -9.7, 0.0) @ _Rz(17))
-        put(farm.pallet(seed=16), 0, 0, M=_T(-5.0, BY0 - 0.30, 0.02) @ _Rx(-78))
-        put(farm.pallet(seed=17), 0, 0, M=_T(-4.55, BY0 - 0.36, 0.02) @ _Rx(-76))
+        # tarimas recargadas en el hastial: giran sobre su canto inferior (y local -0,5), que queda en el piso
+        put(farm.pallet(seed=16), 0, 0, M=_T(-5.0, BY0 - 0.32, 0.0) @ _Rx(78) @ _T(0, 0.5, 0))
+        put(farm.pallet(seed=17), 0, 0, M=_T(-4.55, BY0 - 0.44, 0.0) @ _Rx(76) @ _T(0, 0.5, 0))
         put(farm.water_trough(1.8, seed=18), 3.7, -9.4, 0.0)
         put(farm.sack_pile(4, seed=19), 2.6, -8.9, 0.0)
         # tejaban: pacas, costales y corral vacío
