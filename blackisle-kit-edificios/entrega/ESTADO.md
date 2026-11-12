@@ -268,3 +268,32 @@ bombillas; tomas en `render_qa/recorrido/`. Defectos encontrados y corregidos en
 4. **z-fighting** (`tests/zfight.py`, caras coplanares superpuestas visibles): CAB_3 interior 6,9 → 0,08 m² (duela sobre la losa),
    CAB_1 4,1 → 0,7 (durmientes bajo las vigas), CAB_2 3,8 → 0,2 (diagonales de las cruces), esquineros sin solape, APT_D 308 → 30 m²
    (la cornisa era un bloque que duplicaba la losa de azotea; lo restante son tapas de muro encerradas).
+
+## Revisión de aceptación (2026-10-28, workflow con verificación adversarial) y ronda 3 del pipeline
+Un revisor por departamento contra R12, R4, la regla de color y la del usuario (finales, capturas Three.js, recorrido, plantas,
+paneles); cada hallazgo medio o grave pasó por un verificador que intentó refutarlo. Veredictos: A rechazo, B aceptar con
+correcciones, C rechazo, D aceptar con correcciones. Confirmados (y corregidos en el pipeline común, re-horneando los 7):
+- **Color (B, C, grave):** la pintura descascarada dejaba ver ladrillo en todos los pisos → bajo la pintura queda repellado gris y el
+  tabique solo asoma en parches grandes, más en PB. Descascarado por zonas (humedad, zócalo, esquinas), pintura menos saturada,
+  óxido más escaso y apagado (camuflaje marrón en D y A). Teja −28 % de saturación.
+- **Ático traslúcido (A, grave):** teja de una cara → `t_tile` de doble cara (cubre y da sombra desde dentro).
+- **Cuartos negros, hueco negro en C_04, panel de fachada en C_06, machón de D (medios/graves):** caras interiores de muros de
+  fachada clasificadas como exteriores (sin tabiques como oclusores; en D además por una enfilada de puertas alineadas) → interior
+  como oclusor y un rayo que escapa solo cuenta si recorre ≤ 3 m dentro de la planta; AO de los atlas con mínimo 0,35.
+- **Vidrio de cartulina (A, medio):** material `t_glass` propio, oscuro y brillante (rugosidad 0,1). `liso` único de doble cara.
+- **Aplanado interior en papel tapiz (B, medio):** `T2_plaster_int_2k.png` (2048² a 2,4 m, periódico por construcción).
+- **Props lisos (B, medio):** escombro con textura de concreto; tela con color desteñido por pieza.
+- **Grafiti poco legible (C, medio):** piezas protagonistas más grandes donde caben y alfa ×1,3.
+- **Muro blando a 2 m (A, medio):** banda de PB ×2,0 dentro de `walls_main` y normal de `walls_main` a 2048 (+16 MB).
+- **Interiores sin escombro (D medio, C bajo; en B refutado: la orden del usuario es la estructura):** `interior_dress.py`
+  (escombro de aplanado, basura, focos colgando, apagadores, algún colchón y silla rota) solo donde los rayos ven un cuarto cerrado.
+- R4 (bajo, pero se corrige): las dos estrellas de 5 puntas dentro de la pieza ZORO, borradas; 16 paneles regenerados y revisados.
+Refutados: logias "idénticas" de A, 'Mi Vida Loca' (está en la lista del brief), buzón de D (se movió igual a 1,6 m del vano).
+z-fighting: `coplanar.py` borra caras cubiertas y hunde 3 mm las parciales antes de hornear (D: 16,2 → 0,9 m² visibles);
+`tests/zfight.py` ahora prueba visibilidad con 5 rayos hasta 100 m y descarta caras bajo el suelo.
+
+## Reinicio del contenedor (2026-11-12)
+El contenedor se reemplazó: se perdieron el módulo `bpy` (reinstalado: Blender 5.2.2 LTS en /root/blk-venv), las herramientas
+del scratchpad y lo no subido (vestido interior, re-horneado de C y CAB_1 de la ronda 3). El vestido se reescribió desde la
+sesión; las herramientas de captura y la cadena ahora viven en el repo (`visor/captura/`, `scripts/cadena_horneado.sh`).
+Re-horneado completo de los 7 con el pipeline final en curso.
