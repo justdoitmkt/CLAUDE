@@ -335,3 +335,24 @@ ancla de color y desgaste: hero de APT_A (d2c82805) y `ref_grafiti_planta_baja_1
   las piezas propias del kit (`lettering/cutouts/`), no con estas imágenes.
 - Diferencias entre vistas: en la aérea la rampa baja al agua (rampa de botes); manda el hero/elevación (rampa desde la arena).
 
+
+## MUE_1_carga · modelado (2026-11-12)
+Constructor `blender/mue_builder.py` + piezas portuarias `blender/kit/port.py` (revisadas en primer plano con
+`tests/render_piezas.py`). Cotas: arena z 0, mar −0,5, cubierta +2,5, pilotes a −7; pivote (0, 0, 0) en el eje de la rampa
+en la orilla de la cubierta. Ajustes pedidos por el usuario sobre el primer pase:
+- **Rampa ancha:** del ancho completo de la cubierta (47,4 m libres; pretiles a ras de las trabes), 25 m al 10 %, sobre
+  terraplén con muros de contención, coronamiento, barandal de tubo, aleros abiertos al pie, guarniciones, juntas de acero
+  cada 5 m, estrías antiderrapantes, rejilla de drenaje de lado a lado, placa de transición atornillada y estribo bajo la
+  cubierta. Arena arrastrada por el viento contra los pretiles.
+- **Espacio para vehículos:** carriles de 9 m o más alrededor de la nave; los objetos sueltos van contra muros y orillas.
+- **Detalle realista (fuera "bloques"):** grúa de pedestal con pluma de celosía de ángulos, poleas, cables y gancho (pluma
+  sobre el atraque); postes octagonales con luminaria tipo cobra; bitas en T con anclas; llantas con dibujo colgadas de
+  cadena; defensas de madera con flejes; escaleras marinas; contenedores ISO con puertas, barras de cierre y bisagras;
+  tambos con aros. Nave: crujías de 6 m (se quitó un marco duplicado en y = 10), placas base con anclas y mortero,
+  postes de hastial, largueros Z con clips, largueros de muro C, contraventeo con tensores, cortinas y puerta fuera de
+  las líneas de columnas, juntas de acero en la cubierta.
+- Defecto encontrado en arcilla: zócalos de frente y costado encimados en las esquinas (caras coplanares, franjas negras);
+  corregido arrancando el zócalo lateral dentro del de frente/fondo.
+- Kit UE5: colisión simple añadida para grúa, postes y bitas; ficha con `niveles_m` y `medidas_estructura_m`; el
+  importador compara la Estructura contra esa medida; vista previa con playa y mar; atlas de muros a 8K (superficie
+  exterior ~2x la de un edificio).
