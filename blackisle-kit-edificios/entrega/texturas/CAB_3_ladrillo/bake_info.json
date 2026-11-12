@@ -1,11 +1,11 @@
 {
- "tris": 261749,
- "mem_mb": 141.0,
+ "tris": 260734,
+ "mem_mb": 156.9,
  "materials": [
   "CAB_3_ladrillo_t_brick",
   "CAB_3_ladrillo_t_concrete",
+  "CAB_3_ladrillo_t_glass",
   "CAB_3_ladrillo_t_liso",
-  "CAB_3_ladrillo_t_liso_2c",
   "CAB_3_ladrillo_t_metal_paint",
   "CAB_3_ladrillo_t_metal_rust",
   "CAB_3_ladrillo_t_plaster",
