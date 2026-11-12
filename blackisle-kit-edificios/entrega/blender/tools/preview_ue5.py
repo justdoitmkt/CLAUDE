@@ -274,12 +274,16 @@ def main():
     if solo is None or "exterior" in solo:
         bpy.ops.render.render(write_still=True)
         print("[preview] exterior", sc.render.filepath, flush=True)
-    if bid.startswith("HOS_"):                  # hospital en uso: luminarias encendidas (focos de la ficha)
+    if bid.startswith(("HOS_", "GRA_")):        # en uso: luminarias encendidas (focos de la ficha)
         for i, p in enumerate(d.get("focos_m_blender", [])):
-            Lf = bpy.data.lights.new(f"foco{i}", "AREA")
-            Lf.energy = 30.0
-            Lf.size = 1.1
-            Lf.color = (1.0, 0.97, 0.92)
+            gra = bid.startswith("GRA_")
+            Lf = bpy.data.lights.new(f"foco{i}", "POINT" if gra else "AREA")   # granero: foco desnudo de 100 W
+            Lf.energy = 140.0 if gra else 30.0
+            if gra:
+                Lf.shadow_soft_size = 0.05
+            else:
+                Lf.size = 1.1
+            Lf.color = (1.0, 0.86, 0.66) if gra else (1.0, 0.97, 0.92)
             lf = bpy.data.objects.new(f"foco{i}", Lf)
             lf.location = (p[0], p[1], p[2] - 0.01)
             sc.collection.objects.link(lf)
