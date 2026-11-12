@@ -70,7 +70,7 @@ def cfg_gra(bid="GRA_1_tienda"):
     return dict(id=bid, seed=91, xs=[LX0, SX1], ys=[PORCH_Y, BY1], h=[0.0], band_top=2.6,
                 graffiti_bounds=(LX0 - 0.5, SX1 + 0.5, PORCH_Y - 0.5, BY1 + 0.5), graffiti_px_per_m=150.0,
                 exterior_footprint=fp,
-                lookdev=dict(base_z=0.0, graffiti_mats=("block", "wood_red"), paint_tint=(0.98, 0.90, 0.62), wear=0.25,
+                lookdev=dict(base_z=0.0, graffiti_mats=("block", "wood_red"), paint_tint=(0.98, 0.90, 0.62), wear=0.15,
                              band=(1.0, (0.02, 0.05, 0.16)), paint_sat=1.0))
 
 
