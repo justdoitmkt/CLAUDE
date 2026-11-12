@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "34b7b88",
+ "version_repo": "c585b8e",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -521,6 +521,48 @@
    "dos_caras": false,
    "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.6, metal 0.0 (en el ORM)"
   },
+  "BLK_galvanized": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_galvanized_BC",
+    "N": "T_BLK_galvanized_N",
+    "ORM": "T_BLK_galvanized_ORM"
+   },
+   "UVEscala": 2.0,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.2431,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T13_galvanizado.png a 1.0 m por repetición; rugosidad 0.45, metal 1.0 (en el ORM)"
+  },
+  "BLK_gravel": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_gravel_BC",
+    "N": "T_BLK_gravel_N",
+    "ORM": "T_BLK_gravel_ORM"
+   },
+   "UVEscala": 1.66667,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.0993,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T14_grava.png a 1.2 m por repetición; rugosidad 0.95, metal 0.0 (en el ORM)"
+  },
   "BLK_aluminium": {
    "maestro": "M_BLK_Color",
    "Color": [
@@ -828,6 +870,32 @@
     0.03
    ],
    "Rugosidad": 0.12,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_copper": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.72,
+    0.4,
+    0.25
+   ],
+   "Rugosidad": 0.38,
+   "Metal": 1.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_radome": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.74,
+    0.75,
+    0.74
+   ],
+   "Rugosidad": 0.55,
    "Metal": 0.0,
    "PesoVC": 0.75,
    "dos_caras": false,
@@ -3364,6 +3432,216 @@
       "BC": "T_GRA_1_tienda_walls_rest_BC",
       "N": "T_GRA_1_tienda_walls_rest_N",
       "ORM": "T_GRA_1_tienda_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
+  "COM_1_antena": {
+   "id": "COM_1_antena",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_COM_1_antena_Estructura",
+     "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Estructura.glb",
+     "triangulos": 408,
+     "ranuras": [
+      "COM_1_antena_walls_main",
+      "COM_1_antena_walls_rest",
+      "BLK_concrete",
+      "BLK_paint_white",
+      "BLK_rubber"
+     ],
+     "mib": 0.03
+    },
+    "Detalle": {
+     "nombre": "SM_COM_1_antena_Detalle",
+     "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Detalle.glb",
+     "triangulos": 789549,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_plastic",
+      "BLK_rubber",
+      "BLK_galvanized",
+      "BLK_radome",
+      "BLK_cable",
+      "BLK_enamel",
+      "BLK_aluminium",
+      "BLK_steel",
+      "BLK_sign_white",
+      "BLK_sign_red",
+      "BLK_copper",
+      "BLK_sign_green",
+      "BLK_gravel",
+      "BLK_paint_yellow",
+      "BLK_sign_blue"
+     ],
+     "mib": 46.13
+    },
+    "Mobiliario": {
+     "nombre": "SM_COM_1_antena_Mobiliario",
+     "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Mobiliario.glb",
+     "triangulos": 1078091,
+     "ranuras": [
+      "BLK_rubber",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_aluminium",
+      "BLK_steel",
+      "BLK_sign_green",
+      "BLK_paint_yellow",
+      "BLK_sign_blue",
+      "BLK_sign_white",
+      "BLK_plastic_blue",
+      "BLK_sign_red",
+      "BLK_galvanized",
+      "BLK_vinyl",
+      "BLK_copper",
+      "BLK_enamel",
+      "BLK_concrete"
+     ],
+     "mib": 86.3
+    },
+    "Vidrio": {
+     "nombre": "SM_COM_1_antena_Vidrio",
+     "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Vidrio.glb",
+     "triangulos": 412,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 0.02
+    },
+    "Colision": {
+     "nombre": "SM_COM_1_antena_Colision",
+     "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Colision.glb",
+     "triangulos": 616,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 0.03
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_COM_1_antena_walls_main_BC",
+     "N": "T_COM_1_antena_walls_main_N",
+     "ORM": "T_COM_1_antena_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_COM_1_antena_walls_rest_BC",
+     "N": "T_COM_1_antena_walls_rest_N",
+     "ORM": "T_COM_1_antena_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [
+    [
+     -5.4,
+     2.23,
+     2.674
+    ],
+    [
+     -5.1,
+     3.9,
+     2.94
+    ],
+    [
+     -3.5,
+     3.9,
+     2.94
+    ],
+    [
+     -1.9,
+     3.9,
+     2.94
+    ],
+    [
+     -6.9,
+     -1.0,
+     6.0
+    ],
+    [
+     7.0,
+     6.65,
+     6.0
+    ]
+   ],
+   "medidas_m": {
+    "x": 16.605,
+    "y": 16.903,
+    "z": 45.601,
+    "min": [
+     -8.303,
+     -8.6,
+     -0.6
+    ],
+    "max": [
+     8.303,
+     8.303,
+     45.001
+    ],
+    "escombro_min": null,
+    "escombro_max": null,
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0. Los dados de la torre bajan a z = -0,6 (enterrados)."
+   },
+   "medidas_estructura_m": {
+    "x": 6.0,
+    "y": 3.5,
+    "z": 3.05,
+    "min": [
+     -6.5,
+     2.25,
+     0.15
+    ],
+    "max": [
+     -0.5,
+     5.75,
+     3.2
+    ]
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Mobiliario_presente": true,
+    "Mobiliario_ranuras": true,
+    "Mobiliario_un_uv": true,
+    "Mobiliario_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 132.51,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "portón doble del compound y la puerta de la caseta; la torre queda al fondo a la derecha (+x, +y)"
+   },
+   "materiales_atlas": {
+    "COM_1_antena_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_COM_1_antena_walls_main_BC",
+      "N": "T_COM_1_antena_walls_main_N",
+      "ORM": "T_COM_1_antena_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "COM_1_antena_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_COM_1_antena_walls_rest_BC",
+      "N": "T_COM_1_antena_walls_rest_N",
+      "ORM": "T_COM_1_antena_walls_rest_ORM"
      },
      "AOFuerza": 1.0
     }
