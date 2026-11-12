@@ -579,7 +579,7 @@ def main():
     nb = scale_band_islands(main_o, band_top, BAND_SCALE) if has_g else 0
     log("islas de banda ampliadas:", nb)
     mem = 0.0
-    sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith(("MUE", "GRA")) else SIZES)
+    sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith("MUE") else SIZES)   # GRA: 4K (con 8K y 1,1 M de tris se quedaba sin memoria)
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles
