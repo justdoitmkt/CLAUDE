@@ -426,3 +426,8 @@ honesto de lo que quede por debajo. La primera lámina del mobiliario del hospit
   abandono): ahora el umbral sube con el desgaste (0,52 + 0,70·(1−wear); los demás edificios, wear 1, quedan idénticos);
   (2) el lambrín y el zoclo tapaban el metro inferior de las 4 puertas exteriores y entraban a la colisión (la tolerancia de
   huecos era menor que el grueso del muro exterior): corregido y verificado (coinciden exactamente las 4, sin falsos).
+- **Entrega final al kit UE5** (horneado 14 min, exportación validada): Estructura 10 168 · Detalle 388 886 · **Mobiliario
+  1 574 647** · Vidrio 17 520 · Colision 9 144 triángulos (≈ 2,0 M). GLB del mobiliario 84,6 MB, detalle 21,5 MB;
+  `kit_ue5_descargas/BLACKISLE_UE5_HOS_1_pueblo.zip` 38,6 MiB (un solo ZIP) + común rehecho (65,8 MiB). Vistas previas
+  finales en `render_qa/ue5/HOS_1_pueblo_ue5_{calle,urgencias,trasera,pasillo,encamados,interior}.png`, revisadas a ojo:
+  fachada mantenida, puerta principal hasta el piso, camas tendidas visibles.
