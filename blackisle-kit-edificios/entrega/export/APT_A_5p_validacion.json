@@ -1,15 +1,15 @@
 {
  "id": "APT_A_5p",
  "glb": "export/APT_A_5p.glb",
- "size_mb": 59.06,
- "tris_glb": 821362,
+ "size_mb": 61.86,
+ "tris_glb": 850875,
  "objects": 7,
  "materials": [
   "APT_A_5p_skirt",
   "APT_A_5p_t_brick",
   "APT_A_5p_t_concrete",
+  "APT_A_5p_t_glass",
   "APT_A_5p_t_liso",
-  "APT_A_5p_t_liso_2c",
   "APT_A_5p_t_metal_paint",
   "APT_A_5p_t_metal_rust",
   "APT_A_5p_t_plaster",
@@ -22,7 +22,7 @@
  ],
  "n_materials": 14,
  "images": 17,
- "texture_mem_mb": 220.8,
+ "texture_mem_mb": 252.7,
  "bbox_min": [
   -10.425,
   -8.625,
