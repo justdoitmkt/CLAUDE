@@ -29,7 +29,7 @@ CX0, CX1, CY0, CY1 = -8.0, 8.0, -8.0, 8.0          # eje de la malla
 CURB_W, CURB_TOP = 0.30, 0.18                       # guarnición bajo la malla
 Z_GRAVEL = 0.10
 Z_WALK = 0.12                                       # banquetas 2 cm sobre la grava
-GATE_X0, GATE_X1 = -8.0, -4.0                       # vano del portón (ejes de los postes; el poniente es el de la esquina)
+GATE_X0, GATE_X1 = -5.4 - 2.0508, -5.4 + 2.0508     # ejes de los postes del portón (claro libre de 4 m, al eje de la banqueta)
 # ------------------------------------------------------------------------------------------------------------ caseta
 SH_X0, SH_X1, SH_Y0, SH_Y1 = -6.4, -0.6, 2.35, 5.65
 SH_T = 0.10                                         # muro prefabricado
@@ -707,32 +707,41 @@ def dress(det, furn, r):
 
 
 def fence(furn, tel, r):
-    """Cerca de malla ciclónica de 2,4 m + brazos a 45° con 3 hilos de púas sobre la guarnición, en sentido antihorario (lado
-    público -Y local hacia afuera), y portón doble de 4 m en el lado sur con sus postes de 4" (el poniente en la esquina)."""
+    """Cerca de malla ciclónica de 2,4 m + brazos a 45° con 3 hilos de púas, anclada en la guarnición, en sentido antihorario
+    (lado público -Y local hacia afuera), y portón doble de 4 m de claro en el lado sur, al eje de la banqueta de la caseta.
+    Modo "lite" de kit/telecom.py: tela tejida real en una sola malla (~13,5 k triángulos por metro)."""
     try:
         tel.fence_run(1.0, fabric="lite")
     except TypeError:
         return                                            # versión sin modo realizado ligero: no se puede unir al pipeline
     z = CURB_TOP
+    zg = Z_WALK + 0.01                                    # piso del portón (losa del portón)
     gx = (GATE_X0 + GATE_X1) / 2
-    furn.join(tel.fence_gate(w=GATE_X1 - GATE_X0, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite"), _T(gx, CY0, z))
+    furn.join(tel.fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite", base="curb",
+                             fence_lift=z - zg), _T(gx, CY0, zg))
     runs = [  # (origen, giro, largo, postes de los extremos)
         ((GATE_X1, CY0), 0, CX1 - GATE_X1, (None, True)),          # sur, del portón a la esquina SE
-        ((CX1, CY0), 90, CY1 - CY0, (False, False)),               # oriente
-        ((CX1, CY1), 180, CX1 - CX0, (True, True)),                # norte
-        ((CX0, CY1), -90, CY1 - CY0, (False, None)),               # poniente, remata en el poste del portón
+        ((CX1, CY0), 90, CY1 - CY0, ("corner", True)),             # oriente
+        ((CX1, CY1), 180, CX1 - CX0, ("corner", True)),            # norte
+        ((CX0, CY1), -90, CY1 - CY0, ("corner", True)),            # poniente
+        ((CX0, CY0), 0, GATE_X0 - CX0, ("corner", None)),          # sur, de la esquina SO al portón
     ]
     for (o, rot, L, ends) in runs:
-        furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite"), _T(o[0], o[1], z) @ _Rz(rot))
-    for (a, b) in (((CX0 - 0.08, CY0 - 0.35), (CX1 + 0.08, CY0 + 0.25)), ((CX0 - 0.08, CY1 - 0.25), (CX1 + 0.08, CY1 + 0.35)),
-                   ((CX0 - 0.35, CY0), (CX0 + 0.25, CY1)), ((CX1 - 0.25, CY0), (CX1 + 0.35, CY1))):
+        furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite", base="curb"),
+                  _T(o[0], o[1], z) @ _Rz(rot))
+    for (a, b) in (((CX0 - 0.08, CY0 - 0.35), (GATE_X0 + 0.08, CY0 + 0.25)), ((GATE_X1 - 0.08, CY0 - 0.35), (CX1 + 0.08, CY0 + 0.25)),
+                   ((CX0 - 0.08, CY1 - 0.25), (CX1 + 0.08, CY1 + 0.35)), ((CX0 - 0.35, CY0), (CX0 + 0.25, CY1)),
+                   ((CX1 - 0.25, CY0), (CX1 + 0.35, CY1))):
         _proxy_box((a[0], a[1], 0.0), (b[0], b[1], z + 2.75))
-    # letreros en la malla: junto al portón y en los costados
+    # letreros en la tela (a media crujía, por fuera): junto al portón y en los costados
     sg = tel.signs()
-    for (nm, x, y, rot) in (("NO TRESPASSING", GATE_X1 + 0.9, CY0, 0), ("SITE ID 2047", GATE_X1 + 2.0, CY0, 0),
-                            ("RF EXPOSURE: DO NOT CLIMB", 3.5, CY0, 0), ("DANGER HIGH VOLTAGE", CX1, -2.0, 90),
-                            ("NO TRESPASSING", CX0, 2.0, -90), ("NO TRESPASSING", 1.5, CY1, 180)):
-        furn.join(sg[nm], _T(x, y, z + 1.45) @ _Rz(rot) @ _T(0, -0.03, 0))
+    bay_s = (CX1 - GATE_X1) / math.ceil((CX1 - GATE_X1) / 3.05 - 1e-6)
+    bay = (CY1 - CY0) / math.ceil((CY1 - CY0) / 3.05 - 1e-6)
+    for (nm, x, y, rot) in (("NO TRESPASSING", GATE_X1 + bay_s * 0.5, CY0, 0), ("SITE ID 2047", GATE_X1 + bay_s * 1.5, CY0, 0),
+                            ("RF EXPOSURE: DO NOT CLIMB", GATE_X1 + bay_s * 2.5, CY0, 0),
+                            ("DANGER HIGH VOLTAGE", CX1, CY0 + bay * 2.5, 90), ("NO TRESPASSING", CX0, CY1 - bay * 2.5, -90),
+                            ("NO TRESPASSING", CX1 - bay * 3.5, CY1, 180)):
+        furn.join(sg[nm], _T(x, y, z + 1.40) @ _Rz(rot) @ _T(0, -0.045, 0))
 
 
 def _sfillet(pts, rad, n=6):
