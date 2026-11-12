@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "05fe4a7",
+ "version_repo": "11e522f",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -13,6 +13,11 @@
    "nanite": true,
    "colision": "ninguna",
    "nota": "vanos, barandales, servicios, cables, daño"
+  },
+  "Mobiliario": {
+   "nanite": true,
+   "colision": "ninguna",
+   "nota": "mobiliario, equipo y luminarias interiores (solo modelos que lo traen aparte, p. ej. el hospital); su colisión son cajas simples dentro de la malla Colision"
   },
   "Escombro": {
    "nanite": false,
@@ -334,19 +339,19 @@
     "N": "T_BLK_paint_mint_N",
     "ORM": "T_BLK_paint_mint_ORM"
    },
-   "UVEscala": 0.83333,
+   "UVEscala": 1.0,
    "Tinte": [
-    0.66,
-    0.84,
-    0.7
+    0.7,
+    0.88,
+    0.74
    ],
-   "LumaMedia": 0.5603,
+   "LumaMedia": 0.829,
    "PesoVC": 0.75,
    "AOFuerza": 1.0,
    "NormalFuerza": 1.0,
    "MacroFuerza": 0.3,
    "dos_caras": false,
-   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.72, metal 0.0 (en el ORM)"
+   "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.6, metal 0.0 (en el ORM)"
   },
   "BLK_paint_green": {
    "maestro": "M_BLK_Repetible",
@@ -355,19 +360,19 @@
     "N": "T_BLK_paint_green_N",
     "ORM": "T_BLK_paint_green_ORM"
    },
-   "UVEscala": 0.83333,
+   "UVEscala": 1.0,
    "Tinte": [
-    0.11,
-    0.33,
+    0.1,
+    0.34,
     0.2
    ],
-   "LumaMedia": 0.5603,
+   "LumaMedia": 0.829,
    "PesoVC": 0.75,
    "AOFuerza": 1.0,
    "NormalFuerza": 1.0,
    "MacroFuerza": 0.3,
    "dos_caras": false,
-   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.66, metal 0.0 (en el ORM)"
+   "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.5, metal 0.0 (en el ORM)"
   },
   "BLK_paint_white": {
    "maestro": "M_BLK_Repetible",
@@ -376,19 +381,40 @@
     "N": "T_BLK_paint_white_N",
     "ORM": "T_BLK_paint_white_ORM"
    },
-   "UVEscala": 0.83333,
+   "UVEscala": 1.0,
    "Tinte": [
-    1.02,
-    1.02,
-    1.0
+    1.0,
+    1.0,
+    0.98
    ],
-   "LumaMedia": 0.5603,
+   "LumaMedia": 0.829,
    "PesoVC": 0.75,
    "AOFuerza": 1.0,
    "NormalFuerza": 1.0,
    "MacroFuerza": 0.3,
    "dos_caras": false,
-   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.78, metal 0.0 (en el ORM)"
+   "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.7, metal 0.0 (en el ORM)"
+  },
+  "BLK_wood_varnish": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_wood_varnish_BC",
+    "N": "T_BLK_wood_varnish_N",
+    "ORM": "T_BLK_wood_varnish_ORM"
+   },
+   "UVEscala": 2.5,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.07,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T9_madera_barniz.png a 0.8 m por repetición; rugosidad 0.35, metal 0.0 (en el ORM)"
   },
   "BLK_aluminium": {
    "maestro": "M_BLK_Color",
@@ -635,6 +661,19 @@
    "Metal": 0.0,
    "PesoVC": 0.75,
    "dos_caras": true,
+   "nota": ""
+  },
+  "BLK_enamel": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.5,
+    0.53,
+    0.51
+   ],
+   "Rugosidad": 0.42,
+   "Metal": 0.15,
+   "PesoVC": 0.75,
+   "dos_caras": false,
    "nota": ""
   },
   "BLK_glass": {
@@ -2405,7 +2444,7 @@
     "Estructura": {
      "nombre": "SM_HOS_1_pueblo_Estructura",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Estructura.glb",
-     "triangulos": 10570,
+     "triangulos": 10028,
      "ranuras": [
       "HOS_1_pueblo_walls_main",
       "HOS_1_pueblo_walls_rest",
@@ -2418,65 +2457,91 @@
       "BLK_paint_green",
       "BLK_sign_white",
       "BLK_tile_white",
-      "BLK_wood",
+      "BLK_wood_varnish",
       "BLK_plaster"
      ],
-     "mib": 0.72
+     "mib": 0.7
     },
     "Detalle": {
      "nombre": "SM_HOS_1_pueblo_Detalle",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Detalle.glb",
-     "triangulos": 1334016,
+     "triangulos": 388928,
      "ranuras": [
       "BLK_paint_green",
       "BLK_aluminium",
       "BLK_rubber",
       "BLK_concrete",
       "BLK_paint_white",
-      "BLK_metal_paint",
-      "BLK_metal_rust",
+      "BLK_steel",
       "BLK_plastic",
       "BLK_paint_mint",
-      "BLK_steel",
       "BLK_sign_red",
-      "BLK_sign_white",
       "BLK_mortar",
       "BLK_paint_yellow",
       "BLK_roof_metal_light",
       "BLK_brick",
+      "BLK_metal_rust",
+      "BLK_sign_white",
+      "BLK_enamel",
       "BLK_cable",
       "BLK_wood_dark",
       "BLK_sign_blue",
-      "BLK_plastic_blue",
+      "BLK_wood_grey",
+      "BLK_wood_varnish",
       "BLK_vegetation",
-      "BLK_paper",
-      "BLK_wood",
       "BLK_sign_green",
+      "BLK_fabric",
+      "BLK_wood"
+     ],
+     "mib": 20.55
+    },
+    "Mobiliario": {
+     "nombre": "SM_HOS_1_pueblo_Mobiliario",
+     "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Mobiliario.glb",
+     "triangulos": 1574659,
+     "ranuras": [
+      "BLK_sign_white",
+      "BLK_steel",
+      "BLK_aluminium",
+      "BLK_plastic",
+      "BLK_rubber",
+      "BLK_plastic_blue",
+      "BLK_sign_blue",
+      "BLK_sign_red",
+      "BLK_sign_green",
+      "BLK_cable",
+      "BLK_enamel",
+      "BLK_wood_dark",
+      "BLK_concrete",
+      "BLK_vegetation",
+      "BLK_paint_yellow",
+      "BLK_wood_varnish",
+      "BLK_paper",
+      "BLK_paint_white",
       "BLK_vinyl",
       "BLK_linen",
       "BLK_wool_blue",
-      "BLK_wood_grey",
-      "BLK_fabric"
+      "BLK_paint_green"
      ],
-     "mib": 66.42
+     "mib": 80.68
     },
     "Vidrio": {
      "nombre": "SM_HOS_1_pueblo_Vidrio",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Vidrio.glb",
-     "triangulos": 8918,
+     "triangulos": 17520,
      "ranuras": [
       "BLK_glass"
      ],
-     "mib": 0.57
+     "mib": 0.94
     },
     "Colision": {
      "nombre": "SM_HOS_1_pueblo_Colision",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Colision.glb",
-     "triangulos": 9511,
+     "triangulos": 9006,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 0.39
+     "mib": 0.38
     }
    },
    "texturas": {
@@ -2870,6 +2935,10 @@
     "Detalle_ranuras": true,
     "Detalle_un_uv": true,
     "Detalle_color0": true,
+    "Mobiliario_presente": true,
+    "Mobiliario_ranuras": true,
+    "Mobiliario_un_uv": true,
+    "Mobiliario_color0": true,
     "Vidrio_presente": true,
     "Vidrio_ranuras": true,
     "Vidrio_un_uv": true,
@@ -2881,7 +2950,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 68.1,
+   "mib_total": 103.25,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "pórtico de 4 columnas con COMMUNITY HOSPITAL en el pretil; la cochera de ambulancias queda al oriente (+x)"

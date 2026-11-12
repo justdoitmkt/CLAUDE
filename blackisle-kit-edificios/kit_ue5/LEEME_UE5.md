@@ -97,8 +97,8 @@ centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,4
   ruedas, camillas, mesas de exploración, rayos X, anaqueles, baños, cocina, lavandería, luminarias, ventiladores, aire
   acondicionado, pasamanos). Es la malla más pesada del kit (Nanite); se coloca con las demás y se puede ocultar en bloque.
   Su colisión son **cajas simples** dentro de la pieza Colision; muros, pisos y escalones vienen completos.
-- **Descarga en dos ZIP:** por el límite de 100 MB de GitHub el hospital viene en `BLACKISLE_UE5_HOS_1_pueblo.zip` y
-  `BLACKISLE_UE5_HOS_1_pueblo_parte2.zip`; descomprime los dos en la misma carpeta (las rutas ya empiezan por `kit_ue5/`).
+- **Peso:** ~2 M de triángulos (mobiliario 1,6 M); el GLB del mobiliario pesa ~81 MB sin comprimir (el ZIP, ~40 MB). Si algún
+  modelo llegara a venir en varias partes (`..._parte2.zip`), se descomprimen todas en la misma carpeta.
 - **Textos en inglés** en letreros 3D (COMMUNITY HOSPITAL, EMERGENCY, EXAM 1/2, PHARMACY, X-RAY, WARD, NURSES, EXIT…).
 - **Luces:** cada luminaria fluorescente es un foco en `modelos.HOS_1_pueblo.focos_m_blender`; `ib.focos(actor)` les pone
   una luz puntual. Para un hospital encendido, súbeles los lúmenes (~2000) y temperatura 4000 K.

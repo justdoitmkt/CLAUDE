@@ -363,7 +363,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         nb.link(color, hsv.inputs["Color"])
         tinted = nb.mix(0.6, hsv.outputs[0], (*paint_tint, 1.0), "MULTIPLY")
         if wear < 1.0:                     # pintura mantenida: el tinte manda sobre la mancha del aplanado viejo
-            tinted = nb.mix(0.55, tinted, (*paint_tint, 1.0))
+            tinted = nb.mix(0.55 + 0.25 * (1.0 - wear), tinted, (*paint_tint, 1.0))
         if band is not None:
             bh, bc = band
             nzb = nb.n("ShaderNodeTexNoise", in_Scale=40.0, in_Detail=2.0)
@@ -387,7 +387,9 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", plinth, 0.12))
         ao_p = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.5)
         peel_v = nb.math("ADD", peel_v, nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, ao_p.outputs["AO"], clamp=True), 0.35))
-        peel = nb.math("GREATER_THAN", peel_v, 0.52 + (1.0 - wear) * 0.32)
+        # wear 1 (abandono) -> umbral 0,52 sin cambios; edificio en uso (hospital, wear 0,08) -> ~1,16: solo despostilladuras
+        # sueltas en esquinas y zoclo (con 0,32 el hospital seguía con medio zoclo descascarado: revisión de la vista de calle)
+        peel = nb.math("GREATER_THAN", peel_v, 0.52 + (1.0 - wear) * 0.70)
         if under == "brick":
             # bajo la pintura queda el repellado gris; el tabique solo asoma donde se cayó también el repellado: parches grandes y
             # escasos, más en PB que arriba (conceptos de B y C: muros grises, ladrillo en PB, esquinas y bajo el alero)
