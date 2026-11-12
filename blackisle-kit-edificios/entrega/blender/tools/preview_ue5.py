@@ -271,6 +271,15 @@ def main():
     if solo is None or "exterior" in solo:
         bpy.ops.render.render(write_still=True)
         print("[preview] exterior", sc.render.filepath, flush=True)
+    if bid.startswith("HOS_"):                  # hospital en uso: luminarias encendidas (focos de la ficha)
+        for i, p in enumerate(d.get("focos_m_blender", [])):
+            Lf = bpy.data.lights.new(f"foco{i}", "AREA")
+            Lf.energy = 30.0
+            Lf.size = 1.1
+            Lf.color = (1.0, 0.97, 0.92)
+            lf = bpy.data.objects.new(f"foco{i}", Lf)
+            lf.location = (p[0], p[1], p[2] - 0.01)
+            sc.collection.objects.link(lf)
     for (nm, c, t, lens) in EXTRA_VIEWS.get(bid, ()):
         if solo is not None and nm not in solo:
             continue
