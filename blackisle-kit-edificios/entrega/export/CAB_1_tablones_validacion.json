@@ -1,14 +1,14 @@
 {
  "id": "CAB_1_tablones",
  "glb": "export/CAB_1_tablones.glb",
- "size_mb": 24.3,
- "tris_glb": 320704,
+ "size_mb": 24.05,
+ "tris_glb": 320489,
  "objects": 7,
  "materials": [
   "CAB_1_tablones_skirt",
   "CAB_1_tablones_t_concrete",
+  "CAB_1_tablones_t_glass",
   "CAB_1_tablones_t_liso",
-  "CAB_1_tablones_t_liso_2c",
   "CAB_1_tablones_t_metal_paint",
   "CAB_1_tablones_t_metal_rust",
   "CAB_1_tablones_t_roof_metal",
