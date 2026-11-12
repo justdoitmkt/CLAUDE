@@ -420,3 +420,9 @@ honesto de lo que quede por debajo. La primera lámina del mobiliario del hospit
   imagen impresa; teclas sin rotular; la cubeta conserva 3 caras de mechas que se tocan; ninguna pieza tiene desgaste
   geométrico (golpes, abolladuras) porque el hospital está en uso y limpio; el pasillo cubierto y los exteriores (bancas de
   concreto del patio, tendedero) siguen siendo piezas sencillas del constructor.
+- **Revisión de la vista previa texturizada (primera exportación con Mobiliario)**: camas con sábana, embozo y cobija visibles;
+  pasillo con pasamanos nuevos; sala de espera, encamados y fachadas leídas a ojo. Dos errores encontrados y corregidos antes
+  del horneado final: (1) el aplanado exterior seguía muy descascarado (umbral de pelado de "edificio en uso" casi igual al de
+  abandono): ahora el umbral sube con el desgaste (0,52 + 0,70·(1−wear); los demás edificios, wear 1, quedan idénticos);
+  (2) el lambrín y el zoclo tapaban el metro inferior de las 4 puertas exteriores y entraban a la colisión (la tolerancia de
+  huecos era menor que el grueso del muro exterior): corregido y verificado (coinciden exactamente las 4, sin falsos).
