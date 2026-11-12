@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "42dd61b",
+ "version_repo": "e5cd01e",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -1935,6 +1935,196 @@
       "BC": "T_CAB_3_ladrillo_walls_rest_BC",
       "N": "T_CAB_3_ladrillo_walls_rest_N",
       "ORM": "T_CAB_3_ladrillo_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
+  "MUE_1_carga": {
+   "id": "MUE_1_carga",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_MUE_1_carga_Estructura",
+     "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Estructura.glb",
+     "triangulos": 95980,
+     "ranuras": [
+      "MUE_1_carga_walls_main",
+      "MUE_1_carga_walls_rest",
+      "BLK_concrete",
+      "BLK_metal_paint",
+      "BLK_metal_rust",
+      "BLK_wood",
+      "BLK_wood_grey",
+      "BLK_wood_dark",
+      "BLK_sand",
+      "BLK_plaster",
+      "BLK_cable"
+     ],
+     "mib": 5.65
+    },
+    "Detalle": {
+     "nombre": "SM_MUE_1_carga_Detalle",
+     "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Detalle.glb",
+     "triangulos": 420172,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_metal_rust",
+      "BLK_metal_paint",
+      "BLK_cable",
+      "BLK_wood_dark",
+      "BLK_plastic",
+      "BLK_sand",
+      "BLK_vegetation",
+      "BLK_aluminium",
+      "BLK_mortar",
+      "BLK_fabric",
+      "BLK_wood",
+      "BLK_wood_grey",
+      "BLK_paper",
+      "BLK_brick"
+     ],
+     "mib": 22.5
+    },
+    "Escombro": {
+     "nombre": "SM_MUE_1_carga_Escombro",
+     "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Escombro.glb",
+     "triangulos": 8872,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_sand",
+      "BLK_metal_rust",
+      "BLK_brick",
+      "BLK_cable",
+      "BLK_metal_paint",
+      "BLK_wood_grey"
+     ],
+     "mib": 0.44
+    },
+    "Vidrio": {
+     "nombre": "SM_MUE_1_carga_Vidrio",
+     "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Vidrio.glb",
+     "triangulos": 5258,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 0.36
+    },
+    "Colision": {
+     "nombre": "SM_MUE_1_carga_Colision",
+     "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Colision.glb",
+     "triangulos": 62067,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 2.83
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_MUE_1_carga_walls_main_BC",
+     "N": "T_MUE_1_carga_walls_main_N",
+     "ORM": "T_MUE_1_carga_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_MUE_1_carga_walls_rest_BC",
+     "N": "T_MUE_1_carga_walls_rest_N",
+     "ORM": "T_MUE_1_carga_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [],
+   "medidas_m": {
+    "x": 79.992,
+    "y": 90.031,
+    "z": 23.987,
+    "min": [
+     -25.98,
+     -28.539,
+     -7.0
+    ],
+    "max": [
+     54.012,
+     61.492,
+     16.987
+    ],
+    "escombro_min": [
+     -27.65,
+     -24.468,
+     -0.057
+    ],
+    "escombro_max": [
+     27.476,
+     -2.886,
+     0.648
+    ],
+    "nota": "ejes de Blender (z arriba, metros). Pivote (0, 0, 0) = eje de la rampa en la orilla de la cubierta, a nivel de la arena; la rampa baja hacia -y hasta el pie (y = -25, z = 0) y el muelle entra al mar hacia +y. Sin terreno ni agua: la arena va a z = 0, el mar a z = -0.5, la cubierta queda a z = +2.5 y los pilotes bajan a z = -7.0 (bajo el agua y el lecho)."
+   },
+   "medidas_estructura_m": {
+    "x": 79.98,
+    "y": 80.539,
+    "z": 12.849,
+    "min": [
+     -25.98,
+     -28.539,
+     -0.8
+    ],
+    "max": [
+     54.0,
+     52.0,
+     12.049
+    ]
+   },
+   "niveles_m": {
+    "arena": 0.0,
+    "mar": -0.5,
+    "cubierta": 2.5,
+    "punta_pilotes": -7.0,
+    "pie_rampa_y": -25.0
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Escombro_presente": true,
+    "Escombro_ranuras": true,
+    "Escombro_un_uv": true,
+    "Escombro_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 31.78,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "la rampa ancha que sube desde la playa (pivote en su eje, en la orilla de la cubierta); el atraque mira al mar (+y)"
+   },
+   "materiales_atlas": {
+    "MUE_1_carga_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_MUE_1_carga_walls_main_BC",
+      "N": "T_MUE_1_carga_walls_main_N",
+      "ORM": "T_MUE_1_carga_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "MUE_1_carga_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_MUE_1_carga_walls_rest_BC",
+      "N": "T_MUE_1_carga_walls_rest_N",
+      "ORM": "T_MUE_1_carga_walls_rest_ORM"
      },
      "AOFuerza": 1.0
     }
