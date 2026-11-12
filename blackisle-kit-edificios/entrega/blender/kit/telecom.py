@@ -61,8 +61,13 @@ class TelMB(MB):
         super().__init__()
         self.instances = {}
         self.smooth_default = 30.0
+        self.lite = False                              # modo "lite": todo se vuelve geometría propia, versión ligera
+        self.lite_sides = 3
 
     def add_inst(self, kind, build, M):
+        if self.lite:                                  # versión ligera del herraje, unida directo a la malla
+            MB.join(self, _inst_mb(kind + "~lite", lambda: build(lite=True)), M)
+            return
         self.instances.setdefault(kind, [build, []])[1].append(M.copy())
 
     def transform(self, m):
@@ -259,15 +264,27 @@ def footing(mb, x, y, r_post, r_foot, crown=0.035, mat="concrete", seg=SEG, seed
           M=_T(x, y, 0.0), caps=False, rmod=rm)
 
 
-def dome_cap(mb, x, y, z, r, mat="galvanized"):
+def post_base(mb, x, y, R, r_foot, base="footing", seed=None):
+    """Remate del poste al nivel z = 0: 'footing' = corona de concreto del dado en tierra; 'curb' = poste anclado en la
+    guarnición (barreno con grout): collarín de mortero de 24 mm que no rebasa el ancho de una guarnición de 15 cm."""
+    if base == "curb":
+        lathe(mb, [(R + 0.024, -0.012), (R + 0.024, 0.002), (R + 0.015, 0.011), (R + 0.004, 0.0145), (R + 0.0012, 0.0145)], seg=SEG,
+              mat="concrete", M=_T(x, y, 0.0), caps=False)
+    else:
+        footing(mb, x, y, R, r_foot, seed=seed)
+
+
+def dome_cap(mb, x, y, z, r, mat="galvanized", lite=False):
     """Tapón de domo de lámina embutida para poste terminal (asienta en el tope del tubo a z)."""
     rr = r + 0.0022
-    lathe(mb, [(r - 0.0005, z - 0.045), (rr, z - 0.044), (rr + 0.0008, z - 0.040), (rr, z - 0.036), (rr, z + 0.004),
-               (rr * 0.93, z + 0.016), (rr * 0.72, z + 0.026), (rr * 0.38, z + 0.032), (0.0, z + 0.0335)], seg=SEG, mat=mat,
-          M=_T(x, y, 0.0), caps=False)
+    if lite:
+        prof = [(r - 0.0005, z - 0.045), (rr, z - 0.044), (rr, z + 0.004), (rr * 0.88, z + 0.02), (rr * 0.5, z + 0.031), (0.0, z + 0.0335)]
+    else:
+        prof = [(r - 0.0005, z - 0.045), (rr, z - 0.044), (rr + 0.0008, z - 0.040), (rr, z - 0.036), (rr, z + 0.004),
+                (rr * 0.93, z + 0.016), (rr * 0.72, z + 0.026), (rr * 0.38, z + 0.032), (0.0, z + 0.0335)]
+    lathe(mb, prof, seg=SEG, mat=mat, M=_T(x, y, 0.0), caps=False)
 
 
-# ============================================================================================ malla ciclónica (instancias)
 def _picket_pts(u0, u1, n_top=None, n_bot=0):
     """Línea central de un picket (hélice aplastada de alambre cal. 9) entre los parámetros u0..u1 (u = altura / CL_D).
     Las piernas son rectas; en cada nudo (u entero) el alambre da la vuelta alrededor del picket vecino: sobresale CL_B y cruza
@@ -333,15 +350,17 @@ def chainlink_panel(n, pairs):
 def _add_fabric(mb, x0, x1, z0, n, M=None, fabric="instance"):
     """Tela ciclónica de x0 a x1 (plano y = 0 local), nudos inferiores en z0, n nudos de alto. M coloca la tela."""
     M = M if M is not None else Matrix()
+    if getattr(mb, "lite", False):
+        return _fabric_lite(mb, x0, x1, z0, n, M, sides=getattr(mb, "lite_sides", 3), twist=getattr(mb, "lite_twist", True))
     pairs = max(1, int(round((x1 - x0) / (2 * CL_W))))
     x = (x0 + x1) / 2 - pairs * CL_W
     big = 8
     nb, rest = divmod(pairs, big)
     for _ in range(nb):
-        mb.add_inst(f"cl8_n{n}", lambda n=n: chainlink_panel(n, big), M @ _T(x, 0, z0))
+        mb.add_inst(f"cl8_n{n}", lambda n=n, **kw: chainlink_panel(n, big), M @ _T(x, 0, z0))
         x += 2 * CL_W * big
     for _ in range(rest):
-        mb.add_inst(f"cl1_n{n}", lambda n=n: chainlink_pair(n), M @ _T(x, 0, z0))
+        mb.add_inst(f"cl1_n{n}", lambda n=n, **kw: chainlink_pair(n), M @ _T(x, 0, z0))
         x += 2 * CL_W
     return (x0 + x1) / 2 - pairs * CL_W, x
 
@@ -388,6 +407,8 @@ def barbed_module(nb=8):
 
 def _add_barbed(mb, p0, p1):
     """Cordón de púas recto de p0 a p1 con módulos de 8 púas (+ 4) escalados < 13 % para ajustar el largo."""
+    if getattr(mb, "lite", False):
+        return _barbed_lite(mb, [p0, p1], seed=int(abs(p0[0] * 1000 + p0[2] * 777)) % 997, step=0.115)
     p0, p1 = Vector(p0), Vector(p1)
     Ls = (p1 - p0).length
     half = 4 * BARB_P
@@ -396,13 +417,105 @@ def _add_barbed(mb, p0, p1):
     F = frame_x(p0, p1)
     x = 0.0
     for _ in range(units // 2):
-        mb.add_inst("barb8", lambda: barbed_module(8), F @ _T(x, 0, 0) @ Matrix.Diagonal((sc, 1, 1, 1)))
+        mb.add_inst("barb8", lambda **kw: barbed_module(8), F @ _T(x, 0, 0) @ Matrix.Diagonal((sc, 1, 1, 1)))
         x += 2 * half * sc
     if units % 2:
-        mb.add_inst("barb4", lambda: barbed_module(4), F @ _T(x, 0, 0) @ Matrix.Diagonal((sc, 1, 1, 1)))
+        mb.add_inst("barb4", lambda **kw: barbed_module(4), F @ _T(x, 0, 0) @ Matrix.Diagonal((sc, 1, 1, 1)))
 
 
-def post_tie(R):
+def _fabric_lite(mb, x0, x1, z0, n, M, sides=3, twist=True):
+    """Tela ciclónica ligera (geometría realizada): pickets en zigzag con UN vértice por nudo (medio rombo), alambre de
+    `sides` lados con radio en inglete (grosor constante en las esquinas), nudos entrelazados (cada picket pasa por delante o
+    por detrás del vecino: ±CL_E en profundidad y ±CL_B en X) y orilla superior torcida de 2 tramos con punta.
+    Plano de la tela y = 0 local; nudos inferiores en z0; n nudos de alto; M coloca la tela."""
+    pairs = max(1, int(round((x1 - x0) / (2 * CL_W))))
+    xs0 = (x0 + x1) / 2 - pairs * CL_W
+
+    def picket(k0, k1, off):
+        pts = []
+        for k in range(k0, k1 + 1):
+            sg = 1.0 if (k % 2) else -1.0
+            pts.append(Vector((CL_W / 2 + sg * (CL_W / 2 + CL_B), sg * CL_E, CL_D * k)))
+        sg = 1.0 if (k1 % 2) else -1.0
+        xk = CL_W / 2 + sg * CL_W / 2
+        if twist:                                      # orilla torcida: cruza al otro lado del vecino y remata en punta
+            pts.append(Vector((xk + sg * 0.0008, -sg * CL_E * 1.15, CL_D * k1 + 0.011)))
+            pts.append(Vector((xk - sg * 0.0022, sg * CL_E * 0.75, CL_D * k1 + 0.025)))
+        else:                                          # orilla anudada (hojas de puerta): el extremo se dobla sobre el vecino
+            pts.append(Vector((xk - sg * 0.0035, -sg * CL_E, CL_D * k1 - 0.007)))
+        radii = []
+        for i in range(len(pts)):
+            if 0 < i < len(pts) - 1:
+                a_ = (pts[i] - pts[i - 1]).normalized()
+                b_ = (pts[i + 1] - pts[i]).normalized()
+                c_ = max(min(a_.dot(b_), 1.0), -1.0)
+                f = 1.0 / max(math.cos(math.acos(c_) / 2), 0.66)
+            else:
+                f = 1.0
+            radii.append(CL_R * f)
+        return [tuple(M @ (p + off)) for p in pts], radii
+
+    for pi_ in range(pairs):
+        xp = xs0 + 2 * CL_W * pi_
+        for (k0, k1, off) in ((0, n, Vector((xp, 0.0, z0))), (-1, n - 1, Vector((xp + CL_W, 0.0, z0 + CL_D)))):
+            pts, radii = picket(k0, k1, off)
+            mb.tube(pts, CL_R, seg=sides, mat="galvanized", radii=radii)
+
+
+def _barbed_lite(mb, arm_pts, seed=0, sides=4, step=0.0847, sag=(0.005, 0.010)):
+    """Hilo de púas ligero realizado por los puntos de los brazos `arm_pts` (en orden): en cada claro entre brazos cuelga con
+    una flecha de 5–10 mm (parábola). Dos alambres 12-1/2 ga de `sides` lados torcidos entre sí (un vértice cada 85 mm, giro
+    de 90° por vértice) y púas de 4 puntas cada 127 mm: 2 alambres de 3 lados cruzados en X a través del cordón, con corte en bisel."""
+    r = rng(seed)
+    P = [Vector(p) for p in arm_pts]
+    axis = []
+    for i in range(len(P) - 1):
+        pa, pb = P[i], P[i + 1]
+        Ls = (pb - pa).length
+        ns = max(2, int(math.ceil(Ls / step)))
+        sg = float(r.uniform(*sag))
+        for k in range(ns + (1 if i == len(P) - 2 else 0)):
+            t = k / ns
+            axis.append(pa.lerp(pb, t) - Vector((0, 0, 4 * sg * t * (1 - t))))
+    n = len(axis)
+    T = []
+    for k in range(n):
+        d = axis[min(k + 1, n - 1)] - axis[max(k - 1, 0)]
+        T.append(d.normalized())
+    rho, rl = 0.0018, 0.00127
+    ph = float(r.uniform(0, PI))
+    for sgn in (1, -1):
+        pts = []
+        for k in range(n):
+            n1 = T[k].cross(Vector((0, 0, 1)))
+            n1 = n1.normalized() if n1.length > 1e-6 else Vector((0, 1, 0))
+            n2 = n1.cross(T[k])
+            a = ph + k * PI / 2
+            pts.append(axis[k] + (n1 * math.cos(a) + n2 * math.sin(a)) * rho * sgn)
+        mb.tube([tuple(p) for p in pts], rl, seg=sides, mat="galvanized")
+    acc = [0.0]
+    for k in range(1, n):
+        acc.append(acc[-1] + (axis[k] - axis[k - 1]).length)
+    sv = BARB_P * 0.5
+    kk = 0
+    while sv < acc[-1] - 0.02:
+        i = next((j for j in range(1, n) if acc[j] >= sv), n - 1)
+        t = (sv - acc[i - 1]) / max(acc[i] - acc[i - 1], 1e-9)
+        c = axis[i - 1].lerp(axis[i], t)
+        tg = (axis[i] - axis[i - 1]).normalized()
+        n1 = tg.cross(Vector((0, 0, 1))).normalized()
+        n2 = n1.cross(tg)
+        al = 0.6 * kk + float(r.uniform(-0.3, 0.3))
+        for j in range(2):
+            a = al + j * PI / 2
+            u = n1 * math.cos(a) + n2 * math.sin(a)
+            o = tg * (0.0025 * j)
+            mb.tube([tuple(c + o - u * 0.0105 - tg * 0.0014), tuple(c + o + u * 0.0105 + tg * 0.0016)], 0.001, seg=3, mat="galvanized")
+        sv += BARB_P
+        kk += 1
+
+
+def post_tie(R, lite=False):
     """Amarre de aluminio 9 ga a poste de radio R: engancha un alambre de la tela, rodea el poste por detrás (+Y) y regresa
     con la cola torcida. Local: poste en el origen (eje Z), tela en y = Y_FAB."""
     mb = MB()
@@ -411,40 +524,45 @@ def post_tie(R):
     yf = Y_FAB
     pts = [Vector((-R - 0.0065, yf - 0.002, -0.0075)), Vector((-R - 0.009, yf - 0.0055, -0.004)), Vector((-R - 0.011, yf - 0.002, 0.0)),
            Vector((-R - 0.008, yf + 0.003, 0.001))]
+    if lite:
+        pts = [Vector((-R - 0.009, yf - 0.0045, -0.004)), Vector((-R - 0.008, yf + 0.003, 0.001))]
     yc = yf + 0.004
     xc = math.sqrt(max(Rt ** 2 - yc ** 2, 1e-8))
     al = math.atan2(yc, -xc) + 2 * PI                  # ~ 200° (lado -X), recorre por +Y hasta ~ -20° (lado +X)
     ar = math.atan2(yc, xc)
-    n = 14
+    n = 4 if lite else 14
     for i in range(n + 1):
         a = al - (al - ar) * i / n
         pts.append(Vector((Rt * math.cos(a), Rt * math.sin(a), 0.001 + 0.0012 * math.sin(PI * i / n))))
-    pts += [Vector((R + 0.008, yf + 0.003, 0.001)), Vector((R + 0.011, yf - 0.002, 0.0)), Vector((R + 0.009, yf - 0.0055, -0.004)),
-            Vector((R + 0.0065, yf - 0.002, -0.0075))]
-    mb.tube([tuple(p) for p in _dedupe(pts)], rt, seg=6, mat="aluminium")
+    if lite:
+        pts += [Vector((R + 0.008, yf + 0.003, 0.001)), Vector((R + 0.009, yf - 0.0045, -0.004))]
+    else:
+        pts += [Vector((R + 0.008, yf + 0.003, 0.001)), Vector((R + 0.011, yf - 0.002, 0.0)), Vector((R + 0.009, yf - 0.0055, -0.004)),
+                Vector((R + 0.0065, yf - 0.002, -0.0075))]
+    mb.tube([tuple(p) for p in _dedupe(pts)], rt, seg=4 if lite else 6, mat="aluminium")
     return mb
 
 
-def rail_tie(Rr, yf=None):
+def rail_tie(Rr, yf=None, lite=False):
     """Amarre de aluminio al larguero superior: rodea el larguero (eje X local en el origen) por arriba y por detrás y
     engancha la tela por debajo. Local: larguero en el origen, tela en y = Y_FAB - Y_RAIL."""
     mb = MB()
     rt = 0.0019
     Rt = Rr + rt + 0.0004
     yf = (Y_FAB - Y_RAIL) if yf is None else yf
-    pts = [Vector((-0.006, yf - 0.005, -Rr - 0.020)), Vector((-0.004, yf + 0.0005, -Rr - 0.015))]
-    n = 16
+    pts = [Vector((-0.006, yf - 0.005, -Rr - 0.020)), Vector((-0.004, yf + 0.0005, -Rr - 0.015))][(1 if lite else 0):]
+    n = 5 if lite else 16
     a0 = math.radians(-120)
     for i in range(n + 1):
         a = a0 - math.radians(300) * i / n            # vuelta por -Y, arriba, +Y y abajo
         pts.append(Vector((-0.003 + 0.006 * i / n, Rt * math.cos(a), Rt * math.sin(a))))
     pts += [Vector((0.004, yf + 0.0005, -Rr - 0.015)), Vector((0.006, yf - 0.005, -Rr - 0.021)),
-            Vector((0.003, yf - 0.002, -Rr - 0.027))]
-    mb.tube([tuple(p) for p in _dedupe(pts)], rt, seg=6, mat="aluminium")
+            Vector((0.003, yf - 0.002, -Rr - 0.027))][:(1 if lite else 3)]
+    mb.tube([tuple(p) for p in _dedupe(pts)], rt, seg=4 if lite else 6, mat="aluminium")
     return mb
 
 
-def hog_ring():
+def hog_ring(lite=False):
     """Anillo de cerdo (hog ring) 11 ga que une el nudo inferior de la tela con el alambre tensor. Local: alambre tensor en el
     origen a lo largo de X; la tela queda en y = Y_FAB - Y_TW."""
     mb = MB()
@@ -452,14 +570,15 @@ def hog_ring():
     c = Vector((0.0, yf / 2, 0.0))
     Rr = abs(yf) / 2 + 0.003
     pts = []
-    for i in range(13):
-        a = math.radians(-150 + 300 * i / 12)
+    nn = 4 if lite else 12
+    for i in range(nn + 1):
+        a = math.radians(-150 + 300 * i / nn)
         pts.append(c + Vector((0.0, Rr * math.cos(a), Rr * math.sin(a) * 0.9)))
-    mb.tube([tuple(p) for p in pts], 0.0015, seg=6, mat="galvanized")
+    mb.tube([tuple(p) for p in pts], 0.0015, seg=4 if lite else 6, mat="galvanized")
     return mb
 
 
-def tension_band(R, sd=1, yfab=None):
+def tension_band(R, sd=1, yfab=None, lite=False):
     """Abrazadera de tensión (fleje 3/4" × 12 ga) que abraza un poste de radio R (en el origen) y aprieta con perno de carruaje
     la barra de tensión en (sd·(R + 0.0155), Y_FAB): una oreja por delante y otra por detrás de la barra. sd = ±1: lado del
     poste hacia el que corre la tela."""
@@ -472,24 +591,25 @@ def tension_band(R, sd=1, yfab=None):
     xe = R + 0.0155 + 0.0095 + 0.012                  # punta de las orejas
     xr0 = math.sqrt(max(Rb ** 2 - yrr ** 2, 0.0)) if abs(yrr) < Rb else 0.004
     pts = [(xe, yfr, 0.0), (0.004, yfr, 0.0)]
-    n = 22
+    n = 6 if lite else 22
     a1 = -2.5 * PI + math.atan2(yrr, xr0 + 0.002) + 2 * PI
     for i in range(n + 1):
         a = -PI / 2 - (-PI / 2 - a1) * i / n
         pts.append((Rb * math.cos(a), Rb * math.sin(a), 0.0))
     pts += [(xr0 + 0.004, yrr, 0.0), (xe, yrr, 0.0)]
-    pts = [(sd * x, y, z) for (x, y, z) in _dedupe(fillet(pts, 0.003, 3))]
+    pts = [(sd * x, y, z) for (x, y, z) in _dedupe(pts if lite else fillet(pts, 0.003, 3))]
     if sd < 0:
         pts = list(reversed(pts))
     sweep_frame(mb, [(-t / 2, -w / 2), (t / 2, -w / 2), (t / 2, w / 2), (-t / 2, w / 2)], pts, "galvanized", up=(0, 0, 1))
     xb = sd * (xe - 0.0065)
-    carriage_bolt(mb, _T(xb, yfr - t / 2, 0) @ _Rx(90), d=0.0095)
-    mb.cyl((xb, yfr - t / 2, 0), (xb, yrr + t / 2 + 0.012, 0), 0.0045, seg=12, mat="galvanized", caps=True)
+    carriage_bolt(mb, _T(xb, yfr - t / 2, 0) @ _Rx(90), d=0.0095, seg=8 if lite else 12)
+    if not lite:
+        mb.cyl((xb, yfr - t / 2, 0), (xb, yrr + t / 2 + 0.012, 0), 0.0045, seg=12, mat="galvanized", caps=True)
     hexnut(mb, _T(xb, yrr + t / 2, 0) @ _Rx(-90), s=0.0143, h=0.0085, mat="galvanized")
     return mb
 
 
-def post_band(mb, x, y, z, R, ear_dir, ear_len=0.03, w=0.019, t=0.0027, bolt_d=0.0095):
+def post_band(mb, x, y, z, R, ear_dir, ear_len=0.03, w=0.019, t=0.0027, bolt_d=0.0095, lite=False):
     """Abrazadera de fleje (brace band / rail end band) alrededor de un poste vertical en (x, y), con dos orejas paralelas
     que salen en la dirección `ear_dir` (en planta) y un perno de carruaje entre ellas."""
     ang = math.atan2(ear_dir[1], ear_dir[0])
@@ -498,7 +618,7 @@ def post_band(mb, x, y, z, R, ear_dir, ear_len=0.03, w=0.019, t=0.0027, bolt_d=0
     g = 0.006
     a_s = math.asin(min(0.95, (g + t / 2) / Rb))
     pts = [(Rb + ear_len, g + t / 2, 0.0), (Rb * math.cos(a_s) + 0.003, g + t / 2, 0.0)]
-    n = 14
+    n = 8 if lite else 14
     for i in range(n + 1):
         a = a_s + (2 * PI - 2 * a_s) * i / n
         pts.append((Rb * math.cos(a), Rb * math.sin(a), 0.0))
@@ -506,8 +626,9 @@ def post_band(mb, x, y, z, R, ear_dir, ear_len=0.03, w=0.019, t=0.0027, bolt_d=0
     pts = [tuple(M @ Vector(p)) for p in _dedupe(pts)]
     sweep_frame(mb, [(-t / 2, -w / 2), (t / 2, -w / 2), (t / 2, w / 2), (-t / 2, w / 2)], pts, "galvanized", up=(0, 0, 1))
     xb = Rb + ear_len - 0.009
-    carriage_bolt(mb, M @ _T(xb, g + t, 0) @ _Rx(-90), d=bolt_d)
-    mb.cyl(M @ Vector((xb, g + t, 0)), M @ Vector((xb, -g - t - 0.01, 0)), bolt_d * 0.47, seg=8, mat="galvanized")
+    carriage_bolt(mb, M @ _T(xb, g + t, 0) @ _Rx(-90), d=bolt_d, seg=8 if lite else 12)
+    if not lite:
+        mb.cyl(M @ Vector((xb, g + t, 0)), M @ Vector((xb, -g - t - 0.01, 0)), bolt_d * 0.47, seg=8, mat="galvanized")
     hexnut(mb, M @ _T(xb, -g - t, 0) @ _Rx(90), s=bolt_d * 1.5, h=bolt_d * 0.85, mat="galvanized")
 
 
@@ -521,7 +642,7 @@ ARM_PROF = [(-0.016, 0.0), (-0.016, -0.012), (-0.0135, -0.012), (-0.0135, -0.002
             (0.016, -0.012), (0.016, 0.0)]
 
 
-def _arm(mb, base, out=-1, L=0.345, clips=True):
+def _arm(mb, base, out=-1, L=0.345, clips=True, lite=False):
     """Brazo de púas de lámina prensada (canal 32 × 12 mm) a 45° hacia `out`·Y desde `base`, con remate redondeado y 3 grapas.
     Devuelve las posiciones de los 3 hilos."""
     base = Vector(base)
@@ -529,8 +650,9 @@ def _arm(mb, base, out=-1, L=0.345, clips=True):
     up = Vector((0.0, -out * math.sin(PI / 4), math.cos(PI / 4)))
     tip = base + d * L
     sweep_frame(mb, ARM_PROF, [tuple(base), tuple(tip)], "galvanized", up=tuple(up))
-    lathe(mb, [(0.0, -0.012), (0.016, -0.012), (0.016, 0.0), (0.0, 0.0)], seg=SEG, mat="galvanized",
-          M=frame_x(tip, tip + Vector((1, 0, 0)), up=tuple(up)) @ _Ry(0))
+    if not lite:
+        lathe(mb, [(0.0, -0.012), (0.016, -0.012), (0.016, 0.0), (0.0, 0.0)], seg=SEG, mat="galvanized",
+              M=frame_x(tip, tip + Vector((1, 0, 0)), up=tuple(up)) @ _Ry(0))
     strands = []
     for s in (L - 0.23, L - 0.125, L - 0.02):
         p = base + d * s
@@ -538,55 +660,68 @@ def _arm(mb, base, out=-1, L=0.345, clips=True):
         strands.append(c + up * 0.0022)
         if clips:                                     # grapa en J que abraza el hilo sobre la muesca
             Mc = frame_x(c, c + d, up=tuple(up))
-            ring(mb, Mc @ _T(0, 0, 0.0022), 0.0040, 0.0011, n=8, seg=6, a0=-0.25, a1=PI + 0.25)
+            ring(mb, Mc @ _T(0, 0, 0.0022), 0.0040, 0.0011, n=5 if lite else 8, seg=4 if lite else 6, a0=-0.25, a1=PI + 0.25)
     return strands
 
 
-def _barb_arm_line(mb, x, zp, R, out=-1):
+def _barb_arm_line(mb, x, zp, R, out=-1, lite=False):
     """Brazo de púas para poste de línea: copa sobre el tope del poste, ojo por donde pasa el larguero y brazo a 45°."""
     rr = R + 0.0028
-    lathe(mb, [(R + 0.0006, zp - 0.050), (rr, zp - 0.049), (rr + 0.0012, zp - 0.044), (rr, zp - 0.038), (rr, zp + 0.002),
-               (rr * 0.8, zp + 0.008), (rr * 0.4, zp + 0.010), (0.0, zp + 0.0105)], seg=SEG, mat="galvanized", M=_T(x, 0, 0), caps=False)
+    if lite:
+        prof = [(R + 0.0006, zp - 0.050), (rr, zp - 0.048), (rr, zp + 0.002), (rr * 0.7, zp + 0.009), (0.0, zp + 0.0105)]
+    else:
+        prof = [(R + 0.0006, zp - 0.050), (rr, zp - 0.049), (rr + 0.0012, zp - 0.044), (rr, zp - 0.038), (rr, zp + 0.002),
+                (rr * 0.8, zp + 0.008), (rr * 0.4, zp + 0.010), (0.0, zp + 0.0105)]
+    lathe(mb, prof, seg=SEG, mat="galvanized", M=_T(x, 0, 0), caps=False)
     zr = zp + 0.010 + R_RAIL + 0.002
     sleeve(mb, _T(x - 0.017, Y_RAIL, zr) @ _Ry(90), R_RAIL + 0.0012, R_RAIL + 0.0050, 0.034)
-    rbox(mb, (x - 0.012, Y_RAIL + R_RAIL * 0.3, zp - 0.004), (x + 0.012, R * 0.5, zp + 0.013), "galvanized", r=0.003)
+    if lite:
+        mb.box((x - 0.012, Y_RAIL + R_RAIL * 0.3, zp - 0.004), (x + 0.012, R * 0.5, zp + 0.013), "galvanized", bevel=0.003, seg=1)
+    else:
+        rbox(mb, (x - 0.012, Y_RAIL + R_RAIL * 0.3, zp - 0.004), (x + 0.012, R * 0.5, zp + 0.013), "galvanized", r=0.003)
     base = (x, Y_RAIL - R_RAIL - 0.003, zr + 0.003)
-    return _arm(mb, base, out)
+    return _arm(mb, base, out, lite=lite)
 
 
 def _terminal(mb, x, sd, R, z_b, z_top, zr, zt, lean=0.0, x_brace=None, R_brace=R_LINE, fabric=True, brace=True, rail=True,
-              foot=0.2):
-    """Poste terminal completo en x (la tela corre hacia sd·X): dado, tubo, domo, abrazaderas, copa del larguero, barra de
-    tensión, brazo de púas con amarres, riostra + tirante con tensor al poste vecino en x_brace. Devuelve hilos (3 × Vector)."""
-    footing(mb, x, 0.0, R, foot)
-    pipe(mb, (x, 0, -0.05), (x + lean, 0, zt), R, caps=False)
-    dome_cap(mb, x + lean, 0, zt, R)
+              foot=0.2, lite=False, base="footing", post=True, dz=0.0):
+    """Poste terminal completo en x (la tela corre hacia sd·X): dado (o collarín en guarnición), tubo, domo, abrazaderas, copa
+    del larguero, barra de tensión, brazo de púas con amarres, riostra + tirante con tensor al poste vecino en x_brace.
+    post=False + dz: remate de esquina sobre el poste terminal de OTRO tramo (sin tubo/dado/domo; abrazaderas, riostra y
+    brazo desplazados dz para no chocar con las del otro tramo). Devuelve hilos (3 × Vector)."""
+    if post:
+        post_base(mb, x, 0.0, R, foot, base)
+        pipe(mb, (x, 0, -0.05), (x + lean, 0, zt), R, caps=False)
+        dome_cap(mb, x + lean, 0, zt, R, lite=lite)
     if rail:                                          # copa del larguero sostenida por abrazadera
         xe = x + sd * (R + 0.006)
         sleeve(mb, _T(xe, Y_RAIL, zr) @ _Ry(90 * sd), R_RAIL + 0.0016, R_RAIL + 0.0042, 0.05)
         lathe(mb, [(0.0, -0.004), (R_RAIL + 0.0042, -0.004), (R_RAIL + 0.0042, 0.0), (0.0, 0.0)], seg=SEG, mat="galvanized",
               M=_T(xe, Y_RAIL, zr) @ _Ry(90 * sd))
-        post_band(mb, x, 0.0, zr, R, (sd * 0.6, Y_RAIL / 0.05 * 0.8, 0), ear_len=0.012)
+        post_band(mb, x, 0.0, zr - (0.024 if dz else 0.0), R, (sd * 0.6, Y_RAIL / 0.05 * 0.8, 0), ear_len=0.012, lite=lite)
     if fabric:
         xb = x + sd * (R + 0.0155)
         rbox(mb, (xb - 0.0095, Y_FAB - 0.0024, z_b - 0.012), (xb + 0.0095, Y_FAB + 0.0024, z_top - 0.006), "galvanized", r=0.0012)
-        for k in range(7):
-            zb_ = z_b + 0.16 + (z_top - z_b - 0.4) * k / 6
-            mb.add_inst(f"tband{int(R * 1e4)}{'r' if sd > 0 else 'l'}", lambda R=R, sd=sd: tension_band(R, sd), _T(x, 0, zb_))
+        nbands = (3 if R > R_TERM else 6) if lite else 7
+        for k in range(nbands):
+            zb_ = z_b + 0.16 + (z_top - z_b - 0.4) * k / (nbands - 1) + (0.045 if dz else 0.0)
+            mb.add_inst(f"tband{int(R * 1e4)}{'r' if sd > 0 else 'l'}", lambda R=R, sd=sd, lite=False: tension_band(R, sd, lite=lite),
+                        _T(x, 0, zb_))
     if brace and x_brace is not None:                 # riostra horizontal + tirante de 3/8" con tensor
-        zbr = (z_b + zr) / 2
+        zbr = (z_b + zr) / 2 + (0.06 if dz else 0.0)
         pipe(mb, (x + sd * (R + 0.008), 0.0, zbr), (x_brace - sd * (R_brace + 0.008), 0.0, zbr), R_RAIL)
         for xx, RR, dd in ((x, R, sd), (x_brace, R_brace, -sd)):
             sleeve(mb, _T(xx + dd * (RR + 0.004), 0, zbr) @ _Ry(90 * dd), R_RAIL + 0.0016, R_RAIL + 0.0042, 0.04)
-            post_band(mb, xx, 0.0, zbr, RR, (dd, 0.35, 0), ear_len=0.01)
+            post_band(mb, xx, 0.0, zbr, RR, (dd, 0.35, 0), ear_len=0.01, lite=lite)
         pa = Vector((x_brace - sd * (R_brace + 0.024), 0.0, zbr - 0.016))
-        pb = Vector((x + sd * (R + 0.008), 0.014, z_b + 0.10))
+        pb = Vector((x + sd * (R + 0.008), 0.014, z_b + 0.10 + (0.05 if dz else 0.0)))
         dv = (pb - pa).normalized()
         mid = pa.lerp(pb, 0.45)
         wire(mb, [pa, mid - dv * 0.08], 0.0048)
         wire(mb, [mid + dv * 0.08, pb], 0.0048)
-        post_band(mb, x, 0.0, pb.z, R, (0.0, 1.0, 0), ear_len=0.012)   # el tirante remata en una abrazadera al pie del terminal
-        ring(mb, frame_x(pa, pa + Vector((0, 1, 0)), up=(1, 0, 0)) @ _T(0, 0, 0), 0.008, 0.0042, n=12, seg=8)   # ojo al perno
+        post_band(mb, x, 0.0, pb.z, R, (0.0, 1.0, 0), ear_len=0.012, lite=lite)   # el tirante remata en una abrazadera al pie
+        ring(mb, frame_x(pa, pa + Vector((0, 1, 0)), up=(1, 0, 0)) @ _T(0, 0, 0), 0.008, 0.0042, n=12 if not lite else 8,
+             seg=8 if not lite else 4)       # ojo al perno
         Mtb = frame_x(mid - dv * 0.085, mid + dv * 0.085, up=(0, 1, 0))
         for sy in (-1, 1):                            # tensor: cuerpo de dos barras forjadas y dos tuercas hexagonales
             mb.box((0.018, sy * 0.0068 - 0.0026, -0.0032), (0.152, sy * 0.0068 + 0.0026, 0.0032), "galvanized", bevel=0.0012, seg=1,
@@ -595,17 +730,19 @@ def _terminal(mb, x, sd, R, z_b, z_top, zr, zt, lean=0.0, x_brace=None, R_brace=
             lathe(mb, [(0.0045, -0.009), (0.0098, -0.0082), (0.0098, 0.0082), (0.0045, 0.009)], seg=6, mat="galvanized",
                   M=Mtb @ _T(xx, 0, 0) @ _Ry(90), closed=True, phase=PI / 6)
     # brazo de púas de terminal: abrazadera + brazo; amarre de cada hilo
-    zab = zt - 0.035
+    zab = zt - 0.035 - (0.075 if dz else 0.0)
     lathe(mb, [(R + 0.0006, zab - 0.032), (R + 0.0038, zab - 0.030), (R + 0.0038, zab + 0.030), (R + 0.0006, zab + 0.032)],
           seg=SEG, mat="galvanized", M=_T(x + lean, 0, 0), caps=False)
-    sts = _arm(mb, (x + lean, -R - 0.003, zab + 0.004), -1, L=0.36, clips=False)
+    sts = _arm(mb, (x + lean, -R - 0.003, zab + 0.004), -1, L=0.36, clips=False, lite=lite)
     for p in sts:                                     # vuelta del hilo alrededor del brazo + cola enrollada sobre el hilo
         dd = Vector((0.0, -math.cos(PI / 4), math.sin(PI / 4)))
         upv = Vector((0.0, math.sin(PI / 4), math.cos(PI / 4)))
-        ring(mb, frame_x(p - upv * 0.0075, p - upv * 0.0075 + dd, up=(1, 0, 0)), 0.0105, 0.0013, n=12, seg=6)
+        ring(mb, frame_x(p - upv * 0.0075, p - upv * 0.0075 + dd, up=(1, 0, 0)), 0.0105, 0.0013, n=7 if lite else 12,
+             seg=4 if lite else 6)
+        nt = 5 if lite else 12
         pts = [p + Vector((sd * (0.014 + 0.035 * t), 0.0029 * math.cos(6 * PI * t), 0.0029 * math.sin(6 * PI * t)))
-               for t in [j / 12 for j in range(13)]]
-        wire(mb, pts, 0.0012, seg=6)
+               for t in [j / nt for j in range(nt + 1)]]
+        wire(mb, pts, 0.0012, seg=4 if lite else 6)
     return sts
 
 
@@ -627,7 +764,7 @@ def fence_levels(h=2.4):
     return z_b, n, z_top, zr, zr - R_RAIL - 0.012, zr + 0.05
 
 
-def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance"):
+def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance", base="footing", lite_sides=3):
     """Tramo de malla ciclónica de seguridad a lo largo de +X de x = 0 a x = L (origen: piso, eje de los postes en y = 0).
     Lado público / exterior = -Y: la tela va por la cara -Y de los postes y los brazos de púas se inclinan 45° hacia -Y; el
     recinto queda en +Y (armar el perímetro en sentido antihorario visto desde arriba).
@@ -637,44 +774,57 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance"):
     inferior cal. 7; barras de tensión con abrazaderas en los terminales; riostra horizontal 1-5/8" y tirante de 3/8" con
     tensor al primer poste de línea; amarres de aluminio a postes (~35 cm) y larguero (60 cm), anillos de cerdo al tensor;
     brazos de 45° con 3 hilos de púas.
-    end_posts: True / False o (inicio, fin) con True = terminal, False = poste de línea (la tela sigue hasta x = 0 / L) y
-    None = sin poste: el extremo remata en un poste de puerta 4" de `fence_gate` centrado en ese x (tela, larguero, tensor e
-    hilos llegan a su barra de tensión, su copa y su brazo).
-    fabric: "instance" (por omisión; tela, púas, amarres y abrazaderas como instancias TEL_*), "join" (todo en la malla) o
-    "none" (solo postes y largueros)."""
+    end_posts: True / False o (inicio, fin), cada uno: True = terminal; False = poste de línea (la tela sigue hasta x = 0 / L);
+    None = sin poste, remata en un poste de puerta 4" de `fence_gate` centrado en ese x; "corner" = sin poste, remata en el
+    poste terminal 2-7/8" de OTRO tramo que llega a esa esquina (este tramo pone su barra de tensión, abrazaderas, copa del
+    larguero, riostra y brazo de esquina desplazados para no chocar con los del otro tramo).
+    base: "footing" (corona de dado en tierra) o "curb" (poste anclado en guarnición: collarín de grout de 24 mm).
+    fabric: "instance" (por omisión; tela, púas, amarres y abrazaderas como instancias TEL_*), "join" (todo en la malla),
+    "lite" (MB normal de UNA malla sin instancias, para el pipeline que solo une mallas: tela tejida con un vértice por medio
+    rombo y alambre de `lite_sides` lados, hilos de púas de 4 lados con flecha de 5–10 mm entre brazos, púas de 3 lados,
+    herrajes ligeros; ~13 500 tris por metro) o "none" (solo postes y largueros)."""
     r = rng(seed)
+    lite = fabric == "lite"
     mb = TelMB()
-    mb.smooth_default = 65.0                           # amarres y colas de alambre de 6 lados: suavizado completo
+    mb.lite = lite
+    mb.lite_sides = lite_sides
+    mb.smooth_default = 30.0 if lite else 65.0         # amarres y colas de alambre de 6 lados: suavizado completo
     nb = max(1, int(math.ceil(L / 3.05 - 1e-6)))
     xs = [L * i / nb for i in range(nb + 1)]
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
     ep = tuple(end_posts) if isinstance(end_posts, (tuple, list)) else (bool(end_posts), bool(end_posts))
-    is_term = [(i == 0 and ep[0] is True) or (i == nb and ep[1] is True) for i in range(nb + 1)]
-    is_none = [(i == 0 and ep[0] is None) or (i == nb and ep[1] is None) for i in range(nb + 1)]
+    kind = lambda i: ep[0] if i == 0 else (ep[1] if i == nb else False)    # noqa: E731
+    is_term = [kind(i) is True for i in range(nb + 1)]
+    is_none = [kind(i) is None for i in range(nb + 1)]
+    is_corner = [kind(i) == "corner" for i in range(nb + 1)]
     strand_pts = [[], [], []]
     leans = [float(r.uniform(-0.004, 0.004)) for _ in xs]
+    has_fab = fabric != "none"
     for i, x in enumerate(xs):
         if is_none[i]:                                # el poste lo pone fence_gate: hilos a su brazo
             sts = _term_arm_strands(x, R_GATEPOST, zt)
-        elif is_term[i]:
+        elif is_term[i] or is_corner[i]:
             sd = 1 if i == 0 else -1
             j = i + sd
-            sts = _terminal(mb, x, sd, R_TERM, z_b, z_top, zr, zt, lean=leans[i] * 0.4, x_brace=xs[j],
-                            R_brace=R_TERM if is_term[j] else R_LINE, fabric=fabric != "none",
-                            brace=not (nb == 1 and i == nb and is_term[0]) and not is_none[j])
+            sts = _terminal(mb, x, sd, R_TERM, z_b, z_top, zr, zt, lean=leans[i] * 0.4 if is_term[i] else 0.0, x_brace=xs[j],
+                            R_brace=R_TERM if (is_term[j] or is_corner[j]) else R_LINE, fabric=has_fab,
+                            brace=not (nb == 1 and i == nb and (is_term[0] or is_corner[0])) and not is_none[j],
+                            lite=lite, base=base, post=is_term[i], dz=0.0 if is_term[i] else 1.0)
         else:
-            footing(mb, x, 0.0, R_LINE, 0.15)
+            post_base(mb, x, 0.0, R_LINE, 0.15, base)
             pipe(mb, (x, 0, -0.05), (x + leans[i], 0, zp), R_LINE, caps=False)
-            sts = _barb_arm_line(mb, x + leans[i], zp, R_LINE)
-            if fabric != "none":
-                for k in range(7):
-                    zz = z_b + 0.12 + (z_top - z_b - 0.3) * k / 6
-                    mb.add_inst(f"ptie{int(R_LINE * 1e4)}", lambda: post_tie(R_LINE),
+            sts = _barb_arm_line(mb, x + leans[i], zp, R_LINE, lite=lite)
+            if has_fab:
+                nt = 6 if lite else 7
+                for k in range(nt):
+                    zz = z_b + 0.12 + (z_top - z_b - 0.3) * k / (nt - 1)
+                    mb.add_inst(f"ptie{int(R_LINE * 1e4)}", lambda lite=False: post_tie(R_LINE, lite=lite),
                                 _T(x + leans[i] * zz / zp, 0, zz) @ _Rz(float(r.uniform(-3, 3))))
         for k in range(3):
             strand_pts[k].append(sts[k])
+
     def off(i, k):
-        return (R_TERM + k) if is_term[i] else ((R_GATEPOST + k) if is_none[i] else 0.0)
+        return (R_TERM + k) if (is_term[i] or is_corner[i]) else ((R_GATEPOST + k) if is_none[i] else 0.0)
     xa = xs[0] + off(0, 0.006)
     xb_ = xs[-1] - off(nb, 0.006)
     pipe(mb, (xa, Y_RAIL, zr), (xb_, Y_RAIL, zr), R_RAIL, caps=True)
@@ -685,7 +835,7 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance"):
     z_tw = z_b + 0.5 * CL_D
     ta = xs[0] + off(0, R_TW)
     tb = xs[-1] - off(nb, R_TW)
-    wire(mb, [(ta, Y_TW, z_tw), (tb, Y_TW, z_tw)], R_TW, caps=True)
+    wire(mb, [(ta, Y_TW, z_tw), (tb, Y_TW, z_tw)], R_TW, caps=True, seg=SEG_T)
     for i in (0, nb):                                 # el tensor da vuelta al poste terminal y se enrolla sobre sí mismo
         if is_term[i]:
             sd = 1 if i == 0 else -1
@@ -693,44 +843,53 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance"):
             Rw = R_TERM + R_TW + 0.0003
             a_in = math.atan2(Y_TW, sd * math.sqrt(max(Rw ** 2 - Y_TW ** 2, 0)))
             pts = []
-            for j in range(12):
-                a = a_in - sd * 2 * PI * j / 11 * 0.97
-                pts.append((x + Rw * math.cos(a), Rw * math.sin(a), z_tw + 0.011 * j / 11))
-            for j in range(9):
-                t = j / 8
+            na, nt_ = (7, 4) if lite else (12, 9)
+            for j in range(na):
+                a = a_in - sd * 2 * PI * j / (na - 1) * 0.97
+                pts.append((x + Rw * math.cos(a), Rw * math.sin(a), z_tw + 0.011 * j / (na - 1)))
+            for j in range(nt_):
+                t = j / (nt_ - 1)
                 pts.append((x + sd * (Rw + 0.02 + 0.05 * t), Y_TW + 0.0052 * math.cos(6 * PI * t) * min(1, 3 * t),
                             z_tw + 0.011 * (1 - t) + 0.0052 * math.sin(6 * PI * t) * min(1, 3 * t)))
-            wire(mb, pts, R_TW * 0.95, seg=8)
-    if fabric != "none":
+            wire(mb, pts, R_TW * 0.95, seg=4 if lite else 8)
+    if has_fab:
         fx0 = xs[0] + off(0, 0.0155)
         fx1 = xs[-1] - off(nb, 0.0155)
         _add_fabric(mb, fx0, fx1, z_b, n, M=_T(0, Y_FAB, 0))
         x = xa + 0.3
         while x < xb_ - 0.1:
-            mb.add_inst("rtie", lambda: rail_tie(R_RAIL), _T(x, Y_RAIL, zr))
+            mb.add_inst("rtie", lambda lite=False: rail_tie(R_RAIL, lite=lite), _T(x, Y_RAIL, zr))
             mb.add_inst("hog", hog_ring, _T(x + 0.15, Y_TW, z_tw))
             x += 0.6
         for k in range(3):
-            _add_barbed(mb, strand_pts[k][0], strand_pts[k][-1])
+            if lite:
+                _barbed_lite(mb, strand_pts[k], seed=seed * 7 + k)
+            else:
+                _add_barbed(mb, strand_pts[k][0], strand_pts[k][-1])
     if fabric == "join":
         mb.realize()
+    if lite:                                          # MB normal, una sola malla, sin instancias
+        out = MB()
+        out.join(mb)
+        return out
     return mb
 
 
 # ============================================================================================================ puerta
-def chain_link():
+def chain_link(lite=False):
     """Eslabón de cadena galvanizada de 6 mm (paso interior 28 mm, ancho interior 12 mm) a lo largo de X local."""
     mb = MB()
     rw, hl, hw = 0.003, 0.014, 0.006 + 0.003
     pts = []
-    for k in range(8):
-        a = -PI / 2 + PI * k / 7
+    nk = 3 if lite else 8
+    for k in range(nk):
+        a = -PI / 2 + PI * k / (nk - 1)
         pts.append(Vector((hl - hw + hw * math.cos(a), hw * math.sin(a), 0.0)))
-    for k in range(8):
-        a = PI / 2 + PI * k / 7
+    for k in range(nk):
+        a = PI / 2 + PI * k / (nk - 1)
         pts.append(Vector((-hl + hw + hw * math.cos(a), hw * math.sin(a), 0.0)))
     from kit.clinic_equipo import loop_tube
-    loop_tube(mb, [tuple(p) for p in pts], rw, seg=SEG_T, mat="galvanized", normal=(0, 0, 1))
+    loop_tube(mb, [tuple(p) for p in pts], rw, seg=4 if lite else SEG_T, mat="galvanized", normal=(0, 0, 1))
     return mb
 
 
@@ -756,13 +915,13 @@ def _chain(mb, pts, closed=False, M=None):
         mb.add_inst("chain6", chain_link, (M @ F) if M is not None else F)
 
 
-def padlock(mb, M):
+def padlock(mb, M, lite=False):
     """Candado de acero laminado de 50 mm: cuerpo de 8 láminas con juntas, arco de 8 mm, bocallave abajo. Origen: centro del
     arco arriba (por donde cuelga); cuerpo hacia -Z, frente hacia -Y local."""
     w, d, hb = 0.050, 0.026, 0.040
     loops = []
     z = -0.018
-    nl = 7
+    nl = 4 if lite else 7
     loops.append([(x, y, z) for (x, y) in rr_pts(w - 0.0016, d - 0.0016, 0.0052, n=3)])
     for k in range(nl + 1):                          # láminas: cara recta + junta rehundida 0,6 mm entre lámina y lámina
         zz = z - 0.0008 - (hb - 0.0016) * k / nl
@@ -805,53 +964,63 @@ def _weld_ring(mb, M, R, r=0.0024, n=SEG):
     ring(mb, M, R + r * 0.35, r, mat="galvanized", n=n, seg=5)
 
 
-def _weld_mb(R):
+def _weld_mb(R, lite=False):
     mb = MB()
-    _weld_ring(mb, Matrix(), R)
+    if lite:
+        ring(mb, Matrix(), R + 0.0024 * 0.35, 0.0024, mat="galvanized", n=10, seg=3)
+    else:
+        _weld_ring(mb, Matrix(), R)
     return mb
 
 
-def _band_mb(R, ear_len=0.012):
+def _band_mb(R, ear_len=0.012, lite=False):
     """Abrazadera de fleje (post_band) suelta: poste de radio R en el origen, orejas hacia +X (para instanciar)."""
     mb = MB()
-    post_band(mb, 0.0, 0.0, 0.0, R, (1.0, 0.0, 0.0), ear_len=ear_len)
+    post_band(mb, 0.0, 0.0, 0.0, R, (1.0, 0.0, 0.0), ear_len=ear_len, lite=lite)
     return mb
 
 
-def hinge_leaf_part():
+def hinge_leaf_part(lite=False):
     """Bisagra industrial de 180°, mitad de la hoja: collar partido al montante 1-7/8" (eje en x = 0,05) con dos pernos
     pasados, alma fundida y barril de 33 mm alrededor del perno (eje en el origen). z = 0 = centro de la bisagra."""
     mb = MB()
     R = R_GFRAME
-    lathe(mb, [(R + 0.0010, -0.030), (R + 0.0058, -0.028), (R + 0.0058, 0.028), (R + 0.0010, 0.030)], seg=SEG, mat="galvanized",
-          M=_T(0.05, 0, 0), caps=False)
-    rbox(mb, (0.010, -0.0065, -0.024), (0.05 - R - 0.002, 0.0065, 0.024), "galvanized", r=0.003)
-    sleeve(mb, _T(0, 0, -0.025), 0.0099, 0.0165, 0.05)
-    for zz in (-0.016, 0.016):
-        carriage_bolt(mb, _T(0.05, -R - 0.0058, zz) @ _Rx(90), d=0.008)
+    lathe(mb, [(R + 0.0010, -0.030), (R + 0.0058, -0.028), (R + 0.0058, 0.028), (R + 0.0010, 0.030)][(1 if lite else 0):(3 if lite else 4)],
+          seg=SEG, mat="galvanized", M=_T(0.05, 0, 0), caps=False)
+    if lite:
+        mb.box((0.010, -0.0065, -0.024), (0.05 - R - 0.002, 0.0065, 0.024), "galvanized", bevel=0.003, seg=1)
+    else:
+        rbox(mb, (0.010, -0.0065, -0.024), (0.05 - R - 0.002, 0.0065, 0.024), "galvanized", r=0.003)
+    sleeve(mb, _T(0, 0, -0.025), 0.0099, 0.0165, 0.05, inner=not lite)
+    for zz in ((0.0,) if lite else (-0.016, 0.016)):
+        carriage_bolt(mb, _T(0.05, -R - 0.0058, zz) @ _Rx(90), d=0.008, seg=8 if lite else 12)
         hexnut(mb, _T(0.05, R + 0.0058, zz) @ _Rx(-90), s=0.013, h=0.007, mat="galvanized")
     return mb
 
 
-def hinge_post_part():
+def hinge_post_part(lite=False):
     """Bisagra industrial de 180°, mitad del poste: abrazadera de fleje al poste de 4" (eje en x = -(R + 0,032)) y bloque
     fundido con perno macizo de 3/4" (eje en el origen) sobre el que gira el barril. z = 0 = centro de la bisagra."""
     mb = MB()
     xp = -(R_GATEPOST + 0.032)
-    post_band(mb, xp, 0.0, -0.045, R_GATEPOST, (1.0, 0.0, 0.0), ear_len=0.032 - 0.0027 - 0.011)
-    rbox(mb, (-0.014, -0.012, -0.06), (0.014, 0.012, -0.026), "galvanized", r=0.004)
+    post_band(mb, xp, 0.0, -0.045, R_GATEPOST, (1.0, 0.0, 0.0), ear_len=0.032 - 0.0027 - 0.011, lite=lite)
+    if lite:
+        mb.box((-0.014, -0.012, -0.06), (0.014, 0.012, -0.026), "galvanized", bevel=0.004, seg=1)
+    else:
+        rbox(mb, (-0.014, -0.012, -0.06), (0.014, 0.012, -0.026), "galvanized", r=0.004)
     lathe(mb, [(0.0095, -0.03), (0.0095, 0.03), (0.0075, 0.034), (0.0, 0.035)], seg=SEG_T, mat="galvanized", caps=False)
     return mb
 
 
-def ext_clip():
+def ext_clip(lite=False):
     """Grapa de fleje atornillada a la extensión de un montante 1-7/8" que sostiene un hilo de púas (lado -Y)."""
     mb = MB()
     R = R_GFRAME
     pts = [(-0.014, -0.004, 0.0), (-0.014, -R - 0.0102, 0.0), (0.014, -R - 0.0102, 0.0), (0.014, -0.004, 0.0)]
-    sweep_frame(mb, [(-0.0012, -0.007), (0.0012, -0.007), (0.0012, 0.007), (-0.0012, 0.007)], fillet(pts, 0.006, 2), "galvanized",
-                up=(0, 0, 1))
-    carriage_bolt(mb, _T(0, -R - 0.0114, 0.0) @ _Rx(90), d=0.006)
+    sweep_frame(mb, [(-0.0012, -0.007), (0.0012, -0.007), (0.0012, 0.007), (-0.0012, 0.007)], pts if lite else fillet(pts, 0.006, 2),
+                "galvanized", up=(0, 0, 1))
+    if not lite:
+        carriage_bolt(mb, _T(0, -R - 0.0114, 0.0) @ _Rx(90), d=0.006, seg=12)
     return mb
 
 
@@ -868,32 +1037,37 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
         pipe(lf, (x, 0, z_lb - R - 0.004), (x, 0, z_ext), R, caps=False)
         lathe(lf, [(R, z_lb - R - 0.006), (R * 0.6, z_lb - R - 0.008), (0.0, z_lb - R - 0.0085)], seg=SEG, mat="galvanized",
               M=_T(x, 0, 0), caps=False)
-        lathe(lf, [(R + 0.0012, z_ext - 0.025), (R + 0.0015, z_ext + 0.003), (R * 0.78, z_ext + 0.013), (0.0, z_ext + 0.0165)],
-              seg=SEG, mat="galvanized", M=_T(x, 0, 0), caps=False)
+        cap = [(R + 0.0012, z_ext - 0.025), (R + 0.0015, z_ext + 0.003), (R * 0.78, z_ext + 0.013), (0.0, z_ext + 0.0165)]
+        if getattr(lf, "lite", False):
+            cap = [(R + 0.0013, z_ext - 0.02), (R + 0.0013, z_ext + 0.006), (0.0, z_ext + 0.016)]
+        lathe(lf, cap, seg=SEG, mat="galvanized", M=_T(x, 0, 0), caps=False)
     zm = (z_lb + z_lt) / 2
     for z in (z_lb, zm, z_lt):
         a, b = xh + dirx * R * 0.97, xf - dirx * R * 0.97
         pipe(lf, (a, 0, z), (b, 0, z), R, caps=False)
-        lf.add_inst("weldgf", lambda: _weld_mb(R_GFRAME), _T(a + dirx * 0.0015, 0, z) @ _Ry(90))
-        lf.add_inst("weldgf", lambda: _weld_mb(R_GFRAME), _T(b - dirx * 0.0015, 0, z) @ _Ry(90))
+        lf.add_inst("weldgf", lambda lite=False: _weld_mb(R_GFRAME, lite=lite), _T(a + dirx * 0.0015, 0, z) @ _Ry(90))
+        lf.add_inst("weldgf", lambda lite=False: _weld_mb(R_GFRAME, lite=lite), _T(b - dirx * 0.0015, 0, z) @ _Ry(90))
     _truss(lf, (xh + dirx * (R + 0.03), 0.016, z_lt - 0.05), (xf - dirx * (R + 0.03), 0.016, z_lb + 0.05))
     for (x, z, dd) in ((xh, z_lt - 0.05, dirx), (xf, z_lb + 0.05, -dirx)):
-        lf.add_inst("bandgf", lambda: _band_mb(R_GFRAME), _T(x, 0, z) @ _Rz(math.degrees(math.atan2(0.55, dd))))
+        lf.add_inst("bandgf", lambda lite=False: _band_mb(R_GFRAME, lite=lite), _T(x, 0, z) @ _Rz(math.degrees(math.atan2(0.55, dd))))
     # tela con barras de tensión en ambos montantes
     xa, xb = xh + dirx * (R + 0.0155), xf - dirx * (R + 0.0155)
     zf0 = z_lb + 0.012
     zf1 = zf0 + n_fab * CL_D
     for x, sd, xu in ((xa, dirx, xh), (xb, -dirx, xf)):
         rbox(lf, (x - 0.0095, yfl - 0.0024, zf0 - 0.012), (x + 0.0095, yfl + 0.0024, zf1 - 0.004), "galvanized", r=0.0012)
-        for k in range(5):
-            zb_ = zf0 + 0.15 + (zf1 - zf0 - 0.3) * k / 4
-            lf.add_inst(f"tbandg{'r' if sd > 0 else 'l'}", lambda sd=sd: tension_band(R_GFRAME, sd, yfab=yfl), _T(xu, 0, zb_))
+        nbd = 3 if getattr(lf, "lite", False) else 5
+        for k in range(nbd):
+            zb_ = zf0 + 0.15 + (zf1 - zf0 - 0.3) * k / (nbd - 1)
+            lf.add_inst(f"tbandg{'r' if sd > 0 else 'l'}", lambda sd=sd, lite=False: tension_band(R_GFRAME, sd, yfab=yfl, lite=lite),
+                        _T(xu, 0, zb_))
     _add_fabric(lf, min(xa, xb), max(xa, xb), zf0, n_fab, M=_T(0, yfl, 0))
     x = min(xa, xb) + 0.25
+    step_t = 0.75 if getattr(lf, "lite", False) else 0.5
     while x < max(xa, xb) - 0.15:
-        for z in (z_lb, zm, z_lt):
-            lf.add_inst("rtieg", lambda: rail_tie(R_GFRAME, yf=yfl), _T(x, 0, z))
-        x += 0.5
+        for z in ((z_lb, z_lt) if getattr(lf, "lite", False) else (z_lb, zm, z_lt)):
+            lf.add_inst("rtieg", lambda lite=False: rail_tie(R_GFRAME, yf=yfl, lite=lite), _T(x, 0, z))
+        x += step_t
     # púas: 3 hilos de montante a montante, en grapas de fleje atornilladas a las extensiones
     for zz in (z_lt + 0.12, z_lt + 0.23, z_lt + 0.34):
         ps = []
@@ -927,7 +1101,7 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
     return R, yfl
 
 
-def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), fabric="instance"):
+def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), fabric="instance", base="footing", lite_sides=3):
     """Puerta doble abatible de malla ciclónica (origen: piso al centro del claro; claro libre `w` entre caras de los postes
     a lo largo de X; lado público -Y, abre hacia el recinto +Y). open_deg = (hoja izquierda, hoja derecha) en grados (0 =
     cerrada, + = abre hacia +Y; hasta 90).
@@ -936,14 +1110,20 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
     extensiones de púas, travesaño medio, tirante con tensor, tela 2" cal. 9 con barras de tensión, amarres, 3 hilos de púas,
     2 bisagras industriales de 180° (abrazadera al poste con perno macizo + abrazadera al montante con barril). Cierre: barra
     de caída en la hoja izquierda (con receptáculo de tubo en dado de concreto al centro), horquilla con seguro en la derecha
-    y cadena de 6 mm con candado laminado (cerrada: abraza ambos montantes; abierta: cuelga de la hoja derecha)."""
+    y cadena de 6 mm con candado laminado (cerrada: abraza ambos montantes; abierta: cuelga de la hoja derecha).
+    fabric="lite": MB normal de una sola malla sin instancias (tela y púas ligeras como en fence_run, herrajes ligeros).
+    base: "footing" (dados en tierra) o "curb" (postes en guarnición)."""
     r = rng(seed)
+    lite = fabric == "lite"
     mb = TelMB()
-    mb.smooth_default = 65.0
+    mb.lite = lite
+    mb.lite_sides = lite_sides
+    mb.smooth_default = 30.0 if lite else 65.0
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
     Xl, Xr = -(w / 2 + R_GATEPOST), w / 2 + R_GATEPOST
     for X, sd, fs in ((Xl, -1, fence_sides[0]), (Xr, 1, fence_sides[1])):
-        _terminal(mb, X, sd, R_GATEPOST, z_b, z_top, zr, zt, x_brace=None, fabric=fs and fabric != "none", rail=fs, foot=0.27)
+        _terminal(mb, X, sd, R_GATEPOST, z_b, z_top, zr, zt, x_brace=None, fabric=fs and fabric != "none", rail=fs, foot=0.27,
+                  lite=lite, base=base)
     z_lb, z_lt = 0.11, zr
     n_fab = int((z_lt - z_lb - 0.012) / CL_D)
     L = w / 2 - 0.032 - 0.025 - R_GFRAME              # perno -> eje del montante libre
@@ -952,9 +1132,12 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
         xpin = X + dirx * (R_GATEPOST + 0.032)
         Mleaf = _T(xpin, 0, 0) @ _Rz(dirx * float(ang))
         lf = TelMB()
+        lf.lite = lite
+        lf.lite_sides = lite_sides
+        lf.lite_twist = False
         _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch=latch, rod_up=abs(float(ang)) > 1e-3)
         for z in zh:                                  # bisagras: mitad de la hoja (gira con ella) y mitad del poste
-            lf.add_inst("hingeleaf", hinge_leaf_part, _T(0, 0, z) @ _Rz(0 if dirx > 0 else 180))
+            lf.add_inst("hingeleaf", hinge_leaf_part, _T(0, 0, z) @ _Rz(0 if dirx > 0 else 180))   # noqa
             mb.add_inst("hingepost", hinge_post_part, _T(xpin, 0, z) @ _Rz(0 if dirx > 0 else 180))
         mb.join(lf, Mleaf)
     # receptáculo de la barra de caída (tubo en dado de concreto) al centro, del lado de la hoja izquierda cerrada
@@ -977,7 +1160,7 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
                 pts.append((cx + Rc * math.cos(a), Rc * math.sin(a), zc - 0.006 * math.sin(a) ** 2))
         _chain(mb, pts, closed=True)
         pl = Vector(((xa_ + xb_) / 2, -Rc - 0.006, zc - 0.006))
-        padlock(mb, _T(pl.x, pl.y - 0.004, pl.z + 0.004) @ _Rz(float(r.uniform(-12, 12))))
+        padlock(mb, _T(pl.x, pl.y - 0.004, pl.z + 0.004) @ _Rz(float(r.uniform(-12, 12))), lite=lite)
         _chain(mb, [(pl.x + 0.01, pl.y - 0.004, zc - 0.03), (pl.x + 0.02, pl.y - 0.02, zc - 0.18)])
     else:
         Mr = _T(Xr - R_GATEPOST - 0.032, 0, 0) @ _Rz(-float(open_deg[1]))
@@ -985,9 +1168,13 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
         pts = [(cx + Rc * math.cos(a), Rc * math.sin(a), zc) for a in [PI / 2 + PI * k / 8 for k in range(9)]]
         pts += [(cx - 0.02, -Rc - 0.03, zc - 0.12), (cx - 0.035, -Rc - 0.035, zc - 0.33)]
         _chain(mb, pts, M=Mr)
-        padlock(mb, Mr @ _T(cx - 0.035, -Rc - 0.035, zc - 0.33))
+        padlock(mb, Mr @ _T(cx - 0.035, -Rc - 0.035, zc - 0.33), lite=lite)
     if fabric == "join":
         mb.realize()
+    if lite:
+        out = MB()
+        out.join(mb)
+        return out
     return mb
 
 

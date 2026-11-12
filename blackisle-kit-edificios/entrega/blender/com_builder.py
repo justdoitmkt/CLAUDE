@@ -47,7 +47,7 @@ PORT = (4.6, 2.6)                                   # (y, z) del puerto de cable
 IN_CX, IN_CY = (SH_X0 + SH_X1) / 2, (SH_Y0 + SH_Y1) / 2
 IN_L, IN_W, IN_H = SH_X1 - SH_X0 - 2 * SH_T, SH_Y1 - SH_Y0 - 2 * SH_T, Z_CEIL - Z_FLOOR
 # ------------------------------------------------------------------------------------------------------------ equipo
-TOWER = dict(x=3.6, y=3.4, rot=0.0)                 # centroide de la torre y giro en z (se ajusta con tower.tower_mounts)
+TOWER = dict(x=4.0, y=4.3, rot=90.0)                # centroide y giro: la cara de la escalerilla (+y local) mira a la caseta
 CAB_PAD = (1.4, 5.8, -2.0, -0.95)                   # losa de gabinetes (x0, x1, y0, y1)
 GEN_PAD = (1.6, 7.0, -6.9, -4.4)                    # losa del generador y su tanque
 WALKS = [   # banquetas (x0, x1, y0, y1): del portón a la caseta, ramal a los gabinetes y al generador
@@ -613,7 +613,7 @@ def compound(det, r):
         det.join(stone, M)
         placed += 1
     # registros de prueba del anillo de tierras (tapas redondas de PVC al ras de la grava)
-    for (x, y) in ((-7.3, 7.3), (7.3, 7.3), (7.3, -7.3), (-0.25, 6.2)):
+    for (x, y) in ((-7.3, 7.3), (7.3, 1.6), (7.3, -7.3), (-0.25, 6.2)):
         det.cyl((x, y, Z_GRAVEL - 0.02), (x, y, Z_GRAVEL + 0.022), 0.13, seg=40, mat="plastic")
         det.cyl((x, y, Z_GRAVEL + 0.022), (x, y, Z_GRAVEL + 0.030), 0.115, seg=40, mat="sign_green")
         cl.text(det, "GROUND", 0.035, 0.002, "sign_white", M=_T(x, y, Z_GRAVEL + 0.030))
@@ -688,12 +688,179 @@ def dress(det, furn, r):
     put(tel.light_pole(6.0, seed=int(r.integers(1e6)), cctv=False), 0, 0, M=_T(7.35, 7.0, Z_GRAVEL) @ _Rz(135))
     LIGHTS.append([-6.9, -1.0, 6.0])
     LIGHTS.append([7.0, 6.65, 6.0])
+    # torre, equipo RF y puente de cables a la caseta
+    tw, an = _mod("tower"), _mod("antennas")
+    if tw is not None:
+        tower_site(det, furn, tw, an, tel, r)
     # letreros: en la hoja de la puerta (sigue a la hoja abierta) y en el muro junto a la puerta
     sg = tel.signs()
     if DOOR_M is not None:
         det.join(sg["AUTHORIZED PERSONNEL ONLY"], DOOR_M @ _T(0.45, -0.0012, 1.42))
     det.join(sg["SITE ID 2047"], _T(DX1 + FRAME + 0.30, SH_Y0 - 0.001, 1.55))
     det.join(sg["DANGER HIGH VOLTAGE"], _T(SH_X0 - 0.001, 3.30, 1.82) @ _Rz(-90))
+
+
+def _sfillet(pts, rad, n=6):
+    """cl.fillet a prueba de puntos repetidos y de regresos (giro de ~180°)."""
+    P = []
+    for p in pts:
+        v = Vector(p)
+        if P and (v - P[-1]).length < 1e-3:
+            continue
+        P.append(v)
+    k = 1
+    while k < len(P) - 1:
+        d0, d1 = (P[k - 1] - P[k]), (P[k + 1] - P[k])
+        if d0.length < 1e-6 or d1.length < 1e-6 or d0.angle(d1) < 0.05:
+            del P[k]
+            continue
+        k += 1
+    return cl.fillet([tuple(p) for p in P], rad, n)
+
+
+def _face_rot(f):
+    """Grados en z para que el -Y local de una pieza mire hacia el vector f (x, y)."""
+    return math.degrees(math.atan2(f[0], -f[1]))
+
+
+def tower_site(det, furn, tw, an, tel, r):
+    """Torre de 42 m (kit/tower.py) girada para que su escalerilla de cables mire a la caseta; antenas de panel, AAU y RRU en los
+    9 tubos de sectores con sus jumpers en gaza de goteo; colas de AAU y RRU peinadas bajo la plataforma hasta las cajas de
+    distribución; platos de microondas con su cable a la caja de remate; baliza; puente de cables con los 18 troncales que
+    salen al pie de la torre y entran por las botas del puerto de la caseta con su gaza de goteo."""
+    TM = _T(TOWER["x"], TOWER["y"], 0.0) @ _Rz(TOWER["rot"])
+    R3 = _Rz(TOWER["rot"]).to_3x3()
+    det.join(tw.lattice_tower(), TM)
+    mounts = tw.tower_mounts()
+    G = tw.Geo(42.0, 5.0, 1.6)
+    # colisión: dados y patas por tramo (cajas alineadas que siguen la inclinación de cada pata)
+    for i in range(3):
+        a = math.radians(-90.0 + 120.0 * i)
+        u = Vector((math.cos(a), math.sin(a), 0.0))
+        for (z0, z1) in ((0.0, 6.0), (6.0, 12.0), (12.0, 18.0), (18.0, 24.0), (24.0, 30.35), (30.35, 42.0)):
+            pa = TM @ (u * G.rin(z0) * 2 + Vector((0, 0, z0)))
+            pb = TM @ (u * G.rin(z1) * 2 + Vector((0, 0, z1)))
+            pad = 0.55 if z0 == 0.0 else 0.13
+            _proxy_box((min(pa.x, pb.x) - pad, min(pa.y, pb.y) - pad, max(z0 - 0.6, -0.6)), (max(pa.x, pb.x) + pad, max(pa.y, pb.y) + pad, z1))
+    if an is not None:
+        boxes = [TM @ Vector((G.x_cab + dx, 0.155, G.z_top - 1.0 + 0.42 + 0.03)) for dx in (-0.13, 0.0, 0.13)]
+        nbox = [0, 0, 0]
+
+        def to_box(e, rad, mat, kind):
+            """Cola colgante e -> baja a la cama bajo la plataforma, corre hacia el centro y entra por arriba a una caja."""
+            e = Vector(e)
+            bi = int(np.argmin([(b - e).length for b in boxes]))
+            b = boxes[bi]
+            k = nbox[bi]
+            nbox[bi] += 1
+            ent = b + Vector(((k % 3 - 1) * 0.03, 0.0, 0.0)) + R3 @ Vector((0.0, (k // 3 - 0.5) * 0.04, 0.0))
+            zb = G.z_top - 0.30 - 0.012 * (k % 4)
+            c = Vector((TOWER["x"], TOWER["y"], zb))
+            mid = c + (Vector((e.x, e.y, zb)) - c) * 0.45
+            P = _sfillet([tuple(e), (e.x, e.y, zb + 0.06), (e.x, e.y, zb), tuple(mid), (ent.x, ent.y, zb), (ent.x, ent.y, ent.z + 0.05),
+                           (ent.x, ent.y, ent.z)], 0.07, 6)
+            det.tube(P, rad, seg=14, mat=mat)
+            ce.lathe(det, [(rad + 0.004, 0.0), (rad + 0.006, 0.003), (rad + 0.006, 0.014), (rad + 0.0025, 0.020)], seg=16, mat="plastic",
+                     M=_T(ent.x, ent.y, ent.z - 0.004))
+        for j, s_ in enumerate(mounts["sector"]):
+            px, py = s_["pipe_pos"]
+            P0 = TM @ Vector((px, py, 0.0))
+            f = R3 @ Vector(s_["facing"])
+            M0 = _T(P0.x, P0.y, 0.0) @ _Rz(_face_rot(f))
+            sd = int(r.integers(1e6))
+            if j % 3 == 1:                                               # AAU 5G al centro de cada sector
+                Ma = M0 @ _T(0, 0, 40.80)
+                det.join(an.aau(seed=sd, tilt_deg=2.0), Ma)
+                for k, e in enumerate(an.aau_tail_ends(seed=sd, tilt_deg=2.0)):
+                    pe = Ma @ Vector(e)
+                    if k == 3:                                           # tierra: a la zapata del tubo
+                        det.tube(_sfillet([tuple(pe), (pe.x, pe.y, pe.z - 0.25), tuple(M0 @ Vector((0.0, -0.05, 40.25)))], 0.05, 6),
+                                 0.004, seg=14, mat="cable")
+                        cl.rbox(det, tuple(M0 @ Vector((-0.02, -0.052, 40.22))), tuple(M0 @ Vector((0.02, -0.036, 40.27))), "copper", r=0.003)
+                    else:
+                        to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k)
+            else:                                                        # panel pasivo + RRU abajo con 4 jumpers
+                Mp = M0 @ _T(0, 0, 39.80)
+                det.join(an.panel_antenna(seed=sd, tilt_deg=4.0), Mp)
+                Mr = M0 @ _T(0, 0, 39.21)
+                det.join(an.rru(seed=sd, tails=False), Mr)
+                pports = an.panel_ports(4.0)
+                for k, rp in enumerate(an.rru_ports()):
+                    det.join(an.jumper([tuple(Mr @ Vector(rp)), tuple(Mp @ Vector(pports[k]))], r=0.008,
+                                       band=("sign_red", "sign_blue", "sign_green", "paint_yellow")[k]))
+                for (x, rad, mat) in ((-0.06, 0.0075, "cable"), (-0.03, 0.0035, "paint_yellow")):
+                    a0 = Mr @ Vector((x, -0.100, -0.026))
+                    det.tube([tuple(a0), (a0.x, a0.y, a0.z - 0.10)], rad, seg=14, mat=mat, caps=False)
+                    to_box(Vector((a0.x, a0.y, a0.z - 0.10)), rad, mat, 0)
+        # platos de microondas (0,9 y 0,6 m) en la plataforma intermedia
+        for k, d in enumerate(mounts["dish"]):
+            px, py = d["pipe_pos"]
+            P0 = TM @ Vector((px, py, 0.0))
+            f = R3 @ Vector(d["facing"])
+            Md = _T(P0.x, P0.y, d["dish_z"]) @ _Rz(_face_rot(f))
+            det.join(an.mw_dish(d=0.9 if k == 0 else 0.6, seed=int(r.integers(1e6))), Md)
+        # baliza de obstrucción sobre su ménsula
+        L0 = mounts["light"][0]["pos"]
+        det.join(an.obstruction_light(mount="plate"), TM @ _T(*L0))
+    # troncales: de la salida al pie de la torre, sobre el puente de cables, a las botas del puerto de la caseta
+    cab = tw.cable_layout(G)
+    yA = cab[0]["y"]
+    y_exit = G.rin(G.z_exit) + 0.30
+    x_t = TOWER["x"] - y_exit - 0.05                                  # arranque del puente (junto a la charola corta de la torre)
+    x_s = SH_X1 + 0.32                                                # fin del puente, frente al puerto
+    ex = mounts["cable_exit"][0]
+    yc = TOWER["y"] + ex["pos"][0]
+    h = 2.540 + 0.0532                                                # cama de peldaños bajo la fila inferior de la salida
+    z_bed = h - 0.0532
+    furn.join(tel.ice_bridge(L=x_t - x_s, h=h, w=0.51, n_posts=2, n_cables=0, seed=int(r.integers(1e6))), _T(x_t, yc, 0.0) @ _Rz(180))
+    _proxy_box((x_s, yc - 0.40, 0.0), (x_t, yc + 0.40, h + 0.10))
+    py_, pz_ = PORT
+    boots = [(py_ - 0.195 + i * 0.13, pz_ - 0.085 + j * 0.085) for j in range(3) for i in range(4)]
+    order = sorted(range(len(cab)), key=lambda i: (cab[i]["x"], cab[i]["row"]))
+    # capa sobre el puente (12 abajo y 6 encima) y, en el puerto, cada cable a la columna de botas de su lado (sin cruzarse)
+    slots = []
+    for n_, i in enumerate(order):
+        lay = 0 if n_ % 3 != 1 else 1
+        slots.append((i, lay))
+    bottom = [i for (i, l) in slots if l == 0]
+    upper = [i for (i, l) in slots if l == 1]
+    place = {}
+    for q, i in enumerate(bottom):
+        place[i] = (yc + (q - (len(bottom) - 1) / 2) * 0.031, 0)
+    for q, i in enumerate(upper):
+        place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.050, 1)
+    by_y = sorted(place, key=lambda i: place[i][0])
+    cols = [[] for _ in range(4)]
+    for q, i in enumerate(by_y):
+        cols[q * 4 // len(by_y)].append(i)
+    boot_of = {}
+    for ci, lst in enumerate(cols):
+        for m, i in enumerate(lst):
+            boot_of[i] = (ci, m % 3, m >= 3)
+    for i in order:
+        c = cab[i]
+        zh = G.z_exit - (yA - c["y"])
+        p0 = TM @ Vector((c["x"], y_exit - 0.004 * (c["k"] % 3), zh))
+        yy, lay = place[i]
+        zz = z_bed + c["r"] + (0.0 if lay == 0 else 0.024)
+        ci, rj, dub = boot_of[i]
+        by, bz = boots[(2 - rj) * 4 + ci]
+        by += (0.013 if dub else 0.0)
+        bz += (0.011 if dub else 0.0)
+        tip = SH_X1 + 0.082
+        P = _sfillet([tuple(p0), (p0.x - 0.12, p0.y, p0.z), (x_t - 0.25, yy, zz), (x_s + 0.35, yy, zz), (x_s - 0.02, yy, zz),
+                       (x_s - 0.10, (yy + by) / 2, min(zz, bz) - 0.16), (tip + 0.14, by, bz - 0.04), (tip + 0.05, by, bz), (tip, by, bz)],
+                      0.12, 8)
+        furn.tube(P, c["r"], seg=14, mat=c["mat"])
+    # flejes inoxidables con hebilla cada ~0,9 m sobre el puente
+    nst = max(2, int((x_t - x_s) / 0.9))
+    for k in range(nst):
+        x = x_s + 0.3 + (x_t - x_s - 0.6) * k / (nst - 1)
+        loop = [(x, yc - 0.205, z_bed - 0.004), (x, yc - 0.205, z_bed + 0.062), (x, yc + 0.205, z_bed + 0.062),
+                (x, yc + 0.205, z_bed - 0.004)]
+        rect_sweep(furn, _sfillet(loop, 0.012, 3), 0.0127, 0.0008, 0.0003, "steel", lambda p: (0, 0, 1) if p[2] > z_bed + 0.03 else
+                   ((0, -1, 0) if p[1] < yc else (0, 1, 0)), n=1)
+        cl.rbox(furn, (x - 0.009, yc + 0.06, z_bed + 0.0628), (x + 0.009, yc + 0.085, z_bed + 0.0665), "steel", r=0.0015)
 
 
 # ------------------------------------------------------------------------------------------------- ensamble

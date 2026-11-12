@@ -1513,7 +1513,7 @@ def _platform_specs(G):
     for i in (1, 2):
         a = ang2(LEG_ANG[i])
         t = Vector((-a.y, a.x, 0))
-        pipes_m.append((a, t, clip_m, 0.0, 0.05715, G.z_mw - 0.6, G.z_mw + 1.4))
+        pipes_m.append((a, t, clip_m, 0.0, 0.0381, G.z_mw - 0.6, G.z_mw + 1.4))      # Ø76,2: el de las monturas de plato del kit
     mw["pipes"] = pipes_m
     mw["holes"] = [(G.x_lad - 0.30, G.x_lad + 0.30, G.y_lad - 0.60, G.y_lad + 0.045),
                    (G.x_cab - 0.31, G.x_cab + 0.31, G.y_lad - 0.13, G.y_lad + 0.045)]
@@ -1571,7 +1571,7 @@ def tower_mounts(h=42.0, base_w=5.0, top_w=1.6):
     """Puntos de montaje para el ensamblador del sitio (metros, mundo de la torre; facing = normal horizontal hacia afuera).
     sector: 3 sectores × 3 tubos Ø73 (x, y, z0..z1) con altura sugerida del centro de la antena (antenna_z).
     rru: un RRU por tubo, colgado del mismo tubo bajo el piso (centro rru_z), mirando hacia afuera.
-    dish: 2 tubos Ø114 en las esquinas de la plataforma de microondas (centro del plato dish_z).
+    dish: 2 tubos Ø76 en las esquinas de la plataforma de microondas (centro del plato dish_z).
     light: base de la baliza (cara superior de la placa). cable_exit: centro del haz de cables donde inicia el puente de hielo."""
     G = Geo(h, base_w, top_w)
     top, mw = _platform_specs(G)
