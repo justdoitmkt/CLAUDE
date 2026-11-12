@@ -52,7 +52,7 @@ SHOTS_EXTRA = {
         "espera": dict(azim=108, elev=3, dist=9.8, target=Vector((-11.8, -8.0, 1.0)), fov=75, ground=False),
         "pasillo": dict(azim=90, elev=0, dist=9.0, target=Vector((-4.0, -2.9, 1.5)), fov=70, ground=False),
         "encamados": dict(azim=52, elev=8, dist=5.8, target=Vector((-10.0, 8.6, 0.8)), fov=75, ground=False),
-        "urgencias_int": dict(azim=-70, elev=6, dist=6.5, target=Vector((7.0, -8.6, 0.9)), fov=75, ground=False),
+        "urgencias_int": dict(azim=125, elev=6, dist=7.0, target=Vector((7.0, -8.6, 0.9)), fov=75, ground=False),
         "patio": dict(azim=-30, elev=35, dist=10.0, target=Vector((0.5, 1.1, 1.0)), fov=60),
     },
     "APT_D_4p": {
