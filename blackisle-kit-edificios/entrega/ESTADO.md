@@ -392,3 +392,31 @@ Roblox... tu almohada parece una piedra... Si se ven como cajas de cartón, no s
 Registrada en `CLAUDE.md` (raíz del repo) con sus 6 puntos: sin piezas rápidas, lo blando subdividido con arrugas y costuras,
 bisel y curvas reales en lo rígido, ≥ 100 k triángulos por modelo, revisión de primer plano a < 2 m antes de integrar y reporte
 honesto de lo que quede por debajo. La primera lámina del mobiliario del hospital (cama, almohada, asientos) queda rechazada.
+
+## HOS_1_pueblo · modelado, revisión R-AAA y kit (2026-11-12)
+- **Camas (rechazo del usuario: "cama de Roblox", "almohada de piedra")**: la sábana y la cobija simuladas como rectángulos se
+  arrugaban en picos al caer por el canto del colchón (y con las normales del colisionador invertidas quedaban DENTRO del
+  colchón: en el GLB no se veían). Se reemplazaron por un tendido a la medida (`softgoods.bed_linens`): bajera remetida en los
+  4 lados con frunces de esquina, arrugas de tensión y pliegues de planchado; cobija remetida con esquina de hospital (pliegue
+  diagonal con escalón de solapa); sábana superior con embozo de doblez redondeado; dobladillos. Colchón con las 12 aristas
+  redondeadas y vivos sobre la costura (antes flotaban 1 cm). Cama sin cobija: cobija doblada blanda al pie. Revisado a < 2 m
+  (pie, cabecera, embozo, esquina). 70,7k triángulos por cama tendida (el colchón tapado ya no lleva vivos ni cierre).
+- **Revisión de primer plano de TODO el mobiliario** (`tests/render_pieza.py`, nuevo): 27 piezas de 300–3 000 triángulos se
+  leían como cajas (lavadora = caja + aro, garrafón octagonal, luminaria = placa, mostrador = caja, etc.). Rehechas con su
+  construcción real en `kit/clinic_servicios.py` (lavadora, refrigerador, estufa, despachador, lavabo, inodoro, cubeta con
+  exprimidor, botes, gel), `kit/clinic_oficina.py` (escritorio con monitor/teclado/teléfono, archivero, mostradores de
+  recepción y cocina, sillas, buró, tablero, reloj, planta) y `kit/clinic_equipo.py` (luminaria de rejilla con tubos T8,
+  ventilador, minisplit, extintor, cilindros de oxígeno y de gas LP, rayos X, bucky, mampara plomada, farol); `kit/clinic.py`
+  las enruta. Además: pasamanos de madera con remates y ménsulas y mesa de comedor de tubo (eran cajas en el constructor).
+- **Error corregido**: estufa, refrigerador, mostrador de cocina y lavadoras miraban al muro.
+- **Presupuesto**: el mobiliario completo llegó a 2,8 M triángulos y el GLB no puede pasar de ~95 MB (GitHub). Se recortó lo
+  que nunca se ve (traseras contra muro, fondos, interiores, lo tapado) y segmentos de tornillería; a < 2 m no cambia nada; de
+  muy cerca (< 0,5 m) se notan facetas en el plato de la planta, el aro del reloj, el cordón del teléfono, las mechas del
+  trapeador y el tubo del cespol. Resultado: mobiliario 1,60 M + detalle 0,41 M = 2,02 M triángulos.
+- **Kit UE5**: el mobiliario del hospital va en su propia malla `SM_HOS_1_pueblo_Mobiliario` (constructor → horneado →
+  exportación → manifiesto → importador), con colisión de cajas en Colision; el empaquetador reparte un modelo de más de
+  95 MB en `_parte2.zip`. LEEME §3/§3.2 al día.
+- **Por debajo del estándar, dicho con honestidad**: sin interiores en refrigerador y horno (cerrados); papeles y avisos sin
+  imagen impresa; teclas sin rotular; la cubeta conserva 3 caras de mechas que se tocan; ninguna pieza tiene desgaste
+  geométrico (golpes, abolladuras) porque el hospital está en uso y limpio; el pasillo cubierto y los exteriores (bancas de
+  concreto del patio, tendedero) siguen siendo piezas sencillas del constructor.
