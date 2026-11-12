@@ -1,6 +1,6 @@
 # ESTADO · Kit BLACKISLE (7 modelos)
 
-Última actualización: 2026-10-27 · Fase actual: **F/G de APT_A (horneado final en curso) · E de APT_B / APT_C**
+Última actualización: 2026-11-12 · Fase actual: **entrega: los 7 GLB finales horneados, validados y subidos (ver REPORTE.md)**
 
 ## Resumen
 | Fase | Estado |
@@ -297,3 +297,9 @@ El contenedor se reemplazó: se perdieron el módulo `bpy` (reinstalado: Blender
 del scratchpad y lo no subido (vestido interior, re-horneado de C y CAB_1 de la ronda 3). El vestido se reescribió desde la
 sesión; las herramientas de captura y la cadena ahora viven en el repo (`visor/captura/`, `scripts/cadena_horneado.sh`).
 Re-horneado completo de los 7 con el pipeline final en curso.
+
+## Entrega final (2026-11-12)
+Re-horneado completo de los 7 con el pipeline de la ronda 3 (`scripts/cadena_horneado.sh`), exportación y validación OK en todos,
+renders Cycles, recorrido interior y capturas exteriores en Three.js r169 revisados con mis ojos. Números en `REPORTE.md` §1.
+z-fighting visible (`tests/zfight.py --dedupe`): 0 m² en los 7. Toma 04 de CAB_2 rehecha agachada (la cámara estaba dentro de la
+lámina; el tapanco tiene 1,2–1,5 m libres).
