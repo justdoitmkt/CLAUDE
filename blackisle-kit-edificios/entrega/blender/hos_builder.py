@@ -553,8 +553,8 @@ def rooftop(roof, det, r):
             det.cyl((x + 0.05 * math.cos(a), y + 0.05 * math.sin(a), SLAB_T + 0.6),
                     (x + 0.05 * math.cos(a), y + 0.05 * math.sin(a), SLAB_T + 0.66), 0.006, seg=5, mat="plastic")
     # tubería de los tinacos bajando a la azotea y al muro
-    det.tube([(8.2, 7.0, SLAB_T + 0.9), (8.2, 7.0, SLAB_T + 0.12), (8.2, 9.6, SLAB_T + 0.12), (8.2, 9.75, SLAB_T - 0.3),
-              (8.2, 10.06, SLAB_T - 0.3), (8.2, 10.06, FFL + 0.4)], 0.022, seg=10, mat="plastic")
+    det.tube([(9.2, 7.0, SLAB_T + 0.9), (9.2, 7.0, SLAB_T + 0.12), (9.2, 9.6, SLAB_T + 0.12), (9.2, 9.75, SLAB_T - 0.3),
+              (9.2, 10.06, SLAB_T - 0.3), (9.2, 10.06, FFL + 0.4)], 0.022, seg=10, mat="plastic")      # bajante entre vanos
     for (x, y) in ((7.4, 7.6), (9.0, 7.6)):
         det.join(sv.water_tank(seed=int(r.integers(1e6)), detail="mid"), _T(x, y, SLAB_T))
     # gárgolas de PVC en el pretil (fondo y costados), cada ~7 m
@@ -573,12 +573,12 @@ def rooftop(roof, det, r):
         det.cyl((23.4, 1.2, G_ST + 4.2), (23.4 + dx, 1.2 + dy, G_ST), 0.002, seg=4, mat="steel")
     # condensadoras de minisplit en el muro trasero y oriente, con su tubería forrada
     Mb = ac.panel_matrix("back", X0, X1, Y1, 0.0)
-    for x in (-10.0, -6.5, -2.8, 6.4, 12.0):
+    for x in (-10.0, -5.4, 4.6, 8.4, 13.4):                    # entre ventanas y puerta de servicio, nunca sobre un vano
         det.join(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="mid"), Mb @ _T(X1 - x, 0, 2.05))
         det.tube([tuple(Mb @ Vector((X1 - x + 0.3, -0.12, 2.35))), tuple(Mb @ Vector((X1 - x + 0.3, -0.06, 2.9))),
                   tuple(Mb @ Vector((X1 - x + 0.3, 0.05, 2.95)))], 0.018, seg=8, mat="plastic")
-    det.join(sv.meter_box(seed=int(r.integers(1e6)), open_door=False, detail="high"), Mb @ _T(X1 - 8.2, 0, 1.4))
-    det.join(sv.conduit([(X1 - 8.2, 0.0, 1.92), (X1 - 8.2, 0.0, 3.3), (X1 - 7.4, 0.0, 3.3), (X1 - 7.4, 0.0, PARA - 0.15)],
+    det.join(sv.meter_box(seed=int(r.integers(1e6)), open_door=False, detail="high"), Mb @ _T(X1 - 3.9, 0, 1.4))
+    det.join(sv.conduit([(X1 - 3.9, 0.0, 1.92), (X1 - 3.9, 0.0, 3.3), (X1 - 4.2, 0.0, 3.3), (X1 - 4.2, 0.0, PARA - 0.15)],
                         seed=int(r.integers(1e6)), detail="high"), Mb)                # conduit del medidor hacia la azotea
 
 
