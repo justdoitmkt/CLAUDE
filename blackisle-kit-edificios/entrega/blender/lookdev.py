@@ -174,7 +174,7 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     "aluminium": ((0.55, 0.56, 0.56), 0.45, 1.0), "glass": ((0.10, 0.125, 0.125), 0.08, 0.0), "fabric": ((0.55, 0.50, 0.42), 0.95, 0.0),
     "cable": ((0.03, 0.03, 0.03), 0.6, 0.0), "plastic": ((0.70, 0.69, 0.64), 0.55, 0.0), "metal_paint": ((0.24, 0.27, 0.24), 0.6, 0.3),
     "rubble": ((0.46, 0.44, 0.40), 0.95, 0.0), "sand": ((0.74, 0.68, 0.54), 0.97, 0.0), "vegetation": ((0.22, 0.28, 0.12), 0.8, 0.0),
-    "mortar": ((0.58, 0.56, 0.52), 0.95, 0.0),
+    "mortar": ((0.58, 0.56, 0.52), 0.95, 0.0), "paper": ((0.70, 0.67, 0.58), 0.9, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),
