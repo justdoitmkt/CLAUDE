@@ -317,3 +317,21 @@ el escombro exterior como pieza suelta. Hecho:
 - No probado dentro de Unreal (no hay motor en este contenedor): el script sigue la API de Python de UE 5.x y el LEEME deja la
   especificación para corregirlo si alguna llamada cambia en la versión del proyecto.
 
+## Nuevo modelo: MUE_1_carga (muelle de carga) · referencias (2026-11-12)
+Pedido: muelle de carga en la orilla de la playa con almacén de estructura metálica, espacioso, con atraque para un barco y
+acceso por rampa desde la arena; grafiteado como el resto del kit. Generado con `nano_banana_2_1` a 1k (indicado por el usuario),
+ancla de color y desgaste: hero de APT_A (d2c82805) y `ref_grafiti_planta_baja_1`. 6 imágenes, 0 rechazos, **9,0 créditos**
+(saldo 259,25 → 250,25, plan plus). Revisadas con mis ojos; en `refs_higgsfield/MUE_1_carga/`:
+| Vista | job | Qué fija |
+|---|---|---|
+| hero (desde la playa) | 0937ffb0 | rampa de concreto desde la arena con muretes grafiteados, cubierta sobre pilotes de acero con cruces, nave de marco rígido oxidado con lámina faltante y tragaluces, caseta de oficina, grúa pluma, contenedores, defensas de llanta |
+| mar (desde el agua) | 04c46596 | frente de atraque: defensas de llanta y de madera con percebes, bitas, escalera marina, cortinas metálicas, contenedores grafiteados |
+| elevación lateral | e9568eb8 | proporciones: rampa ~1/5 del largo, cubierta a ~3 m sobre el mar, 7 marcos de pilotes con cruces, nave de ~3/4 del largo, grúa en la punta |
+| aérea | 39d8f79e | planta en L: cubierta principal + espigón de atraque paralelo a la costa; caseta junto a la nave |
+| interior | c1b0826d | nave con marcos y armaduras oxidadas, tragaluces rotos, entrepiso de oficina con escalera, arena y tarimas |
+| materiales | 250e8ba0 | concreto con óxido y sal, viga con pintura gris verdosa descascarada, lámina grafiteada, bita, llanta en cadena, pilote de madera con percebes |
+- R4: palabras vistas KAOS, ZORO, NOVA, REXO, Puro Corazón, Sin Miedo, Respeto, más "NEXO" y "KORO" (deformaciones del modelo),
+  ojos, máscaras, corazones. Sin números de pandilla, coronas, estrellas, marcas ni logos. El grafiti del modelo 3D se compondrá con
+  las piezas propias del kit (`lettering/cutouts/`), no con estas imágenes.
+- Diferencias entre vistas: en la aérea la rampa baja al agua (rampa de botes); manda el hero/elevación (rampa desde la arena).
+
