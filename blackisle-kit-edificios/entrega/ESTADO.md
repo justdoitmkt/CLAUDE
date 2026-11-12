@@ -356,3 +356,10 @@ en la orilla de la cubierta. Ajustes pedidos por el usuario sobre el primer pase
 - Kit UE5: colisión simple añadida para grúa, postes y bitas; ficha con `niveles_m` y `medidas_estructura_m`; el
   importador compara la Estructura contra esa medida; vista previa con playa y mar; atlas de muros a 8K (superficie
   exterior ~2x la de un edificio).
+- **Exportado al kit UE5 (2026-11-12):** `bake_apt.py --ue` + `export_ue5.py` OK, todas las comprobaciones en verde.
+  Triángulos: Estructura 95 980 · Detalle 420 172 · Escombro 8 872 · Vidrio 5 258 · Colision 62 067. Medidas del modelo
+  80,0 × 90,0 × 24,0 m (Estructura sola 80,0 × 80,5 × 12,8 m); 31,8 MiB. z-fighting visible: 5 caras, 0,065 m² (Detalle 2,
+  Interior 3; muros, techo y escombro en 0). Vistas previas con playa y mar en `render_qa/ue5/MUE_1_carga_ue5_*.png`
+  (exterior, playa, mar, atraque, interior), revisadas con mis ojos. ZIP `kit_ue5_descargas/BLACKISLE_UE5_MUE_1_carga.zip`
+  (28,8 MiB); el común se rehízo (LEEME, manifiesto e importador con el muelle).
+- Pendiente menor: los tragaluces usan el vidrio del kit (transparente); en la realidad serían de fibra translúcida.
