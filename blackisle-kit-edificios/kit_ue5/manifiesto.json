@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "c52c8b5",
+ "version_repo": "3997318",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -416,6 +416,111 @@
    "dos_caras": false,
    "nota": "T9_madera_barniz.png a 0.8 m por repetición; rugosidad 0.35, metal 0.0 (en el ORM)"
   },
+  "BLK_wood_red": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_wood_red_BC",
+    "N": "T_BLK_wood_red_N",
+    "ORM": "T_BLK_wood_red_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.0448,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T10_tabla_roja.png a 2.4 m por repetición; rugosidad 0.82, metal 0.0 (en el ORM)"
+  },
+  "BLK_block": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_block_BC",
+    "N": "T_BLK_block_N",
+    "ORM": "T_BLK_block_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.1951,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T11_block.png a 2.4 m por repetición; rugosidad 0.9, metal 0.0 (en el ORM)"
+  },
+  "BLK_tile_clay": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_tile_clay_BC",
+    "N": "T_BLK_tile_clay_N",
+    "ORM": "T_BLK_tile_clay_ORM"
+   },
+   "UVEscala": 1.66667,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.0762,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T12_barro.png a 1.2 m por repetición; rugosidad 0.55, metal 0.0 (en el ORM)"
+  },
+  "BLK_paint_cream": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_paint_cream_BC",
+    "N": "T_BLK_paint_cream_N",
+    "ORM": "T_BLK_paint_cream_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    0.98,
+    0.88,
+    0.58
+   ],
+   "LumaMedia": 0.829,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.7, metal 0.0 (en el ORM)"
+  },
+  "BLK_paint_navy": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_paint_navy_BC",
+    "N": "T_BLK_paint_navy_N",
+    "ORM": "T_BLK_paint_navy_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    0.1,
+    0.15,
+    0.34
+   ],
+   "LumaMedia": 0.829,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T8_pintura_lisa.png a 2.0 m por repetición; rugosidad 0.6, metal 0.0 (en el ORM)"
+  },
   "BLK_aluminium": {
    "maestro": "M_BLK_Color",
    "Color": [
@@ -672,6 +777,58 @@
    ],
    "Rugosidad": 0.42,
    "Metal": 0.15,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_hay": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.6,
+    0.48,
+    0.24
+   ],
+   "Rugosidad": 0.92,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": true,
+   "nota": ""
+  },
+  "BLK_burlap": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.46,
+    0.37,
+    0.25
+   ],
+   "Rugosidad": 0.95,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_cardboard": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.55,
+    0.42,
+    0.27
+   ],
+   "Rugosidad": 0.85,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_amber": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.3,
+    0.13,
+    0.03
+   ],
+   "Rugosidad": 0.12,
+   "Metal": 0.0,
    "PesoVC": 0.75,
    "dos_caras": false,
    "nota": ""
@@ -2971,6 +3128,242 @@
       "BC": "T_HOS_1_pueblo_walls_rest_BC",
       "N": "T_HOS_1_pueblo_walls_rest_N",
       "ORM": "T_HOS_1_pueblo_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
+  "GRA_1_tienda": {
+   "id": "GRA_1_tienda",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_GRA_1_tienda_Estructura",
+     "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Estructura.glb",
+     "triangulos": 199930,
+     "ranuras": [
+      "GRA_1_tienda_walls_main",
+      "GRA_1_tienda_walls_rest",
+      "BLK_wood",
+      "BLK_wood_grey",
+      "BLK_concrete",
+      "BLK_metal_rust",
+      "BLK_tile_clay",
+      "BLK_paint_white",
+      "BLK_paint_navy",
+      "BLK_block",
+      "BLK_wood_red",
+      "BLK_plaster",
+      "BLK_paint_cream",
+      "BLK_roof_metal_light",
+      "BLK_rubber",
+      "BLK_steel",
+      "BLK_roof_metal"
+     ],
+     "mib": 12.92
+    },
+    "Detalle": {
+     "nombre": "SM_GRA_1_tienda_Detalle",
+     "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Detalle.glb",
+     "triangulos": 131633,
+     "ranuras": [
+      "BLK_wood_red",
+      "BLK_paint_white",
+      "BLK_roof_metal_light",
+      "BLK_metal_rust",
+      "BLK_wood",
+      "BLK_concrete",
+      "BLK_paint_green",
+      "BLK_steel",
+      "BLK_aluminium",
+      "BLK_rubber",
+      "BLK_sign_blue",
+      "BLK_wood_dark",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_metal_paint",
+      "BLK_mortar",
+      "BLK_brick",
+      "BLK_sign_white",
+      "BLK_enamel"
+     ],
+     "mib": 6.29
+    },
+    "Mobiliario": {
+     "nombre": "SM_GRA_1_tienda_Mobiliario",
+     "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Mobiliario.glb",
+     "triangulos": 767632,
+     "ranuras": [
+      "BLK_sign_white",
+      "BLK_steel",
+      "BLK_aluminium",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_sign_green",
+      "BLK_sign_blue",
+      "BLK_paint_yellow",
+      "BLK_vinyl",
+      "BLK_sign_red",
+      "BLK_rubber",
+      "BLK_paint_white",
+      "BLK_amber",
+      "BLK_metal_rust",
+      "BLK_burlap",
+      "BLK_hay",
+      "BLK_plastic_blue",
+      "BLK_wood",
+      "BLK_wood_grey",
+      "BLK_wood_varnish",
+      "BLK_paper",
+      "BLK_wood_dark",
+      "BLK_paint_green",
+      "BLK_roof_metal_light",
+      "BLK_cardboard",
+      "BLK_linen",
+      "BLK_enamel"
+     ],
+     "mib": 45.76
+    },
+    "Vidrio": {
+     "nombre": "SM_GRA_1_tienda_Vidrio",
+     "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Vidrio.glb",
+     "triangulos": 2730,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 0.15
+    },
+    "Colision": {
+     "nombre": "SM_GRA_1_tienda_Colision",
+     "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Colision.glb",
+     "triangulos": 31011,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 0.93
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_GRA_1_tienda_walls_main_BC",
+     "N": "T_GRA_1_tienda_walls_main_N",
+     "ORM": "T_GRA_1_tienda_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_GRA_1_tienda_walls_rest_BC",
+     "N": "T_GRA_1_tienda_walls_rest_N",
+     "ORM": "T_GRA_1_tienda_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [
+    [
+     0.0,
+     -4.0,
+     2.4
+    ],
+    [
+     0.0,
+     0.0,
+     2.4
+    ],
+    [
+     0.0,
+     4.0,
+     2.4
+    ],
+    [
+     12.5,
+     -5.6,
+     2.9
+    ],
+    [
+     12.5,
+     -2.6,
+     2.9
+    ],
+    [
+     12.5,
+     -8.45,
+     2.78
+    ]
+   ],
+   "medidas_m": {
+    "x": 27.878,
+    "y": 21.153,
+    "z": 9.166,
+    "min": [
+     -12.078,
+     -10.866,
+     -0.471
+    ],
+    "max": [
+     15.8,
+     10.286,
+     8.695
+    ],
+    "escombro_min": null,
+    "escombro_max": null,
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
+   },
+   "medidas_estructura_m": {
+    "x": 26.222,
+    "y": 18.752,
+    "z": 8.668,
+    "min": [
+     -10.422,
+     -10.402,
+     0.0
+    ],
+    "max": [
+     15.8,
+     8.35,
+     8.668
+    ]
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Mobiliario_presente": true,
+    "Mobiliario_ranuras": true,
+    "Mobiliario_un_uv": true,
+    "Mobiliario_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": false
+   },
+   "ok": false,
+   "mib_total": 66.05,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "hastial del granero con el portón corredizo; la tienda COMMUNITY STORE queda al oriente (+x), su pórtico también hacia -y"
+   },
+   "materiales_atlas": {
+    "GRA_1_tienda_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_GRA_1_tienda_walls_main_BC",
+      "N": "T_GRA_1_tienda_walls_main_N",
+      "ORM": "T_GRA_1_tienda_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "GRA_1_tienda_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_GRA_1_tienda_walls_rest_BC",
+      "N": "T_GRA_1_tienda_walls_rest_N",
+      "ORM": "T_GRA_1_tienda_walls_rest_ORM"
      },
      "AOFuerza": 1.0
     }
