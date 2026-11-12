@@ -7,7 +7,7 @@ el manifiesto es la especificación y el script es una forma de cumplirla (ver L
 Uso (consola Python del editor: Output Log -> "Python"):
     import sys; sys.path.append(r"RUTA/A/kit_ue5")          # la carpeta que contiene este archivo
     import importar_blackisle as ib
-    ib.importar_todo()                                      # texturas + materiales + mallas de los 9 modelos (unos minutos)
+    ib.importar_todo()                                      # texturas + materiales + mallas de los 10 modelos (unos minutos)
     ib.verificar()                                          # medidas, ranuras de material y ejes, modelo por modelo
     ib.colocar("APT_A_5p", unreal.Vector(0, 0, 0), yaw=0)   # pone un edificio (5 actores enganchados al de Estructura)
     ib.reemplazar("Edificio_Placeholder_01", "APT_A_5p")    # lo pone donde está un actor existente y oculta ese actor

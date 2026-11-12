@@ -452,3 +452,27 @@ grafiti `ref_grafiti_planta_baja_1` en las vistas exteriores. 8 imágenes + 2 ho
 - **Biblioteca exclusiva** (`lettering/gra/`, jobs 99c6e52f y 799732a7, recortadas con el verde muestreado y despill):
   G01 placa gótica DRY CREEK con roll call SPARKY / TOPO / FLACO y G02 firma script "Sparky" (las dos que van al granero);
   G03/G04 variantes alternas. Nombres ficticios, sin números, coronas, estrellas ni puntos (R4).
+
+## GRA_1_tienda · modelado (2026-11-12)
+- **Arquitectura** (`blender/gra_builder.py`): granero gambrel 12 × 16 m (base de block, tabla roja con tapajuntas como
+  geometría, esquineros y chambranas blancas, techo de lámina ondulada real con tornillos con rondana, caballete, botaguas del
+  quiebre y frontales; pares cada 1 m con cartabones, tirantes y polines), estructura interior de postes 20 × 20 en dados con
+  estribos, vigas de amarre, solera, tornapuntas con pernos, largueros, tapanco de tablones; portón corredizo de dos hojas en
+  riel con carros, puerta del tapanco con viga de polea, ventanas con postigos abiertos, ventila de tablillas; tejaban
+  poniente. Tienda 6 × 8 m de block aplanado (amarillo, zoclo azul por lookdev), losa con pretil, piso de barro, lambrín azul,
+  pórtico con tejaban de lámina en postes rollizos, reja de seguridad abierta, ventanilla con barrotes y repisa, letreros
+  pintados en relieve, medidor, tinaco en base de ángulo, condensadora, bajada pluvial.
+- **Texturas nuevas** (`tools/texturas_granja.py`): T10 tabla roja de granero (deslavada, desprendimientos sueltos, veta y
+  clavos), T11 block 40 × 20 con junta rehundida, T12 barro 30 × 30. Materiales nuevos: wood_red, block, tile_clay,
+  paint_cream, paint_navy, hay, burlap, cardboard, amber.
+- **Utilería AAA** (agentes, revisada por mí en hojas de primer plano): `kit/farm.py` 21 piezas (pacas con tajos e hilos,
+  estibas, paja suelta, costales que se amoldan, tarima, carretilla, bieldo, pala, bebedero, cubeta, banco con tornillo y
+  herramientas, escalera, polea, cuerda, foco, gabinete, corrales, cerca de rajas, alambrado de púas, tambo); `kit/store.py`
+  16 piezas (mostrador con malla, gabinete de munición sin armas, botiquín de cruz verde, anaqueles surtidos de latas,
+  costales, garrafas…, refrigerador de cerveza, congelador, báscula, caja de dinero, pizarrón bien escrito, jabas, banca,
+  letrero OPEN, calendario, estiba de cajas). Orientación verificada en arcilla (anaqueles, refrigerador y pizarrón con la
+  espalda al muro).
+- **Revisión en arcilla a < 2 m**: portón, hastial, interior del granero, corrales, tapanco, banco, tejaban, frente de la
+  tienda, pórtico, mostrador, abarrotes y fondo. Arreglado: el cruce de las cruces del portón (diagonales coplanares → la
+  segunda en dos tramos que topan contra la primera).
+- **Triángulos antes de hornear**: estructura/detalle ~0,33 M (techo 170 k, detalle 134 k, interior 30 k) + mobiliario 0,77 M.

@@ -5,7 +5,7 @@ Léelo completo antes de tocar el proyecto. La especificación exacta de materia
 `manifiesto.json`; `importar_blackisle.py` la aplica desde el editor.
 
 ## 1. Qué hay que lograr
-Importar los 9 modelos (7 edificios, el muelle de carga y el hospital) y **reemplazar con ellos los edificios, cabañas,
+Importar los 10 modelos (7 edificios, el muelle de carga, el hospital y el granero con tienda) y **reemplazar con ellos los edificios, cabañas,
 muelle y hospital provisionales que ya existen en el nivel**.
 El resultado tiene que verse como un edificio real y abandonado:
 - **Vidrio que se ve como vidrio:** translúcido, con reflejos y suciedad, y con las roturas que trae el modelo.
@@ -28,7 +28,7 @@ El resultado tiene que verse como un edificio real y abandonado:
 | HOS_1_pueblo | Hospital rural de una planta EN USO: urgencias, consultorios, farmacia, rayos X, encamados, patio y cochera de ambulancias | pórtico de 4 columnas con "COMMUNITY HOSPITAL" en el pretil (cochera al oriente, +X) |
 
 Los edificios tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
-departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1 y el hospital en §3.2.
+departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1, el hospital en §3.2 y el granero con tienda en §3.3.
 
 ## 2. Contenido
 ```
@@ -40,13 +40,13 @@ kit_ue5/
                           + T_BLK_vidrio_suciedad
   comun/geometria/        SM_BLK_Ejes.glb (marcador para medir la conversión de ejes)
   modelos/<ID>/           SM_<ID>_Estructura / _Detalle / _Escombro / _Vidrio / _Colision .glb
-                          (+ SM_<ID>_Mobiliario.glb en el hospital)
+                          (+ SM_<ID>_Mobiliario.glb en el hospital y en el granero)
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
-## 3. Las piezas de cada modelo (5; el hospital trae una sexta, Mobiliario)
+## 3. Las piezas de cada modelo (5; el hospital y el granero traen una sexta, Mobiliario)
 Todas comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
 punto y con el mismo giro.
 
@@ -55,7 +55,7 @@ punto y con el mismo giro.
 | Estructura | carcasa (muros con atlas), interior (muros, losas, escaleras, puertas, escombro y basura interior), techo | sí | ninguna | la colisión la da la pieza Colision |
 | Detalle | ventanas, barandales, servicios (A/C, medidores, cables, tinacos), ropa, daño | sí | ninguna | los barandales no bloquean (§7) |
 | Escombro | escombro exterior suelto (montones, trozos, varillas) | no | compleja como simple | opcional: se puede mover o borrar |
-| Mobiliario | solo el hospital: mobiliario, equipo y luminarias interiores | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
+| Mobiliario | hospital y granero: mobiliario, equipo, utilería y luminarias | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
 | Vidrio | todo el vidrio (ventanas, puertas, esquirlas) | **no** (translúcido) | ninguna | sin proyectar sombra |
 | Colision | carcasa + interior con caras coplanares fundidas (misma forma, pocos triángulos) | no | compleja como simple | **invisible**; da la colisión de muros, pisos y escaleras |
 
@@ -104,6 +104,21 @@ centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,4
   una luz puntual. Para un hospital encendido, súbeles los lúmenes (~2000) y temperatura 4000 K.
 - **Ambulancias:** no vienen en el kit (un vehículo no va dentro de la malla del edificio); la cochera tiene lugar para 2.
 
+### 3.3 El granero con tienda comunitaria (GRA_1_tienda)
+Granja en uso de la costa seca (sin ganado modelado). Pivote al centro del granero a nivel de piso (z = 0); fachada (hastial
+con portón) hacia -y.
+- **Granero** (x -6..6, y -8..8): base de block de 1,2 m, tabla roja con tapajuntas, techo a dos aguas quebrado de lámina
+  galvanizada (cumbrera a 8,5 m). Portón corredizo de 4 m (una hoja abierta), puerta del tapanco con viga de polea, puerta
+  trasera y puertas de hombre a los costados. Dentro: postes y vigas con tornapuntas, tapanco al poniente lleno de pacas
+  (escalera al pasillo), corrales vacíos al oriente, banco de trabajo, gabinete y tambos. Tejaban al poniente con pacas,
+  costales y un corral.
+- **Tienda** (x 9,5..15,5, y -8..0): COMMUNITY STORE en el pretil y la lista MEDICAL - FOOD - AMMO - COLD BEER; pórtico con
+  tejaban, reja de seguridad, ventanilla de venta con barrotes. Dentro: mostrador con malla, gabinete de munición (sin armas),
+  botiquín con cruz verde, anaqueles de abarrotes, refrigerador de cerveza, congelador, pizarrón de precios.
+- **Grafiti:** solo un par de piezas chicanas en el costado oriente del granero (placa DRY CREEK y firma), por pedido.
+- **Mobiliario:** la utilería (pacas, costales, corrales, mercancía…) va en `SM_GRA_1_tienda_Mobiliario`; su colisión son
+  cajas simples dentro de Colision. Las luces: focos del granero y luminarias de la tienda en `focos_m_blender`.
+
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).
 2. Plugins activos: **Python Editor Script Plugin** e importador glTF (Interchange, activo por defecto en UE 5.1+).
@@ -112,7 +127,7 @@ centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,4
    ```python
    import sys; sys.path.append(r"RUTA/A/kit_ue5")
    import importar_blackisle as ib
-   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 9 modelos, en /Game/BlackIsle
+   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 10 modelos, en /Game/BlackIsle
    ib.verificar()            # medidas en cm contra el manifiesto, ranuras con material del kit, ejes
    ```
 4. **Reemplaza los provisionales.** Identifica en el nivel qué actor provisional corresponde a cada modelo; si no es
