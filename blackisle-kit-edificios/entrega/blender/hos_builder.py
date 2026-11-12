@@ -654,7 +654,7 @@ def furnish(inter, det, r):
              _T(-2.0 + TI / 2, -8.0, z + 1.05) @ _Rz(90))
     for sgn in (-1, 1):
         inter.box((-2.0 + sgn * TI / 2 - (0.25 if sgn < 0 else 0), -8.05, z + 1.02), (-2.0 + sgn * TI / 2 + (0.25 if sgn > 0 else 0), -6.35, z + 1.05),
-                  "wood", bevel=0.004)
+                  "wood_varnish", bevel=0.004)
     # recepción
     x0, x1, y0, y1, _ = R["recepcion"]
     put(inter, cl.desk(1.5, 0.7, seed=int(r.integers(1e6))), -1.2, -7.2, "-x")
@@ -691,7 +691,7 @@ def furnish(inter, det, r):
             if b - a < 0.4:
                 continue
             k = 0.06 if d == "+y" else -0.06
-            det.box((a, yy + k - 0.03, z + 0.86), (b, yy + k + 0.03, z + 0.92), "wood", bevel=0.01)
+            det.box((a, yy + k - 0.03, z + 0.86), (b, yy + k + 0.03, z + 0.92), "wood_varnish", bevel=0.01)
             x = a + 0.2
             while x < b - 0.1:
                 det.cyl((x, yy, z + 0.89), (x, yy + k * 0.6, z + 0.89), 0.008, seg=6, mat="steel")
@@ -786,7 +786,7 @@ def furnish(inter, det, r):
     put(inter, cl.counter(2.4, 0.6, h=0.9, seed=int(r.integers(1e6)), top="steel", front="plastic"), 6.3, y1 - 0.3, "+y")
     put(inter, cl.stove(int(r.integers(1e6))), x1 - 0.45, y1 - 0.32, "+y")
     put(inter, cl.fridge(int(r.integers(1e6))), x0 + 0.38, y1 - 0.4, "+y")
-    inter.box((5.6, 7.1, z + 0.72), (7.2, 8.0, z + 0.75), "wood", bevel=0.006)
+    inter.box((5.6, 7.1, z + 0.72), (7.2, 8.0, z + 0.75), "wood_varnish", bevel=0.006)
     for (x, y) in ((5.75, 7.15), (7.05, 7.15), (5.75, 7.95), (7.05, 7.95)):
         inter.box((x - 0.025, y - 0.025, z), (x + 0.025, y + 0.025, z + 0.72), "steel", bevel=0.004)
     for (x, y, d) in ((6.0, 6.75, "+y"), (6.8, 6.75, "+y"), (6.0, 8.4, "-y"), (6.8, 8.4, "-y")):
@@ -882,7 +882,7 @@ def _palm(det, x, y, z, r):
         radii.append(0.135 - 0.045 * t + (0.009 if i % 2 == 0 else -0.002))
     det.tube(pts, 0.12, seg=16, mat="wood_grey", radii=radii)
     top = Vector(pts[-1])
-    port.lathe(det, [(0.0, -0.15), (0.11, -0.15), (0.13, 0.0), (0.1, 0.18), (0.05, 0.28), (0.0, 0.3)], seg=14, mat="wood",
+    port.lathe(det, [(0.0, -0.15), (0.11, -0.15), (0.13, 0.0), (0.1, 0.18), (0.05, 0.28), (0.0, 0.3)], seg=14, mat="wood_varnish",
                M=Matrix.Translation(top))
     for k in range(15):
         a = 2 * math.pi * k / 15 + float(r.uniform(-0.15, 0.15))

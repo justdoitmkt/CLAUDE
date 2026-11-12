@@ -29,7 +29,8 @@ IDS = ["APT_A_5p", "APT_B_4p", "APT_C_3p", "APT_D_4p", "CAB_1_tablones", "CAB_2_
 # relieve por material para el normal derivado del albedo (madera y ladrillo marcados; aplanado y metal suaves)
 NORMAL_STRENGTH = {"concrete": 4.0, "plaster": 3.0, "wood": 6.0, "wood_dark": 6.0, "wood_grey": 6.0, "brick": 7.0, "tile": 5.0,
                    "metal_rust": 3.5, "metal_paint": 3.0, "roof_metal": 3.5, "roof_metal_light": 3.0,
-                   "terrazzo": 1.2, "tile_white": 2.5, "ceiling_tile": 2.0, "paint_mint": 1.5, "paint_green": 1.5, "paint_white": 1.5}
+                   "terrazzo": 1.2, "tile_white": 2.5, "ceiling_tile": 2.0, "paint_mint": 0.6, "paint_green": 0.6, "paint_white": 0.6,
+                   "wood_varnish": 3.0}
 COLOR_ONLY = ["aluminium", "fabric", "cable", "plastic", "sand", "vegetation", "mortar", "paper",
               "plastic_blue", "linen", "sign_red", "sign_white", "sign_blue", "sign_green", "paint_yellow", "vinyl", "steel", "rubber", "wool_blue", "enamel"]
 FRONT = {   # rasgo que identifica la fachada principal (-y de Blender) para orientar cada modelo en el mapa

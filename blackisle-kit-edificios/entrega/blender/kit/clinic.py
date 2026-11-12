@@ -868,7 +868,7 @@ def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
     r = rng(seed)
     mb = MB()
     h = 0.75
-    rbox(mb, (-w / 2, -d / 2, h - 0.03), (w / 2, d / 2, h), "wood", r=0.01)
+    rbox(mb, (-w / 2, -d / 2, h - 0.03), (w / 2, d / 2, h), "wood_varnish", r=0.01)
     rbox(mb, (w / 2 - 0.42, -d / 2 + 0.03, 0.02), (w / 2 - 0.02, d / 2 - 0.03, h - 0.03), "enamel", r=0.005)
     for k, z in enumerate((0.05, 0.27, 0.5)):
         mb.box((w / 2 - 0.41, -d / 2 + 0.026, z), (w / 2 - 0.03, -d / 2 + 0.03, z + 0.2), "enamel")
@@ -965,7 +965,7 @@ def shelving(w=1.0, d=0.4, h=2.0, shelves=5, seed=0, stock=True, stock_kind="pha
     return mb
 
 
-def counter(w=2.4, d=0.6, h=1.05, seed=0, top="wood", front="plastic"):
+def counter(w=2.4, d=0.6, h=1.05, seed=0, top="wood_varnish", front="plastic"):
     """Mostrador de enfermería / farmacia: frente laminado con zoclo, cubierta con faldón y repisa interior de trabajo a 0,75."""
     mb = MB()
     mb.box((-w / 2, -d / 2 + 0.02, 0.0), (w / 2, -d / 2 + 0.06, 0.1), "rubber")
@@ -996,7 +996,7 @@ def notice_board(w=0.9, h=0.6, seed=0, posters=()):
     """Tablero de corcho con marco de aluminio, hojas clavadas y carteles con texto (origen: muro, centro inferior)."""
     r = rng(seed)
     mb = MB()
-    mb.box((-w / 2, -0.02, 0.0), (w / 2, 0.0, h), "wood")
+    mb.box((-w / 2, -0.02, 0.0), (w / 2, 0.0, h), "wood_varnish")
     for (a, b) in (((-w / 2, 0), (w / 2, 0.02)), ((-w / 2, h - 0.02), (w / 2, h)), ((-w / 2, 0), (-w / 2 + 0.02, h)), ((w / 2 - 0.02, 0), (w / 2, h))):
         mb.box((a[0], -0.03, a[1]), (b[0], -0.02, b[1]), "aluminium")
     for k in range(int(r.integers(4, 8))):

@@ -138,8 +138,54 @@ def plafon(n=1024, seed=13, panels=2):
         os.path.join(TEX, "T7_plafon.png"), optimize=True)
 
 
+def pintura_lisa(n=1024, seed=14):
+    """Pintura vinílica sobre aplanado fino (2 m por repetición): piel de naranja del rodillo, variación de tono muy leve,
+    sin manchas ni descascarado (hospital en uso)."""
+    r = np.random.default_rng(seed)
+    a = 0.5 + 0.5 * (_wrap_noise(n, 48, r, 3) - 0.5) * 0.9
+    b = _wrap_noise(n, 4, r, 3)
+    img = np.ones((n, n, 3), np.float32) * 0.93
+    img *= (0.975 + 0.035 * a + 0.02 * (b - 0.5))[..., None]
+    Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(os.path.join(TEX, "T8_pintura_lisa.png"), optimize=True)
+
+
+def _aniso_noise(n, cx, cy, r, octaves=3):
+    """Ruido periódico anisótropo: cx celdas en X, cy en Y (vetas largas si cx << cy)."""
+    acc = np.zeros((n, n), np.float32)
+    amp, tot = 1.0, 0.0
+    for o in range(octaves):
+        gx, gy = cx * 2 ** o, cy * 2 ** o
+        g = r.random((gy, gx)).astype(np.float32)
+        g = np.tile(g, (3, 3))
+        img = Image.fromarray((g * 255).astype(np.uint8)).resize((n * 3, n * 3), Image.BICUBIC)
+        acc += np.asarray(img, np.float32)[n:2 * n, n:2 * n] / 255.0 * amp
+        tot += amp
+        amp *= 0.5
+    return acc / tot
+
+
+def madera_barniz(n=1024, seed=15):
+    """Madera barnizada (0,8 m por repetición): vetas largas en X que ondulan suave, anillos de espaciado variable, hilos de
+    poro finos, bandas de duramen más oscuras y brillo de barniz; limpia (hospital en uso)."""
+    r = np.random.default_rng(seed)
+    yy = np.linspace(0, 1, n, endpoint=False)[:, None] * np.ones((1, n))
+    warp = _aniso_noise(n, 2, 5, r, 3)
+    space = _aniso_noise(n, 1, 3, r, 2)
+    phase = yy * 18 + 2.2 * warp + 1.5 * space
+    rings = np.abs(np.sin(np.pi * phase)) ** 0.6
+    pores = _aniso_noise(n, 3, 160, r, 2)
+    bands = _aniso_noise(n, 1, 4, r, 2)
+    t = 0.62 * (1 - rings) + 0.22 * (pores - 0.5) + 0.35 * (bands - 0.5) + 0.25
+    c0 = np.array([0.30, 0.16, 0.07])
+    c1 = np.array([0.60, 0.38, 0.19])
+    img = c0 + (c1 - c0) * np.clip(t, 0, 1)[..., None]
+    Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(os.path.join(TEX, "T9_madera_barniz.png"), optimize=True)
+
+
 if __name__ == "__main__":
     terrazo()
     azulejo()
     plafon()
+    pintura_lisa()
+    madera_barniz()
     print("ok", TEX)
