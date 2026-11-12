@@ -1,4 +1,4 @@
-"""kit/clinic_aaa_b.py — mobiliario de oficina/servicio del hospital rural HOS_1 rehecho a calidad AAA (regla R-AAA).
+"""kit/clinic_oficina.py — mobiliario de oficina/servicio del hospital rural HOS_1 rehecho a calidad AAA (regla R-AAA).
 
 Mismas firmas, origen, orientación y tamaño que las piezas de kit/clinic.py (piso en z = 0, frente hacia -Y; las piezas de
 muro con el origen en la cara del muro y creciendo hacia -Y). Cada pieza se arma con su construcción real: lámina formada con
@@ -544,12 +544,11 @@ def _pen_cup(mb, M, seed=0):
                        mat=("cable" if body != "cable" else "sign_blue"), M=Mb, caps=False)
             mb.box((-0.0012, 0.0040, 0.104), (0.0012, 0.0056, 0.139), "steel", bevel=0.0005, seg=1, m=Mb)
         else:
-            port.lathe(mb, [(0.0, 0.0), (0.0006, 0.0), (0.0012, 0.003)], seg=6, mat="cable", M=Mb, caps=False)
-            port.lathe(mb, [(0.0012, 0.003), (0.0036, 0.016)], seg=6, mat="wood_varnish", M=Mb, caps=False)
-            port.lathe(mb, [(0.0036, 0.016), (0.0036, 0.15)], seg=6, mat="paint_yellow", M=Mb, caps=False, phase=0.0)
-            port.lathe(mb, [(0.0036, 0.15), (0.0039, 0.1505), (0.0039, 0.161), (0.0036, 0.1615)], seg=12, mat="aluminium", M=Mb,
-                       caps=False)
-            port.lathe(mb, [(0.0036, 0.1615), (0.0035, 0.168), (0.0028, 0.171), (0.0, 0.1715)], seg=12, mat="sign_red", M=Mb, caps=False)
+            port.lathe(mb, [(0.0, 0.0), (0.0006, 0.0), (0.0012, 0.003)], seg=6, mat="cable", M=Mb)          # grafito
+            port.lathe(mb, [(0.0011, 0.0031), (0.0036, 0.016)], seg=6, mat="wood_varnish", M=Mb)          # madera afilada
+            port.lathe(mb, [(0.0036, 0.0162), (0.0036, 0.1505)], seg=6, mat="paint_yellow", M=Mb)          # cuerpo hexagonal
+            port.lathe(mb, [(0.0036, 0.15), (0.0039, 0.1505), (0.0039, 0.161), (0.0036, 0.1615)], seg=12, mat="aluminium", M=Mb)
+            port.lathe(mb, [(0.0035, 0.1612), (0.0035, 0.168), (0.0028, 0.171), (0.0, 0.1715)], seg=12, mat="sign_red", M=Mb)
 
 
 def _binder(mb, M, bw, dd, hh, mat, label):
@@ -663,7 +662,7 @@ def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
                 glide(mb, (a_ + b_) / 2, yy)
         rbox(mb, (x0 + 0.02, yb - 0.012, 0.03), (x1 - 0.02, yb - 0.002, zt0), "enamel", r=0.002)
         rbox(mb, (x0 + 0.02, yf + 0.03, 0.012), (x1 - 0.02, yf + 0.045, 0.078), "enamel", r=0.002)
-        rbox(mb, (x0 + 0.02, yf + 0.03, 0.078), (x1 - 0.02, yb - 0.012, 0.086), "enamel", r=0.002)
+        rbox(mb, (x0 + 0.02, yf + 0.03, 0.0785), (x1 - 0.02, yb - 0.012, 0.086), "enamel", r=0.002)
         rbox(mb, (x0 + 0.02, yf, zt0 - 0.026), (x1 - 0.02, yf + 0.022, zt0), "enamel", r=0.003)
         ztop = zt0 - 0.029
         zbot = 0.088
@@ -865,7 +864,7 @@ def _reception(mb, w, d, h, r, top, front):
         rbox(mb, (xg - 0.0042, y0c + 0.008, 0.105), (xg + 0.0042, y0c + tc + 0.002, zT0 - 0.002), "aluminium", r=0.001)
     rbox(mb, (-w / 2 + 0.002, y0c + 0.008, 0.7955), (w / 2 - 0.002, y0c + tc + 0.002, 0.8045), "aluminium", r=0.001)
     rbox(mb, (-xi, y0c + tc, 0.106), (xi, y0c + 0.036, zT0), front, r=0.002)                         # respaldo del frente
-    rbox(mb, (-xi, yk, 0.0), (xi, yk + 0.018, 0.10), front, r=0.002)                                  # zoclo rehundido
+    rbox(mb, (-xi, yk, 0.0), (xi, yk + 0.018, 0.0995), front, r=0.002)                                # zoclo rehundido
     rbox(mb, (-xi, y0c + tc, 0.10), (xi, yk + 0.018, 0.118), front, r=0.002)                          # fondo
     loft_x(mb, fillet2d([(yk - 0.008, 0.0), (yk + 0.001, 0.0), (yk + 0.001, 0.098), (yk - 0.0035, 0.098), (yk - 0.0035, 0.014),
                          (yk - 0.008, 0.004)], [0.0, 0.0, 0.0, 0.0015, 0.006, 0.002], 3), -xi, xi, "rubber", re=0.0)
@@ -925,9 +924,9 @@ def _base_run(mb, w, d, h, r, top, front):
         xa = xi if s > 0 else -w / 2
         loft_x(mb, gab, xa, xa + 0.018, front, re=0.0)
         edge_band(mb, gab, "x", xa, 0.018, "plastic")
-    rbox(mb, (-xi, yE - 0.012, 0.10), (xi, yE, zc), front, r=0.002)                                   # respaldo
+    rbox(mb, (-xi, yE - 0.012, 0.1005), (xi, yE, zc), front, r=0.002)                                 # respaldo
     rbox(mb, (-xi, yc0 + 0.01, 0.10), (xi, yE - 0.012, 0.118), front, r=0.002)                         # fondo
-    rbox(mb, (-xi, yk, 0.0), (xi, yk + 0.018, 0.10), front, r=0.002)                                  # zoclo
+    rbox(mb, (-xi, yk, 0.0), (xi, yk + 0.018, 0.0995), front, r=0.002)                                # zoclo
     loft_x(mb, fillet2d([(yk - 0.008, 0.0), (yk + 0.001, 0.0), (yk + 0.001, 0.098), (yk - 0.0035, 0.098), (yk - 0.0035, 0.014),
                          (yk - 0.008, 0.004)], [0.0, 0.0, 0.0, 0.0015, 0.006, 0.002], 3), -xi, xi, "rubber", re=0.0)
     nm = max(2, int(round(w / 0.6)))
@@ -1047,10 +1046,10 @@ def folding_chair(seed=0):
     # travesaños con cordón de soldadura
     zs = 0.11
     ys = F[0] + sf * (zs - F[1])
-    mb.tube([(-xf, ys, zs), (xf, ys, zs)], 0.0085, seg=10, mat=fr, caps=False)
+    mb.tube([(-xf, ys, zs), (xf, ys, zs)], 0.0085, seg=10, mat=fr)
     zr = 0.085
     yr = R0[0] + sr * (zr - R0[1])
-    mb.tube([(-xr, yr, zr), (xr, yr, zr)], 0.0078, seg=10, mat=fr, caps=False)
+    mb.tube([(-xr, yr, zr), (xr, yr, zr)], 0.0078, seg=10, mat=fr)
     for (x, y, z, rr_) in ((xf - 0.0095, ys, zs, 0.0085), (-xf + 0.0095, ys, zs, 0.0085), (xr - 0.0082, yr, zr, 0.0078),
                            (-xr + 0.0082, yr, zr, 0.0078)):
         lathe_closed(mb, [(rr_ - 0.0005, -0.0028), (rr_ + 0.0018, -0.0012), (rr_ + 0.0022, 0.0006), (rr_ + 0.0008, 0.0024),
@@ -1071,14 +1070,22 @@ def folding_chair(seed=0):
     tpost = (zc - K[1]) / (Tp[1] - K[1])
     yp = K[0] + (Tp[0] - K[0]) * tpost
     ang = math.degrees(math.atan2(Tp[0] - K[0], Tp[1] - K[1]))
-    Mb = _T(0, yp - 0.0125, zc) @ _Rx(-ang) @ Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
-    back = rrect(0, 0, 0.405, 0.168, 0.03, 6)
-    pan_shell(mb, back, "paint_green", M=Mb, dish=0.0, lip=0.011, inner=(0.3, 0.6, 0.85, 0.96),
-              deform=lambda x, y, z: (x, y, z - 0.016 * (1 - (x / 0.2) ** 2)))
+    Mb = _T(0, yp - 0.0125, zc) @ _Rx(-ang)
+    # respaldo de lámina prensada: sección con cejas enrolladas hacia atrás arriba y abajo, cantos laterales redondos y
+    # curvatura cóncava hacia el usuario (centro 16 mm más atrás que los extremos)
+    prof = [(0.011, -0.074), (0.0045, -0.0835), (-0.0015, -0.081), (-0.0005, -0.062), (0.0015, -0.03), (0.002, 0.0), (0.0015, 0.03),
+            (-0.0005, 0.062), (-0.0015, 0.081), (0.0045, 0.0835), (0.011, 0.075)]
+    tmp = MB()
+    from kit.clinic import shell_strip
+    shell_strip(tmp, prof, 0.405, 0.0016, "paint_green", smooth_n=4, edge_seg=4)
+    for v in tmp.bm.verts:
+        v.co.y += 0.016 * (1 - min(1.0, (v.co.x / 0.2025) ** 2))
+    mb.join(tmp, Mb)
+    Mb = Mb @ Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
     for s in (-1, 1):
         for zz in (-0.045, 0.045):
             port.lathe(mb, [(0.0, -0.001), (0.0052, -0.001), (0.0048, 0.0008), (0.003, 0.0019), (0.0, 0.0022)], seg=10, mat="steel",
-                       M=Mb @ _T(s * xf, zz, 0.0005))
+                       M=Mb @ _T(s * xf, zz, -0.0001))
     return mb
 
 
@@ -1245,7 +1252,7 @@ def _towel(mb, xb, zb, rbar, seed):
         path.append((xb + rw + 0.009 * f ** 1.5, zb - 0.235 * f))
     n = len(path)
     hw = 0.112
-    nv = 11
+    nv = 15
     ph = float(r.uniform(0, 6.28))
     top, bot = [], []
     for i in range(n):
@@ -1259,8 +1266,9 @@ def _towel(mb, xb, zb, rbar, seed):
         rt, rb = [], []
         for j in range(nv):
             v = -hw + 2 * hw * j / (nv - 1)
-            wav = 0.0028 * hang * math.sin(v / 0.045 * PI + ph) * (1 if x > xb else -0.6)
-            sag = 0.004 * hang * ((v / hw) ** 2) * (1 if x > xb else -1)
+            fold = math.sin(v / 0.034 * PI + ph) + 0.45 * math.sin(v / 0.019 * PI + 2.1 * ph)
+            wav = 0.0045 * hang ** 0.8 * fold * (1 if x > xb else -0.5)
+            sag = 0.005 * hang * ((v / hw) ** 2) * (1 if x > xb else -1)
             vv = v * (1 + 0.025 * hang)
             px, pz = x + wav + sag, z + 0.003 * hang * (v / hw) ** 2
             rt.append((px + nx * tt / 2, vv, pz + nz * tt / 2))

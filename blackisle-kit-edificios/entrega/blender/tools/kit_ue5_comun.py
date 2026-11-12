@@ -129,6 +129,9 @@ def manifest(kit, tiles):
         partes=dict(
             Estructura=dict(nanite=True, colision="ninguna", nota="carcasa, interior (muros, losas, escaleras, puertas, vestido) y techo"),
             Detalle=dict(nanite=True, colision="ninguna", nota="vanos, barandales, servicios, cables, daño"),
+            Mobiliario=dict(nanite=True, colision="ninguna",
+                            nota="mobiliario, equipo y luminarias interiores (solo modelos que lo traen aparte, p. ej. el hospital); "
+                                 "su colisión son cajas simples dentro de la malla Colision"),
             Escombro=dict(nanite=False, colision="compleja como simple",
                           nota="escombro exterior suelto (sin terreno): se puede mover o borrar sin afectar al edificio"),
             Vidrio=dict(nanite=False, colision="ninguna", sombra=False, nota="todo el vidrio; material translúcido"),

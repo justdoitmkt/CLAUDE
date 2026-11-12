@@ -3,6 +3,8 @@
 Uso: python3 scripts/empaquetar_kit_ue5.py
 Escribe blackisle-kit-edificios/kit_ue5_descargas/BLACKISLE_UE5_comun.zip y BLACKISLE_UE5_<ID>.zip. Todos llevan rutas que
 empiezan por kit_ue5/: al descomprimirlos en la misma carpeta queda el kit completo tal como lo espera LEEME_UE5.md.
+Un modelo que no cabe en 95 MB se reparte por archivos en BLACKISLE_UE5_<ID>.zip, BLACKISLE_UE5_<ID>_parte2.zip, ...
+(los GLB casi no se comprimen: se reparte por tamaño en disco); todas las partes van a la misma carpeta al descomprimir.
 """
 import json
 import os
@@ -32,10 +34,28 @@ def main():
         add_tree(z, KIT, "comun")
     sizes["comun"] = os.path.getsize(f)
     for bid in man["modelos"]:
-        f = os.path.join(OUT, f"BLACKISLE_UE5_{bid}.zip")
-        with zipfile.ZipFile(f, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-            add_tree(z, KIT, os.path.join("modelos", bid))
-        sizes[bid] = os.path.getsize(f)
+        for old in os.listdir(OUT):                       # partes viejas de este modelo
+            if old.startswith(f"BLACKISLE_UE5_{bid}_parte"):
+                os.remove(os.path.join(OUT, old))
+        files = []
+        for dp, _, fs in os.walk(os.path.join(KIT, "modelos", bid)):
+            files += [os.path.join(dp, f) for f in sorted(fs)]
+        bins, cur, acc = [], [], 0
+        for p in sorted(files, key=os.path.getsize, reverse=True):      # reparto voraz por tamaño
+            n = os.path.getsize(p)
+            if cur and acc + n > LIMIT - 2**20:
+                bins.append(cur)
+                cur, acc = [], 0
+            cur.append(p)
+            acc += n
+        bins.append(cur)
+        for k, group in enumerate(bins):
+            tag = bid if k == 0 else f"{bid}_parte{k + 1}"
+            f = os.path.join(OUT, f"BLACKISLE_UE5_{tag}.zip")
+            with zipfile.ZipFile(f, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+                for p in sorted(group):
+                    z.write(p, os.path.join("kit_ue5", os.path.relpath(p, KIT)))
+            sizes[tag] = os.path.getsize(f)
     for k, v in sizes.items():
         print(f"{k:16s} {v / 2**20:6.1f} MiB", "DEMASIADO GRANDE para GitHub" if v > LIMIT else "")
 

@@ -40,13 +40,14 @@ kit_ue5/
                           + T_BLK_vidrio_suciedad
   comun/geometria/        SM_BLK_Ejes.glb (marcador para medir la conversión de ejes)
   modelos/<ID>/           SM_<ID>_Estructura / _Detalle / _Escombro / _Vidrio / _Colision .glb
+                          (+ SM_<ID>_Mobiliario.glb en el hospital)
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
-## 3. Las 5 piezas de cada modelo
-Las cinco comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
+## 3. Las piezas de cada modelo (5; el hospital trae una sexta, Mobiliario)
+Todas comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
 punto y con el mismo giro.
 
 | Pieza | Qué lleva | Nanite | Colisión | Notas |
@@ -54,6 +55,7 @@ punto y con el mismo giro.
 | Estructura | carcasa (muros con atlas), interior (muros, losas, escaleras, puertas, escombro y basura interior), techo | sí | ninguna | la colisión la da la pieza Colision |
 | Detalle | ventanas, barandales, servicios (A/C, medidores, cables, tinacos), ropa, daño | sí | ninguna | los barandales no bloquean (§7) |
 | Escombro | escombro exterior suelto (montones, trozos, varillas) | no | compleja como simple | opcional: se puede mover o borrar |
+| Mobiliario | solo el hospital: mobiliario, equipo y luminarias interiores | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
 | Vidrio | todo el vidrio (ventanas, puertas, esquirlas) | **no** (translúcido) | ninguna | sin proyectar sombra |
 | Colision | carcasa + interior con caras coplanares fundidas (misma forma, pocos triángulos) | no | compleja como simple | **invisible**; da la colisión de muros, pisos y escaleras |
 
@@ -91,9 +93,12 @@ centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,4
   farmacia y rayos X alrededor del patio; al fondo encamados, enfermería, dos baños, cocina y lavandería. Cochera de 2
   ambulancias al oriente, unida por un pasillo cubierto con rampa a la puerta de urgencias. Barda perimetral con portón de
   servicio al fondo.
-- **Mobiliario:** va en la pieza Detalle (camas, bancadas, silla de ruedas, camillas, mesas de exploración, rayos X, anaqueles,
-  baños, cocina, lavandería). Su colisión son **cajas simples** dentro de la pieza Colision; muros, pisos y escalones vienen
-  completos.
+- **Mobiliario:** va en su propia pieza, `SM_HOS_1_pueblo_Mobiliario` (camas tendidas, bancadas, escritorios, sillas, silla de
+  ruedas, camillas, mesas de exploración, rayos X, anaqueles, baños, cocina, lavandería, luminarias, ventiladores, aire
+  acondicionado, pasamanos). Es la malla más pesada del kit (Nanite); se coloca con las demás y se puede ocultar en bloque.
+  Su colisión son **cajas simples** dentro de la pieza Colision; muros, pisos y escalones vienen completos.
+- **Descarga en dos ZIP:** por el límite de 100 MB de GitHub el hospital viene en `BLACKISLE_UE5_HOS_1_pueblo.zip` y
+  `BLACKISLE_UE5_HOS_1_pueblo_parte2.zip`; descomprime los dos en la misma carpeta (las rutas ya empiezan por `kit_ue5/`).
 - **Textos en inglés** en letreros 3D (COMMUNITY HOSPITAL, EMERGENCY, EXAM 1/2, PHARMACY, X-RAY, WARD, NURSES, EXIT…).
 - **Luces:** cada luminaria fluorescente es un foco en `modelos.HOS_1_pueblo.focos_m_blender`; `ib.focos(actor)` les pone
   una luz puntual. Para un hospital encendido, súbeles los lúmenes (~2000) y temperatura 4000 K.

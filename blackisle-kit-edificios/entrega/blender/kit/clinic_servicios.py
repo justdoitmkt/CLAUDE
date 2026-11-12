@@ -1,4 +1,4 @@
-"""kit/clinic_aaa_a.py — electrodomésticos y sanitarios del hospital rural HOS_1_pueblo reconstruidos a calidad AAA (regla R-AAA).
+"""kit/clinic_servicios.py — electrodomésticos y sanitarios del hospital rural HOS_1_pueblo reconstruidos a calidad AAA (regla R-AAA).
 
 Mismas firmas, origen, orientación y tamaño que las versiones de kit/clinic.py (frente -Y, piso en z = 0; las piezas de muro
 tienen el origen en la cara del muro y crecen hacia -Y). Lo que cambia es la construcción: gabinetes de lámina con aristas
@@ -192,11 +192,11 @@ def rrframe(mb, M, outer, inner, t, re_o=0.004, re_i=0.003, n=5, ne=3, mat="sign
     return skin(mb, loops, mat, M, closed=True)
 
 
-def screw(mb, M, r=0.0035, mat="steel", cross=True):
+def screw(mb, M, r=0.0035, mat="steel", cross=True, seg=10):
     """Tornillo de cabeza redonda (pan) con cruz, apoyado en z = 0 local (eje +Z); hundido 0,3 mm para no flotar."""
     h = r * 0.75
     M2 = M @ _T(0, 0, -0.0003)
-    lathe(mb, [(r * 0.98, 0.0), (r, h * 0.35), (r * 0.82, h * 0.85), (r * 0.5, h), (r * 0.28, h * 0.96), (0.0, h * 0.62)], seg=10,
+    lathe(mb, [(r * 0.98, 0.0), (r, h * 0.35), (r * 0.82, h * 0.85), (r * 0.5, h), (r * 0.28, h * 0.96), (0.0, h * 0.62)], seg=seg,
           mat=mat, M=M2)
     if cross:
         for ang in (0, 90):
@@ -339,8 +339,16 @@ def louver_grille(mb, M, w, h, n, mat="plastic", back_mat="cable", t=0.006, fram
            back_mat, bevel=0.0, m=M)
 
 
-def foot_leveler(mb, M, r=0.018, h=0.022, mat="rubber"):
-    """Pata niveladora: base de hule, espárrago roscado y contratuerca (z = 0 = piso, sube hasta h dentro del gabinete)."""
+def foot_leveler(mb, M, r=0.018, h=0.022, mat="rubber", lite=False):
+    """Pata niveladora: base de hule, espárrago roscado y contratuerca (z = 0 = piso, sube hasta h dentro del gabinete).
+    lite: versión de presupuesto (bajo el aparato casi no se ve): base de 10 lados, espárrago liso con 2 hilos, sin fondo."""
+    if lite:
+        lathe(mb, [(r * 0.86, 0.0), (r, 0.002), (r, 0.0042), (r * 0.42, 0.0065), (0.0, 0.0066)], seg=10, mat=mat, M=M, caps=False)
+        rs = r * 0.38
+        lathe(mb, [(rs * 0.9, 0.006), (rs, 0.0075), (rs * 0.84, 0.009), (rs, 0.0105), (rs, h), (0.0, h)], seg=6, mat="steel", M=M,
+              caps=False)
+        hexnut(mb, M @ _T(0, 0, h * 0.45), s=r * 1.2, h=0.005, mat="steel")
+        return
     lathe(mb, [(r * 0.85, 0.0), (r, 0.0015), (r, 0.004), (r * 0.8, 0.0062), (r * 0.42, 0.0065), (0.0, 0.0065)], seg=12, mat=mat, M=M)
     rs = r * 0.38
     prof = [(rs * 0.9, 0.006)]

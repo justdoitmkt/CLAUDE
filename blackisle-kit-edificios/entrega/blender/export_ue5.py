@@ -28,6 +28,7 @@ ENT = os.path.abspath(os.path.join(HERE, ".."))
 GROUPS = {   # malla del kit -> sufijos de los objetos de <ID>_ue.blend
     "Estructura": ("_WallsMain", "_WallsRest", "_Interior", "_Roof"),
     "Detalle": ("_Details",),
+    "Mobiliario": ("_Furniture",),        # solo el hospital: camas, sillas, escritorios, equipo y luminarias interiores
     "Escombro": ("_SkirtLoose",),
 }
 COLLISION_FROM = ("_WallsMain", "_WallsRest", "_Interior")

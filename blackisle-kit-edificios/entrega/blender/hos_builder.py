@@ -690,12 +690,8 @@ def furnish(inter, det, r):
         for (a, b) in segs:
             if b - a < 0.4:
                 continue
-            k = 0.06 if d == "+y" else -0.06
-            det.box((a, yy + k - 0.03, z + 0.86), (b, yy + k + 0.03, z + 0.92), "wood_varnish", bevel=0.01)
-            x = a + 0.2
-            while x < b - 0.1:
-                det.cyl((x, yy, z + 0.89), (x, yy + k * 0.6, z + 0.89), 0.008, seg=6, mat="steel")
-                x += 1.2
+            rail = cl.handrail(b - a, seed=int(r.integers(1e6)))      # corre en +x local: girado 180° (muro sur) arranca en b
+            _wall_item(det, rail, b if d == "+y" else a, yy, z + 0.89, d)
     for (txt, x) in (("EXAM 1", -11.75), ("EXAM 2", -7.35), ("PHARMACY", 5.45), ("X-RAY", 10.95)):
         _wall_item(det, cl.sign_plate(txt, 0.55, 0.15, size=0.075), x, y1, z + 2.25, "-y")
     for (txt, x) in (("RECEPTION", 0.65), ("EMERGENCY ROOM", 6.75)):
@@ -783,18 +779,16 @@ def furnish(inter, det, r):
         LIGHTS.append([round((x0 + x1) / 2, 3), round((y0 + y1) / 2, 3), round(CEIL - 0.085, 3)])
     # cocina del personal
     x0, x1, y0, y1, _ = R["cocina"]
-    put(inter, cl.counter(2.4, 0.6, h=0.9, seed=int(r.integers(1e6)), top="steel", front="plastic"), 6.3, y1 - 0.3, "+y")
-    put(inter, cl.stove(int(r.integers(1e6))), x1 - 0.45, y1 - 0.32, "+y")
-    put(inter, cl.fridge(int(r.integers(1e6))), x0 + 0.38, y1 - 0.4, "+y")
-    inter.box((5.6, 7.1, z + 0.72), (7.2, 8.0, z + 0.75), "wood_varnish", bevel=0.006)
-    for (x, y) in ((5.75, 7.15), (7.05, 7.15), (5.75, 7.95), (7.05, 7.95)):
-        inter.box((x - 0.025, y - 0.025, z), (x + 0.025, y + 0.025, z + 0.72), "steel", bevel=0.004)
+    put(inter, cl.counter(2.4, 0.6, h=0.9, seed=int(r.integers(1e6)), top="steel", front="plastic"), 6.3, y1 - 0.3, "-y")
+    put(inter, cl.stove(int(r.integers(1e6))), x1 - 0.45, y1 - 0.32, "-y")
+    put(inter, cl.fridge(int(r.integers(1e6))), x0 + 0.38, y1 - 0.4, "-y")
+    put(inter, cl.kitchen_table(1.6, 0.9, 0.75, seed=int(r.integers(1e6))), 6.4, 7.55)
     for (x, y, d) in ((6.0, 6.75, "+y"), (6.8, 6.75, "+y"), (6.0, 8.4, "-y"), (6.8, 8.4, "-y")):
         put(inter, cl.folding_chair(int(r.integers(1e6))), x, y, d)
     # lavandería
     x0, x1, y0, y1, _ = R["lavanderia"]
     for x in (x0 + 0.4, x0 + 1.05):
-        put(inter, cl.washer(int(r.integers(1e6))), x, y1 - 0.35, "+y")
+        put(inter, cl.washer(int(r.integers(1e6))), x, y1 - 0.35, "-y")
     put(inter, cl.shelving(1.2, 0.45, 2.0, 5, seed=int(r.integers(1e6)), stock_kind="linen"), x1 - 0.3, 7.4, "-x")
     put(det, cl.mop_bucket(int(r.integers(1e6))), x0 + 2.2, y0 + 0.5)
     _wall_item(det, cl.exit_sign(), 12.1, y1, z + 2.45, "-y")
@@ -950,9 +944,10 @@ def build_hos(bid="HOS_1_pueblo", collection_root=None, dress=True):
     LIGHTS.clear()
     PROXIES.clear()
     root = collection_root or get_collection(cid)
-    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage")}
+    cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")}
     out = {k: [] for k in cols}
     shell, det, inter, roof = MB(), MB(), MB(), MB()
+    furn = MB()          # mobiliario, equipo y luminarias interiores: malla aparte del kit (SM_<ID>_Mobiliario)
     r = rng(cfg["seed"])
     build_slabs(inter, roof)
     Ms, ops = main_walls(shell)
@@ -983,17 +978,17 @@ def build_hos(bid="HOS_1_pueblo", collection_root=None, dress=True):
     for nm in ROOMS:
         wainscot(inter, nm)
         if not nm.startswith("bano"):
-            lights(det, nm)
+            lights(furn, nm)
     cornice(shell, X0, X1, Y0, Y1, SLAB_T - 0.05)
     cornice(shell, GX0, GX1, GY0, GY1, G_ST - 0.05)
     site(shell, inter, det, roof, r)
     rooftop(roof, det, r)
     signage(det, Ms, r)
     if dress:
-        furnish(inter, det, r)
+        furnish(inter, furn, r)
         courtyard(inter, det, r)
         backyard(inter, det, r)
-    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof)):
+    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Furniture", furn)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
     out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), doors=len(DOORS), rooms=len(ROOMS), proxies=list(PROXIES))

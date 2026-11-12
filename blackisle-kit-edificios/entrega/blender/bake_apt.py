@@ -519,8 +519,9 @@ def main():
     roof = g("Roof")[0]
     det = join(g("Details") + [dmg.get("Details"), dmg.get("Shell")], f"{prefix}_Details")
     inter = join(g("Interior") + [dmg.get("Interior")], f"{prefix}_Interior")
+    furn = join(g("Furniture"), f"{prefix}_Furniture") if g("Furniture") else None   # mobiliario en malla propia (hospital)
     skirt = g("Skirt")[0] if g("Skirt") else None        # sin terreno (--ue) las cabañas no tienen nada en la base
-    log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt) if o]))
+    log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt, furn) if o]))
     # caras apoyadas en el terreno (cara inferior de la losa de desplante, pies de columna): nunca se ven y ocupaban medio atlas
     bm = bmesh.new()
     bm.from_mesh(shell.data)
@@ -530,7 +531,7 @@ def main():
     bm.free()
     log("caras de apoyo retiradas:", len(kill))
     import coplanar                                   # z-fighting: borra caras cubiertas por otra coplanar, hunde 3 mm las parciales
-    log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof) if o is not None], log=log))
+    log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof, furn) if o is not None], log=log))
     # oclusores: techo e interior (tabiques, puertas, escaleras). Sin el interior, la cara interior de un muro exterior veía el cielo
     # cruzando el cuarto y las ventanas de enfrente, iba al atlas exterior y salía con AO ~0 (cuartos negros en Three.js) o con la
     # textura de fachada. Los detalles no tapan: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
@@ -577,7 +578,7 @@ def main():
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles
-    loose = [o for o in (det, roof, inter, loose_o) if o is not None and len(o.data.polygons)]
+    loose = [o for o in (det, roof, inter, loose_o, furn) if o is not None and len(o.data.polygons)]
     for o in loose:
         t = time.time()
         vertex_ao(o, 8 if quick else 64)

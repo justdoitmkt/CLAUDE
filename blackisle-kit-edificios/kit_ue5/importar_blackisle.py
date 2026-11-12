@@ -460,7 +460,8 @@ def verificar():
 
 # ----------------------------------------------------------------------------------------------------------- colocación
 def colocar(bid, ubicacion=None, yaw=0.0, con_escombro=True, etiqueta=None):
-    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Vidrio, Escombro y Colision enganchados a él."""
+    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario (si lo trae), Vidrio, Escombro y Colision
+    enganchados a él."""
     sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     loc = ubicacion or unreal.Vector(0, 0, 0)
     rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=float(yaw))

@@ -280,13 +280,16 @@ def _rbox_arrays(W, L, H, re=RE, step=0.05, n_round=5):
     return co, flat, lens
 
 
-def mattress(mb, M, L=1.9, W=0.86, H=0.13, seed=0, mat="vinyl", piping="vinyl", fowler=0.0, hinge=0.15):
+def mattress(mb, M, L=1.9, W=0.86, H=0.13, seed=0, mat="vinyl", piping="vinyl", fowler=0.0, hinge=0.15, covered=False):
     """Colchón de hospital: hule espuma forrado de vinilo con las 12 aristas redondeadas (r 35 mm, también en planta), abombado,
-    vivos (ribetes) sobre la línea de costura a 45° de las aristas superior e inferior y cierre lateral; quiebre Fowler opcional."""
-    co, flat, lens = _rbox_arrays(W, L, H)
+    vivos (ribetes) sobre la línea de costura a 45° de las aristas superior e inferior y cierre lateral; quiebre Fowler opcional.
+    covered=True (cama tendida: la sábana remetida lo tapa entero): solo el cuerpo, a baja resolución, sin vivos ni cierre."""
+    co, flat, lens = _rbox_arrays(W, L, H, step=0.12 if covered else 0.05, n_round=3 if covered else 5)
     co[:, 2] += _crown(co[:, 0], co[:, 1], co[:, 2], W, L, H)
     co = bend_fowler(co, fowler, hinge)
     _to_mb(mb, co, flat, lens, mat, M)
+    if covered:
+        return
     # vivos: tubo de 4 mm sobre la costura (a 45° del redondeo), remuestreado cada 2 cm para seguir el quiebre del respaldo
     a, b = W / 2 - RE, L / 2 - RE
     rp = (RE + 0.0015) * math.cos(math.pi / 4)
@@ -444,17 +447,18 @@ def _wrap(u, v, off, W, L, H, re=RE, tuck=0.05, bump=0.0, bump_w=0.3):
     return np.stack([x, y, z], -1)
 
 
-def _band(R, H, re=RE, tuck=0.05, n_side=3):
+def _band(R, H, re=RE, tuck=0.05, n_side=3, n_low=4):
     """Valores de distancia t (desde el borde del rectángulo interior) para muestrear la vuelta de la tela: arista (8),
-    costado (n_side), arista inferior (4) y remetido (1)."""
+    costado (n_side), arista inferior (n_low, bajo el colchón casi no se ve) y remetido (1)."""
     t1 = 0.5 * np.pi * R
     t2 = t1 + (H - 2 * re)
     t3 = t2 + 0.5 * np.pi * R
-    return np.concatenate([np.linspace(0, t1, 9)[1:], np.linspace(t1, t2, n_side + 1)[1:], np.linspace(t2, t3, 5)[1:], [t3 + tuck]])
+    return np.concatenate([np.linspace(0, t1, 9)[1:], np.linspace(t1, t2, n_side + 1)[1:], np.linspace(t2, t3, n_low + 1)[1:],
+                           [t3 + tuck]])
 
 
-def _axis(inner, R, H, step, lo_end=True, hi_end=True, lo=None, hi=None, n_side=3):
-    band = _band(R, H, n_side=n_side)
+def _axis(inner, R, H, step, lo_end=True, hi_end=True, lo=None, hi=None, n_side=3, n_low=4):
+    band = _band(R, H, n_side=n_side, n_low=n_low)
     lo_ = -inner if lo is None else lo
     hi_ = inner if hi is None else hi
     parts = [-inner - band[::-1]] if lo_end else []
@@ -537,7 +541,13 @@ def bed_linens(mb, M, L=1.9, W=0.86, H=0.13, seed=0, blanket=True, fowler=0.0, h
     yf = y1 + e
     # ---- 1) sábana bajera
     R = RE + OFF_S
-    U, V = np.meshgrid(_axis(a, R, H, 0.015, n_side=6), _axis(b, R, H, 0.015, n_side=6))
+    if blanket:                       # bajo la cobija y el embozo la sábana no se ve: malla gruesa ahí, fina de la cabecera al embozo
+        bs = _band(R, H, n_side=6, n_low=2)
+        vs = np.concatenate([-b - _band(R, H, n_side=2, n_low=1)[::-1], np.linspace(-b, y1 - 0.08, max(2, int((y1 - 0.08 + b) / 0.05)) + 1),
+                             np.linspace(y1 - 0.08, b, max(2, int((b - y1 + 0.08) / 0.016)) + 1)[1:], b + bs])
+    else:
+        vs = _axis(b, R, H, 0.016, n_side=6, n_low=2)
+    U, V = np.meshgrid(_axis(a, R, H, 0.016, n_side=6, n_low=2), vs)
     P = _wrap(U, V, OFF_S, W, L, H, bump=0.0045, bump_w=0.25)
     D = 0.0013 * _perlin(U * 4, V * 4, sd) + 0.0005 * _perlin(U * 12, V * 12, sd + 3)
     vis = _sstep(yf + 0.02, yf + 0.09, V) if blanket else np.ones_like(V)

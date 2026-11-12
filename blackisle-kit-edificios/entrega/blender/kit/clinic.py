@@ -282,54 +282,6 @@ def chair_row(n=4, seed=0, empty=()):
     return mb
 
 
-def office_chair(seed=0):
-    """Silla secretarial: base de 5 brazos (perfil de nylon), rodajas dobles, pistón con fuelle telescópico, mecanismo con palanca,
-    asiento y respaldo tapizados (cojines con vivo), soporte de respaldo de solera doblada y descansabrazos de tubo con cojín."""
-    r = rng(seed)
-    mb = MB()
-    for k in range(5):
-        a = 2 * PI * k / 5 + float(r.uniform(0, 0.2))
-        d = Vector((math.cos(a), math.sin(a), 0))
-        st = [(0.04, 0.05, 0.05, 0.085), (0.18, 0.045, 0.04, 0.075), (0.29, 0.04, 0.035, 0.07)]
-        port.loft(mb, st, seg=10, mat="cable", M=Matrix(((d.x, -d.y, 0, 0), (d.y, d.x, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))), ex=2.6)
-        p = d * 0.3
-        mb.cyl((p.x, p.y, 0.055), (p.x, p.y, 0.07), 0.012, seg=8, mat="steel")
-        for sx in (-1, 1):
-            Mc = _T(p.x, p.y, 0.025) @ Matrix.Rotation(a + float(r.uniform(-0.4, 0.4)), 4, "Z") @ _T(sx * 0.012, 0, 0) @ _Ry(90)
-            port.lathe(mb, [(0.004, -0.007), (0.024, -0.007), (0.025, 0.0), (0.024, 0.007), (0.004, 0.007)], seg=16, mat="cable", M=Mc)
-        rbox(mb, (p.x - 0.008, p.y - 0.018, 0.035), (p.x + 0.008, p.y + 0.018, 0.06), "cable", r=0.004)
-    port.lathe(mb, [(0.0, 0.05), (0.045, 0.05), (0.045, 0.1), (0.0, 0.1)], seg=16, mat="cable")
-    port.lathe(mb, [(0.03, 0.1), (0.03, 0.2), (0.026, 0.205), (0.026, 0.3), (0.022, 0.305), (0.022, 0.37)], seg=16, mat="cable",
-               caps=False)
-    mb.cyl((0, 0, 0.37), (0, 0, 0.41), 0.014, seg=12, mat="steel")
-    rbox(mb, (-0.09, -0.11, 0.405), (0.09, 0.11, 0.44), "cable", r=0.008)
-    mb.tube([(0.08, -0.05, 0.42), (0.17, -0.12, 0.41)], 0.005, seg=6, mat="steel")
-    port.lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.012, 0.03), (0.0, 0.035)], seg=10, mat="cable", M=_T(0.17, -0.12, 0.41) @ _Ry(90))
-    rbox(mb, (-0.22, -0.21, 0.44), (0.22, 0.21, 0.455), "cable", r=0.006)
-    cushion(mb, _T(0, 0, 0.455), 0.47, 0.45, 0.07, mat="vinyl", r=0.03, crown=0.01, seg=(18, 18))
-    mb.sweep(rr_profile(0.06, 0.008, 0.003), fillet([(0, 0.12, 0.43), (0, 0.27, 0.43), (0, 0.29, 0.55), (0, 0.28, 0.72)], 0.05, 8),
-             mat="cable", normal=(1, 0, 0))
-    cushion(mb, _T(0, 0.255, 0.86) @ _Rx(-82), 0.44, 0.40, 0.06, mat="vinyl", r=0.028, crown=0.008, seg=(16, 18))
-    for s_ in (-1, 1):
-        x = s_ * 0.25
-        mb.tube(fillet([(s_ * 0.2, 0.0, 0.44), (x, 0.0, 0.47), (x, 0.0, 0.62), (x, -0.12, 0.64)], 0.03, 6), 0.011, seg=10, mat="cable")
-        cushion(mb, _T(x, -0.02, 0.635), 0.06, 0.24, 0.028, mat="cable", r=0.012, crown=0.0, piping=False, seg=(12, 10))
-    return mb
-
-
-def folding_chair(seed=0):
-    """Silla plegable de lámina (cocina del personal)."""
-    mb = MB()
-    for s in (-1, 1):
-        mb.tube([(s * 0.2, -0.22, 0.0), (s * 0.2, 0.05, 0.44), (s * 0.2, 0.16, 0.86)], 0.011, seg=6, mat="steel")
-        mb.tube([(s * 0.2, 0.2, 0.0), (s * 0.2, -0.12, 0.44)], 0.011, seg=6, mat="steel")
-        for y in (-0.22, 0.2):
-            mb.cyl((s * 0.2, y, 0.0), (s * 0.2, y, 0.015), 0.014, seg=6, mat="rubber")
-    rbox(mb, (-0.21, -0.2, 0.44), (0.21, 0.18, 0.46), "enamel", r=0.03)
-    mb.box((-0.2, 0.09, 0.66), (0.2, 0.11, 0.84), "enamel", m=_T(0, 0.1, 0.75) @ _Rx(-12) @ _T(0, -0.1, -0.75))
-    return mb
-
-
 # --------------------------------------------------------------------------------------------------------------- camas
 def fillet(pts, rad, nseg=8):
     """Polilínea 3D con las esquinas redondeadas (radio de doblez real de tubo)."""
@@ -544,7 +496,7 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
     # colchón, sábana, cobija, almohada
     Lm, Wm, Hm = 1.90, 0.86, 0.13
     Mm = _T(0, 0.0, zd)
-    sg.mattress(mb, Mm, Lm, Wm, Hm, seed=seed, fowler=fowler, hinge=hinge)
+    sg.mattress(mb, Mm, Lm, Wm, Hm, seed=seed, fowler=fowler, hinge=hinge, covered=made)
     if made:
         sg.bed_linens(mb, Mm, Lm, Wm, Hm, seed=seed, blanket=blanket, fowler=fowler, hinge=hinge)
         a = math.radians(fowler)
@@ -553,25 +505,6 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
             dy = yp - hinge
             yp, zp = hinge + dy * math.cos(a) - zp * math.sin(a), dy * math.sin(a) + zp * math.cos(a)
         sg.pillow(mb, Mm @ _T(float(r.uniform(-0.03, 0.03)), yp, zp) @ _Rx(fowler) @ _Rz(float(r.uniform(-5, 5))), seed=seed % 4)
-    return mb
-
-
-def bedside_cabinet(seed=0):
-    """Buró de hospital laminado: cajón, puerta, cubierta con borde y un vaso con jarra."""
-    r = rng(seed)
-    mb = MB()
-    rbox(mb, (-0.22, -0.21, 0.08), (0.22, 0.21, 0.78), "plastic", r=0.01)
-    rbox(mb, (-0.235, -0.225, 0.78), (0.235, 0.225, 0.80), "plastic", r=0.015)
-    for (x, y) in ((-0.18, -0.17), (0.18, -0.17), (-0.18, 0.17), (0.18, 0.17)):
-        caster(mb, (x, y, 0.0), r=0.025)
-    mb.box((-0.2, -0.214, 0.62), (0.2, -0.21, 0.76), "plastic")
-    mb.box((-0.2, -0.214, 0.12), (0.2, -0.21, 0.60), "plastic")
-    for z in (0.69, 0.5):
-        mb.box((-0.06, -0.235, z - 0.008), (0.06, -0.214, z + 0.008), "steel")
-    if r.random() < 0.8:
-        port.lathe(mb, [(0.0, 0.0), (0.045, 0.0), (0.05, 0.03), (0.042, 0.2), (0.02, 0.24), (0.0, 0.24)], seg=12, mat="plastic",
-                   M=_T(0.1, 0.05, 0.80))
-        mb.cyl((-0.08, 0.02, 0.80), (-0.08, 0.02, 0.89), 0.032, seg=10, mat="glass", r1=0.036)
     return mb
 
 
@@ -854,53 +787,6 @@ def stretcher(seed=0):
     return mb
 
 
-def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
-    """Escritorio metálico con cubierta laminada, pedestal de cajones, monitor, teclado, teléfono, carpetas y papeles."""
-    r = rng(seed)
-    mb = MB()
-    h = 0.75
-    rbox(mb, (-w / 2, -d / 2, h - 0.03), (w / 2, d / 2, h), "wood_varnish", r=0.01)
-    rbox(mb, (w / 2 - 0.42, -d / 2 + 0.03, 0.02), (w / 2 - 0.02, d / 2 - 0.03, h - 0.03), "enamel", r=0.005)
-    for k, z in enumerate((0.05, 0.27, 0.5)):
-        mb.box((w / 2 - 0.41, -d / 2 + 0.026, z), (w / 2 - 0.03, -d / 2 + 0.03, z + 0.2), "enamel")
-        mb.box((w / 2 - 0.27, -d / 2 + 0.01, z + 0.15), (w / 2 - 0.17, -d / 2 + 0.026, z + 0.165), "steel")
-    mb.box((-w / 2 + 0.02, -d / 2 + 0.03, 0.0), (-w / 2 + 0.05, d / 2 - 0.03, h - 0.03), "enamel")
-    mb.box((-w / 2 + 0.05, d / 2 - 0.05, 0.3), (w / 2 - 0.42, d / 2 - 0.03, h - 0.03), "enamel")
-    if monitor:
-        x = float(r.uniform(-0.15, 0.15))
-        mb.box((x - 0.1, 0.05, h), (x + 0.1, 0.2, h + 0.015), "plastic")
-        mb.box((x - 0.02, 0.15, h + 0.015), (x + 0.02, 0.18, h + 0.15), "plastic")
-        rbox(mb, (x - 0.27, 0.09, h + 0.1), (x + 0.27, 0.13, h + 0.43), "plastic", r=0.01)
-        mb.box((x - 0.255, 0.088, h + 0.115), (x + 0.255, 0.09, h + 0.415), "cable")
-        rbox(mb, (x - 0.22, -0.2, h), (x + 0.22, -0.05, h + 0.02), "plastic", r=0.008)
-        mb.box((x + 0.27, -0.15, h), (x + 0.33, -0.08, h + 0.02), "plastic")
-    rbox(mb, (-w / 2 + 0.1, 0.05, h), (-w / 2 + 0.3, 0.27, h + 0.08), "cable", r=0.02)
-    mb.tube([(-w / 2 + 0.2, 0.05, h + 0.04), (-w / 2 + 0.25, -0.05, h + 0.003), (-w / 2 + 0.32, -0.08, h + 0.003)], 0.004, seg=4, mat="cable")
-    if papers:
-        for k in range(int(r.integers(2, 5))):
-            xx, yy = float(r.uniform(-w / 2 + 0.3, w / 2 - 0.3)), float(r.uniform(-d / 2 + 0.1, -0.05))
-            mb.box((xx - 0.105, yy - 0.15, h), (xx + 0.105, yy + 0.15, h + 0.003 + 0.002 * k), "paper",
-                   m=_T(xx, yy, 0) @ _Rz(float(r.uniform(-25, 25))) @ _T(-xx, -yy, 0))
-        for k in range(int(r.integers(3, 7))):
-            xx = w / 2 - 0.4 + k * 0.055
-            mat = ("plastic_blue", "sign_red", "sign_green", "plastic")[int(r.integers(0, 4))]
-            mb.box((xx, 0.12, h), (xx + 0.05, 0.4, h + 0.31), mat)
-    return mb
-
-
-def filing_cabinet(seed=0, n=4):
-    """Archivero metálico de n cajones con jaladeras y portaetiquetas."""
-    mb = MB()
-    h = 0.33 * n + 0.04
-    rbox(mb, (-0.235, -0.31, 0.0), (0.235, 0.31, h), "enamel", r=0.008)
-    for k in range(n):
-        z = 0.04 + k * 0.33
-        mb.box((-0.225, -0.314, z), (0.225, -0.31, z + 0.32), "enamel")
-        mb.box((-0.07, -0.33, z + 0.19), (0.07, -0.314, z + 0.21), "steel")
-        mb.box((-0.04, -0.318, z + 0.24), (0.04, -0.314, z + 0.27), "paper")
-    return mb
-
-
 def shelving(w=1.0, d=0.4, h=2.0, shelves=5, seed=0, stock=True, stock_kind="pharmacy"):
     """Anaquel de ángulo ranurado con entrepaños de lámina, lleno de cajas de medicamento, frascos y rollos (farmacia) o de
     sábanas dobladas (lavandería)."""
@@ -956,190 +842,12 @@ def shelving(w=1.0, d=0.4, h=2.0, shelves=5, seed=0, stock=True, stock_kind="pha
     return mb
 
 
-def counter(w=2.4, d=0.6, h=1.05, seed=0, top="wood_varnish", front="plastic"):
-    """Mostrador de enfermería / farmacia: frente laminado con zoclo, cubierta con faldón y repisa interior de trabajo a 0,75."""
-    mb = MB()
-    mb.box((-w / 2, -d / 2 + 0.02, 0.0), (w / 2, -d / 2 + 0.06, 0.1), "rubber")
-    mb.box((-w / 2, -d / 2 + 0.02, 0.1), (w / 2, -d / 2 + 0.05, h - 0.03), front)
-    for s in (-1, 1):
-        mb.box((s * w / 2 - (0.03 if s > 0 else 0), -d / 2 + 0.02, 0.0), (s * w / 2 + (0.0 if s > 0 else 0.03), d / 2, h - 0.03), front)
-    rbox(mb, (-w / 2 - 0.02, -d / 2 - 0.05, h - 0.03), (w / 2 + 0.02, -d / 2 + 0.25, h), top, r=0.015)
-    mb.box((-w / 2 + 0.03, -d / 2 + 0.05, 0.72), (w / 2 - 0.03, d / 2, 0.75), top)
-    return mb
-
-
-def clock(seed=0):
-    """Reloj de pared Ø 0,3 (origen: cara del muro, centro)."""
-    mb = MB()
-    M = _Rx(90)
-    port.lathe(mb, [(0.0, 0.0), (0.15, 0.0), (0.155, 0.01), (0.15, 0.045), (0.0, 0.045)], seg=28, mat="plastic", M=_T(0, 0, 0) @ M)
-    mb.cyl((0, -0.045, 0), (0, -0.046, 0), 0.135, seg=28, mat="sign_white")
-    for k in range(12):
-        a = 2 * PI * k / 12
-        mb.box((0.118 * math.cos(a) - 0.003, -0.048, 0.118 * math.sin(a) - 0.003), (0.118 * math.cos(a) + 0.003, -0.046, 0.118 * math.sin(a) + 0.003),
-               "cable")
-    mb.box((-0.004, -0.05, -0.004), (0.06, -0.048, 0.004), "cable", m=_Ry(-40))
-    mb.box((-0.003, -0.052, -0.003), (0.1, -0.05, 0.003), "cable", m=_Ry(-160))
-    return mb
-
-
-def notice_board(w=0.9, h=0.6, seed=0, posters=()):
-    """Tablero de corcho con marco de aluminio, hojas clavadas y carteles con texto (origen: muro, centro inferior)."""
-    r = rng(seed)
-    mb = MB()
-    mb.box((-w / 2, -0.02, 0.0), (w / 2, 0.0, h), "wood_varnish")
-    for (a, b) in (((-w / 2, 0), (w / 2, 0.02)), ((-w / 2, h - 0.02), (w / 2, h)), ((-w / 2, 0), (-w / 2 + 0.02, h)), ((w / 2 - 0.02, 0), (w / 2, h))):
-        mb.box((a[0], -0.03, a[1]), (b[0], -0.02, b[1]), "aluminium")
-    for k in range(int(r.integers(4, 8))):
-        pw, ph = float(r.uniform(0.15, 0.22)), float(r.uniform(0.2, 0.3))
-        x = float(r.uniform(-w / 2 + 0.05 + pw / 2, w / 2 - 0.05 - pw / 2))
-        z = float(r.uniform(0.05 + ph / 2, h - 0.05 - ph / 2))
-        mb.box((x - pw / 2, -0.022, z - ph / 2), (x + pw / 2, -0.0205 - 0.0004 * k, z + ph / 2), "paper",
-               m=_T(x, 0, z) @ _Ry(float(r.uniform(-6, 6))) @ _T(-x, 0, -z))
-        mb.cyl((x, -0.025 - 0.0004 * k, z + ph / 2 - 0.02), (x, -0.02, z + ph / 2 - 0.02), 0.006, seg=6,
-               mat=("sign_red", "sign_blue", "sign_green")[k % 3])
-    for k, s in enumerate(posters):
-        x = -w / 2 + 0.2 + k * 0.45
-        mb.box((x - 0.15, -0.026, h * 0.3), (x + 0.15, -0.024, h * 0.3 + 0.36), "sign_white")
-        text(mb, s, 0.03, 0.001, "sign_blue", _T(x, -0.026, h * 0.3 + 0.28) @ _Rx(90))
-        mb.box((x - 0.1, -0.0262, h * 0.3 + 0.06), (x + 0.1, -0.026, h * 0.3 + 0.22), "plastic_blue")
-    return mb
-
-
 def poster(s, w=0.42, h=0.6, bg="sign_white", fg="sign_blue", art="plastic_blue"):
     """Cartel de salud pegado al muro (hoja + texto + bloque de ilustración)."""
     mb = MB()
     mb.box((-w / 2, -0.002, 0.0), (w / 2, 0.0, h), bg)
     text(mb, s, w * 0.09, 0.0008, fg, _T(0, -0.002, h * 0.82) @ _Rx(90))
     mb.box((-w * 0.35, -0.0026, h * 0.15), (w * 0.35, -0.002, h * 0.72), art)
-    return mb
-
-
-def water_dispenser():
-    """Despachador de garrafón: gabinete blanco, dos llaves, charola y garrafón azul translúcido."""
-    mb = MB()
-    rbox(mb, (-0.16, -0.16, 0.0), (0.16, 0.16, 1.0), "sign_white", r=0.02)
-    mb.box((-0.12, -0.165, 0.62), (0.12, -0.16, 0.8), "plastic")
-    for x, m in ((-0.05, "sign_blue"), (0.05, "sign_red")):
-        mb.box((x - 0.015, -0.19, 0.74), (x + 0.015, -0.165, 0.77), m)
-    mb.box((-0.1, -0.2, 0.6), (0.1, -0.16, 0.615), "plastic")
-    port.lathe(mb, [(0.0, 0.0), (0.04, 0.0), (0.04, 0.05), (0.13, 0.1), (0.135, 0.36), (0.12, 0.42), (0.0, 0.43)], seg=16, mat="glass",
-               M=_T(0, 0, 1.0) @ _Rx(180) @ _T(0, 0, -0.43))
-    return mb
-
-
-def potted_plant(seed=0, h=0.9):
-    """Maceta de barro con planta de hojas largas (vegetación de doble cara)."""
-    r = rng(seed)
-    mb = MB()
-    port.lathe(mb, [(0.0, 0.0), (0.13, 0.0), (0.18, 0.32), (0.19, 0.34), (0.19, 0.36), (0.0, 0.36)], seg=16, mat="brick")
-    mb.cyl((0, 0, 0.33), (0, 0, 0.34), 0.175, seg=16, mat="rubble")
-    for k in range(int(r.integers(9, 14))):
-        a = float(r.uniform(0, 2 * PI))
-        L = float(r.uniform(0.35, h * 0.8))
-        el = float(r.uniform(35, 75))
-        pts = []
-        for i in range(7):
-            t = i / 6
-            rad = L * t * math.cos(math.radians(el)) * (1 + 0.25 * t)
-            z = 0.34 + L * t * math.sin(math.radians(el)) * (1 - 0.45 * t * t)
-            pts.append((rad * math.cos(a), rad * math.sin(a), z))
-        wd = float(r.uniform(0.03, 0.06))
-        side = Vector((-math.sin(a), math.cos(a), 0)) * wd
-        vs = []
-        for i, p in enumerate(pts):
-            k2 = math.sin(PI * min(1.0, i / 5.5)) if i else 0.15
-            c = Vector(p)
-            vs.append((mb.bm.verts.new(c - side * k2), mb.bm.verts.new(c + side * k2)))
-        for i in range(len(vs) - 1):
-            mb.face([vs[i][0], vs[i][1], vs[i + 1][1], vs[i + 1][0]], "vegetation")
-    return mb
-
-
-def trash_bin(seed=0, pedal=True):
-    """Bote de basura de pedal (consultorio) o de tapa basculante."""
-    mb = MB()
-    port.lathe(mb, [(0.0, 0.0), (0.13, 0.0), (0.15, 0.45), (0.0, 0.45)], seg=16, mat="sign_white" if pedal else "plastic")
-    port.lathe(mb, [(0.0, 0.45), (0.155, 0.45), (0.155, 0.47), (0.12, 0.5), (0.0, 0.5)], seg=16, mat="steel" if pedal else "plastic")
-    if pedal:
-        mb.box((-0.05, -0.19, 0.01), (0.05, -0.12, 0.03), "steel")
-    return mb
-
-
-def sanitizer(seed=0):
-    """Despachador de gel en muro (origen: cara del muro, centro inferior)."""
-    mb = MB()
-    rbox(mb, (-0.06, -0.1, 0.0), (0.06, 0.0, 0.25), "sign_white", r=0.01)
-    mb.box((-0.04, -0.105, 0.03), (0.04, -0.1, 0.08), "plastic_blue")
-    mb.box((-0.03, -0.102, 0.12), (0.03, -0.1, 0.2), "glass")
-    return mb
-
-
-def extinguisher(seed=0):
-    """Extintor PQS de 6 kg colgado de su gancho con letrero arriba (origen: cara del muro, piso)."""
-    mb = MB()
-    zb = 1.0
-    port.lathe(mb, [(0.0, 0.0), (0.075, 0.0), (0.08, 0.02), (0.08, 0.42), (0.06, 0.47), (0.02, 0.5), (0.0, 0.5)], seg=16, mat="sign_red",
-               M=_T(0, -0.1, zb))
-    mb.cyl((0, -0.1, zb + 0.5), (0, -0.1, zb + 0.56), 0.016, seg=8, mat="steel")
-    mb.box((-0.05, -0.115, zb + 0.55), (0.06, -0.085, zb + 0.57), "rubber")
-    mb.tube([(0.02, -0.1, zb + 0.54), (0.09, -0.11, zb + 0.5), (0.1, -0.12, zb + 0.2), (0.08, -0.12, zb + 0.12)], 0.008, seg=6, mat="rubber")
-    mb.box((-0.04, -0.03, zb + 0.35), (0.04, 0.0, zb + 0.45), "steel")
-    mb.box((-0.02, -0.05, zb + 0.4), (0.02, -0.025, zb + 0.43), "steel")
-    mb.box((-0.06, -0.181, zb + 0.15), (0.06, -0.18, zb + 0.32), "sign_white")
-    mb.join(sign_plate("FIRE", 0.24, 0.12, bg="sign_red", fg="sign_white", t=0.004), _T(0, 0, zb + 0.75))
-    return mb
-
-
-def fluorescent(L=1.22, W=0.30, recessed=False):
-    """Luminaria fluorescente de sobreponer con difusor de acrílico (origen: plafón, centro; cuelga hacia -Z)."""
-    mb = MB()
-    if recessed:
-        mb.box((-L / 2 - 0.02, -W / 2 - 0.02, -0.006), (L / 2 + 0.02, W / 2 + 0.02, 0.0), "sign_white")
-        mb.box((-L / 2, -W / 2, -0.008), (L / 2, W / 2, -0.006), "plastic")
-        return mb
-    rbox(mb, (-L / 2, -W / 2, -0.07), (L / 2, W / 2, 0.0), "sign_white", r=0.01)
-    rbox(mb, (-L / 2 + 0.02, -W / 2 + 0.02, -0.085), (L / 2 - 0.02, W / 2 - 0.02, -0.07), "plastic", r=0.02)
-    return mb
-
-
-def ceiling_fan(seed=0, drop=0.35):
-    """Ventilador de techo: tubo, motor, 3 aspas de madera sobre brazos (origen: losa, cuelga hacia -Z)."""
-    r = rng(seed)
-    mb = MB()
-    mb.cyl((0, 0, 0), (0, 0, -0.05), 0.06, seg=12, mat="sign_white", r1=0.04)
-    mb.cyl((0, 0, -0.05), (0, 0, -drop), 0.012, seg=8, mat="steel")
-    port.lathe(mb, [(0.0, 0.0), (0.07, 0.0), (0.11, -0.03), (0.11, -0.08), (0.08, -0.11), (0.0, -0.12)], seg=16, mat="sign_white",
-               M=_T(0, 0, -drop))
-    a0 = float(r.uniform(0, 120))
-    for k in range(3):
-        a = math.radians(a0 + 120 * k)
-        M = _T(0, 0, -drop - 0.07) @ Matrix.Rotation(a, 4, "Z")
-        mb.box((0.08, -0.015, -0.006), (0.2, 0.015, 0.0), "steel", m=M)
-        mb.box((0.18, -0.065, -0.012), (0.68, 0.065, -0.004), "wood_dark", m=M @ _Rx(10))
-    return mb
-
-
-def split_indoor(seed=0):
-    """Minisplit (unidad interior) 0,8 × 0,2 × 0,28 con rejilla y lama, tubería forrada que sale por el muro (origen: muro, centro)."""
-    mb = MB()
-    rbox(mb, (-0.4, -0.2, 0.0), (0.4, 0.0, 0.28), "sign_white", r=0.03)
-    for k in range(12):
-        x = -0.33 + k * 0.055
-        mb.box((x, -0.205, 0.03), (x + 0.04, -0.2, 0.08), "plastic")
-    mb.box((-0.37, -0.215, 0.0), (0.37, -0.195, 0.025), "plastic", m=_T(0, -0.2, 0.02) @ _Rx(25) @ _T(0, 0.2, -0.02))
-    mb.box((0.27, -0.202, 0.2), (0.33, -0.2, 0.22), "sign_green")
-    return mb
-
-
-def wall_lamp():
-    """Arbotante exterior tipo farol (limpio, funcionando): placa, brazo, farol de vidrio con capuchón (origen: muro, centro)."""
-    mb = MB()
-    mb.box((-0.06, -0.02, -0.1), (0.06, 0.0, 0.1), "enamel")
-    mb.tube([(0, -0.02, 0.0), (0, -0.12, 0.04), (0, -0.16, 0.12)], 0.012, seg=6, mat="enamel")
-    port.lathe(mb, [(0.0, 0.0), (0.05, 0.0), (0.075, 0.2), (0.0, 0.2)], seg=6, mat="glass", M=_T(0, -0.16, -0.08))
-    port.lathe(mb, [(0.0, 0.0), (0.09, 0.0), (0.03, 0.06), (0.0, 0.08)], seg=6, mat="enamel", M=_T(0, -0.16, 0.12))
-    port.lathe(mb, [(0.0, 0.0), (0.055, 0.0), (0.055, 0.02), (0.0, 0.02)], seg=6, mat="enamel", M=_T(0, -0.16, -0.1))
     return mb
 
 
@@ -1188,147 +896,6 @@ def zloft(mb, stations, seg=20, mat="sign_white", M=None, ex=2.4, caps=True):
     if caps:
         mb.face(list(reversed(rings[0])), mat)
         mb.face(rings[-1], mat)
-
-
-def toilet(seed=0):
-    """Inodoro de cerámica (taza ovalada sobre pedestal, tanque, asiento y tapa levantada). Frente -Y, respaldo en y = +0,36."""
-    mb = MB()
-    zloft(mb, [(0.0, 0.22, 0.34, 0.06), (0.03, 0.21, 0.33, 0.06), (0.2, 0.24, 0.38, 0.03), (0.33, 0.34, 0.5, -0.01),
-               (0.38, 0.37, 0.53, -0.015), (0.39, 0.36, 0.52, -0.015)], seg=24, mat="sign_white", ex=2.2)
-    zloft(mb, [(0.39, 0.37, 0.5, -0.02), (0.415, 0.37, 0.5, -0.02)], seg=24, mat="plastic", ex=2.2)
-    zloft(mb, [(0.0, 0.35, 0.025, 0.0), (0.4, 0.33, 0.025, 0.0)], seg=16, mat="plastic", ex=2.2,
-          M=_T(0, 0.17, 0.415) @ _Rx(-5))                                                     # tapa levantada
-    rbox(mb, (-0.19, 0.2, 0.40), (0.19, 0.36, 0.80), "sign_white", r=0.03)
-    rbox(mb, (-0.2, 0.19, 0.80), (0.2, 0.37, 0.83), "sign_white", r=0.03)
-    mb.box((0.12, 0.185, 0.72), (0.17, 0.2, 0.74), "steel")
-    mb.cyl((0.1, 0.36, 0.2), (0.1, 0.45, 0.2), 0.012, seg=6, mat="steel")
-    return mb
-
-
-def sink(seed=0, mirror=True):
-    """Lavabo de pared de cerámica con llave, desagüe cromado y espejo (origen: cara del muro, piso; sale hacia -Y)."""
-    mb = MB()
-    rbox(mb, (-0.25, -0.45, 0.72), (0.25, 0.0, 0.85), "sign_white", r=0.04)
-    mb.box((-0.19, -0.38, 0.84), (0.19, -0.07, 0.851), "steel")
-    mb.cyl((0, -0.05, 0.85), (0, -0.05, 0.95), 0.014, seg=8, mat="steel")
-    mb.tube([(0, -0.05, 0.95), (0, -0.14, 0.97), (0, -0.18, 0.93)], 0.01, seg=6, mat="steel")
-    mb.box((0.05, -0.07, 0.94), (0.11, -0.05, 0.96), "steel")
-    mb.tube([(0, -0.25, 0.72), (0, -0.25, 0.55), (0, -0.1, 0.5), (0, 0.0, 0.5)], 0.016, seg=8, mat="steel")
-    if mirror:
-        mb.box((-0.25, -0.012, 1.15), (0.25, 0.0, 1.75), "steel")
-        mb.box((-0.27, -0.008, 1.13), (0.27, 0.0, 1.77), "aluminium")
-    return mb
-
-
-def fridge(seed=0):
-    """Refrigerador doméstico de dos puertas con jaladeras (frente -Y)."""
-    mb = MB()
-    rbox(mb, (-0.32, -0.32, 0.03), (0.32, 0.34, 1.65), "sign_white", r=0.03)
-    mb.box((-0.31, -0.325, 1.12), (0.31, -0.32, 1.125), "plastic")
-    for (z0, z1) in ((1.18, 1.5), (0.5, 1.05)):
-        mb.box((0.24, -0.36, z0), (0.27, -0.325, z1), "steel")
-    for x in (-0.28, 0.28):
-        mb.box((x - 0.02, -0.28, 0.0), (x + 0.02, -0.2, 0.03), "rubber")
-    return mb
-
-
-def stove(seed=0):
-    """Estufa de 4 quemadores con horno (frente -Y)."""
-    mb = MB()
-    rbox(mb, (-0.38, -0.3, 0.0), (0.38, 0.3, 0.9), "sign_white", r=0.01)
-    mb.box((-0.38, -0.3, 0.9), (0.38, 0.3, 0.91), "steel")
-    for (x, y) in ((-0.18, -0.12), (0.18, -0.12), (-0.18, 0.12), (0.18, 0.12)):
-        port.lathe(mb, [(0.0, 0.0), (0.09, 0.0), (0.09, 0.012), (0.0, 0.012)], seg=12, mat="cable", M=_T(x, y, 0.91))
-        for k in range(4):
-            a = PI / 4 + PI / 2 * k
-            mb.box((x - 0.006, y - 0.11, 0.922), (x + 0.006, y + 0.11, 0.935), "cable", m=_T(x, y, 0) @ _Rz(math.degrees(a)) @ _T(-x, -y, 0))
-    mb.box((-0.3, -0.305, 0.12), (0.3, -0.3, 0.68), "cable")
-    mb.box((-0.25, -0.33, 0.66), (0.25, -0.305, 0.68), "steel")
-    rbox(mb, (-0.38, 0.27, 0.91), (0.38, 0.3, 1.05), "sign_white", r=0.005)
-    for k in range(5):
-        x = -0.3 + k * 0.15
-        mb.cyl((x, -0.3, 0.8), (x, -0.33, 0.8), 0.018, seg=10, mat="cable")
-    return mb
-
-
-def washer(seed=0, front_load=True):
-    """Lavadora de carga frontal: gabinete, ojo de buey con vidrio, panel de control (frente -Y)."""
-    mb = MB()
-    rbox(mb, (-0.3, -0.3, 0.0), (0.3, 0.3, 0.85), "sign_white", r=0.02)
-    mb.box((-0.29, -0.305, 0.72), (0.29, -0.3, 0.83), "plastic")
-    for x in (-0.2, 0.15):
-        mb.cyl((x, -0.3, 0.775), (x, -0.32, 0.775), 0.025, seg=10, mat="plastic")
-    M = _T(0, -0.3, 0.42) @ _Rx(90)
-    port.lathe(mb, [(0.0, 0.0), (0.2, 0.0), (0.21, -0.03), (0.15, -0.045), (0.0, -0.045)], seg=24, mat="plastic", M=M)
-    mb.cyl((0, -0.344, 0.42), (0, -0.346, 0.42), 0.14, seg=24, mat="glass")
-    return mb
-
-
-def mop_bucket(seed=0):
-    """Cubeta con exprimidor y trapeador (lavandería)."""
-    mb = MB()
-    rbox(mb, (-0.2, -0.15, 0.06), (0.2, 0.15, 0.4), "paint_yellow", r=0.05)
-    for (x, y) in ((-0.16, -0.11), (0.16, -0.11), (-0.16, 0.11), (0.16, 0.11)):
-        caster(mb, (x, y, 0.0), r=0.025)
-    mb.box((0.02, -0.12, 0.4), (0.18, 0.12, 0.58), "paint_yellow")
-    mb.cyl((-0.08, 0.0, 0.25), (0.05, 0.05, 1.35), 0.012, seg=6, mat="steel")
-    return mb
-
-
-def cylinder_rack(n=2, seed=0, medical=True):
-    """Tanques de oxígeno medicinal (verde y blanco) en carrito con cadena, o de gas LP en jaula (patio de servicio)."""
-    mb = MB()
-    for k in range(n):
-        x = (k - (n - 1) / 2) * 0.27
-        mat = "sign_green" if medical else "steel"
-        port.lathe(mb, [(0.0, 0.0), (0.11, 0.0), (0.115, 0.03), (0.115, 1.25), (0.08, 1.35), (0.03, 1.4), (0.0, 1.4)], seg=16, mat=mat,
-                   M=_T(x, 0, 0.02))
-        if medical:
-            port.lathe(mb, [(0.03, 1.36), (0.08, 1.33), (0.115, 1.25), (0.116, 1.2), (0.03, 1.2)], seg=16, mat="sign_white", M=_T(x, 0, 0.02),
-                       caps=False)
-        mb.cyl((x, 0, 1.42), (x, 0, 1.5), 0.02, seg=8, mat="steel")
-        mb.cyl((x - 0.05, 0, 1.47), (x + 0.05, 0, 1.47), 0.012, seg=6, mat="steel")
-        mb.cyl((x, 0, 1.53), (x, 0, 1.55), 0.035, seg=10, mat="sign_green" if medical else "cable")
-    for z in (0.25, 1.0):
-        mb.tube([(-(n - 1) * 0.135 - 0.13, -0.12, z), ((n - 1) * 0.135 + 0.13, -0.12, z)], 0.005, seg=4, mat="steel")
-    mb.box((-(n - 1) * 0.135 - 0.15, -0.15, 0.0), ((n - 1) * 0.135 + 0.15, 0.15, 0.02), "steel")
-    return mb
-
-
-def xray_unit(seed=0):
-    """Rayos X convencional: mesa flotante con colchoneta, columna de piso con brazo y cabezal con colimador, bucky de pared."""
-    mb = MB()
-    rbox(mb, (-0.35, -0.5, 0.0), (0.35, 0.5, 0.62), "sign_white", r=0.03)
-    rbox(mb, (-0.4, -1.1, 0.62), (0.4, 1.1, 0.7), "plastic", r=0.03)
-    rbox(mb, (-0.36, -1.0, 0.7), (0.36, 1.0, 0.74), "vinyl", r=0.03)
-    mb.box((-0.06, -1.25, 0.0), (0.06, -1.1, 0.04), "steel")
-    mb.box((0.62, -0.1, 0.0), (0.82, 0.1, 0.03), "steel")
-    mb.box((0.66, -0.08, 0.03), (0.78, 0.08, 2.1), "sign_white")
-    mb.box((0.0, -0.1, 1.6), (0.66, 0.1, 1.72), "sign_white")
-    rbox(mb, (-0.17, -0.2, 1.38), (0.17, 0.2, 1.6), "plastic", r=0.04)
-    rbox(mb, (-0.12, -0.12, 1.24), (0.12, 0.12, 1.38), "plastic", r=0.01)
-    mb.box((-0.08, -0.08, 1.235), (0.08, 0.08, 1.24), "glass")
-    mb.box((0.05, -0.13, 1.28), (0.1, -0.12, 1.34), "sign_green")
-    return mb
-
-
-def wall_bucky():
-    """Bucky de pared: columna y portachasis (origen: muro, centro)."""
-    mb = MB()
-    mb.box((-0.1, -0.08, 0.0), (0.1, 0.0, 2.0), "sign_white")
-    rbox(mb, (-0.25, -0.2, 0.9), (0.25, -0.08, 1.45), "plastic", r=0.02)
-    mb.box((-0.2, -0.205, 0.98), (0.2, -0.2, 1.38), "cable")
-    return mb
-
-
-def lead_screen():
-    """Mampara plomada con mirilla (cuarto de rayos X)."""
-    mb = MB()
-    mb.box((-0.5, -0.03, 0.08), (0.5, 0.03, 1.95), "sign_white")
-    mb.box((-0.2, -0.032, 1.4), (0.2, 0.032, 1.7), "glass")
-    for x in (-0.45, 0.45):
-        mb.box((x - 0.04, -0.3, 0.0), (x + 0.04, 0.3, 0.08), "steel")
-    return mb
 
 
 # ======================================================================================================== vanos limpios
@@ -1493,3 +1060,154 @@ def door_steel(w, h=2.1, depth=0.2, seed=0, ang=0.0, panic=True, mat="paint_gree
     mb.join(leaf, M)
     del seed
     return mb
+
+
+# ------------------------------------------------------------------------------------------------ pasamanos y mesa de cocina
+def handrail(L, seed=0, depth=0.075):
+    """Pasamanos de madera barnizada para muro (origen: muro, x de 0 a L, a la altura del eje del riel; sale hacia -Y):
+    riel de sección ovalada 60 x 50 mm con ranura de agarre a los costados, remates curvos que regresan al muro con roseta,
+    ménsulas de barra doblada cada <= 1,2 m con placa de muro, 2 pijas y silleta atornillada al riel."""
+    r = rng(seed)
+    mb = MB()
+    prof = []
+    n = 22
+    for k in range(n):
+        a = 2 * PI * k / n
+        c, s = math.cos(a), math.sin(a)
+        x = 0.030 * math.copysign(abs(c) ** (2 / 2.6), c)
+        y = 0.025 * math.copysign(abs(s) ** (2 / 2.6), s)
+        if abs(s) < 0.35:                                     # ranura de agarre a media altura
+            x *= 1 - 0.06 * (1 - abs(s) / 0.35)
+        if s < -0.8:                                          # asiento plano para las silletas
+            y = max(y, -0.022)
+        prof.append((x, y))
+    prof.reverse()
+    path = fillet([(0.0, -0.014, 0.0), (0.0, -depth, 0.0), (L, -depth, 0.0), (L, -0.014, 0.0)], 0.045, nseg=10)
+    mb.sweep(prof, path, mat="wood_varnish", normal=(0, 0, 1))
+    for x in (0.0, L):                                        # rosetas en el muro
+        mb.cyl((x, -0.004, 0.0), (x, -0.014, 0.0), 0.034, seg=18, mat="steel")
+        mb.cyl((x, 0.0, 0.0), (x, -0.004, 0.0), 0.037, seg=18, mat="steel")
+    nb = max(2, int(math.ceil((L - 0.3) / 1.2)) + 1)
+    for i in range(nb):
+        x = 0.15 + (L - 0.3) * i / (nb - 1) + float(r.uniform(-0.01, 0.01))
+        rbox(mb, (x - 0.03, -0.006, -0.10), (x + 0.03, 0.0, -0.035), "steel", r=0.008)       # placa de muro
+        for z in (-0.088, -0.047):
+            mb.cyl((x, -0.006, z), (x, -0.009, z), 0.0055, seg=8, mat="steel")
+            mb.box((x - 0.004, -0.0095, z - 0.0007), (x + 0.004, -0.0088, z + 0.0007), "cable", bevel=0.0)
+        arm = fillet([(x, -0.006, -0.066), (x, -depth, -0.066), (x, -depth, -0.030)], 0.022, nseg=5)
+        mb.tube(arm, 0.0065, seg=8, mat="steel")
+        mb.cyl((x, -0.006, -0.066), (x, -0.012, -0.066), 0.011, seg=12, mat="steel")       # cubo de la ménsula
+        rbox(mb, (x - 0.028, -depth - 0.012, -0.0255), (x + 0.028, -depth + 0.012, -0.0215), "steel", r=0.003)  # silleta
+        for dx in (-0.018, 0.018):
+            mb.cyl((x + dx, -depth, -0.0255), (x + dx, -depth, -0.0275), 0.003, seg=6, mat="steel")
+    return mb
+
+
+def kitchen_table(w=1.6, d=0.9, h=0.75, seed=0):
+    """Mesa de comedor del personal: cubierta de aglomerado con laminado y canto de PVC de 2 mm, faldón de PTR 40 x 20
+    soldado a patas de tubo de 1 1/4" con regatones de hule y niveladores, cartelas en las esquinas con tornillos; encima un
+    servilletero de lámina con servilletas, salero y una taza (origen: piso, centro)."""
+    r = rng(seed)
+    mb = MB()
+    t = 0.028
+    rbox(mb, (-w / 2, -d / 2, h - t), (w / 2, d / 2, h - 0.002), "wood_varnish", r=0.004)
+    # canto de PVC: banda perimetral 2 mm más alta que el laminado, esquinas redondeadas
+    rr = 0.02
+    out = []
+    for (cx, cy, a0) in ((w / 2 - rr, -d / 2 + rr, -PI / 2), (w / 2 - rr, d / 2 - rr, 0.0), (-w / 2 + rr, d / 2 - rr, PI / 2),
+                         (-w / 2 + rr, -d / 2 + rr, PI)):
+        for k in range(7):
+            a = a0 + PI / 2 * k / 6
+            out.append((cx + (rr + 0.0025) * math.cos(a), cy + (rr + 0.0025) * math.sin(a), h - t / 2 - 0.001))
+    out.append(out[0])
+    mb.sweep([(-0.0012, -t / 2 - 0.0005), (0.0012, -t / 2 - 0.0005), (0.0012, t / 2 + 0.0005), (-0.0012, t / 2 + 0.0005)], out,
+             mat="plastic", closed_profile=True, normal=(0, 0, 1))
+    zb = h - t - 0.001
+    li, wi = 0.07, 0.07
+    legs = [(sx * (w / 2 - li), sy * (d / 2 - wi)) for sx in (-1, 1) for sy in (-1, 1)]
+    for (x, y) in legs:
+        mb.cyl((x, y, 0.025), (x, y, zb), 0.0159, seg=20, mat="steel")
+        mb.cyl((x, y, 0.012), (x, y, 0.03), 0.0165, seg=20, mat="rubber")                  # regatón
+        mb.cyl((x, y, 0.0), (x, y, 0.012), 0.012, seg=16, mat="rubber")                    # nivelador
+        mb.cyl((x, y, 0.012), (x, y, 0.016), 0.0045, seg=8, mat="steel")
+    for sy in (-1, 1):                                                                     # faldón largo
+        rtube(mb, (-w / 2 + li, sy * (d / 2 - wi), zb - 0.02), (w / 2 - li, sy * (d / 2 - wi), zb - 0.02), 0.02, 0.04, "steel",
+              r=0.002)
+    for sx in (-1, 1):                                                                     # faldón corto
+        rtube(mb, (sx * (w / 2 - li), -d / 2 + wi, zb - 0.02), (sx * (w / 2 - li), d / 2 - wi, zb - 0.02), 0.02, 0.04, "steel",
+              r=0.002)
+    for (x, y) in legs:                                                                    # cartelas y tornillos
+        sx, sy = math.copysign(1, x), math.copysign(1, y)
+        for (ax, ay) in ((-sx, 0), (0, -sy)):
+            p = (x + ax * 0.08, y + ay * 0.08)
+            mb.tube([(x + ax * 0.02, y + ay * 0.02, zb - 0.04), (p[0], p[1], zb - 0.004)], 0.004, seg=6, mat="steel")
+        for (ax, ay) in ((-sx, 0), (0, -sy)):
+            q = (x + ax * 0.12, y + ay * 0.12)
+            mb.cyl((q[0], q[1], zb + 0.0005), (q[0], q[1], zb - 0.004), 0.005, seg=10, mat="steel")
+    # servilletero de lámina doblada con servilletas
+    sx0, sy0 = float(r.uniform(-0.15, 0.05)), float(r.uniform(-0.05, 0.05))
+    base = h
+    for s in (-1, 1):
+        rbox(mb, (sx0 - 0.065, sy0 + s * 0.035 - 0.0012, base), (sx0 + 0.065, sy0 + s * 0.035 + 0.0012, base + 0.09), "aluminium",
+             r=0.0011)
+    rbox(mb, (sx0 - 0.065, sy0 - 0.037, base), (sx0 + 0.065, sy0 + 0.037, base + 0.006), "aluminium", r=0.002)
+    for k in range(9):
+        y = sy0 - 0.028 + k * 0.007
+        rbox(mb, (sx0 - 0.055, y - 0.0028, base + 0.006), (sx0 + 0.055, y + 0.0028, base + 0.105 + 0.004 * math.sin(k * 1.7)),
+             "paper", r=0.0012)
+    # salero
+    mb.cyl((sx0 + 0.14, sy0, base), (sx0 + 0.14, sy0, base + 0.07), 0.018, seg=20, mat="glass")
+    mb.cyl((sx0 + 0.14, sy0, base + 0.07), (sx0 + 0.14, sy0, base + 0.085), 0.0185, seg=20, mat="aluminium")
+    # taza con asa
+    cx, cy = float(r.uniform(0.3, 0.55)), float(r.uniform(-0.25, 0.2))
+    mb.cyl((cx, cy, base), (cx, cy, base + 0.004), 0.03, seg=24, mat="sign_white")
+    mb.cyl((cx, cy, base + 0.004), (cx, cy, base + 0.095), 0.041, seg=28, mat="sign_white")
+    mb.cyl((cx, cy, base + 0.08), (cx, cy, base + 0.0905), 0.037, seg=28, mat="wood_dark")
+    ang = float(r.uniform(0, 2 * PI))
+    hx, hy = math.cos(ang), math.sin(ang)
+    hp = [(cx + hx * (0.041 + 0.02 * math.sin(PI * k / 10)), cy + hy * (0.041 + 0.02 * math.sin(PI * k / 10)),
+           base + 0.075 - 0.05 * k / 10) for k in range(11)]
+    mb.tube(hp, 0.006, seg=10, mat="sign_white")
+    return mb
+
+
+# ---------------------------------------------------------------------------------------------- piezas AAA (regla R-AAA)
+# Reconstruidas con su construcción real (2026-11-12); la implementación vive en kit/clinic_servicios.py (electrodomésticos y
+# sanitarios), kit/clinic_oficina.py (mobiliario de oficina y servicio) y kit/clinic_equipo.py (equipo médico, luminarias y
+# accesorios). Se importan al llamarlas para evitar la importación circular (esos módulos usan los ayudantes de aquí).
+def _impl(mod, name):
+    def f(*a, **k):
+        import importlib
+        return getattr(importlib.import_module("kit." + mod), name)(*a, **k)
+    f.__name__ = name
+    f.__doc__ = f"Ver kit/{mod}.py::{name}."
+    return f
+
+
+washer = _impl("clinic_servicios", "washer")
+fridge = _impl("clinic_servicios", "fridge")
+stove = _impl("clinic_servicios", "stove")
+water_dispenser = _impl("clinic_servicios", "water_dispenser")
+sink = _impl("clinic_servicios", "sink")
+toilet = _impl("clinic_servicios", "toilet")
+mop_bucket = _impl("clinic_servicios", "mop_bucket")
+trash_bin = _impl("clinic_servicios", "trash_bin")
+sanitizer = _impl("clinic_servicios", "sanitizer")
+desk = _impl("clinic_oficina", "desk")
+filing_cabinet = _impl("clinic_oficina", "filing_cabinet")
+counter = _impl("clinic_oficina", "counter")
+folding_chair = _impl("clinic_oficina", "folding_chair")
+office_chair = _impl("clinic_oficina", "office_chair")
+bedside_cabinet = _impl("clinic_oficina", "bedside_cabinet")
+notice_board = _impl("clinic_oficina", "notice_board")
+clock = _impl("clinic_oficina", "clock")
+potted_plant = _impl("clinic_oficina", "potted_plant")
+fluorescent = _impl("clinic_equipo", "fluorescent")
+ceiling_fan = _impl("clinic_equipo", "ceiling_fan")
+split_indoor = _impl("clinic_equipo", "split_indoor")
+extinguisher = _impl("clinic_equipo", "extinguisher")
+cylinder_rack = _impl("clinic_equipo", "cylinder_rack")
+xray_unit = _impl("clinic_equipo", "xray_unit")
+wall_bucky = _impl("clinic_equipo", "wall_bucky")
+lead_screen = _impl("clinic_equipo", "lead_screen")
+wall_lamp = _impl("clinic_equipo", "wall_lamp")

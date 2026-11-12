@@ -1,4 +1,4 @@
-"""kit/clinic_aaa_c.py — reconstrucción AAA (regla R-AAA) de equipo del hospital HOS_1_pueblo: luminaria fluorescente,
+"""kit/clinic_equipo.py — reconstrucción AAA (regla R-AAA) de equipo del hospital HOS_1_pueblo: luminaria fluorescente,
 ventilador de techo, minisplit, extintor, carro de cilindros (oxígeno / gas LP), rayos X con columna, bucky de pared, mampara
 plomada y arbotante de muro.
 
