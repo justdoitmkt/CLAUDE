@@ -233,6 +233,7 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     "sign_blue": ((0.02, 0.15, 0.52), 0.45, 0.0), "sign_green": ((0.02, 0.38, 0.11), 0.45, 0.0),
     "paint_yellow": ((0.72, 0.50, 0.04), 0.6, 0.0), "vinyl": ((0.07, 0.20, 0.19), 0.5, 0.0),
     "steel": ((0.60, 0.61, 0.62), 0.35, 1.0), "rubber": ((0.025, 0.025, 0.025), 0.8, 0.0),
+    "wool_blue": ((0.10, 0.17, 0.33), 0.97, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),

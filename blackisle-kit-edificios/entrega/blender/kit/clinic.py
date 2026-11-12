@@ -8,6 +8,7 @@ Materiales del kit: steel, plastic, plastic_blue, linen, vinyl, rubber, sign_*, 
 import math
 
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 from kit import port
@@ -239,49 +240,237 @@ def folding_chair(seed=0):
 
 
 # --------------------------------------------------------------------------------------------------------------- camas
-def hospital_bed(seed=0, rails_up=True):
-    """Cama de hospital de tubo: bastidor con 4 rodajas, cabecera y piecera de tubo con barrotes, colchón de vinilo con sábana,
-    almohada, cobija doblada al pie y barandales abatibles. 2,05 × 0,95; colchón a 0,58."""
+def fillet(pts, rad, nseg=8):
+    """Polilínea 3D con las esquinas redondeadas (radio de doblez real de tubo)."""
+    P = [Vector(p) for p in pts]
+    if len(P) < 3:
+        return [tuple(p) for p in P]
+    out = [P[0]]
+    for i in range(1, len(P) - 1):
+        a, b, c = P[i - 1], P[i], P[i + 1]
+        d0, d1 = (a - b).normalized(), (c - b).normalized()
+        ang = d0.angle(d1)
+        if ang > math.pi - 1e-3:
+            out.append(b)
+            continue
+        t = rad / math.tan(ang / 2)
+        t = min(t, (a - b).length * 0.49, (c - b).length * 0.49)
+        p0, p1 = b + d0 * t, b + d1 * t
+        for k in range(nseg + 1):
+            u = k / nseg
+            q = p0.lerp(b, u).lerp(b.lerp(p1, u), u)          # bezier cuadrática (arco aproximado)
+            out.append(q)
+    out.append(P[-1])
+    return [tuple(p) for p in out]
+
+
+def rr_profile(w, h, r, n=4):
+    """Perfil de tubo rectangular con esquinas de radio r (sentido antihorario)."""
+    pts = []
+    for (cx, cy, a0) in ((w / 2 - r, h / 2 - r, 0.0), (-w / 2 + r, h / 2 - r, PI / 2), (-w / 2 + r, -h / 2 + r, PI),
+                         (w / 2 - r, -h / 2 + r, 1.5 * PI)):
+        for k in range(n + 1):
+            a = a0 + PI / 2 * k / n
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return pts
+
+
+def rtube(mb, p0, p1, w, h, mat, up=(0, 0, 1), r=0.004, caps=True):
+    """Tubo rectangular de esquinas redondeadas (PTR) de p0 a p1; w en el eje lateral, h en `up`."""
+    M, L = port.frame_on(p0, p1, up)
+    prof = rr_profile(w, h, r)
+    rings = []
+    for x in (0.0, L):
+        rings.append([mb.bm.verts.new(M @ Vector((x, py, pz))) for (py, pz) in prof])
+    k = len(prof)
+    for j in range(k):
+        jj = (j + 1) % k
+        f = mb.face([rings[0][j], rings[0][jj], rings[1][jj], rings[1][j]], mat)
+        f.smooth = True
+    if caps:
+        mb.face(list(reversed(rings[0])), mat)
+        mb.face(rings[1], mat)
+
+
+def _spoke(r):
+    sp = MB()
+    sp.box((0.018, -0.0035, 0.0), (r * 0.66, 0.0035, 0.0045), "plastic")
+    return sp
+
+
+def caster_pro(mb, M, d=0.125, brake=False, swivel=0.0, mat_tire="rubber"):
+    """Rodaja hospitalaria de 125 mm: placa/espiga, horquilla de lámina embutida, rueda con banda de rodadura, rin y tapón;
+    pedal de freno opcional. Origen: piso bajo el eje (z = 0 en el piso)."""
+    r = d / 2
+    Mz = M @ _Rz(swivel)
+    off = r * 0.55                                     # avance de la rueda respecto de la espiga
+    zt = d + 0.035
+    port.lathe(mb, [(0.0, 0.0), (0.032, 0.0), (0.032, 0.006), (0.0, 0.006)], seg=16, mat="steel", M=Mz @ _T(0, 0, zt))
+    port.lathe(mb, [(0.0, 0.0), (0.03, 0.0), (0.03, 0.012), (0.026, 0.016), (0.0, 0.016)], seg=16, mat="steel", M=Mz @ _T(0, 0, zt - 0.016))
+    mb.cyl(Mz @ Vector((0, 0, zt + 0.006)), Mz @ Vector((0, 0, zt + 0.045)), 0.011, seg=10, mat="steel")
+    for s in (-1, 1):
+        prof = [(-0.024, zt - 0.016), (0.024, zt - 0.016), (off + 0.018, r + 0.012), (off + 0.016, r - 0.01), (off - 0.016, r - 0.01),
+                (-0.018, zt - 0.03)]
+        perm = Matrix(((0, 0, 1, 0), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)))   # local (y, z, espesor) -> mundo (x espesor)
+        mb.plate([(y, z) for (y, z) in prof], 0.003, "steel", m=Mz @ _T(s * 0.024 - (0.003 if s > 0 else 0), 0, 0) @ perm)
+    mb.box(Mz @ Vector((-0.027, -0.024, zt - 0.02)), Mz @ Vector((0.027, 0.024, zt - 0.014)), "steel")
+    Mw = Mz @ _T(0, off, r) @ _Ry(90)
+    # llanta de poliuretano: banda con dos ranuras perimetrales, hombros redondeados; rin de nylon con 6 rayos rehundidos y maza
+    prof = [(r * 0.72, -0.0185), (r * 0.9, -0.017), (r - 0.004, -0.0145), (r - 0.0008, -0.011), (r, -0.006), (r - 0.0025, -0.0045),
+            (r - 0.0025, -0.0025), (r, -0.0015), (r, 0.0015), (r - 0.0025, 0.0025), (r - 0.0025, 0.0045), (r, 0.006),
+            (r - 0.0008, 0.011), (r - 0.004, 0.0145), (r * 0.9, 0.017), (r * 0.72, 0.0185)]
+    port.lathe(mb, prof, seg=40, mat=mat_tire, M=Mw, caps=False)
+    port.lathe(mb, [(0.016, -0.019), (r * 0.72, -0.0185), (r * 0.72, 0.0185), (0.016, 0.019)], seg=40, mat="plastic", M=Mw,
+               caps=False)
+    for sgn in (-1, 1):                               # cara del rin rehundida con rayos
+        port.lathe(mb, [(0.016, sgn * 0.019), (0.02, sgn * 0.012), (r * 0.66, sgn * 0.012), (r * 0.72, sgn * 0.0185)], seg=40,
+                   mat="plastic", M=Mw, caps=False)
+        for k in range(6):
+            a = 2 * PI * k / 6
+            mb.join(_spoke(r), Mw @ Matrix.Rotation(a, 4, "Z") @ _T(0, 0, sgn * 0.012 - (0.0045 if sgn > 0 else 0)))
+    port.lathe(mb, [(0.0, -0.024), (0.016, -0.024), (0.016, 0.024), (0.0, 0.024)], seg=16, mat="steel", M=Mw)
+    mb.cyl(Mz @ Vector((-0.03, off, r)), Mz @ Vector((0.03, off, r)), 0.005, seg=8, mat="steel")
+    if brake:                                          # pedal de freno: palanca roja con cojín de hule estriado
+        mb.box(Mz @ Vector((-0.012, -0.03, zt - 0.03)), Mz @ Vector((0.012, -0.012, zt - 0.02)), "steel")
+        rbox(mb, (-0.032, -0.085, zt - 0.032), (0.032, -0.03, zt - 0.02), "sign_red", r=0.008, m=Mz)
+        for k in range(5):
+            y = -0.08 + k * 0.011
+            mb.box(Mz @ Vector((-0.028, y, zt - 0.02)), Mz @ Vector((0.028, y + 0.006, zt - 0.016)), "rubber")
+
+
+def _bars_board(mb, x0, x1, y, z0, z1, mat_tube="sign_white", rad=0.07, bar_step=0.085):
+    """Cabecera/piecera de tubo doblado Ø 25 con barrotes Ø 13 soldados, travesaño inferior y tapones."""
+    path = fillet([(x0, y, z0), (x0, y, z1), (x1, y, z1), (x1, y, z0)], rad, nseg=10)
+    mb.tube(path, 0.0127, seg=12, mat=mat_tube, caps=True)
+    zl = z0 + 0.14
+    mb.tube([(x0 + 0.012, y, zl), (x1 - 0.012, y, zl)], 0.0105, seg=10, mat=mat_tube)
+    n = int((x1 - x0 - 0.1) / bar_step)
+    for i in range(1, n + 1):
+        x = x0 + 0.05 + (x1 - x0 - 0.1) * i / (n + 1)
+        mb.tube([(x, y, zl + 0.008), (x, y, z1 - 0.012)], 0.0065, seg=8, mat=mat_tube, caps=False)
+        for zz in (zl + 0.01, z1 - 0.014):                        # cordón de soldadura
+            port.lathe(mb, [(0.0065, -0.004), (0.0095, 0.0), (0.0065, 0.004)], seg=8, mat=mat_tube, caps=False, M=_T(x, y, zz))
+    for x in (x0, x1):
+        port.lathe(mb, [(0.0, 0.0), (0.0135, 0.0), (0.0135, 0.02), (0.0, 0.022)], seg=12, mat="plastic", M=_T(x, y, z0 - 0.02))
+
+
+def _wire_deck(mb, x0, x1, y0, y1, z, M=None, step=0.055, mat="steel"):
+    """Sección de plataforma: marco de PTR 25×25 y malla electrosoldada (alambre Ø 4 mm) en las dos direcciones."""
+    M = M if M is not None else Matrix()
+    for (a, b) in (((x0, y0), (x1, y0)), ((x1, y0), (x1, y1)), ((x1, y1), (x0, y1)), ((x0, y1), (x0, y0))):
+        rtube(mb, M @ Vector((a[0], a[1], z)), M @ Vector((b[0], b[1], z)), 0.025, 0.025, mat, up=tuple((M.to_3x3() @ Vector((0, 0, 1)))),
+              r=0.003)
+    x = x0 + step
+    while x < x1 - 0.02:
+        mb.cyl(M @ Vector((x, y0 + 0.012, z + 0.006)), M @ Vector((x, y1 - 0.012, z + 0.006)), 0.002, seg=5, mat=mat)
+        x += step
+    y = y0 + step
+    while y < y1 - 0.02:
+        mb.cyl(M @ Vector((x0 + 0.012, y, z + 0.0105)), M @ Vector((x1 - 0.012, y, z + 0.0105)), 0.002, seg=5, mat=mat)
+        y += step
+
+
+def _side_rail(mb, xs, ya, yb, z_deck, up=True, mat="sign_white"):
+    """Barandal abatible: 3 tubos Ø 20 con remates doblados, 2 postes con eslabones de pivote, perilla de seguro."""
+    zb = z_deck + (0.14 if up else -0.30)
+    zt = zb + 0.38
+    path = fillet([(xs, ya, zb + 0.05), (xs, ya, zt), (xs, yb, zt), (xs, yb, zb + 0.05)], 0.05, nseg=8)
+    mb.tube(path, 0.0105, seg=10, mat=mat)
+    for z in (zb + 0.13, zb + 0.25):
+        mb.tube([(xs, ya, z), (xs, yb, z)], 0.0095, seg=10, mat=mat, caps=False)
+    for y in (ya + 0.12, yb - 0.12):
+        sgn = 1 if xs > 0 else -1
+        mb.tube([(xs, y, zb + 0.05), (xs - sgn * 0.01, y, zb - 0.05), (xs - sgn * 0.035, y, z_deck - 0.02)], 0.009, seg=8, mat=mat)
+        mb.box((xs - sgn * 0.035 - 0.012, y - 0.02, z_deck - 0.05), (xs - sgn * 0.035 + 0.012, y + 0.02, z_deck - 0.0), "steel")
+        port.lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.014, 0.01), (0.012, 0.02), (0.0, 0.022)], seg=10, mat="sign_red",
+                   M=_T(xs + sgn * 0.012, y, zb + 0.09) @ _Ry(90 * sgn))
+
+
+def _crank(mb, x, y, z, ang=0.0):
+    """Manivela plegable: flecha, cardán, brazo doblado y empuñadura giratoria (al pie de la cama)."""
+    mb.cyl((x, y + 0.25, z), (x, y, z), 0.008, seg=10, mat="steel")
+    port.lathe(mb, [(0.0, 0.0), (0.014, 0.0), (0.016, 0.02), (0.014, 0.04), (0.0, 0.04)], seg=12, mat="steel",
+               M=_T(x, y, z) @ _Rx(90))
+    M = _T(x, y - 0.04, z) @ Matrix.Rotation(math.radians(ang), 4, "Y")
+    arm = [M @ Vector(p) for p in [(0.0, 0.0, 0.0), (0.0, -0.03, 0.0), (0.09, -0.03, 0.0), (0.12, -0.03, -0.02)]]
+    mb.tube(fillet([tuple(a) for a in arm], 0.02, 6), 0.007, seg=8, mat="steel")
+    port.lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.013, 0.02), (0.013, 0.07), (0.011, 0.09), (0.0, 0.09)], seg=12, mat="plastic",
+               M=M @ _T(0.12, -0.03, -0.02) @ _Rx(90))
+
+
+def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rails=(True, True)):
+    """Cama hospitalaria manual de 2 manivelas (≈ 2,10 × 0,98; colchón arriba a 0,66): bastidor de PTR 50×30, patas de PTR
+    40×40, rodajas de 125 mm (2 con freno), plataforma de 4 secciones con malla electrosoldada (respaldo con ángulo `fowler`),
+    cabecera y piecera de tubo doblado con barrotes, barandales abatibles, defensas giratorias, portasueros, manivelas;
+    colchón de vinilo con vivos, sábana y cobija simuladas, almohada inflada por presión.
+    Cabecera hacia +Y, pie hacia -Y."""
+    from kit import softgoods as sg
     r = rng(seed)
     mb = MB()
-    L, W = 2.0, 0.92
-    zf = 0.44
-    for (x, y) in ((-W / 2 + 0.04, -L / 2 + 0.06), (W / 2 - 0.04, -L / 2 + 0.06), (-W / 2 + 0.04, L / 2 - 0.06), (W / 2 - 0.04, L / 2 - 0.06)):
-        caster(mb, (x, y, 0.0), r=0.05, swivel=float(r.uniform(0, 360)))
-        mb.cyl((x, y, 0.14), (x, y, zf), 0.018, seg=8, mat="steel")
-    for s in (-1, 1):
-        mb.box((s * W / 2 - 0.03, -L / 2 + 0.03, zf - 0.04), (s * W / 2, L / 2 - 0.03, zf + 0.02), "steel")
-    for y in (-L / 2 + 0.06, -0.3, 0.3, L / 2 - 0.06):
-        mb.box((-W / 2, y - 0.015, zf - 0.03), (W / 2, y + 0.015, zf + 0.01), "steel")
-    mb.box((-W / 2 + 0.03, -L / 2 + 0.05, zf + 0.01), (W / 2 - 0.03, L / 2 - 0.05, zf + 0.025), "steel")
-    # cabecera (y+) y piecera (y-)
-    for (yb, hgt) in ((L / 2 - 0.02, 1.02), (-L / 2 + 0.02, 0.88)):
-        pts = [(-W / 2 + 0.02, yb, zf - 0.05), (-W / 2 + 0.02, yb, hgt - 0.06), (-W / 2 + 0.08, yb, hgt), (W / 2 - 0.08, yb, hgt),
-               (W / 2 - 0.02, yb, hgt - 0.06), (W / 2 - 0.02, yb, zf - 0.05)]
-        mb.tube(pts, 0.016, seg=8, mat="steel")
-        mb.tube([(-W / 2 + 0.02, yb, zf + 0.14), (W / 2 - 0.02, yb, zf + 0.14)], 0.012, seg=6, mat="steel")
-        x = -W / 2 + 0.12
-        while x < W / 2 - 0.1:
-            mb.cyl((x, yb, zf + 0.14), (x, yb, hgt - 0.01), 0.008, seg=6, mat="steel")
-            x += 0.1
-    # colchón y ropa
-    zt = zf + 0.155
-    rbox(mb, (-W / 2 + 0.04, -L / 2 + 0.07, zf + 0.025), (W / 2 - 0.04, L / 2 - 0.07, zt), "vinyl", r=0.04)
-    rbox(mb, (-W / 2 + 0.025, -L / 2 + 0.06, zt - 0.02), (W / 2 - 0.025, L / 2 - 0.08, zt + 0.012), "linen", r=0.05)
-    port.loft(mb, [(-0.28, 0.0, 0.10, 0.0), (-0.2, 0.55, 0.13, 0.0), (0.0, 0.6, 0.15, 0.0), (0.2, 0.55, 0.13, 0.0), (0.28, 0.0, 0.1, 0.0)],
-              seg=10, mat="linen", M=_T(float(r.uniform(-0.03, 0.03)), L / 2 - 0.3, zt + 0.07), ex=2.8)
-    rbox(mb, (-W / 2 + 0.06, -L / 2 + 0.12, zt + 0.012), (W / 2 - 0.06, -L / 2 + 0.5, zt + 0.07), "fabric", r=0.04)
+    L, W = 1.96, 0.90
+    zf = 0.42                     # bastidor
+    zd = 0.505                    # cara superior de la plataforma
+    xr = W / 2 + 0.01
+    # patas y rodajas
+    for (sx, sy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        x, y = sx * (xr - 0.02), sy * (L / 2 - 0.02)
+        rtube(mb, (x, y, 0.165), (x, y, zf + 0.03), 0.04, 0.04, "sign_white", up=(1, 0, 0), r=0.004)
+        caster_pro(mb, _T(x, y, 0.0), brake=(sy < 0), swivel=float(r.uniform(-30, 30)) + (180 if sy > 0 else 0))
+        mb.cyl((x - sx * 0.035, y + sy * 0.035, zf - 0.01), (x - sx * 0.035, y + sy * 0.035, zf + 0.04), 0.032, seg=16, mat="rubber")
+    # largueros, travesaños y soportes de plataforma
+    for sx in (-1, 1):
+        rtube(mb, (sx * xr, -L / 2 - 0.02, zf), (sx * xr, L / 2 + 0.02, zf), 0.03, 0.05, "sign_white", up=(0, 0, 1), r=0.004)
+    for y in (-L / 2 + 0.03, -0.35, 0.25, L / 2 - 0.03):
+        rtube(mb, (-xr + 0.015, y, zf - 0.005), (xr - 0.015, y, zf - 0.005), 0.03, 0.03, "sign_white", up=(0, 0, 1), r=0.003)
+    # plataforma de 4 secciones (malla)
+    hinge = 0.22
+    _wire_deck(mb, -W / 2 + 0.02, W / 2 - 0.02, -L / 2 + 0.03, -0.52, zd - 0.0125)
+    _wire_deck(mb, -W / 2 + 0.02, W / 2 - 0.02, -0.5, -0.12, zd - 0.0125)
+    _wire_deck(mb, -W / 2 + 0.02, W / 2 - 0.02, -0.10, hinge - 0.02, zd - 0.0125)
+    Mb = _T(0, hinge, zd) @ _Rx(fowler) @ _T(0, -hinge, -zd)
+    _wire_deck(mb, -W / 2 + 0.02, W / 2 - 0.02, hinge, L / 2 - 0.03, zd - 0.0125, M=Mb)
+    for x in (-W / 2 + 0.06, W / 2 - 0.06):                   # bisagras
+        port.lathe(mb, [(0.0, -0.03), (0.011, -0.03), (0.011, 0.03), (0.0, 0.03)], seg=10, mat="steel", M=_T(x, hinge - 0.01, zd - 0.012) @ _Ry(90))
+    if fowler > 0:                                             # brazo del mecanismo bajo el respaldo
+        mb.tube([(0.0, hinge + 0.05, zf), (0.0, hinge + 0.25, zd - 0.02 + 0.25 * math.sin(math.radians(fowler)))], 0.012, seg=8, mat="steel")
+    for sx in (-1, 1):                                         # retenes del colchón
+        for y in (-0.7, 0.0):
+            mb.box((sx * (W / 2 - 0.005) - 0.004, y - 0.03, zd - 0.01), (sx * (W / 2 - 0.005) + 0.004, y + 0.03, zd + 0.06), "steel")
+    # cabecera y piecera
+    _bars_board(mb, -W / 2 + 0.005, W / 2 - 0.005, L / 2 + 0.005, zf + 0.02, 1.02)
+    _bars_board(mb, -W / 2 + 0.005, W / 2 - 0.005, -L / 2 - 0.005, zf + 0.02, 0.90)
+    for sx in (-1, 1):                                         # portasueros
+        mb.tube([(sx * (W / 2 + 0.04), L / 2 + 0.03, zf - 0.03), (sx * (W / 2 + 0.04), L / 2 + 0.03, zf + 0.09)], 0.011, seg=10, mat="steel")
+        mb.tube([(sx * (W / 2 + 0.04), L / 2 + 0.03, zf + 0.0), (sx * xr, L / 2 + 0.01, zf + 0.0)], 0.006, seg=6, mat="steel")
     # barandales
-    if rails_up:
-        for s in (-1, 1):
-            xr = s * (W / 2 + 0.02)
-            mb.tube([(xr, -0.35, zt + 0.02), (xr, -0.35, zt + 0.30), (xr, 0.55, zt + 0.30), (xr, 0.55, zt + 0.02)], 0.011, seg=6,
-                    mat="steel")
-            mb.tube([(xr, -0.35, zt + 0.16), (xr, 0.55, zt + 0.16)], 0.008, seg=6, mat="steel")
-    # manivela al pie
-    mb.cyl((0.0, -L / 2 - 0.02, zf - 0.02), (0.0, -L / 2 - 0.09, zf - 0.02), 0.01, seg=6, mat="steel")
-    mb.cyl((0.0, -L / 2 - 0.09, zf - 0.02), (0.09, -L / 2 - 0.09, zf - 0.02), 0.008, seg=6, mat="steel")
-    mb.cyl((0.09, -L / 2 - 0.09, zf - 0.02), (0.09, -L / 2 - 0.13, zf - 0.02), 0.012, seg=8, mat="plastic")
+    for k, sx in enumerate((-1, 1)):
+        if rails[k]:
+            _side_rail(mb, sx * (W / 2 + 0.035), -0.15, 0.62, zd + 0.13, up=rails_up)
+    # manivelas al pie
+    for x in (-0.18, 0.18):
+        _crank(mb, x, -L / 2 - 0.03, zf - 0.02, ang=float(r.uniform(-20, 60)))
+    # colchón, sábana, cobija, almohada
+    Lm, Wm, Hm = 1.90, 0.86, 0.13
+    Mm = _T(0, 0.0, zd)
+    sg.mattress(mb, Mm, Lm, Wm, Hm, seed=seed, fowler=fowler, hinge=hinge)
+    if made:
+        # las telas se simulan sobre el colchón plano y luego siguen el quiebre del respaldo (como una sábana ajustable)
+        col = sg.mattress_collider_arrays(Lm, Wm, Hm)
+        bend = (lambda co: sg.bend_fowler(co, fowler, hinge)) if fowler > 0 else None
+        sg.drape(mb, Mm, "sabana", (Wm + 0.22, Lm + 0.16), (44, 80), Hm + 0.04, lambda: [col], "linen", seed=seed % 3, stiff=10.0,
+                 frames=55, post=bend)
+        if blanket:
+            off = np.array([0, -0.32, 0], np.float32)
+            sg.drape(mb, Mm @ _T(0, -0.32, 0), "cobija", (Wm + 0.34, 1.25), (40, 56), Hm + 0.08,
+                     lambda: [(col[0] - off, col[1], col[2])], "wool_blue", seed=seed % 3, stiff=18.0,
+                     frames=55, thickness=0.006, pre_fold=0.42,
+                     post=(lambda co: sg.bend_fowler(co + off, fowler, hinge) - off) if fowler > 0 else None)
+        a = math.radians(fowler)
+        yp, zp = 0.68, Hm + 0.016
+        if fowler > 0:
+            dy = yp - hinge
+            yp, zp = hinge + dy * math.cos(a) - zp * math.sin(a), dy * math.sin(a) + zp * math.cos(a)
+        sg.pillow(mb, Mm @ _T(float(r.uniform(-0.03, 0.03)), yp, zp) @ _Rx(fowler) @ _Rz(float(r.uniform(-5, 5))), seed=seed % 4)
     return mb
 
 

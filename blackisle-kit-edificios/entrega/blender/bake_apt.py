@@ -229,7 +229,7 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
 TILE_ALIAS = {"rubble": "concrete", "cladding": "metal_paint", "container": "metal_paint"}   # lámina: cara interior repetible
 # doble cara: láminas (lámina ondulada, tela, hierba) y la teja (piezas sueltas sin cara inferior: desde el ático se veía el cielo
 # y el sol pasaba, porque Three.js no dibuja la cara trasera ni la usa para la sombra)
-DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile")
+DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile", "linen", "wool_blue")
 
 
 def vertex_ao(obj, samples, dist=0.5, inset=0.03, lift=0.001):
