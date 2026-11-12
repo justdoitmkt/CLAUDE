@@ -488,3 +488,28 @@ grafiti `ref_grafiti_planta_baja_1` en las vistas exteriores. 8 imágenes + 2 ho
   < 1 m; los costales no son simulación de tela (trama insinuada); los hilos de púas van cada 30 cm (los reales, 10–13 cm);
   la mercancía de los anaqueles sale de unas pocas piezas repetidas con variación; las letras del pizarrón usan la fuente de
   Blender inclinada, no letra a mano; el refrigerador de cerveza no tiene condensador atrás (va contra el muro).
+
+## Nuevo modelo: COM_1_antena (sitio de telecomunicaciones) · referencias (2026-11-12)
+Pedido: un puesto de antena de comunicaciones **actual (tipo 2026), no futurista**, con su centro (caseta de equipos), no muy
+grande, para cubrir una ciudad pequeña. Generado con `nano_banana_2_1` a 1k (thinking medium): 8 imágenes, 0 rechazos,
+**12 créditos** (jobs 29e35fa2, 7b236343, 838bc0df, 9aa11167, 610a01b7, b9b5795e, 666505a1, eff7c255). Revisadas con mis
+ojos; en `refs_higgsfield/COM_1_antena/`:
+| Vista | Qué fija |
+|---|---|
+| hero | torre autosoportada de tres patas tubulares galvanizada (~40 m) con plataforma de sectores arriba, compound con malla ciclónica y alambre de púas, caseta prefabricada de concreto gris claro |
+| base | patas tubulares sobre dados redondos con placa base y anclas, escalera de gato con riel, escalerilla de cables (coaxiales negros + 2 fibras amarillas) que baja al puente de cables (ice bridge) en postes hasta la caseta, barra de tierra de cobre, gabinetes blancos en losas, marco H con medidor y desconectador, banquetas de concreto sobre grava |
+| antenas | plataforma triangular con barandal y rejilla: paneles de 2,6 m, AAU 5G masivas, RRU con aletas, jumpers con gaza de goteo, platos de microondas con radomo de tela y ODU, baliza roja |
+| aérea | distribución: compound ~16 × 16 m, caseta en una esquina, torre al fondo, puente de cables torre→caseta, gabinetes en losas junto a la torre, generador con tanque al frente, portón doble, postes de luz |
+| caseta_int | dos filas de racks de 19", charolas de escalerilla en el techo con cableado peinado, rectificador, baterías, panel de alarmas, minisplits, barra de tierra, piso antiestático |
+| trasera | trasera de la caseta y del compound; **la imagen traía un grafiti con "13" (prohibido por R4): se tapó en la referencia con un parche del muro y no se modela** |
+| torre_arriba | contrapicada de la torre: tramos con bridas, contraventeo en K/X, escalera, plataforma de microondas intermedia |
+| materiales | acero galvanizado, concreto prefabricado, grava, malla ciclónica, radomo, cobre |
+- **Proporciones de fuentes reales (R-AAA punto 7)**, investigadas en la web antes de modelar: torre de 3 patas de 15–60 m con
+  ancho de base 3–8 m y cabeza 0,5–1,2 m, galvanizado ≥ 65 µm, norma TIA-222-G → se usa 42 m, base 5,0 m, cabeza recta 1,6 m;
+  panel pasivo de 8 puertos 2688 × 301 × 181 mm (22,3 kg); AAU 5G 64T64R 730–795 × 395–470 × 160–240 mm; RRU 4T4R
+  ≈ 480 × 270 × 140 mm; caseta prefabricada con muros de ~100 mm y losa de 100–150 mm; puente de cables de 508–610 mm en
+  tramos de 3,66 m; colgadores de cable en torre cada 0,9–1,2 m; malla ciclónica con postes de línea de 2-3/8" (60,3 mm) a
+  ≤ 3,05 m, brazos a 45° con 3 hilos de púas; generador de 20–30 kVA en gabinete insonorizado ≈ 1,7–2,0 × 0,7–0,95 × 1,05–1,4 m.
+  Las fuentes concretas de cada pieza se anotan en la sección de modelado.
+- **Grafiti (R-GRAF):** el usuario no fijó cantidad; un sitio de telecom vigilado lleva poco: unas cuantas placas y firmas
+  chicanas solo en la trasera de la caseta. Biblioteca exclusiva nueva, sin números, coronas ni estrellas (R4).

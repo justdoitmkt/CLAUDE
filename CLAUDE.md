@@ -19,6 +19,12 @@ Regla de trabajo, sin excepciones:
 5. **Revisión de primer plano obligatoria antes de integrar:** cada pieza nueva se renderiza en arcilla a menos de 2 m y se
    compara con una referencia real. Si a esa distancia se lee como "caja de cartón" o "low poly", se rehace antes de seguir.
 6. **Al reportar,** decir con honestidad qué piezas siguen por debajo de este estándar; nunca presentarlas como terminadas.
+7. **Segunda pasada obligatoria (orden del usuario, 2026-11-12):** "Cuando termines de armar, das una segunda pasada cuidando
+   detalles... No se tienen que ver facetadas las piezas. Nútrete de la web para que puedas aprender a cómo modelar
+   correctamente con proporción los modelos." Al terminar de armar un modelo se hace una pasada SOLO de detalle: nada redondo
+   facetado a < 2 m (cilindros visibles ≥ 24 lados, tubos y cables ≥ 12, con sombreado suave; los bordes duros solo donde el
+   objeto real los tiene) y las medidas y proporciones de cada componente se verifican contra fuentes reales consultadas en la
+   web (fichas técnicas, normas, catálogos), anotadas en ESTADO.md.
 
 ## R-GRAF · Estilo y cantidad de grafiti (orden del usuario, 2026-11-12)
 Cita: "Aquí ya no metas ilustraciones propias, únicamente grafitis, placas, firmas, artes, dibujos, ilustraciones callejeras,
