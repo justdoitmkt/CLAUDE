@@ -257,6 +257,10 @@ def main():
         # la rampa entierra su cimiento 0,8 m en la arena y los pilotes llegan a -7 m
         checks["base_en_suelo"] = (mu.PILE_BOT - 0.1 <= float(mins[2]) <= mu.PILE_BOT + 0.1 and
                                    -0.85 <= float(smin[2]) <= -0.75)
+    elif bid.startswith("COM_"):
+        # sitio de antena: la plataforma apoya en z = 0; los dados de la torre (Ø 1,0 m) se entierran 0,6 m bajo el piso del mapa
+        info["medidas_m"]["nota"] += " Los dados de la torre bajan a z = -0,6 (enterrados)."
+        checks["base_en_suelo"] = -0.65 <= float(mins[2]) <= -0.55 and -0.2 <= float(smin[2]) <= 0.2
     else:
         # apoya en z = 0; las zapatas de los pilotes y los dados de las cabañas se entierran hasta 0,15 m (bajo el piso del mapa)
         checks["base_en_suelo"] = -0.2 <= float(mins[2]) <= 0.06
