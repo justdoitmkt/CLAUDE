@@ -63,7 +63,7 @@ SHOTS_EXTRA = {
 shots.update(SHOTS_EXTRA.get(bid, {}))
 for p in (res.get("stats", {}).get("interior_dress", {}).get("bulb_pos", []) if bid.startswith("HOS_") else []):
     L = bpy.data.lights.new("_foco", "AREA")          # luminarias del hospital encendidas (interiores legibles en arcilla)
-    L.energy = 90.0
+    L.energy = 22.0
     L.size = 1.1
     lo = bpy.data.objects.new("_foco", L)
     lo.location = (p[0], p[1], p[2] - 0.01)

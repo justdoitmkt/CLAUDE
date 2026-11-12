@@ -115,7 +115,8 @@ def hanging_sign(s, w=1.1, h=0.26, drop=0.32, bg="sign_white", fg="sign_green"):
     mb.box((-w / 2, -0.009, zt - h), (w / 2, 0.009, zt), bg)
     for sgn in (-1, 1):
         sz = h * 0.52
-        M = _T(0, sgn * 0.009, zt - h / 2 - sz * 0.36) @ _Rx(90 * sgn) @ (Matrix() if sgn < 0 else _Rz(180))
+        # cara -y: Rx(90) (texto mirando a -y, legible desde -y); cara +y: Rz(180) @ Rx(90) (legible desde +y)
+        M = _T(0, sgn * 0.009, zt - h / 2 - sz * 0.36) @ (_Rx(90) if sgn < 0 else _Rz(180) @ _Rx(90))
         text(mb, s, sz, 0.002, fg, M)
     for x in (-w / 2 + 0.08, w / 2 - 0.08):
         mb.cyl((x, 0, zt), (x, 0, 0), 0.003, seg=5, mat="steel")

@@ -601,7 +601,7 @@ def signage(det, Ms, r):
     for (x0, x1) in ((GX0 + 0.4, GX0 + 3.8), (GX0 + 4.2, GX0 + 7.6)):        # franjas y NO PARKING pintados en la plataforma
         for x in (x0, x1 - 0.1):
             det.box((x, -14.2, PAVE), (x + 0.1, GY0 - 0.2, PAVE + 0.002), "paint_yellow", bevel=0.0)
-        cl.text(det, "NO PARKING", 0.42, 0.002, "paint_yellow", _T((x0 + x1) / 2, -12.4, PAVE) @ Matrix.Rotation(math.pi, 4, "Z"))
+        cl.text(det, "NO PARKING", 0.42, 0.002, "paint_yellow", _T((x0 + x1) / 2, -12.4, PAVE))      # legible entrando desde la calle
     B = ac.panel_matrix("back", X0, X1, Y1, 0.0)
     det.join(cl.sign_plate("STAFF ONLY", 0.5, 0.15, bg="sign_white", fg="sign_red", size=0.06), B @ _T(X1 - 12.1, 0, FFL + 2.2))
     det.join(cl.wall_lamp(), B @ _T(X1 - 12.95, 0, FFL + 2.35))
