@@ -417,7 +417,7 @@ def site(shell, inter, det, roof, r):
     for (ya, yb) in ((-12.5, -12.4), (-11.2, -11.1)):
         wedge(inter, -16.6, px0, ya, yb, PAVE + 0.1, FFL + 0.1, axis="x")
     for y in (-12.45, -11.15):
-        port.handrail(det, (-16.5, y, PAVE + 0.1 + 0.0), (px0 - 0.1, y, FFL + 0.1), h=0.9, post_step=1.4, r=r, knee=True)
+        port.handrail(det, (-16.5, y, PAVE + 0.1 + 0.0), (px0 - 0.1, y, FFL + 0.1), h=0.9, post_step=1.4, r=r, knee=True, mat="steel")
     # pasillo cubierto de urgencias: rampa, descanso, escalones y firme
     wedge(inter, X1, GX0, -14.5, -9.6, PAVE, FFL, axis="y")
     inter.box((X1, -9.6, 0.0), (GX0, -5.6, FFL), "concrete")
@@ -431,24 +431,24 @@ def site(shell, inter, det, roof, r):
         det.box((X1 + 0.15, y, z - 0.002), (GX0 - 0.15, y + 0.025, z + 0.004), "concrete")
         y += 0.15
     for x in (X1 + 0.06, GX0 - 0.06):
-        port.handrail(det, (x, -14.35, PAVE), (x, -10.15, FFL), h=0.9, post_step=1.4, r=r, knee=True)
+        port.handrail(det, (x, -14.35, PAVE), (x, -10.15, FFL), h=0.9, post_step=1.4, r=r, knee=True, mat="steel")
     # marquesina de lámina sobre el pasillo (vigas canal, postes, largueros, lámina ondulada, canalón)
     zt_back, zt_front = 3.48, 3.22
     zf = lambda y: zt_front + (zt_back - zt_front) * (y + 14.6) / (GY1 + 14.6)  # noqa: E731
     for x in (X1 + 0.06, GX0 - 0.06):
         port.member(det, (x, -14.6, zf(-14.6) - 0.1), (x, GY1, zf(GY1) - 0.1),
-                    [(-0.025, 0.025, -0.075, -0.067), (-0.025, 0.025, 0.067, 0.075), (-0.025, -0.017, -0.075, 0.075)], "metal_paint",
+                    [(-0.025, 0.025, -0.075, -0.067), (-0.025, 0.025, 0.067, 0.075), (-0.025, -0.017, -0.075, 0.075)], "paint_green",
                     up=(0, 0, 1))
-        cl.rtube(det, (x, -14.45, PAVE), (x, -14.45, zf(-14.45) - 0.17), 0.1, 0.1, "metal_paint", up=(1, 0, 0), r=0.006)
+        cl.rtube(det, (x, -14.45, PAVE), (x, -14.45, zf(-14.45) - 0.17), 0.1, 0.1, "paint_green", up=(1, 0, 0), r=0.006)
         det.box((x - 0.12, -14.57, PAVE), (x + 0.12, -14.33, PAVE + 0.012), "steel", bevel=0.002)
         for (dx, dy) in ((-0.09, -0.09), (0.09, -0.09), (-0.09, 0.09), (0.09, 0.09)):
             port.bolt(det, _T(x + dx, -14.45 + dy, PAVE + 0.012), d=0.012, stud=0.01, mat="steel")
     y = -14.4
     while y < GY1:
-        cl.rtube(det, (X1 + 0.02, y, zf(y) - 0.02), (GX0 - 0.02, y, zf(y) - 0.02), 0.04, 0.08, "metal_paint", up=(0, 0, 1), r=0.003)
+        cl.rtube(det, (X1 + 0.02, y, zf(y) - 0.02), (GX0 - 0.02, y, zf(y) - 0.02), 0.04, 0.08, "paint_green", up=(0, 0, 1), r=0.003)
         y += 1.3
     _corrugated(det, X1 - 0.05, GX0 + 0.05, -14.7, GY1 + 0.02, zf, mat="roof_metal_light")
-    det.tube([(X1 - 0.04, -14.75, zt_front - 0.03), (GX0 + 0.04, -14.75, zt_front - 0.03)], 0.06, seg=12, mat="metal_paint")
+    det.tube([(X1 - 0.04, -14.75, zt_front - 0.03), (GX0 + 0.04, -14.75, zt_front - 0.03)], 0.06, seg=12, mat="paint_green")
     det.tube([(GX0 + 0.04, -14.75, zt_front - 0.03), (GX0 + 0.15, -14.75, zt_front - 0.1), (GX0 + 0.15, -14.75, PAVE + 0.15),
               (GX0 + 0.25, -14.78, PAVE + 0.05)], 0.035, seg=10, mat="plastic")
     # barda perimetral de block con castillos y remate; portón de servicio
@@ -520,14 +520,14 @@ def _gate(det, x0, x1, y, r):
     """Portón de dos hojas de herrería: bastidor de PTR, barrotes cuadrados, lámina en la parte baja, bisagras y pasador."""
     mid = (x0 + x1) / 2
     for (a, b) in ((x0, mid - 0.01), (mid + 0.01, x1)):
-        cl.rtube(det, (a, y, 0.05), (a, y, 1.95), 0.05, 0.05, "metal_paint", up=(1, 0, 0), r=0.004)
-        cl.rtube(det, (b, y, 0.05), (b, y, 1.95), 0.05, 0.05, "metal_paint", up=(1, 0, 0), r=0.004)
+        cl.rtube(det, (a, y, 0.05), (a, y, 1.95), 0.05, 0.05, "paint_green", up=(1, 0, 0), r=0.004)
+        cl.rtube(det, (b, y, 0.05), (b, y, 1.95), 0.05, 0.05, "paint_green", up=(1, 0, 0), r=0.004)
         for z in (0.07, 0.9, 1.93):
-            cl.rtube(det, (a, y, z), (b, y, z), 0.05, 0.04, "metal_paint", up=(0, 0, 1), r=0.004)
-        det.box((a + 0.02, y - 0.003, 0.09), (b - 0.02, y + 0.003, 0.88), "metal_paint", bevel=0.001)
+            cl.rtube(det, (a, y, z), (b, y, z), 0.05, 0.04, "paint_green", up=(0, 0, 1), r=0.004)
+        det.box((a + 0.02, y - 0.003, 0.09), (b - 0.02, y + 0.003, 0.88), "paint_green", bevel=0.001)
         x = a + 0.12
         while x < b - 0.06:
-            det.box((x - 0.008, y - 0.008, 0.92), (x + 0.008, y + 0.008, 1.92), "metal_paint", bevel=0.001)
+            det.box((x - 0.008, y - 0.008, 0.92), (x + 0.008, y + 0.008, 1.92), "paint_green", bevel=0.001)
             x += 0.12
         for z in (0.3, 1.6):
             det.cyl((a if a == x0 else b, y - 0.04, z), (a if a == x0 else b, y - 0.04, z + 0.12), 0.012, seg=8, mat="steel")
@@ -538,7 +538,7 @@ def _gate(det, x0, x1, y, r):
 def rooftop(roof, det, r):
     # registro de azotea con tapa de lámina y bisagras
     roof.box((-8.5, 6.2, SLAB_T), (-7.6, 7.1, SLAB_T + 0.35), "concrete", bevel=0.01)
-    det.box((-8.55, 6.15, SLAB_T + 0.35), (-7.55, 7.15, SLAB_T + 0.39), "metal_paint", bevel=0.006)
+    det.box((-8.55, 6.15, SLAB_T + 0.35), (-7.55, 7.15, SLAB_T + 0.39), "paint_green", bevel=0.006)
     det.box((-8.12, 6.12, SLAB_T + 0.36), (-7.98, 6.16, SLAB_T + 0.38), "steel", bevel=0.002)
     for x in (-8.4, -7.7):
         det.cyl((x, 7.17, SLAB_T + 0.37), (x + 0.08, 7.17, SLAB_T + 0.37), 0.008, seg=8, mat="steel")
@@ -840,7 +840,7 @@ def _tire_flat():
 
 def _hose_reel():
     mb = cl.MB()
-    mb.box((-0.2, -0.04, -0.2), (0.2, 0.0, 0.2), "metal_paint", bevel=0.01)
+    mb.box((-0.2, -0.04, -0.2), (0.2, 0.0, 0.2), "paint_green", bevel=0.01)
     for x in (-0.12, 0.12):
         port.lathe(mb, [(0.0, -0.005), (0.22, -0.005), (0.22, 0.005), (0.0, 0.005)], seg=24, mat="sign_red",
                    M=_T(x, -0.18, 0.0) @ Matrix.Rotation(math.pi / 2, 4, "Y"))
@@ -922,12 +922,12 @@ def backyard(inter, det, r):
     for (a, b) in (((gx - 0.6, gy - 0.35), (gx + 0.6, gy - 0.35)), ((gx + 0.6, gy - 0.35), (gx + 0.6, gy + 0.35)),
                    ((gx + 0.6, gy + 0.35), (gx - 0.6, gy + 0.35)), ((gx - 0.6, gy + 0.35), (gx - 0.6, gy - 0.35))):
         for z in (0.1, 0.9, 1.75):
-            det.cyl((a[0], a[1], z), (b[0], b[1], z), 0.012, seg=6, mat="metal_paint")
+            det.cyl((a[0], a[1], z), (b[0], b[1], z), 0.012, seg=6, mat="paint_green")
         L = math.hypot(b[0] - a[0], b[1] - a[1])
         n = int(L / 0.1)
         for i in range(n + 1):
             p = (a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n)
-            det.cyl((p[0], p[1], 0.1), (p[0], p[1], 1.75), 0.003, seg=4, mat="metal_paint")
+            det.cyl((p[0], p[1], 0.1), (p[0], p[1], 1.75), 0.003, seg=4, mat="paint_green")
     for k, x in enumerate((-8.6, -7.8)):
         det.box((x - 0.33, gy - 0.35, 0.08), (x + 0.33, gy + 0.35, 1.05), "sign_green" if k == 0 else "cable", bevel=0.03)
         det.box((x - 0.35, gy - 0.37, 1.05), (x + 0.35, gy + 0.37, 1.1), "sign_green" if k == 0 else "cable", bevel=0.02)
@@ -935,7 +935,7 @@ def backyard(inter, det, r):
             det.cyl((x + sx * 0.28, gy + 0.36, 0.1), (x + sx * 0.28, gy + 0.44, 0.1), 0.1, seg=16, mat="rubber")
     det.join(sv.laundry_line(5.5, seed=int(r.integers(1e6)), detail="mid"), _T(-7.0, Y1 + 1.2, 1.75))
     for x in (-7.0, -1.5):
-        det.cyl((x, Y1 + 1.2, 0.08), (x, Y1 + 1.2, 1.8), 0.03, seg=8, mat="metal_paint")
+        det.cyl((x, Y1 + 1.2, 0.08), (x, Y1 + 1.2, 1.8), 0.03, seg=8, mat="paint_green")
 
 
 # ------------------------------------------------------------------------------------------------------------ ensamblado
@@ -973,8 +973,9 @@ def build_hos(bid="HOS_1_pueblo", collection_root=None, dress=True):
     place_windows(det, Mg["back"], ops_g["back"], r)
     place_windows(det, Mg["east"], ops_g["east"], r)
     for k, (u0, u1, v0, v1) in enumerate(ops_g["front"]):
-        det.join(op.rolling_shutter(u1 - u0, v1 - v0, seed=int(r.integers(1e6)), dent=0.12, open_frac=(0.96 if k == 0 else 0.22)),
-                 Mg["front"] @ _T(u0, 0, v0))
+        sh = op.rolling_shutter(u1 - u0, v1 - v0, seed=int(r.integers(1e6)), dent=0.08, open_frac=(0.96 if k == 0 else 0.22))
+        cl.remap(sh, {"metal_rust": "steel", "metal_paint": "steel"})               # lámina galvanizada mantenida
+        det.join(sh, Mg["front"] @ _T(u0, 0, v0))
     place_doors(det, r)
     for nm in ROOMS:
         wainscot(inter, nm)

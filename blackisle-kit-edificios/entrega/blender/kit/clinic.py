@@ -325,8 +325,8 @@ def folding_chair(seed=0):
         mb.tube([(s * 0.2, 0.2, 0.0), (s * 0.2, -0.12, 0.44)], 0.011, seg=6, mat="steel")
         for y in (-0.22, 0.2):
             mb.cyl((s * 0.2, y, 0.0), (s * 0.2, y, 0.015), 0.014, seg=6, mat="rubber")
-    rbox(mb, (-0.21, -0.2, 0.44), (0.21, 0.18, 0.46), "metal_paint", r=0.03)
-    mb.box((-0.2, 0.09, 0.66), (0.2, 0.11, 0.84), "metal_paint", m=_T(0, 0.1, 0.75) @ _Rx(-12) @ _T(0, -0.1, -0.75))
+    rbox(mb, (-0.21, -0.2, 0.44), (0.21, 0.18, 0.46), "enamel", r=0.03)
+    mb.box((-0.2, 0.09, 0.66), (0.2, 0.11, 0.84), "enamel", m=_T(0, 0.1, 0.75) @ _Rx(-12) @ _T(0, -0.1, -0.75))
     return mb
 
 
@@ -869,12 +869,12 @@ def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
     mb = MB()
     h = 0.75
     rbox(mb, (-w / 2, -d / 2, h - 0.03), (w / 2, d / 2, h), "wood", r=0.01)
-    rbox(mb, (w / 2 - 0.42, -d / 2 + 0.03, 0.02), (w / 2 - 0.02, d / 2 - 0.03, h - 0.03), "metal_paint", r=0.005)
+    rbox(mb, (w / 2 - 0.42, -d / 2 + 0.03, 0.02), (w / 2 - 0.02, d / 2 - 0.03, h - 0.03), "enamel", r=0.005)
     for k, z in enumerate((0.05, 0.27, 0.5)):
-        mb.box((w / 2 - 0.41, -d / 2 + 0.026, z), (w / 2 - 0.03, -d / 2 + 0.03, z + 0.2), "metal_paint")
+        mb.box((w / 2 - 0.41, -d / 2 + 0.026, z), (w / 2 - 0.03, -d / 2 + 0.03, z + 0.2), "enamel")
         mb.box((w / 2 - 0.27, -d / 2 + 0.01, z + 0.15), (w / 2 - 0.17, -d / 2 + 0.026, z + 0.165), "steel")
-    mb.box((-w / 2 + 0.02, -d / 2 + 0.03, 0.0), (-w / 2 + 0.05, d / 2 - 0.03, h - 0.03), "metal_paint")
-    mb.box((-w / 2 + 0.05, d / 2 - 0.05, 0.3), (w / 2 - 0.42, d / 2 - 0.03, h - 0.03), "metal_paint")
+    mb.box((-w / 2 + 0.02, -d / 2 + 0.03, 0.0), (-w / 2 + 0.05, d / 2 - 0.03, h - 0.03), "enamel")
+    mb.box((-w / 2 + 0.05, d / 2 - 0.05, 0.3), (w / 2 - 0.42, d / 2 - 0.03, h - 0.03), "enamel")
     if monitor:
         x = float(r.uniform(-0.15, 0.15))
         mb.box((x - 0.1, 0.05, h), (x + 0.1, 0.2, h + 0.015), "plastic")
@@ -901,10 +901,10 @@ def filing_cabinet(seed=0, n=4):
     """Archivero metálico de n cajones con jaladeras y portaetiquetas."""
     mb = MB()
     h = 0.33 * n + 0.04
-    rbox(mb, (-0.235, -0.31, 0.0), (0.235, 0.31, h), "metal_paint", r=0.008)
+    rbox(mb, (-0.235, -0.31, 0.0), (0.235, 0.31, h), "enamel", r=0.008)
     for k in range(n):
         z = 0.04 + k * 0.33
-        mb.box((-0.225, -0.314, z), (0.225, -0.31, z + 0.32), "metal_paint")
+        mb.box((-0.225, -0.314, z), (0.225, -0.31, z + 0.32), "enamel")
         mb.box((-0.07, -0.33, z + 0.19), (0.07, -0.314, z + 0.21), "steel")
         mb.box((-0.04, -0.318, z + 0.24), (0.04, -0.314, z + 0.27), "paper")
     return mb
@@ -1144,11 +1144,11 @@ def split_indoor(seed=0):
 def wall_lamp():
     """Arbotante exterior tipo farol (limpio, funcionando): placa, brazo, farol de vidrio con capuchón (origen: muro, centro)."""
     mb = MB()
-    mb.box((-0.06, -0.02, -0.1), (0.06, 0.0, 0.1), "metal_paint")
-    mb.tube([(0, -0.02, 0.0), (0, -0.12, 0.04), (0, -0.16, 0.12)], 0.012, seg=6, mat="metal_paint")
+    mb.box((-0.06, -0.02, -0.1), (0.06, 0.0, 0.1), "enamel")
+    mb.tube([(0, -0.02, 0.0), (0, -0.12, 0.04), (0, -0.16, 0.12)], 0.012, seg=6, mat="enamel")
     port.lathe(mb, [(0.0, 0.0), (0.05, 0.0), (0.075, 0.2), (0.0, 0.2)], seg=6, mat="glass", M=_T(0, -0.16, -0.08))
-    port.lathe(mb, [(0.0, 0.0), (0.09, 0.0), (0.03, 0.06), (0.0, 0.08)], seg=6, mat="metal_paint", M=_T(0, -0.16, 0.12))
-    port.lathe(mb, [(0.0, 0.0), (0.055, 0.0), (0.055, 0.02), (0.0, 0.02)], seg=6, mat="metal_paint", M=_T(0, -0.16, -0.1))
+    port.lathe(mb, [(0.0, 0.0), (0.09, 0.0), (0.03, 0.06), (0.0, 0.08)], seg=6, mat="enamel", M=_T(0, -0.16, 0.12))
+    port.lathe(mb, [(0.0, 0.0), (0.055, 0.0), (0.055, 0.02), (0.0, 0.02)], seg=6, mat="enamel", M=_T(0, -0.16, -0.1))
     return mb
 
 

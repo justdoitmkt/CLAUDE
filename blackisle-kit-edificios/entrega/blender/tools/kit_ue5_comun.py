@@ -31,7 +31,7 @@ NORMAL_STRENGTH = {"concrete": 4.0, "plaster": 3.0, "wood": 6.0, "wood_dark": 6.
                    "metal_rust": 3.5, "metal_paint": 3.0, "roof_metal": 3.5, "roof_metal_light": 3.0,
                    "terrazzo": 1.2, "tile_white": 2.5, "ceiling_tile": 2.0, "paint_mint": 1.5, "paint_green": 1.5, "paint_white": 1.5}
 COLOR_ONLY = ["aluminium", "fabric", "cable", "plastic", "sand", "vegetation", "mortar", "paper",
-              "plastic_blue", "linen", "sign_red", "sign_white", "sign_blue", "sign_green", "paint_yellow", "vinyl", "steel", "rubber", "wool_blue"]
+              "plastic_blue", "linen", "sign_red", "sign_white", "sign_blue", "sign_green", "paint_yellow", "vinyl", "steel", "rubber", "wool_blue", "enamel"]
 FRONT = {   # rasgo que identifica la fachada principal (-y de Blender) para orientar cada modelo en el mapa
     "APT_A_5p": "pórtico de concreto con la entrada de PB entre cortinas metálicas, logias con barandal",
     "APT_B_4p": "galerías de acceso con balaustrada y el pórtico con marquesina",
