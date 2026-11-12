@@ -68,12 +68,18 @@ def _inside_run(inside, c, d, step=0.2, cap=12.0):
     return s
 
 
-def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5, max_inside=3.0):
+def _rects_inside(rects):
+    return lambda x, y: any(x0 <= x <= x1 and y0 <= y <= y1 for (x0, x1, y0, y1) in rects)
+
+
+def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5, max_inside=3.0, footprint=None):
     """Clasifica cada cara: exterior si al menos un rayo (normal + 4 inclinaciones de 35°) escapa sin chocar en max_dist y,
     antes de salir de la planta del edificio, recorre dentro de ella como mucho `max_inside` m. Lo segundo evita que la cara
     interior de un muro de fachada pase por exterior porque su rayo cruza una enfilada de puertas y sale por la fachada de
     enfrente (APT_D); logias, galerías, balcones y el rincón de la L quedan dentro de esos 3 m.
-    `others`: objetos que también tapan (detalles, interior). Devuelve (obj_ext, obj_int) — nuevos objetos con las caras separadas."""
+    `others`: objetos que también tapan (detalles, interior). footprint: [(x0, x1, y0, y1)] planta explícita de los recintos
+    cerrados (muelle: la cubierta es una losa enorme y no sirve para deducir la planta de la nave).
+    Devuelve (obj_ext, obj_int) — nuevos objetos con las caras separadas."""
     dg = bpy.context.evaluated_depsgraph_get()
     occl = [obj] + [o for o in others if o.type == "MESH"]
     bms = []
@@ -91,7 +97,7 @@ def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5, max_inside=3.0):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     mw = obj.matrix_world
-    inside = _footprint_grid(bm, mw)
+    inside = _rects_inside(footprint) if footprint else _footprint_grid(bm, mw)
     ext = []
     for f in bm.faces:
         c = mw @ f.calc_center_median()
@@ -264,8 +270,17 @@ def _graffiti_layer(nb, coord_obj, gmap, band_top):
     return col_acc, a_acc
 
 
-def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete", dust_h=0.35):
-    """Material de look-dev para `name` (nombre canónico del kit). Concreto/aplanado llevan todas las capas; el resto, capas reducidas."""
+CLAD_PAINT = {   # lámina pintada sobre óxido (muelle): color de la pintura vieja
+    "cladding": (0.60, 0.62, 0.60),     # nave: gris verdoso deslavado
+    "container": (0.24, 0.36, 0.40),    # contenedores: azul petróleo deslavado
+}
+
+
+def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete", dust_h=0.35,
+                     base_z=0.0, graffiti_mats=("concrete", "plaster")):
+    """Material de look-dev para `name` (nombre canónico del kit). Concreto/aplanado llevan todas las capas; el resto, capas reducidas.
+    base_z: cota del piso del modelo (musgo, polvo y salpicaduras se miden desde ahí; 0 en edificios, la cubierta en el muelle).
+    graffiti_mats: materiales que reciben la capa de grafiti."""
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     nb = NB(mat)
     out = nb.n("ShaderNodeOutputMaterial")
@@ -303,6 +318,26 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
 
     k = lambda fn, s, rot=0.0: nb.tex(os.path.join(TEX, fn), s, co, "Non-Color", rot_z=rot, offset=off).outputs[0]
     color = base
+    if name in CLAD_PAINT:
+        # L1 (lámina): pintura vieja sobre óxido; se cae por zonas, en bordes y cavidades (AO) y en la franja baja (salpicadura)
+        rust = nb.tex(os.path.join(TEX, "M1_rust_metal.png"), 1.2, co, offset=off)
+        t1 = rust
+        rough_base, metal = 0.62, 0.12
+        pc = CLAD_PAINT[name]
+        nzp = nb.n("ShaderNodeTexNoise", in_Scale=0.6, in_Detail=4.0)
+        nb.link(co, nzp.inputs["Vector"])
+        paint = nb.mix(nb.math("MULTIPLY", nzp.outputs["Fac"], 0.5), (*pc, 1.0), (pc[0] * 0.78, pc[1] * 0.78, pc[2] * 0.76, 1.0))
+        k1a = k("K1_peel.png", 2.1, 0.4)
+        k1b = k("K1_peel.png", 5.3, 1.3)
+        zone = nb.n("ShaderNodeTexNoise", in_Scale=0.09, in_Detail=2.0)
+        nb.link(co, zone.inputs["Vector"])
+        pv = nb.math("ADD", nb.math("MULTIPLY", k1a, 0.6), nb.math("MULTIPLY", k1b, 0.4))
+        pv = nb.math("ADD", pv, nb.math("MULTIPLY", nb.math("SUBTRACT", zone.outputs["Fac"], 0.5), 0.8))
+        lowp = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", nb.math("SUBTRACT", sep_p.outputs[2], base_z), 1.8), clamp=True)
+        pv = nb.math("ADD", pv, nb.math("MULTIPLY", lowp, 0.22))
+        aop = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.4)
+        pv = nb.math("ADD", pv, nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, aop.outputs["AO"], clamp=True), 0.35))
+        color = nb.mix(nb.math("GREATER_THAN", pv, 0.56), paint, rust.outputs[0])
     if name == "plaster":
         # L1: pintura vieja (crema/ocre apagado) que se descascara mostrando el concreto (L0); dos escalas de K1 contra repetición
         # under: lo que asoma bajo la pintura ('concrete' = losa/columna colada; 'brick' = relleno de tabique, APT_B/APT_C)
@@ -340,7 +375,8 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
             bmask = nb.math("MULTIPLY", nb.math("GREATER_THAN", bfield, thr), peel)
             conc = nb.mix(bmask, conc, brick)
         color = nb.mix(peel, tinted, conc)
-    if name in ("concrete", "plaster", "brick", "tile", "wood", "wood_dark", "wood_grey"):
+    if name in ("concrete", "plaster", "brick", "tile", "wood", "wood_dark", "wood_grey") + tuple(CLAD_PAINT):
+        zr = nb.math("SUBTRACT", sep_p.outputs[2], base_z)                 # altura sobre el piso del modelo
         # L2: suciedad por cavidades (AO)
         ao = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.6)
         dirt = nb.math("SUBTRACT", 1.0, ao.outputs["AO"], clamp=True)
@@ -350,7 +386,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         streak = nb.math("MULTIPLY", k("K2_rain_streaks.png", 3.6), vertical)
         color = nb.mix(nb.math("MULTIPLY", streak, 0.8), color, (0.17, 0.168, 0.16, 1.0), "MULTIPLY")
         # L4: eflorescencia (más abajo)
-        low = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 6.0), clamp=True)
+        low = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, 6.0), clamp=True)
         eff = nb.math("MULTIPLY", nb.math("MULTIPLY", k("K3_efflorescence.png", 2.3, 1.1), low), 0.55)
         color = nb.mix(eff, color, (0.86, 0.85, 0.80, 1.0))
         # L5: óxido sangrando (manchas grandes, escasas)
@@ -358,13 +394,13 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         rustm = nb.math("MULTIPLY", nb.math("GREATER_THAN", k("K6_rust_bleed.png", 4.1, 2.0), 0.72), 0.4)
         color = nb.mix(nb.math("MULTIPLY", rustm, vertical), color, (0.42, 0.31, 0.22, 1.0), "MULTIPLY")
         # L6: musgo/algas en la base (z < 1,4) y en la cara norte (+Y)
-        base_z = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 1.4), clamp=True)
+        base_zz = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, 1.4), clamp=True)
         north = nb.math("MULTIPLY", nb.math("GREATER_THAN", sep_n.outputs[1], 0.5), 0.45)
-        moss = nb.math("MULTIPLY", k("K4_moss.png", 1.9, 0.7), nb.math("MAXIMUM", base_z, north))
+        moss = nb.math("MULTIPLY", k("K4_moss.png", 1.9, 0.7), nb.math("MAXIMUM", base_zz, north))
         color = nb.mix(nb.math("MULTIPLY", moss, 0.85), color, (0.20, 0.25, 0.11, 1.0))
         # L7: arena y polvo en horizontales hacia arriba y en la base
         up = nb.math("GREATER_THAN", sep_n.outputs[2], 0.7)
-        ground = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], dust_h), clamp=True)   # 0,35 m con duna; 0,12 sin
+        ground = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", zr, dust_h), clamp=True)   # 0,35 m con duna; 0,12 sin
         nz2 = nb.n("ShaderNodeTexNoise", in_Scale=1.5, in_Detail=4.0)
         nb.link(co, nz2.inputs["Vector"])
         sand = nb.math("MULTIPLY", nb.math("MAXIMUM", nb.math("MULTIPLY", up, 0.6), ground), nz2.outputs["Fac"])
@@ -377,7 +413,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         edge = nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, dot.outputs["Value"]), 18.0, clamp=True)
         color = nb.mix(nb.math("MULTIPLY", edge, 0.5), color, (0.70, 0.68, 0.63, 1.0))
         nb.link(bev.outputs[0], bsdf.inputs["Normal"])
-    if gmap and name in ("concrete", "plaster"):
+    if gmap and name in graffiti_mats:
         # L9: grafiti de PB (capa RGBA por cara) con el relieve del soporte atravesando la pintura
         gcol, ga = _graffiti_layer(nb, co, gmap, band_top)
         # alfa x1,3 (tope 1): el desgaste del panel ya rompe la pintura; con 0,95 las piezas se perdían a 15 m en Three.js

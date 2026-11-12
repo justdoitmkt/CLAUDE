@@ -34,6 +34,15 @@ SHOTS_EXTRA = {
         "esquina": dict(azim=-45, elev=8, dist=22.0, target=Vector((-1.0, -1.0, 4.5)), fov=55),
         "ojo_acceso": dict(azim=-60, elev=-6, dist=10.0, target=Vector((-3.2, -1.8, 2.2)), fov=60),
     },
+    "MUE_1_carga": {
+        "playa": dict(azim=-22, elev=3, dist=52.0, target=Vector((2.0, 10.0, 4.0)), fov=60),
+        "mar": dict(azim=160, elev=1, dist=44.0, target=Vector((18.0, 48.0, 3.5)), fov=60),
+        "nave_interior": dict(azim=10, elev=2, dist=10.0, target=Vector((1.0, 23.0, 4.2)), fov=78, ground=False),
+        "rampa": dict(azim=-18, elev=7, dist=24.0, target=Vector((2.0, -8.0, 1.6)), fov=62),
+        "rampa_pie": dict(azim=-40, elev=4, dist=9.0, target=Vector((-21.0, -24.0, 0.8)), fov=60),
+        "atraque": dict(azim=165, elev=6, dist=13.0, target=Vector((22.0, 52.0, 2.0)), fov=58),
+        "grua": dict(azim=135, elev=8, dist=24.0, target=Vector((43.0, 49.0, 7.5)), fov=55),
+    },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
         "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),

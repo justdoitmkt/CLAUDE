@@ -424,3 +424,132 @@ def compose_graffiti_dense(width_m, height_m, px_per_m, keepout, out, *, seed, h
         a = cv[..., 3:4]
         paint = cv[..., :3] * np.clip(1.0 + hp * 2.5, 0.7, 1.3)[..., None]
         Image.fromarray((np.clip(b * (1 - a) + paint * a, 0, 1) * 255).astype(np.uint8)).save(jpg_out, quality=92)
+
+
+def compose_graffiti_zones(width_m, height_m, px_per_m, zones, keepout, out, *, seed, hero=(), tags=(), icons=(), drips=(),
+                           tags_per_m2=1.6, n_buffs=4, peel_mask=None, jpg_base=None, jpg_out=None):
+    """Capa de grafiti RGBA para caras sin una banda de PB continua (muelle): solo pinta dentro de `zones` [(u0, z0, u1, z1)]
+    (paredes reales: zócalos, lámina baja, pretiles, trabes de borde, contenedores) y nunca en `keepout` (vanos).
+    Mismas capas que compose_graffiti_dense, pero cada pieza se coloca entera dentro de una zona y los tags se reparten por
+    área; la densidad decrece desde el pie de cada zona."""
+    r = np.random.default_rng(seed)
+    W, H = int(width_m * px_per_m), int(height_m * px_per_m)
+    cv = np.zeros((H, W, 4), np.float32)
+    mask = np.zeros((H, W), np.float32)
+    PAL = [(0.03, 0.03, 0.04), (0.03, 0.03, 0.04), (0.08, 0.20, 0.62), (0.65, 0.07, 0.07), (0.92, 0.92, 0.90), (0.85, 0.62, 0.10)]
+    to_px = lambda x, y: (x * px_per_m, H - y * px_per_m)
+    zones = [z for z in zones if z[2] - z[0] > 0.2 and z[3] - z[1] > 0.2]
+    for (u0, z0, u1, z1) in zones:
+        mask[max(int(H - z1 * px_per_m), 0):max(int(H - z0 * px_per_m), 0), max(int(u0 * px_per_m), 0):max(int(u1 * px_per_m), 0)] = 1.0
+    area = np.array([(z[2] - z[0]) * (z[3] - z[1]) for z in zones])
+    prob = area / area.sum()
+
+    def pick(w=0.0, h=0.0):
+        """Zona (al azar por área) donde cabe una pieza w x h; None si no cabe en ninguna."""
+        ok = [i for i, z in enumerate(zones) if z[2] - z[0] >= w + 0.1 and z[3] - z[1] >= h + 0.1]
+        if not ok:
+            return None
+        p = prob[ok] / prob[ok].sum()
+        return zones[ok[int(r.choice(len(ok), p=p))]]
+
+    def place_tag(w, op_lo, op_hi, pal_n):
+        z = pick()
+        p = tags[int(r.integers(len(tags)))]
+        arr = _load_piece(p, w, px_per_m, rot=float(r.uniform(-14, 14)), rgb=PAL[int(r.integers(pal_n))])
+        x = float(r.uniform(z[0], z[2]))
+        y = z[1] + float(min(r.gamma(2.0, 0.35), z[3] - z[1]))
+        _stamp(cv, arr, *to_px(x, y), op=float(r.uniform(op_lo, op_hi)), overspray=0.22)
+    total = float(area.sum())
+    for _ in range(int(total * tags_per_m2)):
+        place_tag(float(r.uniform(0.4, 1.1)), 0.35, 0.85, len(PAL))
+    taken = []
+    for hp in hero:
+        arr = _load_piece(hp["png"], hp["w"], px_per_m, rot=hp.get("rot", float(r.uniform(-5, 5))))
+        hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m
+        z = pick(wm, hm)
+        if z is None:                      # se reduce hasta caber en la zona más alta (mínimo 60 %)
+            zz = max(zones, key=lambda q: q[3] - q[1])
+            k = min((zz[2] - zz[0] - 0.12) / wm, (zz[3] - zz[1] - 0.12) / hm)
+            if k < 0.6:
+                print(f"[grafiti] AVISO: sin lugar para {os.path.basename(hp['png'])} en {os.path.basename(out)}", flush=True)
+                continue
+            arr = _load_piece(hp["png"], hp["w"] * k, px_per_m, rot=hp.get("rot", 0.0))
+            hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m
+            z = zz
+        for _ in range(300):
+            x = float(r.uniform(z[0] + wm / 2 + 0.05, z[2] - wm / 2 - 0.05))
+            y = float(r.uniform(z[1] + hm / 2 + 0.05, z[3] - hm / 2 - 0.05))
+            rect = (x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2)
+            if not _hits(rect, keepout) and not _hits(rect, taken, pad=0.12):
+                break
+            z = pick(wm, hm) or z
+        else:
+            print(f"[grafiti] AVISO: sin lugar libre para {os.path.basename(hp['png'])} en {os.path.basename(out)}", flush=True)
+            continue
+        taken.append(rect)
+        _stamp(cv, arr, *to_px(x, y), op=float(r.uniform(0.9, 1.0)), overspray=0.35)
+    for _ in range(int(total * tags_per_m2 * 0.25)):
+        place_tag(float(r.uniform(0.35, 0.75)), 0.6, 0.95, 4)
+    for p in [icons[i] for i in r.permutation(len(icons))]:
+        arr = _load_piece(p, float(r.uniform(0.5, 0.9)), px_per_m, rot=float(r.uniform(-8, 8)))
+        hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m
+        for _ in range(60):
+            z = pick(wm, hm)
+            if z is None:
+                break
+            x, y = float(r.uniform(z[0] + wm / 2, z[2] - wm / 2)), float(r.uniform(z[1] + hm / 2, z[3] - hm / 2))
+            if not _hits((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2), taken + list(keepout), pad=0.05):
+                _stamp(cv, arr, *to_px(x, y), op=0.9, overspray=0.3)
+                taken.append((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2))
+                break
+    for _ in range(int(total * 0.15)):
+        p = drips[int(r.integers(len(drips)))]
+        arr = _load_piece(p, float(r.uniform(0.25, 0.55)), px_per_m, rgb=PAL[int(r.integers(4))] if r.random() < 0.5 else None)
+        hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m
+        z = pick()
+        x, y = float(r.uniform(z[0], z[2])), z[1] + float(r.uniform(0.2, min(1.6, z[3] - z[1])))
+        if not _hits((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2), taken):
+            _stamp(cv, arr, *to_px(x, y), op=float(r.uniform(0.5, 0.9)))
+    for _ in range(n_buffs):
+        z = pick(1.0, 0.6)
+        if z is None:
+            break
+        bw, bh = float(r.uniform(0.9, min(2.0, z[2] - z[0] - 0.1))), float(r.uniform(0.5, min(1.3, z[3] - z[1] - 0.05)))
+        bx, by = float(r.uniform(z[0], z[2] - bw)), float(r.uniform(z[1], z[3] - bh))
+        if _hits((bx, by, bx + bw, by + bh), taken, pad=0.05):
+            continue
+        ys0, ys1 = int(H - (by + bh) * px_per_m), int(H - by * px_per_m)
+        xs0, xs1 = int(bx * px_per_m), int((bx + bw) * px_per_m)
+        hh, ww = ys1 - ys0, xs1 - xs0
+        yy, xx = np.mgrid[0:hh, 0:ww]
+        d = np.minimum.reduce([xx / ww, 1 - xx / ww, yy / hh, 1 - yy / hh])
+        n = _blur(r.random((hh, ww)).astype(np.float32), 9) - 0.5
+        m = np.clip((d + n * 0.5 - 0.04) * 14, 0, 1)
+        g = float(r.uniform(0.42, 0.62)); col = np.array([g, g * 0.985, g * 0.95], np.float32)
+        reg = cv[ys0:ys1, xs0:xs1]
+        a_old = reg[..., 3:4].copy(); mm = m[..., None]
+        reg[..., :3] = np.where(a_old > 0, col * mm + reg[..., :3] * (1 - mm), col)
+        reg[..., 3:4] = np.maximum(a_old, mm * 0.92)
+    if peel_mask is not None:
+        pm = Image.open(peel_mask).convert("L")
+        tile = int(1.6 * px_per_m)
+        pm = np.asarray(pm.resize((tile, tile), Image.LANCZOS), np.float32) / 255.0
+        pm = np.tile(pm, (H // tile + 1, W // tile + 1))[:H, :W]
+        cv[..., 3] *= np.clip(1.0 - 0.5 * pm, 0.0, 1.0)
+    cv[..., 3] *= mask
+    for (kx0, ky0, kx1, ky1) in keepout:
+        cv[max(int(H - ky1 * px_per_m), 0):max(int(H - ky0 * px_per_m), 0), max(int(kx0 * px_per_m), 0):max(int(kx1 * px_per_m), 0), 3] = 0
+    pl = cv[..., :3].mean(axis=2, keepdims=True)
+    cv[..., :3] = np.clip(cv[..., :3] * 0.88 + pl * 0.12, 0, 1)
+    Image.fromarray((np.clip(cv, 0, 1) * 255).astype(np.uint8), "RGBA").save(out)
+    if jpg_base and jpg_out:
+        base = Image.open(jpg_base).convert("RGB")
+        tw = int(3.0 * px_per_m); base = base.resize((tw, tw), Image.LANCZOS)
+        bg = Image.new("RGB", (W, H))
+        for ty in range(0, H, tw):
+            for tx in range(0, W, tw):
+                bg.paste(base, (tx, ty))
+        b = np.asarray(bg, np.float32) / 255.0
+        a = cv[..., 3:4] * 0.85 + mask[..., None] * 0.0
+        shade = 0.55 + 0.45 * mask[..., None]
+        Image.fromarray((np.clip((b * (1 - a) + cv[..., :3] * a) * shade, 0, 1) * 255).astype(np.uint8)).save(jpg_out, quality=90)

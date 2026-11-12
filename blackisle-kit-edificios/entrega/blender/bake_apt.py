@@ -216,7 +216,7 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
 }
 # materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
 # y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)
-TILE_ALIAS = {"rubble": "concrete"}
+TILE_ALIAS = {"rubble": "concrete", "cladding": "metal_paint", "container": "metal_paint"}   # lámina: cara interior repetible
 # doble cara: láminas (lámina ondulada, tela, hierba) y la teja (piezas sueltas sin cara inferior: desde el ático se veía el cielo
 # y el sol pasaba, porque Three.js no dibuja la cara trasera ni la usa para la sombra)
 DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile")
@@ -523,12 +523,12 @@ def main():
     # oclusores: techo e interior (tabiques, puertas, escaleras). Sin el interior, la cara interior de un muro exterior veía el cielo
     # cruzando el cuarto y las ventanas de enfrente, iba al atlas exterior y salía con AO ~0 (cuartos negros en Three.js) o con la
     # textura de fachada. Los detalles no tapan: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
-    ext, intr = ld.split_exterior(shell, others=[roof, inter])
+    ext, intr = ld.split_exterior(shell, others=[roof, inter], footprint=cfg.get("exterior_footprint"))
     bpy.data.objects.remove(shell)
     short = "_".join(bid.split("_")[:2])
     gfile = os.path.join(ld.TEX, "graffiti", f"G_{short}_mapa.json")
     has_g = os.path.exists(gfile)                         # las cabañas no llevan panel de grafiti
-    band_top = (cfg["h"][0] + ab.GROUND + 0.7) if has_g else -1.0
+    band_top = cfg.get("band_top", cfg["h"][0] + ab.GROUND + 0.7) if has_g else -1.0
     main_o, rest_o = split_by(ext, lambda c, n: n.y < -0.5 or c.z < band_top, f"{prefix}_WallsMain", f"{prefix}_WallsRest")
     inter = join([inter, intr], f"{prefix}_Interior")
     if ue:                                               # sin terreno: lo que queda en la base es escombro exterior suelto
@@ -550,9 +550,9 @@ def main():
         log("arena: caras volteadas hacia arriba", len(down))
     atlas_objs = [(main_o, "walls_main"), (rest_o, "walls_rest")] + ([] if ue else [(sand_o, "skirt")])
     log("split ok", round(time.time() - t0), "s")
-    gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)),
-                           cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
-                           cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2) if has_g else None
+    gb = cfg.get("graffiti_bounds") or (cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
+                                        cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2)
+    gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)), *gb) if has_g else None
     for nm in sorted({m.name for o, _ in atlas_objs for m in o.data.materials}):
         ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top, dust_h=0.12 if ue else 0.35, **cfg.get("lookdev", {}))
     for o, _ in atlas_objs:
@@ -562,7 +562,7 @@ def main():
     nb = scale_band_islands(main_o, band_top, BAND_SCALE) if has_g else 0
     log("islas de banda ampliadas:", nb)
     mem = 0.0
-    sizes = SIZES if bid.startswith("APT") else SIZES_CAB
+    sizes = SIZES_CAB if bid.startswith("CAB") else SIZES
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles

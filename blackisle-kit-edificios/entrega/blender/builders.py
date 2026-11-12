@@ -7,6 +7,10 @@ def build(bid, **kw):
         if kw.get("dress_all", True) and kw.get("dress", True):
             _dress_interior(res)
         return res
+    if bid.startswith("MUE_"):
+        import mue_builder
+        kw.pop("dress_all", None)
+        return mue_builder.build_mue(bid, **kw)
     if bid.startswith("CAB_"):
         import cabin_builder
         kw.pop("dress_all", None)
