@@ -49,9 +49,10 @@ SHOTS_EXTRA = {
         "calle": dict(azim=-25, elev=4, dist=34.0, target=Vector((3.0, -6.0, 2.4)), fov=55),
         "urgencias": dict(azim=35, elev=6, dist=13.0, target=Vector((15.2, -9.0, 2.0)), fov=60),
         "trasera": dict(azim=160, elev=10, dist=30.0, target=Vector((4.0, 8.0, 2.0)), fov=55),
-        "espera": dict(azim=60, elev=-2, dist=6.5, target=Vector((-8.0, -6.6, 1.3)), fov=75, ground=False),
+        "espera": dict(azim=108, elev=3, dist=9.8, target=Vector((-11.8, -8.0, 1.0)), fov=75, ground=False),
         "pasillo": dict(azim=90, elev=0, dist=9.0, target=Vector((-4.0, -2.9, 1.5)), fov=70, ground=False),
-        "encamados": dict(azim=-150, elev=6, dist=5.5, target=Vector((-9.0, 8.0, 1.0)), fov=75, ground=False),
+        "encamados": dict(azim=52, elev=8, dist=5.8, target=Vector((-10.0, 8.6, 0.8)), fov=75, ground=False),
+        "urgencias_int": dict(azim=-70, elev=6, dist=6.5, target=Vector((7.0, -8.6, 0.9)), fov=75, ground=False),
         "patio": dict(azim=-30, elev=35, dist=10.0, target=Vector((0.5, 1.1, 1.0)), fov=60),
     },
     "APT_D_4p": {
@@ -60,6 +61,13 @@ SHOTS_EXTRA = {
     },
 }
 shots.update(SHOTS_EXTRA.get(bid, {}))
+for p in (res.get("stats", {}).get("interior_dress", {}).get("bulb_pos", []) if bid.startswith("HOS_") else []):
+    L = bpy.data.lights.new("_foco", "AREA")          # luminarias del hospital encendidas (interiores legibles en arcilla)
+    L.energy = 90.0
+    L.size = 1.1
+    lo = bpy.data.objects.new("_foco", L)
+    lo.location = (p[0], p[1], p[2] - 0.01)
+    bpy.context.scene.collection.objects.link(lo)
 if bid.startswith("MUE_"):
     # muelle: playa a z 0 que baja bajo la cubierta y mar a -0,5 (el piso automático quedaría en el fondo de los pilotes)
     me = bpy.data.meshes.new("_playa")

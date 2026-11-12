@@ -331,32 +331,44 @@ def lights(det, name, step=2.4):
 
 
 # ------------------------------------------------------------------------------------------------------------ vanos
-def place_windows(det, M, ops, r, depth=TE, grille=True, sill=True):
+def surround(det, M, u0, u1, v0, v1, fw=0.09, proud=0.025, mat="paint_green", bottom=False):
+    """Marco de aplanado en relieve alrededor de un vano (como en la referencia: marcos verdes sobre el muro crema)."""
+    det.box((u0 - fw, -proud, v0 - (fw if bottom else 0.0)), (u0, 0.0, v1 + fw), mat, bevel=0.006, m=M)
+    det.box((u1, -proud, v0 - (fw if bottom else 0.0)), (u1 + fw, 0.0, v1 + fw), mat, bevel=0.006, m=M)
+    det.box((u0, -proud, v1), (u1, 0.0, v1 + fw), mat, bevel=0.006, m=M)
+    if bottom:
+        det.box((u0, -proud, v0 - fw), (u1, 0.0, v0), mat, bevel=0.006, m=M)
+
+
+def place_windows(det, M, ops, r, depth=TE, grille=True, sill=True, frame=True):
     for (u0, u1, v0, v1) in ops:
         w, h = u1 - u0, v1 - v0
         if v0 <= FFL + 0.05:
+            if frame and v0 >= 0.0:
+                surround(det, M, u0, u1, v0, v1)
             continue
-        det.join(op.window("sliding", w, h, depth=depth, seed=int(r.integers(1e6)), broken=0.0, curtain=False, sill=sill),
-                 M @ _T(u0, 0, v0))
+        if frame:
+            surround(det, M, u0, u1, v0, v1)
+        det.join(cl.window_clean(w, h, depth=depth, seed=int(r.integers(1e6)), sill=sill), M @ _T(u0, 0, v0))
         if grille:
             det.join(cl.window_grille(w, h - 0.05, seed=int(r.integers(1e6))), M @ _T(u0, 0, v0 + 0.05))
 
 
 def place_doors(det, r):
-    remap = {"wood": "paint_mint", "wood_dark": "paint_green", "wood_grey": "paint_mint"}
+    """Puertas limpias de hospital en uso (kit/clinic): tablero pintado, doble de tablero, doble de vidrio y de acero."""
     for (M, w, h, kind, ang, depth) in DOORS:
-        if kind == "flush2":
-            leaf = w / 2
-            for (u, a) in ((0.0, ang), (leaf, -ang * 0.6)):
-                d = op.door("flush", leaf, h, depth=depth, seed=int(r.integers(1e6)), open_angle=abs(a))
-                cl.remap(d, remap)
-                Mi = M @ _T(u, 0, 0) if a >= 0 else M @ _T(u + leaf, 0, 0) @ Matrix.Scale(-1, 4, Vector((1, 0, 0)))
-                det.join(d, Mi)
-            continue
-        d = op.door(kind, w, h, depth=depth, seed=int(r.integers(1e6)), open_angle=ang)
         if kind == "flush":
-            cl.remap(d, remap)
-        det.join(d, M)
+            det.join(cl.door_panel(w, h, depth=depth, seed=int(r.integers(1e6)), ang=ang), M)
+        elif kind == "flush2":
+            leaf = w / 2
+            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang), M)
+            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang * 0.15),
+                     M @ _T(w, 0, 0) @ Matrix.Scale(-1, 4, Vector((1, 0, 0))))
+        elif kind == "double_glazed":
+            det.join(cl.door_glass_double(w, h, depth=depth, seed=int(r.integers(1e6)), angles=(ang, ang * 0.3),
+                                          transom=max(0.0, h - 2.1)), M)
+        else:
+            det.join(cl.door_steel(w, h, depth=depth, seed=int(r.integers(1e6)), ang=ang), M)
 
 
 # ------------------------------------------------------------------------------------------------------------ exterior
@@ -369,6 +381,14 @@ def wedge(mb, x0, x1, y0, y1, z0a, z0b, mat="concrete", axis="y"):
     v = [mb.bm.verts.new(p) for p in pts]
     for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
         mb.face([v[i] for i in q], mat)
+
+
+def cornice(shell, x0, x1, y0, y1, z, h=0.1, proud=0.05):
+    """Moldura corrida bajo el pretil: frente y fondo de esquina a esquina, costados entre ellos (sin caras encimadas)."""
+    shell.box((x0 - proud, y0 - proud, z), (x1 + proud, y0, z + h), "plaster")
+    shell.box((x0 - proud, y1, z), (x1 + proud, y1 + proud, z + h), "plaster")
+    shell.box((x0 - proud, y0, z), (x0, y1, z + h), "plaster")
+    shell.box((x1, y0, z), (x1 + proud, y1, z + h), "plaster")
 
 
 def site(shell, inter, det, roof, r):
@@ -516,6 +536,25 @@ def _gate(det, x0, x1, y, r):
 
 # ------------------------------------------------------------------------------------------------------------ azotea y servicios
 def rooftop(roof, det, r):
+    # registro de azotea con tapa de lámina y bisagras
+    roof.box((-8.5, 6.2, SLAB_T), (-7.6, 7.1, SLAB_T + 0.35), "concrete", bevel=0.01)
+    det.box((-8.55, 6.15, SLAB_T + 0.35), (-7.55, 7.15, SLAB_T + 0.39), "metal_paint", bevel=0.006)
+    det.box((-8.12, 6.12, SLAB_T + 0.36), (-7.98, 6.16, SLAB_T + 0.38), "steel", bevel=0.002)
+    for x in (-8.4, -7.7):
+        det.cyl((x, 7.17, SLAB_T + 0.37), (x + 0.08, 7.17, SLAB_T + 0.37), 0.008, seg=8, mat="steel")
+    # tubos de ventilación de los baños y la cocina, con sombrerete
+    for (x, y) in ((0.9, 8.6), (3.0, 8.6), (6.2, 9.1), (-3.0, 9.1)):
+        det.cyl((x, y, SLAB_T), (x, y, SLAB_T + 0.6), 0.05, seg=14, mat="plastic")
+        port.lathe(det, [(0.0, 0.0), (0.055, 0.0), (0.055, 0.03), (0.0, 0.03)], seg=14, mat="plastic", M=_T(x, y, SLAB_T))
+        port.lathe(det, [(0.0, 0.0), (0.09, 0.0), (0.085, 0.015), (0.05, 0.05), (0.0, 0.06)], seg=14, mat="plastic",
+                   M=_T(x, y, SLAB_T + 0.66))
+        for k in range(3):
+            a = 2 * math.pi * k / 3
+            det.cyl((x + 0.05 * math.cos(a), y + 0.05 * math.sin(a), SLAB_T + 0.6),
+                    (x + 0.05 * math.cos(a), y + 0.05 * math.sin(a), SLAB_T + 0.66), 0.006, seg=5, mat="plastic")
+    # tubería de los tinacos bajando a la azotea y al muro
+    det.tube([(8.2, 7.0, SLAB_T + 0.9), (8.2, 7.0, SLAB_T + 0.12), (8.2, 9.6, SLAB_T + 0.12), (8.2, 9.75, SLAB_T - 0.3),
+              (8.2, 10.06, SLAB_T - 0.3), (8.2, 10.06, FFL + 0.4)], 0.022, seg=10, mat="plastic")
     for (x, y) in ((7.4, 7.6), (9.0, 7.6)):
         det.join(sv.water_tank(seed=int(r.integers(1e6)), detail="mid"), _T(x, y, SLAB_T))
     # gárgolas de PVC en el pretil (fondo y costados), cada ~7 m
@@ -539,6 +578,8 @@ def rooftop(roof, det, r):
         det.tube([tuple(Mb @ Vector((X1 - x + 0.3, -0.12, 2.35))), tuple(Mb @ Vector((X1 - x + 0.3, -0.06, 2.9))),
                   tuple(Mb @ Vector((X1 - x + 0.3, 0.05, 2.95)))], 0.018, seg=8, mat="plastic")
     det.join(sv.meter_box(seed=int(r.integers(1e6)), open_door=False, detail="high"), Mb @ _T(X1 - 8.2, 0, 1.4))
+    det.join(sv.conduit([(X1 - 8.2, 0.0, 1.92), (X1 - 8.2, 0.0, 3.3), (X1 - 7.4, 0.0, 3.3), (X1 - 7.4, 0.0, PARA - 0.15)],
+                        seed=int(r.integers(1e6)), detail="high"), Mb)                # conduit del medidor hacia la azotea
 
 
 # ------------------------------------------------------------------------------------------------------------ letreros
@@ -555,7 +596,8 @@ def signage(det, Ms, r):
     G = ac.panel_matrix("front", GX0, GX1, GY0, 0.0)
     cl.text(det, "AMBULANCE ENTRANCE", 0.26, 0.012, "sign_red", G @ _T((GX1 - GX0) / 2, 0, 3.32) @ Matrix.Rotation(math.pi / 2, 4, "X"))
     det.join(cl.sign_plate("AMBULANCE ONLY", 0.62, 0.3, bg="sign_white", fg="sign_red", size=0.075), G @ _T(4.0, 0, 1.7))
-    det.join(cl.wall_lamp(), G @ _T(4.0, 0, 3.35))
+    for u in (0.2, 4.0, 7.8):
+        det.join(cl.wall_lamp(), G @ _T(u, 0, 2.95))
     for (x0, x1) in ((GX0 + 0.4, GX0 + 3.8), (GX0 + 4.2, GX0 + 7.6)):        # franjas y NO PARKING pintados en la plataforma
         for x in (x0, x1 - 0.1):
             det.box((x, -14.2, PAVE), (x + 0.1, GY0 - 0.2, PAVE + 0.002), "paint_yellow", bevel=0.0)
@@ -605,7 +647,7 @@ def furnish(inter, det, r):
     _wall_item(det, cl.sign_plate("RECEPTION", 1.1, 0.24, size=0.13), x1, -7.2, z + 2.3, "-x")
     _wall_item(det, cl.extinguisher(), x0, -5.0, z, "+x")
     # ventanilla de recepción: cancel de aluminio y repisas a ambos lados
-    det.join(op.window("sliding", 1.6, 1.15, depth=TI, seed=int(r.integers(1e6)), broken=0.0, curtain=False, sill=False),
+    det.join(cl.window_clean(1.6, 1.15, depth=TI, seed=int(r.integers(1e6)), sill=False, open_frac=0.6),
              _T(-2.0 + TI / 2, -8.0, z + 1.05) @ _Rz(90))
     for sgn in (-1, 1):
         inter.box((-2.0 + sgn * TI / 2 - (0.25 if sgn < 0 else 0), -8.05, z + 1.02), (-2.0 + sgn * TI / 2 + (0.25 if sgn > 0 else 0), -6.35, z + 1.05),
@@ -926,6 +968,8 @@ def build_hos(bid="HOS_1_pueblo", collection_root=None, dress=True):
         wainscot(inter, nm)
         if not nm.startswith("bano"):
             lights(det, nm)
+    cornice(shell, X0, X1, Y0, Y1, SLAB_T - 0.05)
+    cornice(shell, GX0, GX1, GY0, GY1, G_ST - 0.05)
     site(shell, inter, det, roof, r)
     rooftop(roof, det, r)
     signage(det, Ms, r)

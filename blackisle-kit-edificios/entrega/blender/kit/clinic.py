@@ -1337,3 +1337,167 @@ def lead_screen():
     for x in (-0.45, 0.45):
         mb.box((x - 0.04, -0.3, 0.0), (x + 0.04, 0.3, 0.08), "steel")
     return mb
+
+
+# ======================================================================================================== vanos limpios
+# Las ventanas y puertas de kit/openings vienen rotas (edificios abandonados). Un hospital en uso lleva todo entero.
+def _al_frame(mb, w, h, y0, y1, prof_w=0.045, mat="aluminium"):
+    """Marco perimetral de aluminio dentro del vano (local u 0..w, v 0..h), de y0 a y1, con canal y esquinas a inglete."""
+    d = y1 - y0
+    # marco como cuatro barras rectangulares con canal (más simple y exacto en las esquinas)
+    for (u0, v0, u1, v1) in ((0.0, 0.0, w, prof_w), (0.0, h - prof_w, w, h), (0.0, 0.0, prof_w, h), (w - prof_w, 0.0, w, h)):
+        mb.box((u0, y0, v0), (u1, y1, v1), mat, bevel=0.002)
+    for (u0, v0, u1, v1) in ((prof_w, prof_w - 0.006, w - prof_w, prof_w), (prof_w, h - prof_w, w - prof_w, h - prof_w + 0.006)):
+        for yy in (y0 + d * 0.33, y0 + d * 0.62):
+            mb.box((u0, yy, v0), (u1, yy + 0.004, v1), mat, bevel=0.0)
+
+
+def _al_sash_clean(mb, x0, x1, z0, z1, y, mat="aluminium", t=0.022, sw=0.035, mid=None):
+    """Hoja de aluminio con vidrio entero de 6 mm, empaque de hule y travesaño opcional."""
+    for (u0, v0, u1, v1) in ((x0, z0, x1, z0 + sw), (x0, z1 - sw, x1, z1), (x0, z0, x0 + sw, z1), (x1 - sw, z0, x1, z1)):
+        mb.box((u0, y - t / 2, v0), (u1, y + t / 2, v1), mat, bevel=0.002)
+    lites = [(z0 + sw, z1 - sw)]
+    if mid:
+        mb.box((x0 + sw, y - t / 2 + 0.002, mid - 0.015), (x1 - sw, y + t / 2 - 0.002, mid + 0.015), mat, bevel=0.002)
+        lites = [(z0 + sw, mid - 0.015), (mid + 0.015, z1 - sw)]
+    for (a, b) in lites:
+        mb.box((x0 + sw - 0.008, y - 0.003, a - 0.008), (x1 - sw + 0.008, y + 0.003, b + 0.008), "glass", bevel=0.0)
+        for (u0, v0, u1, v1) in ((x0 + sw, a, x1 - sw, a + 0.006), (x0 + sw, b - 0.006, x1 - sw, b), (x0 + sw, a, x0 + sw + 0.006, b),
+                                 (x1 - sw - 0.006, a, x1 - sw, b)):
+            for s_ in (-1, 1):
+                mb.box((u0, y + s_ * 0.0035 - 0.0012, v0), (u1, y + s_ * 0.0035 + 0.0012, v1), "rubber", bevel=0.0)
+
+
+def window_clean(w, h, depth=0.2, seed=0, open_frac=None, sill=True):
+    """Ventana corrediza de aluminio en uso: marco con rieles, dos hojas con vidrio entero (una entreabierta), traslape con
+    cerrojo de media luna, jaladera, y alféizar de concreto con gotero por fuera. Local: u 0..w, v 0..h, muro y 0..depth."""
+    r = rng(seed)
+    mb = MB()
+    fy0, fy1 = depth * 0.35, depth * 0.35 + 0.065
+    _al_frame(mb, w, h, fy0, fy1)
+    pw = 0.045
+    half = (w - 2 * pw) / 2 + 0.03
+    of = float(r.uniform(0.0, 0.35)) if open_frac is None else open_frac
+    mid = h * 0.5 if h > 1.0 else None
+    ya, yb = fy0 + 0.018, fy0 + 0.045
+    _al_sash_clean(mb, pw, pw + half, pw, h - pw, ya, mid=mid)
+    xo = pw + half - 0.06 - of * (half - 0.1)
+    xo = max(pw, min(xo, w - pw - half))
+    _al_sash_clean(mb, xo + 0.0, xo + half, pw, h - pw, yb, mid=mid)
+    zl = h * 0.5
+    mb.box((pw + half - 0.03, ya + 0.011, zl - 0.04), (pw + half - 0.01, ya + 0.02, zl + 0.04), "aluminium", bevel=0.002)
+    mb.box((xo + half - 0.03, yb - 0.02, zl - 0.06), (xo + half - 0.015, yb - 0.011, zl + 0.06), "aluminium", bevel=0.002)
+    if sill:
+        mb.box((-0.04, -0.06, -0.05), (w + 0.04, fy0, 0.0), "concrete", bevel=0.008)
+        mb.box((-0.04, -0.06, -0.065), (w + 0.04, -0.045, -0.05), "concrete", bevel=0.002)
+    mb.box((0.0, fy1, -0.02), (w, depth, 0.0), "paint_white", bevel=0.004)                 # repisa interior
+    return mb
+
+
+def door_glass_double(w, h, depth=0.2, seed=0, angles=(0.0, 0.0), transom=0.3):
+    """Puerta doble de aluminio y vidrio (entrada): marco con travesaño y fijo superior, hojas con zoclo pateador alto,
+    travesaño medio, vidrio entero, jaladeras verticales de tubo, cierrapuertas aéreos y topes de piso.
+    Local: u 0..w, v 0..h (v = 0 piso terminado), muro y 0..depth; las hojas abren hacia +Y (adentro)."""
+    mb = MB()
+    fy0, fy1 = depth * 0.3, depth * 0.3 + 0.1
+    pw = 0.05
+    hd = h - transom
+    for (u0, v0, u1, v1) in ((0.0, 0.0, pw, h), (w - pw, 0.0, w, h), (0.0, h - pw, w, h), (pw, hd - 0.03, w - pw, hd + 0.03)):
+        mb.box((u0, fy0, v0), (u1, fy1, v1), "aluminium", bevel=0.003)
+    mb.box((pw, (fy0 + fy1) / 2 - 0.003, hd + 0.03), (w - pw, (fy0 + fy1) / 2 + 0.003, h - pw), "glass", bevel=0.0)
+    mb.box((pw, fy0 - 0.005, -0.01), (w - pw, fy1 + 0.005, 0.0), "aluminium", bevel=0.001)
+    lw = (w - 2 * pw - 0.006) / 2
+    for k, (hx, sgn) in enumerate(((pw, 1), (w - pw, -1))):
+        leaf = MB()
+        T, sw, kick = 0.045, 0.1, 0.22
+        for (u0, v0, u1, v1) in ((0.0, 0.006, sw, hd - 0.035), (lw - sw, 0.006, lw, hd - 0.035), (0.0, hd - 0.035 - sw, lw, hd - 0.035),
+                                 (0.0, 0.006, lw, kick), (0.0, 0.98, lw, 1.06)):
+            leaf.box((u0, -T / 2, v0), (u1, T / 2, v1), "aluminium", bevel=0.003)
+        for (a, b) in ((kick, 0.98), (1.06, hd - 0.035 - sw)):
+            leaf.box((sw - 0.01, -0.003, a - 0.01), (lw - sw + 0.01, 0.003, b + 0.01), "glass", bevel=0.0)
+        leaf.box((0.0, -T / 2 - 0.0015, 0.006), (lw, -T / 2, kick), "steel", bevel=0.0)
+        hxl = lw - 0.07
+        for s_ in (-1, 1):
+            leaf.cyl((hxl, s_ * (T / 2 + 0.05), 0.8), (hxl, s_ * (T / 2 + 0.05), 1.4), 0.014, seg=12, mat="steel")
+            for z in (0.85, 1.35):
+                leaf.cyl((hxl, s_ * T / 2, z), (hxl, s_ * (T / 2 + 0.05), z), 0.008, seg=8, mat="steel")
+        leaf.box((0.03, T / 2, hd - 0.1), (0.3, T / 2 + 0.04, hd - 0.05), "aluminium", bevel=0.004)
+        leaf.box((0.25, T / 2 + 0.01, hd - 0.085), (0.5, T / 2 + 0.025, hd - 0.07), "aluminium", bevel=0.002)
+        ang = angles[k]
+        if sgn > 0:
+            M = _T(hx + 0.003, (fy0 + fy1) / 2, 0.0) @ _Rz(ang)
+        else:
+            M = _T(hx - 0.003, (fy0 + fy1) / 2, 0.0) @ _Rz(-ang) @ Matrix.Scale(-1, 4, Vector((1, 0, 0)))
+        mb.join(leaf, M)
+        port.lathe(mb, [(0.0, 0.0), (0.025, 0.0), (0.02, 0.05), (0.0, 0.06)], seg=12, mat="rubber",
+                   M=_T(hx + sgn * (lw - 0.1), fy1 + 0.6, 0.0))
+    return mb
+
+
+def door_panel(w, h=2.1, depth=0.12, seed=0, ang=45.0, mat="paint_mint", frame_mat="paint_green", kick=True):
+    """Puerta interior de tablero (4 tableros con bisel), chambrana a ambos lados, marco, 3 bisagras, manija de palanca con
+    roseta, placa pateadora de acero y tope de piso. Local: u 0..w, v 0..h, muro y 0..depth; la hoja abre hacia +Y."""
+    mb = MB()
+    jw = 0.035
+    for (u0, v0, u1, v1) in ((-0.002, 0.0, jw, h + 0.002), (w - jw, 0.0, w + 0.002, h + 0.002), (-0.002, h - jw, w + 0.002, h + 0.002)):
+        mb.box((u0, -0.002, v0), (u1, depth + 0.002, v1), frame_mat, bevel=0.003)
+    for (y0, y1) in ((-0.018, 0.0), (depth, depth + 0.018)):        # chambranas
+        for (u0, v0, u1, v1) in ((-0.07, 0.0, 0.0, h + 0.07), (w, 0.0, w + 0.07, h + 0.07), (-0.07, h, w + 0.07, h + 0.07)):
+            mb.box((u0, y0, v0), (u1, y1, v1), frame_mat, bevel=0.004)
+    lw, lh, T = w - 2 * jw - 0.006, h - jw - 0.008, 0.04
+    leaf = MB()
+    st, rl = 0.11, 0.12
+    for (u0, v0, u1, v1) in ((0.0, 0.0, st, lh), (lw - st, 0.0, lw, lh), (0.0, lh - rl, lw, lh), (0.0, 0.0, lw, 0.2),
+                             (0.0, lh * 0.45, lw, lh * 0.45 + rl), (lw / 2 - 0.05, 0.2, lw / 2 + 0.05, lh - rl)):
+        leaf.box((u0, -T / 2, v0), (u1, T / 2, v1), mat, bevel=0.004)
+    for (a, b) in ((0.2, lh * 0.45), (lh * 0.45 + rl, lh - rl)):
+        for (c, d) in ((st, lw / 2 - 0.05), (lw / 2 + 0.05, lw - st)):
+            leaf.box((c, -T / 2 + 0.008, a), (d, T / 2 - 0.008, b), mat, bevel=0.0)
+            for s_ in (-1, 1):                                    # tablero realzado con bisel
+                leaf.box((c + 0.03, s_ * (T / 2 - 0.008) - (0.006 if s_ > 0 else 0.0), a + 0.03),
+                         (d - 0.03, s_ * (T / 2 - 0.008) + (0.0 if s_ > 0 else 0.006), b - 0.03), mat, bevel=0.012)
+    if kick:
+        for s_ in (-1, 1):
+            leaf.box((0.02, s_ * T / 2 - (0.0015 if s_ < 0 else 0.0), 0.02), (lw - 0.02, s_ * T / 2 + (0.0015 if s_ > 0 else 0.0), 0.22),
+                     "steel", bevel=0.0)
+    hx = lw - 0.065
+    for s_ in (-1, 1):
+        port.lathe(leaf, [(0.0, 0.0), (0.028, 0.0), (0.028, 0.006), (0.02, 0.012), (0.0, 0.012)], seg=16, mat="steel",
+                   M=_T(hx, s_ * T / 2, 1.0) @ Matrix.Rotation(-s_ * PI / 2, 4, "X"))
+        leaf.tube([(hx, s_ * (T / 2 + 0.01), 1.0), (hx, s_ * (T / 2 + 0.055), 1.0), (hx - 0.12, s_ * (T / 2 + 0.06), 1.0)], 0.009,
+                  seg=10, mat="steel")
+    for z in (0.22, lh / 2, lh - 0.22):
+        leaf.cyl((0.0, -T / 2 - 0.004, z - 0.05), (0.0, -T / 2 - 0.004, z + 0.05), 0.007, seg=8, mat="steel")
+    M = _T(jw + 0.003, depth / 2, 0.004) @ _Rz(ang)
+    mb.join(leaf, M)
+    a = math.radians(ang)
+    port.lathe(mb, [(0.0, 0.0), (0.018, 0.0), (0.014, 0.03), (0.0, 0.035)], seg=12, mat="rubber",
+               M=_T(jw + (lw - 0.08) * math.cos(a), depth / 2 + (lw - 0.08) * math.sin(a) + 0.05, 0.0))
+    del seed
+    return mb
+
+
+def door_steel(w, h=2.1, depth=0.2, seed=0, ang=0.0, panic=True, mat="paint_green"):
+    """Puerta de servicio de acero: marco de lámina, hoja lisa con refuerzos, barra de pánico por dentro, manija por fuera,
+    cierrapuertas, mirilla de vidrio armado y placa pateadora. Local: u 0..w, v 0..h, muro y 0..depth; abre hacia -Y (afuera)."""
+    mb = MB()
+    jw = 0.05
+    for (u0, v0, u1, v1) in ((0.0, 0.0, jw, h), (w - jw, 0.0, w, h), (0.0, h - jw, w, h)):
+        mb.box((u0, depth * 0.2, v0), (u1, depth * 0.8, v1), mat, bevel=0.003)
+    lw, lh, T = w - 2 * jw - 0.006, h - jw - 0.006, 0.045
+    leaf = MB()
+    leaf.box((0.0, -T / 2, 0.0), (lw, T / 2, lh), mat, bevel=0.004)
+    for v in (0.35, 1.05, 1.75):
+        leaf.box((0.04, -T / 2 - 0.002, v - 0.02), (lw - 0.04, -T / 2, v + 0.02), mat, bevel=0.001)
+    leaf.box((lw / 2 - 0.12, -T / 2 - 0.004, 1.45), (lw / 2 + 0.12, T / 2 + 0.004, 1.75), mat, bevel=0.003)
+    leaf.box((lw / 2 - 0.1, -0.003, 1.47), (lw / 2 + 0.1, 0.003, 1.73), "glass", bevel=0.0)
+    leaf.box((0.02, -T / 2 - 0.0015, 0.02), (lw - 0.02, -T / 2, 0.25), "steel", bevel=0.0)
+    if panic:
+        leaf.box((0.08, T / 2, 0.92), (lw - 0.06, T / 2 + 0.07, 0.98), "steel", bevel=0.01)
+        leaf.box((lw - 0.16, T / 2, 0.88), (lw - 0.04, T / 2 + 0.08, 1.02), "sign_red", bevel=0.01)
+    leaf.tube([(lw - 0.06, -T / 2, 1.0), (lw - 0.06, -T / 2 - 0.05, 1.0), (lw - 0.18, -T / 2 - 0.055, 1.0)], 0.009, seg=10, mat="steel")
+    leaf.box((0.03, -T / 2 - 0.04, lh - 0.12), (0.32, -T / 2, lh - 0.06), "steel", bevel=0.005)
+    M = _T(jw + 0.003, depth * 0.5, 0.004) @ _Rz(-ang)
+    mb.join(leaf, M)
+    del seed
+    return mb
