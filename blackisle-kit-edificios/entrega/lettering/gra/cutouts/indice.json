@@ -1,0 +1,10 @@
+{
+ "modelo": "GRA_1_tienda",
+ "regla": "R-GRAF: solo grafiti callejero cholo/chicano; R4: nombres ficticios, sin números, coronas, estrellas ni puntos",
+ "piezas": {
+  "G01_DRYCREEK_placa": "placa en letra gótica (Old English) DRY CREEK con roll call SPARKY / TOPO / FLACO, aerosol negro (job 99c6e52f)",
+  "G02_Sparky_firma": "firma en script chicano 'Sparky' con remate, aerosol negro (job 99c6e52f)",
+  "G03_DRYCREEK_placa_contorno": "variante: placa gótica negra con contorno blanco y roll call (job 799732a7) — alterna, no usada",
+  "G04_Topo_firma": "variante: firma script 'Topo' café (job 799732a7) — alterna, no usada"
+ }
+}

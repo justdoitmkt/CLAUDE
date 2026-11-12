@@ -431,3 +431,24 @@ honesto de lo que quede por debajo. La primera lámina del mobiliario del hospit
   `kit_ue5_descargas/BLACKISLE_UE5_HOS_1_pueblo.zip` 38,6 MiB (un solo ZIP) + común rehecho (65,8 MiB). Vistas previas
   finales en `render_qa/ue5/HOS_1_pueblo_ue5_{calle,urgencias,trasera,pasillo,encamados,interior}.png`, revisadas a ojo:
   fachada mantenida, puerta principal hasta el piso, camas tendidas visibles.
+
+## Nuevo modelo: GRA_1_tienda (granero con tienda comunitaria) · referencias (2026-11-12)
+Pedido: un granero y al lado una tienda comunitaria chica para comprar suministros (medicinas, comida, munición y cerveza), en
+una granja con algo de ganado que **no** se modela. Generado con `nano_banana_2_1` a 1k (thinking medium); ancla de estilo de
+grafiti `ref_grafiti_planta_baja_1` en las vistas exteriores. 8 imágenes + 2 hojas de lettering, 0 rechazos, **15 créditos**
+(saldo 224,75 → 209,75, plan plus). Revisadas con mis ojos; en `refs_higgsfield/GRA_1_tienda/`:
+| Vista | job | Qué fija |
+|---|---|---|
+| hero | 8301fcd0 | granero de tablas rojas sobre base de block con techo a dos aguas quebrado (gambrel) de lámina galvanizada, puerta de heno con viga y polea, puertas corredizas con cruz; tienda COMMUNITY STORE de aplanado amarillo pálido con zoclo azul, tejaban de lámina en postes, lista MEDICAL - FOOD - AMMO - COLD BEER |
+| tienda | f82ce81c | frente de la tienda: puerta con reja, ventanilla con barrotes y repisa de madera, letrero OPEN, pizarrón, congelador, cajas de envases, banca, medidor |
+| granero | cb4d1517 | frente del granero (se toma el techo gambrel del hero, no la buhardilla de esta vista), puerta corrediza con FEED, pacas, costales, carretilla, tarimas, bebedero |
+| trasera | 28a2193c | tejaban lateral con pacas y costales, corral vacío de rajas, tinaco sobre base de acero, jaula de cilindros, condensadora |
+| tienda_int | 8e36e295 | mostrador de madera con malla, gabinete de acero y vidrio para munición, botiquín con cruz verde, anaqueles de abarrotes, refrigerador de cerveza, congelador, báscula, pizarrón (con faltas de ortografía: se corrigen al modelar) |
+| granero_int | 4b3b3b49 | estructura de postes y vigas con tornapuntas, tapanco con escalera y pacas, corrales vacíos, banco de trabajo, cuerdas, foco colgante |
+| aérea | 13e42c9f | distribución: granero con tejaban y corral al poniente, tienda 4 m al oriente con tinaco, patio de tierra, alambrado |
+| materiales | 53694951 | tabla roja, lámina con óxido, block, aplanado amarillo con zoclo azul, poste con herraje, piso de barro rojo, paca, reja verde |
+- **Regla R-GRAF (nueva, CLAUDE.md):** solo grafiti callejero cholo/chicano (placas, firmas, piezas, arte callejero), sin
+  ilustraciones propias; aquí **solo un par** en un costado del granero. Las referencias traen de más: no se copian.
+- **Biblioteca exclusiva** (`lettering/gra/`, jobs 99c6e52f y 799732a7, recortadas con el verde muestreado y despill):
+  G01 placa gótica DRY CREEK con roll call SPARKY / TOPO / FLACO y G02 firma script "Sparky" (las dos que van al granero);
+  G03/G04 variantes alternas. Nombres ficticios, sin números, coronas, estrellas ni puntos (R4).

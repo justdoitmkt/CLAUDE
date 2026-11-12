@@ -20,6 +20,18 @@ Regla de trabajo, sin excepciones:
    compara con una referencia real. Si a esa distancia se lee como "caja de cartón" o "low poly", se rehace antes de seguir.
 6. **Al reportar,** decir con honestidad qué piezas siguen por debajo de este estándar; nunca presentarlas como terminadas.
 
+## R-GRAF · Estilo y cantidad de grafiti (orden del usuario, 2026-11-12)
+Cita: "Aquí ya no metas ilustraciones propias, únicamente grafitis, placas, firmas, artes, dibujos, ilustraciones callejeras,
+street. Que se ve así muy cholo, chicano. Esa es la regla de los grafitis para cada lugar. Cuando yo te pida que no los
+incluyas, no los vas a incluir."
+1. **Solo grafiti callejero** con estética chola/chicana: placas, firmas, tags, throw-ups, piezas, arte y dibujos callejeros
+   (letra gótica "Old English", script chicano, sombreado fino, contornos y brillos de aerosol). **Prohibidas las ilustraciones
+   propias** tipo cartel o mural institucional (como el mural "get well" o el corazón de enfermeras del hospital, que se queda
+   como está porque al usuario le gustó ahí).
+2. **R4 sigue mandando:** crews y nombres ficticios; nada de números, siglas ni símbolos de pandillas reales, ni símbolos de odio.
+3. **Cantidad según cada lugar:** si el usuario pide un lugar sin grafiti, no se pone; si pide poco, es poco (granero GRA_1:
+   solo un par de rayaduras en un costado).
+
 ## Otras reglas vigentes (resumen; detalle en blackisle-kit-edificios/entrega/ESTADO.md)
 - R4: contenido seguro. Lettering con palabras inocuas; prohibidos nombres, números, siglas o símbolos de pandillas reales,
   símbolos de odio, personas reales y marcas comerciales. Crews ficticios.
