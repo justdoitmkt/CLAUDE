@@ -229,6 +229,8 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
     "tile_clay": ("T12_barro.png", 1.2, 0.55, 0.0, (1, 1, 1)),
     "paint_cream": ("T8_pintura_lisa.png", 2.0, 0.7, 0.0, (0.98, 0.88, 0.58)),
     "paint_navy": ("T8_pintura_lisa.png", 2.0, 0.6, 0.0, (0.10, 0.15, 0.34)),
+    # sitio de telecom (COM_1): acero galvanizado (torre, malla, postes, charolas) y grava triturada de la plataforma
+    "galvanized": ("T13_galvanizado.png", 1.0, 0.45, 1.0, (1, 1, 1)), "gravel": ("T14_grava.png", 1.2, 0.95, 0.0, (1, 1, 1)),
 }
 # materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
 # y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)

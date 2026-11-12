@@ -237,6 +237,9 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     # granero con tienda (GRA_1): paja, costal, cartón y vidrio ámbar (botellas)
     "hay": ((0.60, 0.48, 0.24), 0.92, 0.0), "burlap": ((0.46, 0.37, 0.25), 0.95, 0.0),
     "cardboard": ((0.55, 0.42, 0.27), 0.85, 0.0), "amber": ((0.30, 0.13, 0.03), 0.12, 0.0),
+    # sitio de telecom (COM_1): galvanizado por inmersión, cobre de tierras, grava triturada y radomo de fibra de vidrio
+    "galvanized": ((0.56, 0.58, 0.59), 0.45, 1.0), "copper": ((0.72, 0.40, 0.25), 0.38, 1.0),
+    "gravel": ((0.45, 0.45, 0.45), 0.95, 0.0), "radome": ((0.74, 0.75, 0.74), 0.55, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),
@@ -245,6 +248,8 @@ TEX_FOR = {  # material -> (textura, tamaño m)
     "roof_metal_light": ("R1_roof_corrugated_rust.png", 2.0),
     # granero con tienda (GRA_1): tabla roja de granero y block de concreto
     "wood_red": ("T10_tabla_roja.png", 2.4), "block": ("T11_block.png", 2.4),
+    # sitio de telecom (COM_1)
+    "galvanized": ("T13_galvanizado.png", 1.0), "gravel": ("T14_grava.png", 1.2),
 }
 
 

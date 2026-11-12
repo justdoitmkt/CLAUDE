@@ -1,0 +1,10 @@
+{
+ "modelo": "COM_1_antena",
+ "regla": "R-GRAF: solo grafiti callejero cholo/chicano; R4: nombres ficticios, sin números, coronas, estrellas ni puntos",
+ "piezas": {
+  "G01_STATIK_placa": "placa en letra gótica (Old English) STATIK con subrayado, aerosol negro (job c803f94f)",
+  "G02_STATIK_rollcall": "roll call en gótica: CHISPA / NENE / GUERO, aerosol negro (job c803f94f)",
+  "G03_Chispa_firma": "firma en script chicano 'Chispa' con remate largo, aerosol negro (job c803f94f)",
+  "G04_Nene_firma": "firma script 'Nene' en aerosol guinda con un rizo (job c803f94f)"
+ }
+}

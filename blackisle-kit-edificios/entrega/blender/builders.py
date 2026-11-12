@@ -19,6 +19,10 @@ def build(bid, **kw):
         import gra_builder
         kw.pop("dress_all", None)
         return gra_builder.build_gra(bid, **kw)
+    if bid.startswith("COM_"):
+        import com_builder
+        kw.pop("dress_all", None)
+        return com_builder.build_com(bid, **kw)
     if bid.startswith("CAB_"):
         import cabin_builder
         kw.pop("dress_all", None)
