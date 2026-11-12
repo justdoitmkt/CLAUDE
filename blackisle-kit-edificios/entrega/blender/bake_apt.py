@@ -224,13 +224,18 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
     "paint_green": ("T8_pintura_lisa.png", 2.0, 0.5, 0.0, (0.10, 0.34, 0.20)),
     "paint_white": ("T8_pintura_lisa.png", 2.0, 0.7, 0.0, (1.0, 1.0, 0.98)),
     "wood_varnish": ("T9_madera_barniz.png", 0.8, 0.35, 0.0, (1, 1, 1)),
+    # granero con tienda (GRA_1): tabla roja, block, piso de barro y la pintura interior de la tienda (amarillo y zoclo azul)
+    "wood_red": ("T10_tabla_roja.png", 2.4, 0.82, 0.0, (1, 1, 1)), "block": ("T11_block.png", 2.4, 0.9, 0.0, (1, 1, 1)),
+    "tile_clay": ("T12_barro.png", 1.2, 0.55, 0.0, (1, 1, 1)),
+    "paint_cream": ("T8_pintura_lisa.png", 2.0, 0.7, 0.0, (0.98, 0.88, 0.58)),
+    "paint_navy": ("T8_pintura_lisa.png", 2.0, 0.6, 0.0, (0.10, 0.15, 0.34)),
 }
 # materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
 # y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)
 TILE_ALIAS = {"rubble": "concrete", "cladding": "metal_paint", "container": "metal_paint"}   # lámina: cara interior repetible
 # doble cara: láminas (lámina ondulada, tela, hierba) y la teja (piezas sueltas sin cara inferior: desde el ático se veía el cielo
 # y el sol pasaba, porque Three.js no dibuja la cara trasera ni la usa para la sombra)
-DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile", "linen", "wool_blue")
+DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile", "linen", "wool_blue", "hay")
 
 
 def vertex_ao(obj, samples, dist=0.5, inset=0.03, lift=0.001):
@@ -574,7 +579,7 @@ def main():
     nb = scale_band_islands(main_o, band_top, BAND_SCALE) if has_g else 0
     log("islas de banda ampliadas:", nb)
     mem = 0.0
-    sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith("MUE") else SIZES)
+    sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith(("MUE", "GRA")) else SIZES)
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles

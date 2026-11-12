@@ -234,12 +234,17 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     "paint_yellow": ((0.72, 0.50, 0.04), 0.6, 0.0), "vinyl": ((0.07, 0.20, 0.19), 0.5, 0.0),
     "steel": ((0.60, 0.61, 0.62), 0.35, 1.0), "rubber": ((0.025, 0.025, 0.025), 0.8, 0.0),
     "wool_blue": ((0.10, 0.17, 0.33), 0.97, 0.0), "enamel": ((0.50, 0.53, 0.51), 0.42, 0.15),
+    # granero con tienda (GRA_1): paja, costal, cartón y vidrio ámbar (botellas)
+    "hay": ((0.60, 0.48, 0.24), 0.92, 0.0), "burlap": ((0.46, 0.37, 0.25), 0.95, 0.0),
+    "cardboard": ((0.55, 0.42, 0.27), 0.85, 0.0), "amber": ((0.30, 0.13, 0.03), 0.12, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),
     "tile": ("T3_roof_tile.png", 2.0), "wood": ("T4_wood_weathered.png", 1.6), "wood_dark": ("W1_wood_dark_planks.png", 1.8),
     "wood_grey": ("W2_wood_grey_clapboard.png", 1.8), "metal_rust": ("M1_rust_metal.png", 1.2), "roof_metal": ("R1_roof_corrugated_rust.png", 2.0),
     "roof_metal_light": ("R1_roof_corrugated_rust.png", 2.0),
+    # granero con tienda (GRA_1): tabla roja de granero y block de concreto
+    "wood_red": ("T10_tabla_roja.png", 2.4), "block": ("T11_block.png", 2.4),
 }
 
 
@@ -402,7 +407,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
             bmask = nb.math("MULTIPLY", nb.math("GREATER_THAN", bfield, thr), peel)
             conc = nb.mix(bmask, conc, brick)
         color = nb.mix(peel, tinted, conc)
-    if name in ("concrete", "plaster", "brick", "tile", "wood", "wood_dark", "wood_grey") + tuple(CLAD_PAINT):
+    if name in ("concrete", "plaster", "brick", "tile", "wood", "wood_dark", "wood_grey", "wood_red", "block") + tuple(CLAD_PAINT):
         zr = nb.math("SUBTRACT", sep_p.outputs[2], base_z)                 # altura sobre el piso del modelo
         # L2: suciedad por cavidades (AO)
         ao = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.6)

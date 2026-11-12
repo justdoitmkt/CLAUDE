@@ -55,6 +55,17 @@ SHOTS_EXTRA = {
         "urgencias_int": dict(azim=125, elev=6, dist=7.0, target=Vector((7.0, -8.6, 0.9)), fov=75, ground=False),
         "patio": dict(azim=-30, elev=35, dist=10.0, target=Vector((0.5, 1.1, 1.0)), fov=60),
     },
+    "GRA_1_tienda": {
+        "patio": dict(azim=-24.2, elev=-3.4, dist=21.97, target=Vector((5.0, -4.0, 3.0)), fov=55),
+        "tienda": dict(azim=29.7, elev=-0.7, dist=8.06, target=Vector((12.5, -8.0, 1.8)), fov=55),
+        "costado": dict(azim=12.7, elev=-4.4, dist=11.82, target=Vector((6.0, 0.0, 2.6)), fov=60),
+        "tejaban": dict(azim=-36.9, elev=-1.7, dist=10.00, target=Vector((-8.0, -2.0, 2.0)), fov=60),
+        "trasera": dict(azim=167.5, elev=-1.6, dist=18.45, target=Vector((2.0, 6.0, 2.5)), fov=55),
+        "granero_int": dict(azim=2.7, elev=-4.2, dist=10.84, target=Vector((0.0, 4.0, 2.4)), fov=75, ground=False),
+        "tapanco": dict(azim=171.6, elev=6.5, dist=9.67, target=Vector((-4.0, -3.0, 3.8)), fov=75, ground=False),
+        "tienda_int": dict(azim=-43.6, elev=3.9, dist=5.95, target=Vector((14.5, -3.0, 1.2)), fov=75, ground=False),
+        "mostrador": dict(azim=-68.2, elev=3.5, dist=3.24, target=Vector((15.2, -4.4, 1.3)), fov=70, ground=False),
+    },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
         "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),
