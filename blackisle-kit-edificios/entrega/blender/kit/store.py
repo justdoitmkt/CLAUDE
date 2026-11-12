@@ -260,8 +260,6 @@ def shop_counter(L=3.0, d=0.6, h=0.95, seed=0, mesh=True):
             board(mb, xa_ + 0.0005, xb_ - 0.0005, ya, yb, zs_, zs_ + 0.019 + _jit(r, 0.0006), "wood_grey", rc=0.002, re=0.0015)
             for xn in (xa_ + 0.011, xb_ - 0.011):
                 nail(mb, _T(xn, (ya + yb) / 2, zs_ + 0.019), r=0.0028)
-        if 0 < k:                                                # división entre compartimentos (bajo el montante)
-            pass
     for x in xs_st[1:-1]:
         board(mb, x - 0.011, x + 0.011, yi0 + 0.001, yB - 0.061, zb0 + 0.019, zt0 - 0.001, "wood_grey", rc=0.002, re=0.002)
     # travesaños bajo la cubierta (de frente a fondo, sobre postes)
@@ -614,7 +612,7 @@ def jug(mat="plastic", cap="plastic_blue", label="sign_blue"):
     return mb
 
 
-def carton(w, d, h, seed=0, tape=True, mat="cardboard", tape_mat="paper", open_flaps=None, crush=0.0):
+def carton(w, d, h, seed=0, tape=True, mat="cardboard", tape_mat="paper", open_flaps=None, crush=0.0, stamp=None):
     """Caja de cartón corrugado cerrada: cuerpo con cantos un poco aplastados y costados abombados, tapas superiores (dos
     solapas largas con junta de 3 mm al centro), cinta canela sobre la junta que baja por los costados, ceja de la solapa
     de unión en una esquina. open_flaps=(a1, a2): solapas abiertas (grados) y caja hueca con fondo."""
@@ -622,7 +620,46 @@ def carton(w, d, h, seed=0, tape=True, mat="cardboard", tape_mat="paper", open_f
     mb = MB()
     hb = h - 0.004
     if open_flaps is None:
-        slab(mb, _T(0, 0, 0), w, d, hb, rc=0.004, re=0.004 + crush, mat=mat, nc=1, ne=1)
+        bul = [_f(r.uniform(0.002, 0.006)) for _ in range(4)]        # costados abombados por el contenido / la estiba
+        dent = (int(r.integers(0, 4)), _f(r.uniform(0.0, 0.007)))   # una esquina golpeada
+
+        def ring(z, inset, fz):
+            c_ = 0.005
+            P = [(w / 2, 0.0, 0), (w / 2, d / 2 - c_, -1), (w / 2 - c_, d / 2, -1), (0.0, d / 2, 1), (-w / 2 + c_, d / 2, -1),
+                 (-w / 2, d / 2 - c_, -1), (-w / 2, 0.0, 2), (-w / 2, -d / 2 + c_, -1), (-w / 2 + c_, -d / 2, -1), (0.0, -d / 2, 3),
+                 (w / 2 - c_, -d / 2, -1), (w / 2, -d / 2 + c_, -1)]
+            out = []
+            for k, (x, y, side) in enumerate(P):
+                sx_, sy_ = (1 if x > 0 else -1 if x < 0 else 0), (1 if y > 0 else -1 if y < 0 else 0)
+                b = bul[side] * fz if side >= 0 else 0.0
+                if side in (0, 2):
+                    x += sx_ * b
+                elif side in (1, 3):
+                    y += sy_ * b
+                if side < 0 and k // 3 == dent[0] and fz > 0.6:
+                    x -= sx_ * dent[1] * 0.7
+                    y -= sy_ * dent[1] * 0.7
+                out.append((x - sx_ * inset, y - sy_ * inset, z))
+            return out
+        loops = [ring(0.0, 0.003 + crush, 0.0), ring(0.004 + crush, 0.0, 0.2), ring(hb * 0.5, 0.0, 1.0), ring(hb - 0.004, 0.0, 0.7),
+                 ring(hb, 0.002, 0.6)]
+        skin(mb, loops, mat)
+        if stamp:                                                # leyenda impresa (relieve 1,2 mm) que sigue el abombado del frente
+            word, size = stamp
+            tmp = MB()
+            etext(tmp, word, size, 0.0015, "cable", _T(0, -size * 0.36, -0.0003), res=1, back=False, bold=True)
+            z0_ = hb * 0.5
+
+            def fzz(z):
+                if z <= hb * 0.5:
+                    return 0.2 + 0.8 * (z - 0.004) / (hb * 0.5 - 0.004)
+                return 1.0 - 0.3 * (z - hb * 0.5) / (hb * 0.5 - 0.004)
+            for v in tmp.bm.verts:
+                tx, ty, tz = v.co
+                zz = z0_ + ty
+                yy = -(d / 2 + bul[3] * fzz(zz) * max(0.0, 1 - abs(tx) / (w / 2 - 0.005))) - tz
+                v.co = Vector((tx, yy, zz))
+            mb.join(tmp)
         rise = 0.0
         for s in (-1, 1):                                       # solapas con bisagra en el canto y junta al centro, levantadas
             th = math.degrees(math.atan(0.0015 / (w / 2))) * _f(r.uniform(0.3, 1.0))
@@ -634,11 +671,17 @@ def carton(w, d, h, seed=0, tape=True, mat="cardboard", tape_mat="paper", open_f
             tw = 0.048
             zt = hb - 0.0005 + 0.004 + rise - 0.0003
             mb.box((-tw / 2, -d / 2 - 0.0012, zt), (tw / 2, d / 2 + 0.0012, zt + 0.0011), tape_mat, bevel=0.0)
-            for s in (-1, 1):
-                yy = s * (d / 2 + 0.0012)
-                mb.box((-tw / 2, min(yy, yy - s * 0.0011), hb - 0.06), (tw / 2, max(yy, yy - s * 0.0011), zt + 0.0004), tape_mat,
-                       bevel=0.0)
-        mb.box((w / 2 - 0.0005, -d / 2 + 0.012, 0.01), (w / 2 + 0.003, d / 2 - 0.012, hb - 0.012), mat, bevel=0.0008, seg=1)  # ceja
+            for s in (-1, 1):                                   # cinta que baja por el frente y la espalda (sigue el abombado)
+                side = 1 if s > 0 else 3
+
+                def fz(z):
+                    return 0.7 + 0.3 * max(0.0, (hb - 0.004 - z) / (hb * 0.5 - 0.004)) if z < hb - 0.004 else 0.7 - 0.1 * (z - hb + 0.004) / 0.004
+                tl = []
+                for z in (hb - 0.06, hb - 0.03, hb - 0.004, zt + 0.0004):
+                    y0_ = s * (d / 2 + bul[side] * min(fz(z), 0.7 if z > hb - 0.004 else 1.0) + 0.0001)
+                    y1_ = y0_ + s * 0.0011
+                    tl.append([(-tw / 2, y0_, z), (tw / 2, y0_, z), (tw / 2, y1_, z), (-tw / 2, y1_, z)])
+                skin(mb, tl, tape_mat)
     else:
         t = 0.004
         cupw = [(x, y) for (x, y) in rr_pts(w, d, 0.004, 1)]
@@ -648,10 +691,10 @@ def carton(w, d, h, seed=0, tape=True, mat="cardboard", tape_mat="paper", open_f
         skin(mb, loops, mat)
         for (s, ax, L_, ang) in ((-1, "y", d, open_flaps[0]), (1, "y", d, open_flaps[1])):
             Mf = _T(s * (w / 2 - t / 2), 0, hb) @ _Ry(s * (90 - ang))
-            board(mb, -t / 2, t / 2, -d / 2 + 0.002, d / 2 - 0.002, 0.0, w / 2 - 0.004, mat, rc=0.002, re=0.0015, M=Mf)
+            board(mb, -t / 2, t / 2, -d / 2 + t + 0.0015, d / 2 - t - 0.0015, 0.0, w / 2 - 0.004, mat, rc=0.002, re=0.0015, M=Mf)
         for (s, ang) in ((-1, open_flaps[0] * 0.8), (1, open_flaps[1] * 1.1)):
             Mf = _T(0, s * (d / 2 - t / 2), hb) @ _Rx(-s * (90 - ang))
-            board(mb, -w / 2 + 0.003, w / 2 - 0.003, -t / 2, t / 2, 0.0, d / 2 - 0.004, mat, rc=0.002, re=0.0015, M=Mf)
+            board(mb, -w / 2 + t + 0.0015, w / 2 - t - 0.0015, -t / 2, t / 2, 0.0, d / 2 - 0.004, mat, rc=0.002, re=0.0015, M=Mf)
     return mb
 
 
@@ -824,37 +867,53 @@ class Placer:
     def __init__(self, mb):
         self.mb = mb
         self.items = []
+        self.deps = []
 
-    def join(self, hero, M, prio=0):
+    def join(self, hero, M, prio=0, on=None):
+        """on: índice de la pieza sobre la que descansa (si esa se quita, ésta también: nada queda flotando)."""
         self.items.append((hero, M, prio))
+        self.deps.append(on)
+        return len(self.items) - 1
 
     def flush(self, r, budget):
         tot = _tris(self.mb) + sum(_tris(h) for (h, _, _) in self.items)
         keep = [True] * len(self.items)
+        kids = {}
+        for i, on in enumerate(self.deps):
+            if on is not None:
+                kids.setdefault(on, []).append(i)
+
+        def drop(i):
+            nonlocal tot
+            if not keep[i]:
+                return
+            keep[i] = False
+            tot -= _tris(self.items[i][0])
+            for k in kids.get(i, ()):
+                drop(k)
         for prio in (2, 1, 0):
             idx = [i for i, it in enumerate(self.items) if it[2] == prio]
             r.shuffle(idx)
             for i in idx:
                 if tot <= budget:
                     break
-                keep[i] = False
-                tot -= _tris(self.items[i][0])
+                drop(i)
         for k, (h, M, _) in zip(keep, self.items):
             if k:
                 self.mb.join(h, M)
         return tot
 
 
-def _put(mb, hero, x, y, z, rz=0.0, s=1.0, extra=None, prio=0):
+def _put(mb, hero, x, y, z, rz=0.0, s=1.0, extra=None, prio=0, on=None):
     M = _T(x, y, z) @ _Rz(rz)
     if s != 1.0:
         M = M @ Matrix.Diagonal((s, s, s, 1.0))
     if extra is not None:
         M = M @ extra
     if isinstance(mb, Placer):
-        mb.join(hero, M, prio)
-    else:
-        mb.join(hero, M)
+        return mb.join(hero, M, prio, on)
+    mb.join(hero, M)
+    return None
 
 
 def _stock_canned(mb, r, H, x0, x1, y0, y1, z, zmax, kind):
@@ -894,13 +953,11 @@ def _stock_canned(mb, r, H, x0, x1, y0, y1, z, zmax, kind):
                     break
                 lod = 0 if k == 0 else 1
                 hero = H.get(("can", R, Hc, lab, lod), lambda: can(R, Hc, lab, seg=14 if lod == 0 else 13, lod=lod))
-                _put(mb, hero, cx, cy, z, rz=_f(r.uniform(0, 360)), prio=2 if k else 0)
+                i0 = _put(mb, hero, cx, cy, z, rz=_f(r.uniform(0, 360)), prio=2 if k else 0)
                 if stack and (k == 0 or r.random() < 0.5) and not (fi == f - 1 and r.random() < 0.5):
                     _put(mb, hero, cx + _jit(r, 0.0015), cy + _jit(r, 0.0015), z + Hc - 0.0012, rz=_f(r.uniform(0, 360)),
-                         prio=2 if k else 1)
+                         prio=2 if k else 1, on=i0)
         x += f * pitch + _f(r.uniform(0.006, 0.025))
-    if kind == "bottom":
-        pass
 
 
 def _stock_dry(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
@@ -940,17 +997,20 @@ def _stock_dry(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
             while x + Wb < xend:
                 n = int(r.integers(2, 4))
                 n = min(n, int((zmax - z) / (Tb * 0.92)))
+                below = None
                 for k in range(n):
                     var = int(r.integers(0, 3))
                     hero = H.get(("bag", cfg[1], cfg[2], var), lambda: pillow_bag(Lb, Wb, Tb, mat=cfg[1], band=cfg[2], seed=21 + var,
                                                                                    nu=11, nv=7, seal=0.018))
-                    _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + Lb / 2 + 0.005 + _jit(r, 0.008), z + k * Tb * 0.9, rz=90 + _jit(r, 7),
-                         prio=1 if k else 0)
+                    below = _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + Lb / 2 + 0.005 + _jit(r, 0.008), z + k * Tb * 0.9,
+                                 rz=90 + _jit(r, 7), prio=1 if k else 0, on=below)
                 if r.random() < 0.3 and y1 - y0 > 2 * Lb:             # segunda pila detrás
+                    below = None
                     for k in range(int(r.integers(1, n + 1))):
                         hero = H.get(("bag", cfg[1], cfg[2], 0), lambda: pillow_bag(Lb, Wb, Tb, mat=cfg[1], band=cfg[2], seed=21, nu=11,
                                                                                      nv=7, seal=0.018))
-                        _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + 1.5 * Lb + 0.01, z + k * Tb * 0.9, rz=90 + _jit(r, 7), prio=2)
+                        below = _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + 1.5 * Lb + 0.01, z + k * Tb * 0.9, rz=90 + _jit(r, 7),
+                                     prio=2, on=below)
                 x += Wb + _f(r.uniform(0.004, 0.012))
         elif cfg[0] == "paper":                                # bolsas de papel paradas en dos filas
             bw, bd, bh = 0.115, 0.07, 0.23
@@ -1003,10 +1063,13 @@ def _stock_household(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
         x = x0 + 0.003
         while x + 0.22 < x1:
             n = 2 if (zmax - z) > 0.22 else 1
+            below = None
             for k in range(n):
                 for j in range(2 if (y1 - y0 > 0.44 and k == 0) else 1):
-                    _put(mb, H.get(("tp",), lambda: tp_pack()), x + 0.108, y0 + 0.11 + j * 0.22, z + k * 0.1, rz=_jit(r, 4),
-                         prio=2 if j else (1 if k else 0))
+                    i_ = _put(mb, H.get(("tp",), lambda: tp_pack()), x + 0.108, y0 + 0.11 + j * 0.22, z + k * 0.1, rz=_jit(r, 4),
+                              prio=2 if j else (1 if k else 0), on=below if j == 0 else None)
+                    if j == 0:
+                        below = i_
             x += 0.222
     elif sel == 2:                                             # veladoras y exhibidor de pilas
         x = x0 + 0.005
@@ -1071,23 +1134,24 @@ def grocery_shelving(w=1.2, d=0.40, h=2.0, seed=0, stock="canned"):
 
 # ======================================================================================================== refrigerador de cerveza
 def beer_bottle(lod=0, cap=True, empty=False, seg=14):
-    """Botella ámbar de cuello largo de 355 ml (Ø 62 × 236 mm): fondo con picón, talón, cuerpo, hombro, cuello, corona con
+    """Botella ámbar de cuello largo de 355 ml (Ø 62 × 230 mm): fondo con picón, talón, cuerpo, hombro, cuello largo, corona con
     corcholata de acero (o boca abierta con hueco si empty). lod=1: perfil reducido para filas traseras / dentro de jaba."""
     mb = MB()
     if empty:
-        prof = [(0.031, 0.0), (0.031, 0.15), (0.027, 0.171), (0.0145, 0.196), (0.0124, 0.214), (0.0146, 0.217), (0.0146, 0.223),
-                (0.0092, 0.224), (0.0088, 0.212), (0.0, 0.205)]
+        prof = [(0.031, 0.0), (0.031, 0.118), (0.0215, 0.152), (0.0135, 0.172), (0.0122, 0.216), (0.0145, 0.2185), (0.0145, 0.2245),
+                (0.0092, 0.2255), (0.0088, 0.214), (0.0, 0.207)]
         if lod == 0:
-            prof = [(0.0, 0.004), (0.027, 0.0)] + prof[:1] + [(0.031, 0.006)] + prof[1:]
-            prof = [prof[0], prof[1], prof[3]] + prof[4:]
+            prof = [(0.0, 0.004), (0.027, 0.0), (0.031, 0.006)] + prof[1:]
+        else:
+            prof = prof[:5] + [(0.0145, 0.2215), (0.0092, 0.2255), (0.0, 0.21)]
         revolve(mb, prof, "amber", seg=seg)
         return mb
     if lod == 0:
-        prof = [(0.0, 0.004), (0.027, 0.0), (0.031, 0.006), (0.031, 0.15), (0.027, 0.171), (0.0145, 0.196), (0.0124, 0.214),
-                (0.0146, 0.218), (0.0152, 0.2205), (0.0152, 0.2265), (0.012, 0.2285), (0.0, 0.2285)]
+        prof = [(0.0, 0.004), (0.027, 0.0), (0.031, 0.006), (0.031, 0.118), (0.026, 0.142), (0.0145, 0.168), (0.0122, 0.214),
+                (0.0146, 0.2175), (0.0152, 0.22), (0.0152, 0.2265), (0.012, 0.2285), (0.0, 0.2285)]
         mats = ["amber"] * 7 + ["steel"] * 4
     else:
-        prof = [(0.031, 0.0), (0.031, 0.15), (0.0145, 0.196), (0.0124, 0.214), (0.0152, 0.2205), (0.0152, 0.2265), (0.0, 0.2285)]
+        prof = [(0.031, 0.0), (0.031, 0.118), (0.0145, 0.168), (0.0122, 0.214), (0.0152, 0.22), (0.0152, 0.2265), (0.0, 0.2285)]
         mats = ["amber"] * 3 + ["steel"] * 3
     revolve(mb, prof, mats, seg=seg)
     return mb
@@ -1607,10 +1671,11 @@ def bottle_crate(seed=0, empty=True):
     for sy in (-1, 1):
         y0_, y1_ = sorted((sy * D / 2, sy * (D / 2 - t)))
         board(mb, -W / 2 + 0.012, W / 2 - 0.012, y0_, y1_, 0.004, Hh - 0.012, mat, rc=0.002, re=0.002)
-        for k in range(7):                                       # costillas verticales
-            x = -W / 2 + 0.035 + (W - 0.07) * k / 6
+        for k in range(5):                                       # costillas verticales
+            x = -W / 2 + 0.05 + (W - 0.1) * k / 4
             yr = sy * (D / 2 + 0.0035)
-            board(mb, x - 0.004, x + 0.004, min(yr, sy * D / 2), max(yr, sy * D / 2), 0.006, Hh - 0.014, mat, rc=0.002, re=0.002)
+            mb.box((x - 0.004, min(yr, sy * D / 2 - sy * 0.0005), 0.006), (x + 0.004, max(yr, sy * D / 2 - sy * 0.0005), Hh - 0.014), mat,
+                   bevel=0.0012, seg=1)
         yr0 = sy * (D / 2 + 0.006)                               # borde superior reforzado
         board(mb, -W / 2 + 0.008, W / 2 - 0.008, min(yr0, sy * (D / 2 - t - 0.002)), max(yr0, sy * (D / 2 - t - 0.002)), Hh - 0.014,
               Hh, mat, rc=0.004, re=0.003, nc=2)
@@ -1621,7 +1686,7 @@ def bottle_crate(seed=0, empty=True):
             board(mb, x0_, x1_, min(sy * 0.055, sy * (D / 2 - 0.012)), max(sy * 0.055, sy * (D / 2 - 0.012)), Hh - 0.072, Hh - 0.012,
                   mat, rc=0.003, re=0.002)
         xh = sx * (W / 2 - t / 2)
-        mb.tube([(xh, -0.06, Hh - 0.02), (xh, 0.06, Hh - 0.02)], 0.011, seg=10, mat=mat)                # travesaño del asa
+        mb.tube([(xh, -0.06, Hh - 0.02), (xh, 0.06, Hh - 0.02)], 0.011, seg=8, mat=mat)                 # travesaño del asa
         board(mb, min(sx * (W / 2 + 0.002), sx * (W / 2 - t - 0.002)), max(sx * (W / 2 + 0.002), sx * (W / 2 - t - 0.002)),
               -D / 2 + 0.008, D / 2 - 0.008, Hh - 0.0095, Hh, mat, rc=0.004, re=0.003, nc=2)
     for (sx, sy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):     # esquineros
@@ -1630,12 +1695,12 @@ def bottle_crate(seed=0, empty=True):
     # rejilla de divisiones
     for i in range(1, nx):
         x = -W / 2 + 0.008 + i * c
-        mb.box((x - 0.0012, -D / 2 + t, 0.008), (x + 0.0012, D / 2 - t, Hh - 0.045), mat, bevel=0.0006, seg=1)
+        mb.box((x - 0.0012, -D / 2 + t, 0.008), (x + 0.0012, D / 2 - t, Hh - 0.045), mat, bevel=0.0)
     for j in range(1, ny):
         y = -D / 2 + 0.008 + j * c
         for i in range(nx):
             xa = -W / 2 + 0.008 + i * c + 0.0012
-            mb.box((xa, y - 0.0012, 0.008), (xa + c - 0.0024, y + 0.0012, Hh - 0.045), mat, bevel=0.0006, seg=1)
+            mb.box((xa, y - 0.0012, 0.008), (xa + c - 0.0024, y + 0.0012, Hh - 0.046), mat, bevel=0.0)
     # botellas
     P = Placer(base)
     hero = beer_bottle(lod=1, empty=empty, seg=13)
@@ -1690,12 +1755,317 @@ def crate_stack(seed=0):
     r = rng(seed)
     mb = MB()
     mb.join(wood_crate(seed=seed), _T(-0.27, 0.0, 0.0) @ _Rz(_jit(r, 3)))
-    c1 = carton(0.46, 0.32, 0.26, seed=seed + 1, crush=0.002)
+    c1 = carton(0.46, 0.32, 0.26, seed=seed + 1, crush=0.002, stamp=("THIS SIDE UP", 0.024))
     mb.join(c1, _T(-0.27 + _jit(r, 0.01), _jit(r, 0.01), 0.3) @ _Rz(_jit(r, 4)))
     c2 = carton(0.36, 0.28, 0.22, seed=seed + 2)
     mb.join(c2, _T(-0.25 + _jit(r, 0.015), _jit(r, 0.01), 0.3 + 0.26 + 0.0028) @ _Rz(_f(r.uniform(-12, 12))))
-    c3 = carton(0.4, 0.34, 0.3, seed=seed + 3, crush=0.003)
+    c3 = carton(0.4, 0.34, 0.3, seed=seed + 3, crush=0.003, stamp=("KEEP DRY", 0.03))
     mb.join(c3, _T(0.25, -0.02, 0.0) @ _Rz(_jit(r, 5)))
     c4 = carton(0.3, 0.26, 0.24, seed=seed + 4, open_flaps=(_f(r.uniform(60, 100)), _f(r.uniform(70, 110))))
     mb.join(c4, _T(0.27 + _jit(r, 0.01), 0.0, 0.3 + 0.0028) @ _Rz(_f(r.uniform(-15, 15))))
     return mb
+
+
+# ======================================================================================================== gabinetes de lámina (muro)
+def _carcass(mb, W, D, H, zp, mat="steel", t=0.018, yf=0.0):
+    """Cuerpo de gabinete de lámina contra el muro (espalda en y = 0, frente en y = -D): costados de doble lámina con canto
+    redondeado, techo con ceja, piso, espalda y zoclo remetido sobre niveladores. yf: profundidad que ocupa el marco frontal
+    (los costados y el techo empiezan detrás de él)."""
+    for s in (-1, 1):
+        x0_, x1_ = sorted((s * W / 2, s * (W / 2 - t)))
+        board(mb, x0_, x1_, -D + yf, 0.0, 0.0, H, mat, rc=0.004, re=0.003, nc=2)
+    board(mb, -W / 2 + t, W / 2 - t, -D + max(yf, 0.0005), 0.0, H - t, H - 0.0005, mat, rc=0.003, re=0.003)
+    board(mb, -W / 2 + t, W / 2 - t, -D + 0.02, 0.0, zp, zp + t, mat, rc=0.002, re=0.002)
+    board(mb, -W / 2 + t, W / 2 - t, -0.012, -0.0005, zp + t, H - t, mat, rc=0.002, re=0.001)
+    board(mb, -W / 2 + t, W / 2 - t, -D + 0.035, -D + 0.05, 0.012, zp, mat, rc=0.002, re=0.002)                  # zoclo
+    for x in (-W / 2 + 0.06, W / 2 - 0.06):
+        for y in (-D + 0.07, -0.07):
+            foot_leveler(mb, _T(x, y, 0.0), r=0.018, h=zp - 0.005, lite=True)
+
+
+def _shelf_sheet(mb, x0, x1, y0, y1, z, mat="steel", lip=0.025, t=0.0012):
+    """Entrepaño de lámina: placa con ceja frontal y trasera dobladas hacia abajo (un solo perfil barrido) y canto redondeado."""
+    prof = [(y0, z - lip), (y0, z - 0.002), (y0 + 0.002, z), (y1 - 0.002, z), (y1, z - 0.002), (y1, z - lip * 0.6), (y1 - t, z - lip * 0.6),
+            (y1 - t, z - t), (y0 + t, z - t), (y0 + t, z - lip)]
+    lofts(mb, [(x, prof) for x in (x0, x1)], mat)
+
+
+def ammo_box(w=0.065, d=0.10, h=0.038, mat="cardboard", band="sign_red", word=None, seed=0):
+    """Cajita de cartuchos de cartón (de pie sobre su cara ancha, la cabecera de w × h mira a -Y): cuerpo con cantos un poco
+    vencidos, franja impresa que le da la vuelta (tramo de material, sin calcomanía), ceja de la tapa de lengüeta en la cabecera
+    y, si word, la palabra genérica en relieve de 1,1 mm sobre la franja."""
+    mb = MB()
+    pts = rr_pts(w, d, 0.0025, 1)
+    zs = [(0.0, 0.0), (h * 0.3, 0.0), (h * 0.7, 0.0), (h - 0.0012, 0.0), (h, 0.0012)]
+    loops = [[(x - math.copysign(i_, x), y - math.copysign(i_, y), z) for (x, y) in pts] for (z, i_) in zs]
+    skin(mb, loops, mat, mats=[mat, band, mat, mat])
+    # lengüeta de la tapa (ceja en la cabecera frontal, 1,2 mm)
+    mb.box((-w / 2 + 0.004, -d / 2 - 0.0012, h - 0.009), (w / 2 - 0.004, -d / 2 + 0.0003, h - 0.0015), mat, bevel=0.0)
+    if word:
+        etext(mb, word, min(h * 0.26, w * 0.18), 0.0015, "sign_white", _T(0, -d / 2 - 0.0, h * 0.5 - h * 0.1) @ _Rx(90) @
+              _T(0, 0, -0.0003), res=1, back=False, bold=True)
+    return mb
+
+
+def ammo_cabinet(seed=0):
+    """Gabinete de lámina de muro para munición, 1,0 × 0,40 × 1,9 (espalda en y = 0): cuerpo de doble lámina, marco frontal,
+    dos puertas de perfil con vidrio, junquillo de hule, 3 bisagras de barril por puerta, jaladeras, porta-candado con
+    candado; 4 entrepaños de lámina con cajitas de cartuchos genéricas en pilas (franja impresa; algunas con AMMO / RIFLE /
+    SHOTGUN), dos sueltas y caídas; cajas de cartón arriba. Sin armas."""
+    r = rng(seed)
+    base = MB()
+    mb = base
+    W, D, H, zp = 1.0, 0.40, 1.9, 0.07
+    t = 0.018
+    _carcass(mb, W, D, H, zp, yf=0.02)
+    # marco frontal (cara en y = -D) y puertas inset con vidrio
+    zo0, zo1 = zp + t, H - t
+    Mf = _T(0, -D + 0.02, 0) @ _Rx(90)
+    rrframe(mb, Mf, (0, (zp + H) / 2, W, H - zp, 0.004), (0, (zo0 + zo1) / 2, W - 2 * t, zo1 - zo0, 0.003), 0.02,
+            re_o=0.003, re_i=0.002, n=2, ne=1, mat="steel")
+    g = 0.003
+    dw = (W - 2 * t - 3 * g) / 2
+    dh = zo1 - zo0 - 2 * g
+    zc = (zo0 + zo1) / 2
+    for s in (-1, 1):
+        xc = s * (g / 2 + dw / 2)
+        yd = -D + 0.0025                                         # cara frontal de la puerta 2,5 mm adentro
+        Md = _T(xc, yd + 0.022, 0) @ _Rx(90)
+        rrframe(mb, Md, (0, zc, dw, dh, 0.004), (0, zc + 0.01, dw - 0.11, dh - 0.17, 0.004), 0.022, re_o=0.003, re_i=0.002, n=2,
+                ne=1, mat="steel")
+        board(mb, xc - dw / 2 + 0.05, xc + dw / 2 - 0.05, yd + 0.011, yd + 0.015, zc + 0.01 - (dh - 0.17) / 2 - 0.005,
+              zc + 0.01 + (dh - 0.17) / 2 + 0.005, "glass", rc=0.003, re=0.001)
+        path = [(xc + x, yd + 0.0095, zc + 0.01 + z) for (x, z) in rr_pts(dw - 0.11 + 0.003, dh - 0.17 + 0.003, 0.004, 1)]
+        mb.sweep([(u, v) for (u, v) in rr_pts(0.006, 0.004, 0.0015, 1)], path, mat="rubber", closed_path=True, normal=(0, 1, 0))
+        xh = s * (W / 2 - t - g)                                 # bisagras de barril en el canto exterior
+        for zz in (zo0 + 0.15, zc, zo1 - 0.15):
+            revolve(mb, [(0.0, -0.035), (0.005, -0.035), (0.0055, -0.033), (0.0055, 0.033), (0.005, 0.035), (0.0, 0.035)], "steel",
+                    seg=10, M=_T(xh, -D - 0.002, zz))
+            board(mb, min(xh, xh - s * 0.02), max(xh, xh - s * 0.02), -D - 0.0015, -D + 0.0025, zz - 0.03, zz + 0.03, "steel",
+                  rc=0.002, re=0.0006)
+        xg = s * 0.06                                            # jaladera
+        hose(mb, [(xg, yd + 0.0005, zc + 0.05), (xg, yd - 0.03, zc + 0.05), (xg, yd - 0.03, zc - 0.07), (xg, yd + 0.0005, zc - 0.07)],
+             0.0055, bend=0.012, mat="steel", seg=8, nseg=3)
+    # porta-candado: escuadra con argolla en la puerta derecha, aldaba en la izquierda, candado colgando
+    zh = zc + 0.18
+    board(mb, 0.008, 0.05, -D - 0.0025, -D + 0.0025, zh - 0.022, zh + 0.022, "steel", rc=0.003, re=0.001)
+    board(mb, -0.07, -0.004, -D - 0.006, -D + 0.0005, zh - 0.017, zh + 0.017, "steel", rc=0.004, re=0.001)
+    revolve(mb, [(0.0, -0.016), (0.004, -0.016), (0.004, 0.016), (0.0, 0.016)], "steel", seg=8, M=_T(-0.07, -D - 0.003, zh))
+    for x in (0.02, 0.04, -0.05, -0.03):
+        revolve(mb, [(0.0035, -0.0003), (0.003, 0.0012), (0.0, 0.0018)], "steel", seg=6,
+                M=_T(x, -D - (0.0025 if x > 0 else 0.006), zh + (0.012 if x in (0.02, -0.05) else -0.012)) @ _Rx(90), caps=False)
+    sp = [(0.0, -D - 0.0025, zh - 0.006), (0.0, -D - 0.022, zh - 0.006), (0.0, -D - 0.022, zh + 0.006), (0.0, -D - 0.0025, zh + 0.006)]
+    hose(mb, sp, 0.0028, bend=0.005, mat="steel", seg=6, nseg=3)                               # argolla
+    Mp = _T(0.0, -D - 0.022, zh - 0.006) @ _Rx(8)
+    pts = [(-0.012, 0.0, -0.012), (-0.012, 0.0, 0.006), (0.012, 0.0, 0.006), (0.012, 0.0, -0.012)]
+    tmp = MB()
+    hose(tmp, pts, 0.0035, bend=0.011, mat="steel", seg=8, nseg=5)
+    slab(tmp, _T(0, 0, -0.05), 0.04, 0.016, 0.04, rc=0.004, re=0.003, mat="aluminium", nc=2, ne=2)
+    revolve(tmp, [(0.0035, -0.0003), (0.0035, 0.001), (0.0, 0.0013)], "steel", seg=8, M=_T(0, -0.008, -0.04) @ _Rx(90), caps=False)
+    mb.join(tmp, Mp @ _Rx(-90) @ _Rx(90))
+    # entrepaños
+    xi0, xi1 = -W / 2 + t + 0.002, W / 2 - t - 0.002
+    yi0, yi1 = -D + 0.03, -0.014
+    levels = [zp + t, 0.48, 0.84, 1.2, 1.56]
+    for z in levels[1:]:
+        _shelf_sheet(mb, xi0, xi1, yi0, yi1, z)
+    # cajitas de cartuchos (presupuesto)
+    P = Placer(base)
+    H_ = _Heroes()
+    kinds = [((0.065, 0.10, 0.036), None), ((0.06, 0.105, 0.045), "RIFLE"), ((0.065, 0.11, 0.066), "SHOTGUN"), ((0.065, 0.10, 0.036), "AMMO")]
+    bands = ("sign_red", "sign_green", "paint_yellow", "sign_blue")
+    for i, z in enumerate(levels):
+        zs = z + (0.0 if i else 0.0)
+        top = (levels[i + 1] - 0.03) if i + 1 < len(levels) else H - t - 0.02
+        x = xi0 + 0.012
+        gap_p = (0.45, 0.25, 0.3, 0.35, 0.5)[i]
+        while x < xi1 - 0.08:
+            if r.random() < gap_p:
+                x += _f(r.uniform(0.05, 0.14))
+                continue
+            k = int(r.integers(0, len(kinds)))
+            (bw, bd, bh), word = kinds[k]
+            if word and r.random() < 0.5:
+                word = None
+            band = bands[(k + i) % len(bands)]
+            nh = max(1, min(int(r.integers(1, 4)) + (1 if bh < 0.04 else 0), int((top - zs) / (bh + 0.001))))
+            rows = 2 if r.random() < 0.3 else 1
+            for row in range(rows):
+                y = yi0 + 0.004 + bd / 2 + row * (bd + 0.006)
+                if y + bd / 2 > yi1:
+                    break
+                below = None
+                for j in range(nh if row == 0 else max(1, nh - int(r.integers(0, 3)))):
+                    wd = word if (row == 0 and j == 0 and word) else None
+                    hero = H_.get(("ab", k, band, wd), lambda: ammo_box(bw, bd, bh, band=band, word=wd))
+                    below = _put(P, hero, x + bw / 2 + _jit(r, 0.002), y + _jit(r, 0.003), zs + j * (bh + 0.0004), rz=_jit(r, 2.5),
+                                 prio=(0 if j < 2 else 1) if row == 0 else 2, on=below)
+            x += bw + _f(r.uniform(0.004, 0.02))
+    # dos cajitas sueltas caídas en el piso del gabinete
+    for (x, rz) in ((xi1 - 0.12, 35.0), (xi1 - 0.2, -70.0)):
+        hero = H_.get(("ab", 0, "sign_red", None), lambda: ammo_box(0.065, 0.10, 0.036, band="sign_red"))
+        _put(P, hero, x, yi0 + 0.12, levels[0] + 0.0325, rz=rz, extra=_Ry(90) @ _T(-0.0325, 0, 0) @ _T(0.0, 0, -0.0325 + 0.0325), prio=0)
+    # cajas de cartón sobre el gabinete
+    c1 = carton(0.42, 0.34, 0.2, seed=seed + 5)
+    _put(P, c1, -0.22, -D / 2, H, rz=_jit(r, 4), prio=1)
+    c2 = carton(0.36, 0.3, 0.16, seed=seed + 6)
+    _put(P, c2, 0.24, -D / 2 + 0.01, H, rz=_jit(r, 6), prio=1)
+    P.flush(r, 11900)
+    return base
+
+
+# ======================================================================================================== anaquel de curación
+def first_aid_kit(w=0.26, d=0.1, h=0.17, words=False):
+    """Botiquín de plástico blanco (de pie, frente -Y): casco y tapa con junta de 2 mm, asa abatible arriba con orejas, dos
+    broches al frente y cruz VERDE en relieve de 1,5 mm (y FIRST AID si words)."""
+    mb = MB()
+    hl = h * 0.42
+    slab(mb, _T(0, 0, 0), w, d, h - hl - 0.001, rc=0.012, re=0.004, re0=0.006, mat="sign_white", nc=2, ne=1)
+    slab(mb, _T(0, 0, h - hl + 0.001), w, d, hl - 0.001, rc=0.012, re=0.008, re0=0.003, mat="sign_white", nc=2, ne=2)
+    cw, ct = 0.05 if not words else 0.04, 0.016 if not words else 0.013
+    cz = h * 0.58 if not words else h * 0.66
+    cross = [(ct / 2, cw / 2), (-ct / 2, cw / 2), (-ct / 2, ct / 2), (-cw / 2, ct / 2), (-cw / 2, -ct / 2), (-ct / 2, -ct / 2),
+             (-ct / 2, -cw / 2), (ct / 2, -cw / 2), (ct / 2, -ct / 2), (cw / 2, -ct / 2), (cw / 2, ct / 2), (ct / 2, ct / 2)]
+    mb.plate(cross, 0.0018, "sign_green", m=_T(0, -d / 2 + 0.0003, cz) @ _Rx(90))
+    if words:
+        etext(mb, "FIRST AID", 0.018, 0.0015, "sign_green", _T(0, -d / 2 + 0.0003, h * 0.27) @ _Rx(90), res=1, back=False, bold=True)
+    for x in (-w / 2 + 0.035, w / 2 - 0.035):                    # broches
+        board(mb, x - 0.012, x + 0.012, -d / 2 - 0.006, -d / 2 + 0.002, h - hl - 0.018, h - hl + 0.012, "plastic", rc=0.004, re=0.002)
+    for x in (-0.055, 0.055):                                    # orejas del asa
+        board(mb, x - 0.008, x + 0.008, -0.008, 0.008, h - 0.0005, h + 0.012, "plastic", rc=0.004, re=0.002)
+    hose(mb, [(-0.055, 0.0, h + 0.006), (-0.05, -0.03, h + 0.0065), (0.05, -0.03, h + 0.0065), (0.055, 0.0, h + 0.006)], 0.0045,
+         bend=0.01, mat="plastic", seg=6, nseg=3)
+    return mb
+
+
+def bandage_roll(R=0.024, L=0.075, mat="linen", core=0.008):
+    """Venda elástica enrollada (de pie): rollo con canto boleado, capas insinuadas en la cara superior y hueco del centro."""
+    mb = MB()
+    prof = [(core, L - 0.0015), (R * 0.6, L - 0.0007), (R - 0.0025, L), (R, L - 0.0025), (R, 0.0025), (R - 0.0025, 0.0), (core, 0.0015)]
+    revolve(mb, prof, mat, seg=14, closed=True)
+    return mb
+
+
+def med_bottle(kind="iodine"):
+    """Frasco ámbar (yodo 60 ml / alcohol 250 ml) con hombro, cuello, tapa de rosca estriada y etiqueta como tramo del perfil."""
+    mb = MB()
+    if kind == "iodine":
+        R, Hb, cap = 0.019, 0.075, "cable"
+    else:
+        R, Hb, cap = 0.028, 0.15, "sign_red"
+    prof = [(0.0, 0.002), (R * 0.93, 0.0), (R, 0.006), (R, 0.2 * Hb), (R, 0.8 * Hb), (R * 0.95, 0.88 * Hb), (R * 0.55, 0.96 * Hb),
+            (R * 0.45, Hb), (R * 0.45, Hb + 0.006)]
+    revolve(mb, prof, ["amber", "amber", "amber", "paper", "amber", "amber", "amber", "amber"], seg=14)
+    revolve(mb, [(R * 0.52, Hb + 0.002), (R * 0.55, Hb + 0.003), (R * 0.55, Hb + 0.018), (R * 0.5, Hb + 0.0195), (0.0, Hb + 0.0195)],
+            cap, seg=14, caps=False)
+    return mb
+
+
+def syringe_pack():
+    """Jeringa desechable en su sobre: papel grado médico con la jeringa (cilindro, émbolo y capuchón azul) bajo película
+    termoformada que sigue su silueta, sello perimetral. Acostada sobre z = 0, larga en X."""
+    mb = MB()
+    board(mb, -0.085, 0.085, -0.019, 0.019, 0.0, 0.0012, "paper", rc=0.004, re=0.0004)
+    Ms = _T(0, 0, 0.0012 + 0.0052) @ _Ry(90)
+    revolve(mb, [(0.0, -0.065), (0.0045, -0.065), (0.0045, -0.062), (0.0048, -0.06), (0.0048, 0.02), (0.002, 0.024), (0.0015, 0.03),
+                 (0.0, 0.03)], ["plastic", "plastic", "plastic", "plastic", "plastic", "plastic", "plastic"], seg=10, M=Ms)
+    revolve(mb, [(0.0, 0.03), (0.0032, 0.03), (0.0028, 0.072), (0.0, 0.073)], "plastic_blue", seg=8, M=Ms)     # capuchón
+    board(mb, -0.076, -0.072, -0.009, 0.009, 0.0012, 0.0045, "plastic", rc=0.002, re=0.0006)              # aletas
+    return mb
+
+
+def gauze_pack(seed=0):
+    """Sobre de gasa estéril: almohadilla de papel con el contenido abombado y sellos dentados en los cuatro cantos."""
+    return pillow_bag(0.1, 0.085, 0.014, mat="paper", band="sign_blue", seed=seed, nu=8, nv=6, seal=0.009, zr=0.5, wr=0.0008,
+                      band_u=0.25)
+
+
+def medical_shelf(seed=0):
+    """Anaquel de lámina de muro para curación, 0,9 × 0,32 × 1,8 (espalda en y = 0): costados, techo, espalda y zoclo de lámina,
+    4 entrepaños con cejas; botiquines blancos con cruz verde (uno con FIRST AID), vendas elásticas, sobres de gasa, cajas
+    blancas de medicamento con franja, frascos ámbar de yodo y alcohol, jeringas en sobre y una caja abierta con más."""
+    r = rng(seed)
+    base = MB()
+    mb = base
+    W, D, H, zp = 0.9, 0.32, 1.8, 0.07
+    t = 0.016
+    _carcass(mb, W, D, H, zp, t=t)
+    xi0, xi1 = -W / 2 + t + 0.002, W / 2 - t - 0.002
+    yi0, yi1 = -D + 0.004, -0.014
+    levels = [zp + t, 0.46, 0.83, 1.2, 1.55]
+    for z in levels[1:]:
+        _shelf_sheet(mb, xi0, xi1, yi0, yi1, z)
+    P = Placer(base)
+    H_ = _Heroes()
+    yf = yi0 + 0.006
+
+    def kits(z, x):
+        for k in range(2):
+            hero = H_.get(("fak", k == 0), lambda: first_aid_kit(words=(k == 0)))
+            _put(P, hero, x + 0.13, yf + 0.05 + 0.006, z, rz=_jit(r, 3))
+            x += 0.275
+        return x
+
+    def rolls(z, x, n):
+        for k in range(n):
+            hero = H_.get(("roll", k % 2), lambda: bandage_roll(mat="linen" if k % 2 == 0 else "paper"))
+            _put(P, hero, x + 0.025, yf + 0.025 + (k % 2) * 0.05 + _jit(r, 0.003), z, rz=_f(r.uniform(0, 360)), prio=0 if k % 2 == 0 else 2)
+            if k % 2:
+                x += 0.052
+        return x + 0.052
+
+    def gauze(z, x):
+        below = None
+        for k in range(int(r.integers(3, 7))):
+            hero = H_.get(("gz", k % 2), lambda: gauze_pack(seed=k % 2))
+            below = _put(P, hero, x + 0.055 + _jit(r, 0.004), yf + 0.05 + _jit(r, 0.004), z + k * 0.0125, rz=_jit(r, 8), prio=0 if k < 2 else 1,
+                         on=below)
+        return x + 0.12
+
+    def medboxes(z, x, n, band):
+        for k in range(n):
+            below = None
+            for j in range(int(r.integers(1, 3))):
+                hero = H_.get(("mbx", band), lambda: ammo_box(0.045, 0.095, 0.06, mat="sign_white", band=band))
+                below = _put(P, hero, x + 0.023, yf + 0.048 + _jit(r, 0.004), z + j * 0.0605, rz=_jit(r, 4), prio=0 if j == 0 else 1,
+                             on=below)
+            x += 0.049
+        return x + 0.01
+
+    def bottles(z, x, n, kind):
+        for k in range(n):
+            hero = H_.get(("mb", kind), lambda: med_bottle(kind))
+            R = 0.019 if kind == "iodine" else 0.028
+            for j in range(2 if r.random() < 0.5 else 1):
+                _put(P, hero, x + R + 0.002, yf + R + 0.004 + j * (2 * R + 0.006), z, rz=_f(r.uniform(0, 360)), prio=0 if j == 0 else 2)
+            x += 2 * R + 0.006
+        return x + 0.01
+
+    def syringes(z, x):
+        bx = carton(0.18, 0.1, 0.07, seed=seed + 8, open_flaps=(95, 85), mat="sign_white")
+        i0 = _put(P, bx, x + 0.09, yf + 0.055, z, rz=_jit(r, 3))
+        sp = H_.get(("syr",), lambda: syringe_pack())
+        for k in range(4):                                       # sobres parados de canto dentro de la caja, recargados
+            _put(P, sp, x + 0.09, yf + 0.055 + (k - 1.5) * 0.02, z + 0.0045 + 0.0195, rz=0.0, extra=_Rx(78), prio=1, on=i0)
+        for k in range(3):                                       # sueltos al lado
+            _put(P, sp, x + 0.28 + _jit(r, 0.01), yf + 0.03 + k * 0.045, z + k * 0.0, rz=_jit(r, 10), prio=0)
+        return x + 0.38
+
+    # nivel 4 (arriba): botiquines + vendas; 3: gasas, cajas, frascos de yodo; 2: alcohol, cajas; 1: jeringas, vendas; piso: botiquín
+    x = kits(levels[4], xi0 + 0.01)
+    rolls(levels[4], x + 0.02, 6)
+    x = gauze(levels[3], xi0 + 0.01)
+    x = gauze(levels[3], x)
+    x = medboxes(levels[3], x + 0.01, 4, "sign_blue")
+    bottles(levels[3], x, 4, "iodine")
+    x = bottles(levels[2], xi0 + 0.01, 5, "alcohol")
+    medboxes(levels[2], x + 0.02, 6, "sign_green")
+    x = syringes(levels[1], xi0 + 0.01)
+    rolls(levels[1], x + 0.02, 4)
+    hero = H_.get(("fak", False), lambda: first_aid_kit(words=False))
+    _put(P, hero, xi0 + 0.2, yf + 0.06, levels[0], rz=_jit(r, 4))
+    _put(P, H_.get(("mbx", "sign_red"), lambda: ammo_box(0.045, 0.095, 0.06, mat="sign_white", band="sign_red")), xi0 + 0.45,
+         yf + 0.07, levels[0], rz=25)
+    _put(P, carton(0.34, 0.26, 0.22, seed=seed + 12, crush=0.002), xi1 - 0.19, yf + 0.14, levels[0], rz=_jit(r, 5), prio=1)
+    P.flush(r, 11900)
+    return base
