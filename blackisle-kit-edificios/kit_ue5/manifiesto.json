@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "1637c54",
+ "version_repo": "115fb3f",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -390,6 +390,262 @@
   }
  },
  "modelos": {
+  "APT_C_3p": {
+   "id": "APT_C_3p",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_APT_C_3p_Estructura",
+     "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Estructura.glb",
+     "triangulos": 332622,
+     "ranuras": [
+      "APT_C_3p_walls_main",
+      "APT_C_3p_walls_rest",
+      "BLK_plaster",
+      "BLK_wood",
+      "BLK_concrete",
+      "BLK_metal_paint",
+      "BLK_metal_rust",
+      "BLK_sand",
+      "BLK_aluminium",
+      "BLK_plastic",
+      "BLK_cable",
+      "BLK_fabric",
+      "BLK_paper",
+      "BLK_brick",
+      "BLK_wood_dark",
+      "BLK_wood_grey",
+      "BLK_tile",
+      "BLK_mortar"
+     ],
+     "mib": 18.55
+    },
+    "Detalle": {
+     "nombre": "SM_APT_C_3p_Detalle",
+     "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Detalle.glb",
+     "triangulos": 216354,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_aluminium",
+      "BLK_mortar",
+      "BLK_plastic",
+      "BLK_metal_paint",
+      "BLK_fabric",
+      "BLK_wood",
+      "BLK_metal_rust",
+      "BLK_wood_grey",
+      "BLK_tile",
+      "BLK_brick",
+      "BLK_cable",
+      "BLK_wood_dark"
+     ],
+     "mib": 12.55
+    },
+    "Escombro": {
+     "nombre": "SM_APT_C_3p_Escombro",
+     "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Escombro.glb",
+     "triangulos": 16428,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_sand",
+      "BLK_brick",
+      "BLK_metal_rust"
+     ],
+     "mib": 0.89
+    },
+    "Vidrio": {
+     "nombre": "SM_APT_C_3p_Vidrio",
+     "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Vidrio.glb",
+     "triangulos": 27544,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 1.97
+    },
+    "Colision": {
+     "nombre": "SM_APT_C_3p_Colision",
+     "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Colision.glb",
+     "triangulos": 84039,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 3.64
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_APT_C_3p_walls_main_BC",
+     "N": "T_APT_C_3p_walls_main_N",
+     "ORM": "T_APT_C_3p_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_APT_C_3p_walls_rest_BC",
+     "N": "T_APT_C_3p_walls_rest_N",
+     "ORM": "T_APT_C_3p_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [
+    [
+     3.39,
+     0.922,
+     2.594
+    ],
+    [
+     3.444,
+     4.119,
+     2.7
+    ],
+    [
+     -4.382,
+     1.505,
+     2.571
+    ],
+    [
+     -0.387,
+     3.92,
+     2.745
+    ],
+    [
+     -0.083,
+     -3.98,
+     2.629
+    ],
+    [
+     -4.416,
+     4.601,
+     2.666
+    ],
+    [
+     2.959,
+     -4.496,
+     2.594
+    ],
+    [
+     -0.059,
+     4.498,
+     5.581
+    ],
+    [
+     3.014,
+     4.511,
+     5.607
+    ],
+    [
+     2.607,
+     1.449,
+     5.541
+    ],
+    [
+     2.551,
+     -3.894,
+     5.588
+    ],
+    [
+     -0.54,
+     -4.433,
+     5.422
+    ],
+    [
+     3.072,
+     4.416,
+     8.394
+    ],
+    [
+     0.037,
+     4.474,
+     8.405
+    ],
+    [
+     2.578,
+     -3.431,
+     8.574
+    ],
+    [
+     2.573,
+     -0.035,
+     8.517
+    ],
+    [
+     -4.084,
+     1.018,
+     8.506
+    ]
+   ],
+   "medidas_m": {
+    "x": 13.788,
+    "y": 13.735,
+    "z": 13.934,
+    "min": [
+     -7.05,
+     -6.738,
+     -0.032
+    ],
+    "max": [
+     6.738,
+     6.997,
+     13.902
+    ],
+    "escombro_min": [
+     -6.885,
+     -8.268,
+     -0.056
+    ],
+    "escombro_max": [
+     6.541,
+     8.936,
+     1.554
+    ],
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Escombro_presente": true,
+    "Escombro_ranuras": true,
+    "Escombro_un_uv": true,
+    "Escombro_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 37.6,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "hastial del ala sur con la cortina metálica de PB y 'Mi Vida Loca'"
+   },
+   "materiales_atlas": {
+    "APT_C_3p_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_APT_C_3p_walls_main_BC",
+      "N": "T_APT_C_3p_walls_main_N",
+      "ORM": "T_APT_C_3p_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "APT_C_3p_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_APT_C_3p_walls_rest_BC",
+      "N": "T_APT_C_3p_walls_rest_N",
+      "ORM": "T_APT_C_3p_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
   "CAB_2_pilotes": {
    "id": "CAB_2_pilotes",
    "mallas": {
