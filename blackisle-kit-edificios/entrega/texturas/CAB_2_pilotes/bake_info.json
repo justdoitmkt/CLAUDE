@@ -1,10 +1,10 @@
 {
- "tris": 183392,
- "mem_mb": 141.0,
+ "tris": 183246,
+ "mem_mb": 156.9,
  "materials": [
   "CAB_2_pilotes_t_concrete",
+  "CAB_2_pilotes_t_glass",
   "CAB_2_pilotes_t_liso",
-  "CAB_2_pilotes_t_liso_2c",
   "CAB_2_pilotes_t_metal_paint",
   "CAB_2_pilotes_t_metal_rust",
   "CAB_2_pilotes_t_roof_metal_light",
