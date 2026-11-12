@@ -9,12 +9,15 @@ Convenciones (todas las funciones devuelven un MB):
 Materiales: galvanized, steel, aluminium, metal_rust, concrete, rubber, cable, plastic, plastic_blue, enamel, sign_*, paint_yellow,
 glass, vinyl, paper, copper, gravel, radome.
 
-INSTANCIAS (malla ciclónica, púas, amarres): la tela de alambre tejido real cuesta ~8 000 triángulos por par de pickets y el
-alambre de púas ~5 600 por metro; no caben en una malla única por tramo. `fence_run` y `fence_gate` devuelven un `TelMB` cuyo
-`instances` guarda {tipo: (constructor, [Matrix...])}. `TelMB.finish()` crea la malla propia del tramo y, como hijos, objetos
-"linked duplicate" que comparten UNA malla por tipo (TEL_*), lista para instanciarse en UE5 (ISM/HISM) o para unirse al
-exportar. `TelMB.transform()` y `TelMB.join()` arrastran las instancias; `realize()` (o fabric="join") las vuelve geometría
-propia (para vistas previas) y entonces `finish()` suaviza a 65° para que los alambres de 6 lados no se vean facetados.
+INSTANCIAS (malla ciclónica, púas, amarres, abrazaderas, bisagras, eslabones): la tela de alambre tejido real cuesta ~5 150
+triángulos por par de pickets (72 mm × 2,4 m) y el alambre de púas ~4 100 por metro de hilo (realizado: ~86 000 tris por metro
+de cerca); no caben en una malla única por tramo. `fence_run` y `fence_gate` devuelven un `TelMB` cuyo `instances` guarda
+{tipo: [constructor, [Matrix...]]}. `TelMB.finish()` crea la malla propia del tramo y, como hijos, objetos "linked duplicate"
+que comparten UNA malla por tipo (TEL_<tipo>, alambres de 6 lados con normales 100 % suaves), listos para instanciarse en UE5
+(ISM/HISM) o para unirse al exportar. `TelMB.transform()` y `TelMB.join()` (hacia otro TelMB) arrastran las instancias;
+`realize()` (o fabric="join") las vuelve geometría propia; los TelMB de cerca y puerta terminan con suavizado a 65° (sus
+amarres y colas de alambre de 6 lados no se facetan): si se unen a un MB común, terminar ese MB con smooth_angle >= 65.
+`sign(name)` devuelve un letrero suelto de `signs()` (útil con tests/render_pieza.py).
 """
 import math
 
@@ -641,6 +644,7 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance"):
     "none" (solo postes y largueros)."""
     r = rng(seed)
     mb = TelMB()
+    mb.smooth_default = 65.0                           # amarres y colas de alambre de 6 lados: suavizado completo
     nb = max(1, int(math.ceil(L / 3.05 - 1e-6)))
     xs = [L * i / nb for i in range(nb + 1)]
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
@@ -851,7 +855,7 @@ def ext_clip():
     return mb
 
 
-def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod"):
+def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
     """Hoja de puerta en coordenadas de hoja: eje del perno de bisagra en el origen, la hoja se extiende hacia dirx·X.
     Marco soldado de tubo 1-7/8" (dos montantes con extensión para púas, travesaños arriba / medio / abajo con cordones de
     soldadura), tirante con tensor, tela con barras de tensión y amarres, 3 hilos de púas y el herraje de cierre `latch`:
@@ -899,14 +903,15 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod"):
         _add_barbed(lf, ps[0] + Vector((dirx * 0.016, 0, 0)), ps[1] - Vector((dirx * 0.016, 0, 0)))
     if latch == "rod":                                # barra de caída por dentro (+Y) del montante libre
         xr, yr = xf - dirx * 0.002, R + 0.0135
-        zt_ = 1.30
-        wire(lf, [(xr, yr, -0.13), (xr, yr, zt_), (xr - dirx * 0.17, yr, zt_)], 0.0079, seg=SEG_T, bend=0.03)
+        lift = 0.16 if rod_up else 0.0                  # hoja abierta: la barra se levanta y se traba arriba
+        zt_ = 1.30 + lift
+        wire(lf, [(xr, yr, -0.13 + lift), (xr, yr, zt_), (xr - dirx * 0.17, yr, zt_)], 0.0079, seg=SEG_T, bend=0.03)
         for zg in (0.30, 1.05):                       # guías: fleje en U soldado al montante
             pts = [(xr - 0.017, R - 0.003, zg), (xr - 0.017, yr + 0.0115, zg), (xr + 0.017, yr + 0.0115, zg), (xr + 0.017, R - 0.003, zg)]
             sweep_frame(lf, [(-0.0025, -0.012), (0.0025, -0.012), (0.0025, 0.012), (-0.0025, 0.012)], fillet(pts, 0.008, 3),
                         "galvanized", up=(0, 0, 1))
         lathe(lf, [(0.0079, 1.10), (0.0125, 1.102), (0.0125, 1.118), (0.0079, 1.12)], seg=SEG_T, mat="galvanized",
-              M=_T(xr, yr, 0), closed=True)        # collar de tope sobre la guía superior
+              M=_T(xr, yr, lift), closed=True)     # collar de tope sobre la guía superior
     else:                                             # horquilla: collar + dos dientes que abrazan al otro montante + seguro
         zl = 1.05
         D = 2 * R + 0.05
@@ -934,6 +939,7 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
     y cadena de 6 mm con candado laminado (cerrada: abraza ambos montantes; abierta: cuelga de la hoja derecha)."""
     r = rng(seed)
     mb = TelMB()
+    mb.smooth_default = 65.0
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
     Xl, Xr = -(w / 2 + R_GATEPOST), w / 2 + R_GATEPOST
     for X, sd, fs in ((Xl, -1, fence_sides[0]), (Xr, 1, fence_sides[1])):
@@ -946,7 +952,7 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
         xpin = X + dirx * (R_GATEPOST + 0.032)
         Mleaf = _T(xpin, 0, 0) @ _Rz(dirx * float(ang))
         lf = TelMB()
-        _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch=latch)
+        _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch=latch, rod_up=abs(float(ang)) > 1e-3)
         for z in zh:                                  # bisagras: mitad de la hoja (gira con ella) y mitad del poste
             lf.add_inst("hingeleaf", hinge_leaf_part, _T(0, 0, z) @ _Rz(0 if dirx > 0 else 180))
             mb.add_inst("hingepost", hinge_post_part, _T(xpin, 0, z) @ _Rz(0 if dirx > 0 else 180))
@@ -1384,6 +1390,19 @@ def generator(seed=0):
     return mb
 
 
+def _dial(mb, M, r=0.05, depth=0.03, needle=0.0):
+    """Indicador de carátula de 24 lados: caja embutida con bisel, carátula blanca rehundida, marcas, aguja y eje (mira a +Z)."""
+    revolve(mb, [(0.0, 0.0), (r * 0.93, 0.0), (r, depth * 0.25), (r, depth * 0.8), (r * 1.06, depth * 0.84), (r * 1.06, depth),
+                 (r * 0.9, depth), (r * 0.9, depth - 0.0015), (0.0, depth - 0.0015)],
+            ["steel"] * 7 + ["sign_white"], seg=SEG, M=M)
+    zf = depth - 0.0015
+    for k in range(9):
+        a = math.radians(-60 + 15 * k)
+        mb.box((-0.0006, r * 0.66, -0.0002), (0.0006, r * 0.8, 0.0005), "cable", bevel=0.0, m=M @ _T(0, 0, zf) @ _Rz(math.degrees(a)))
+    mb.box((-0.0009, -0.004, 0.0003), (0.0009, r * 0.72, 0.0011), "sign_red", bevel=0.0, m=M @ _T(0, 0, zf) @ _Rz(needle))
+    lathe(mb, [(0.0, -0.0002), (0.0025, -0.0002), (0.0025, 0.0016), (0.0, 0.0019)], seg=12, mat="cable", M=M @ _T(0, 0, zf))
+
+
 def fuel_tank(seed=0):
     """Tanque diésel horizontal de doble pared UL 142 de ~550 gal (Ø 1,12 × 1,85 m de virola; catálogos tankretailer /
     Modweldco: 48" × 72"), sobre dos silletas soldadas con placa base anclada. Origen: piso al centro; eje del tanque en X.
@@ -1439,10 +1458,9 @@ def fuel_tank(seed=0):
     lathe(mb, [(0.085, zt - 0.02), (0.085, zt + 0.04), (0.11, zt + 0.042), (0.11, zt + 0.06), (0.095, zt + 0.1), (0.04, zt + 0.12),
                (0.0, zt + 0.122)], seg=SEG, mat="steel", M=_T(0.55, -0.1, 0), caps=False)
     # indicador de nivel de carátula
-    from kit.clinic_equipo import gauge
     lathe(mb, [(0.03, zt - 0.02), (0.03, zt + 0.08), (0.06, zt + 0.08), (0.06, zt + 0.085)], seg=SEG, mat="steel", M=_T(-0.1, -0.15, 0),
           caps=False)
-    gauge(mb, _T(-0.1, -0.15, zt + 0.12) @ _Rx(80), r=0.05, depth=0.03, needle=float(r.uniform(-30, 30)))
+    _dial(mb, _T(-0.1, -0.15, zt + 0.12) @ _Rx(80), r=0.05, depth=0.03, needle=float(r.uniform(-30, 30)))
     mb.cyl((-0.1, -0.15, zt + 0.085), (-0.1, -0.15 - 0.005, zt + 0.12), 0.012, seg=12, mat="steel")
     # monitor intersticial
     lathe(mb, [(0.02, zt - 0.02), (0.02, zt + 0.05), (0.026, zt + 0.052), (0.026, zt + 0.07), (0.0, zt + 0.072)], seg=SEG,
@@ -1790,10 +1808,9 @@ def _chassis(mb, nU, mat="cable", d=0.42, ears=True, ear_mat=None):
         for sx in (-1, 1):
             mb.box((sx * 0.2165 - (0.0 if sx > 0 else 0.0225) + (0.0 if sx < 0 else 0.0), -0.0025, 0.0004),
                    (sx * 0.2165 + (0.0225 if sx > 0 else 0.0), 0.0, h + 0.0004), ear_mat or mat, bevel=0.0008, seg=1)
-            for k in range(nU):
-                zz = k * U + U / 2
-                lathe(mb, [(0.0035, 0.0), (0.0035, 0.001), (0.0018, 0.0022), (0.0, 0.0025)], seg=8, mat="steel",
-                      M=_T(sx * 0.2325, -0.0025, zz) @ _Rx(90))
+            for zz in ([h / 2] if nU < 3 else [U / 2, h - U / 2]):
+                lathe(mb, [(0.0035, -0.0003), (0.0033, 0.0012), (0.0, 0.0024)], seg=8, mat="steel",
+                      M=_T(sx * 0.2325, -0.0025, zz) @ _Rx(90), caps=False)
     return h
 
 
@@ -1823,7 +1840,7 @@ def eq_odf():
     _chassis(mb, 1, "cable", d=0.3)
     for k in range(12):
         x = -0.17 + k * 0.026
-        mb.box((x, -0.008, 0.007), (x + 0.02, 0.0, 0.037), "plastic_blue", bevel=0.0008, seg=1)
+        mb.box((x, -0.008, 0.007), (x + 0.02, 0.0, 0.037), "plastic_blue", bevel=0.0)
         mb.box((x + 0.003, -0.0085, 0.012), (x + 0.0085, -0.006, 0.032), "cable", bevel=0.0)
         mb.box((x + 0.0115, -0.0085, 0.012), (x + 0.017, -0.006, 0.032), "cable", bevel=0.0)
     return mb, 1
@@ -1840,7 +1857,7 @@ def eq_bbu():
         mb.box((x0, -0.0025, z0), (x0 + 0.117, 0.0, z0 + 0.040), "aluminium", bevel=0.0006, seg=1)
         for sx in (0, 1):                           # jaladeras con tornillo cautivo
             xx = x0 + 0.004 + sx * 0.104
-            mb.box((xx, -0.012, z0 + 0.006), (xx + 0.009, -0.0025, z0 + 0.034), "cable", bevel=0.0015, seg=1)
+            mb.box((xx, -0.012, z0 + 0.006), (xx + 0.009, -0.0025, z0 + 0.034), "cable", bevel=0.0)
         _cells(mb, x0 + 0.02, z0 + 0.012, 3, 1, 0.0135, 0.0095, gap=0.0015, depth=0.003, wall="aluminium")
         _leds(mb, [x0 + 0.08, x0 + 0.087, x0 + 0.094], z0 + 0.03, ["sign_green", "sign_green", "sign_red" if k == 4 else "sign_green"])
     mb.box((0.155, -0.003, 0.004), (0.215, 0.0, 0.085), "aluminium", bevel=0.0008, seg=1)
@@ -1884,6 +1901,23 @@ def eq_blank(nU=1):
     return mb, nU
 
 
+def eq_vent(nU=2):
+    """Tapa ciega ventilada de nU con 8 ranuras troqueladas."""
+    mb, _ = eq_blank(nU)
+    h = nU * U
+    for k in range(8):
+        x = -0.17 + k * 0.045
+        mb.box((x, -0.0032, 0.012), (x + 0.03, -0.0021, h - 0.012), "rubber", bevel=0.0)
+    return mb, nU
+
+
+def eq_brush(nU=1):
+    """Panel pasacables de cepillo de 1U."""
+    mb, _ = eq_blank(nU)
+    mb.box((-0.2, -0.0034, 0.017), (0.2, -0.0021, 0.028), "rubber", bevel=0.0)
+    return mb, nU
+
+
 def eq_cm(nU=1):
     """Organizador horizontal de cables de nU con 8 dedos."""
     mb = MB()
@@ -1891,7 +1925,7 @@ def eq_cm(nU=1):
     mb.box((-0.2405, 0.0, 0.0004), (0.2405, 0.003, h + 0.0004), "cable", bevel=0.0008, seg=1)
     for k in range(9):
         x = -0.2 + k * 0.05
-        mb.box((x - 0.004, -0.06, 0.006), (x + 0.004, 0.0, h - 0.004), "cable", bevel=0.0018, seg=1)
+        mb.box((x - 0.004, -0.06, 0.006), (x + 0.004, 0.0, h - 0.004), "cable", bevel=0.0)
     return mb, nU
 
 
@@ -1924,7 +1958,7 @@ def eq_dcdist():
         x = -0.195 + k * 0.0328
         mb.box((x, -0.022, 0.016), (x + 0.03, -0.002, 0.07), "sign_white", bevel=0.0015, seg=1)
         mb.box((x + 0.011, -0.03, 0.04 + (0.0 if k % 5 else -0.012)), (x + 0.019, -0.022, 0.054 + (0.0 if k % 5 else -0.012)),
-               "cable", bevel=0.0012, seg=1)
+               "cable", bevel=0.0)
     mb.box((-0.2, -0.0015, 0.076), (0.2, 0.0, 0.084), "sign_white", bevel=0.0)
     return mb, 2
 
@@ -1951,11 +1985,13 @@ def eq_battery():
     return mb, 3
 
 
-def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0):
+def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0, sides=(True, True), fill=35):
     """Gabinete de 19" 42U (w × d × h; catálogos Lehmann / Danbit 600 × 600-1000 × 2000) negro, sin puerta frontal: zócalo
     con rejilla, 4 postes de perfil redondeado, marcos superior e inferior, laterales y espalda de lámina, techo con pasacables
     de cepillo atrás, rieles de 19" con perforación implícita y el equipo `items` (constructores eq_* de abajo hacia arriba;
-    None = 1U libre). jumpers: n de jumpers de fibra amarillos en lazo al frente. Local: centro de la huella, frente -Y."""
+    None = 1U libre); el resto hasta `fill` U se cierra con tapas ciegas de 2U. jumpers: n de jumpers de fibra amarillos en
+    lazo al frente. sides: laterales (-X, +X) (en filas acopladas solo los extremos llevan lateral). Local: centro de la huella,
+    frente -Y."""
     from kit.clinic_equipo import rtube_lo
     r = rng(seed)
     P = lambda x, y, z: M @ Vector((x, y, z))           # noqa: E731
@@ -1976,10 +2012,10 @@ def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0):
         for sx in (-1, 1):
             rtube_lo(mb, P(sx * (w / 2 - 0.022), -d / 2 + 0.042, z), P(sx * (w / 2 - 0.022), d / 2 - 0.042, z), 0.04, 0.03, "cable",
                      up=tuple(M.to_3x3() @ Vector((0, 0, 1))), r=0.004)
-    for sx in (-1, 1):                                   # laterales de lámina con canto redondo
-        slab(mb, M @ _T(sx * (w / 2 - 0.0005), 0.0, 0.1) @ _Ry(90 * sx) @ _Rz(0), 0.0, 0.0, 0.0) if False else None
-        mb.box((sx * w / 2 - (0.0012 if sx > 0 else 0.0), -d / 2 + 0.004, 0.1), (sx * w / 2 + (0.0 if sx > 0 else 0.0012), d / 2 - 0.004,
-               h - 0.022), "cable", bevel=0.0006, seg=1, m=M)
+    for sx, on in zip((-1, 1), sides):                    # laterales de lámina
+        if on:
+            mb.box((sx * w / 2 - (0.0012 if sx > 0 else 0.0), -d / 2 + 0.004, 0.1), (sx * w / 2 + (0.0 if sx > 0 else 0.0012),
+                   d / 2 - 0.004, h - 0.022), "cable", bevel=0.0006, seg=1, m=M)
     mb.box((-w / 2 + 0.004, d / 2 - 0.0012, 0.1), (w / 2 - 0.004, d / 2, h - 0.022), "cable", bevel=0.0006, seg=1, m=M)
     mb.box((-w / 2, -d / 2, h - 0.022), (w / 2, d / 2, h), "cable", bevel=0.004, seg=2, m=M)
     mb.box((-0.18, d / 2 - 0.2, h), (0.18, d / 2 - 0.06, h + 0.006), "rubber", bevel=0.0015, seg=1, m=M)   # pasacables de cepillo
@@ -1998,9 +2034,21 @@ def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0):
         placed.append((u, nU, src))
         mb.join(src, M @ _T(0, yr, 0.1 + u * U))
         u += nU
+    n_items_u = u
+    pool = [eq_blank(2), eq_blank(1), eq_vent(2), eq_brush(1), eq_cm(1), None]
+    wts = [0.34, 0.14, 0.2, 0.1, 0.1, 0.12]
+    while u < fill:
+        it = pool[int(r.choice(len(pool), p=wts))]
+        if it is None:
+            u += 1
+            continue
+        src, nU = it
+        if u + nU > fill:
+            break
+        mb.join(src, M @ _T(0, yr, 0.1 + u * U))
+        u += nU
     if jumpers:                                          # jumpers de fibra en lazo desde la ODF a las tarjetas
-        odf = [p for p in placed if p[2] is items[-1][0]] if False else None
-        z_hi = 0.1 + (u - 1.5) * U
+        z_hi = 0.1 + (n_items_u - 1.5) * U
         z_lo = 0.1 + 6 * U
         for k in range(jumpers):
             xa = -0.16 + 0.31 * k / max(jumpers - 1, 1)
@@ -2008,9 +2056,19 @@ def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0):
             za = z_hi - (k % 2) * 0.012
             zb = z_lo + (k % 3) * 0.04
             sag = 0.05 + 0.03 * float(r.random())
-            pts = [P(xa, yr - 0.008, za), P(xa, yr - 0.04, za - 0.02), P(xa * 0.7 + 0.21, yr - 0.07 - 0.01 * (k % 3), (za + zb) / 2 + 0.05),
-                   P(0.215, yr - 0.055, (za + zb) / 2 - sag), P(xb, yr - 0.045, zb + 0.03), P(xb, yr - 0.012, zb)]
-            wire(mb, pts, 0.0015, mat="paint_yellow", seg=13, bend=0.03, nseg=3)
+            ctrl = [Vector((xa, yr - 0.004, za)), Vector((xa, yr - 0.035, za - 0.012)),
+                    Vector((xa * 0.6 + 0.08, yr - 0.07 - 0.01 * (k % 3), (za + zb) / 2 + 0.04)),
+                    Vector((0.2, yr - 0.06, (za + zb) / 2 - sag)), Vector((xb, yr - 0.04, zb + 0.025)), Vector((xb, yr - 0.004, zb))]
+            from kit.clinic import _catmull
+            sm = []
+            for i in range(len(ctrl) - 1):               # curva Catmull-Rom suave por los puntos de control
+                p0_, p1_, p2_, p3_ = ctrl[max(i - 1, 0)], ctrl[i], ctrl[i + 1], ctrl[min(i + 2, len(ctrl) - 1)]
+                for q in range(2):
+                    tq = q / 2
+                    sm.append(0.5 * ((2 * p1_) + (-p0_ + p2_) * tq + (2 * p0_ - 5 * p1_ + 4 * p2_ - p3_) * tq * tq
+                                     + (-p0_ + 3 * p1_ - 3 * p2_ + p3_) * tq ** 3))
+            sm.append(ctrl[-1])
+            mb.tube([tuple(M @ v) for v in sm], 0.0015, seg=13, mat="paint_yellow")
     return yr
 
 
@@ -2038,8 +2096,8 @@ def _offset_route(route, o):
     return [(p.x, p.y) for p in out]
 
 
-def _ladder_tray(mb, p0, p1, z, w=0.3, rung_phase=0.0, mat="galvanized"):
-    """Charola tipo escalera (300 mm interior) de p0 a p1 en planta a la altura z (cama de peldaños): largueros de canal de
+def _ladder_tray(mb, p0, p1, z, w=0.45, rung_phase=0.0, mat="galvanized"):
+    """Charola tipo escalera (450 mm interior) de p0 a p1 en planta a la altura z (cama de peldaños): largueros de canal de
     75 mm y peldaños de 25 × 12 cada 30 cm."""
     from kit.clinic_equipo import rtube_lo
     p0, p1 = Vector((p0[0], p0[1], z)), Vector((p1[0], p1[1], z))
@@ -2063,15 +2121,15 @@ def _ladder_tray(mb, p0, p1, z, w=0.3, rung_phase=0.0, mat="galvanized"):
         k += 1
 
 
-def _trapeze(mb, c, along, z_under, H, w=0.3):
+def _trapeze(mb, c, along, z_under, H, w=0.45):
     """Soporte trapecio: unistrut bajo la charola colgado de 2 varillas roscadas de 3/8" al plafón, con tuercas y rondanas."""
-    c = Vector(c)
-    t = Vector(along).normalized()
+    c = Vector((c[0], c[1], 0.0))
+    t = Vector((along[0], along[1], 0.0)).normalized()
     nrm = Vector((-t.y, t.x, 0))
-    a = c + nrm * (w / 2 + 0.07)
-    b = c - nrm * (w / 2 + 0.07)
+    a = c + nrm * (w / 2 + 0.06)
+    b = c - nrm * (w / 2 + 0.06)
     strut(mb, (a.x, a.y, z_under), (b.x, b.y, z_under), up=(0, 0, 1))
-    for p in (c + nrm * (w / 2 + 0.04), c - nrm * (w / 2 + 0.04)):
+    for p in (c + nrm * (w / 2 + 0.043), c - nrm * (w / 2 + 0.043)):
         mb.cyl((p.x, p.y, z_under - 0.06), (p.x, p.y, H), 0.0048, seg=13, mat="galvanized", caps=True)
         hexnut(mb, _T(p.x, p.y, z_under), s=0.0143, h=0.008, mat="galvanized")
         hexnut(mb, _T(p.x, p.y, z_under - 0.0413) @ _Rx(180), s=0.0143, h=0.008, mat="galvanized")
@@ -2084,7 +2142,7 @@ def _entry_port(mb, x_wall, yc, zc, ncol=4, nrow=2, used=8):
     Devuelve las salidas [(punto, radio)] de las botas usadas."""
     pitch = 0.12
     Wp, Hp = ncol * pitch + 0.06, nrow * pitch + 0.06
-    M = _T(x_wall, yc, zc) @ _Rz(90) @ _Rx(90)          # XY local sobre el muro, +Z hacia -X (adentro)
+    M = _T(x_wall, yc, zc) @ _Rz(-90) @ _Rx(90)         # XY local sobre el muro, +Z hacia -X (adentro)
     slab(mb, M @ _T(0, 0, -0.0005), Wp, Hp, 0.012, rc=0.012, re=0.003, mat="galvanized", nc=3, ne=1, re0=0.0, cap0=False)
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -2097,9 +2155,9 @@ def _entry_port(mb, x_wall, yc, zc, ncol=4, nrow=2, used=8):
             y = ((nrow - 1) / 2 - j) * pitch
             Mb = M @ _T(x, y, 0.012)
             if k < used:                                 # bota: brida, cuerpo cónico escalonado y cuello sobre el cable
-                lathe(mb, [(0.0, 0.0), (0.05, 0.0), (0.05, 0.012), (0.042, 0.016), (0.03, 0.06), (0.026, 0.07), (0.016, 0.085),
-                           (0.0135, 0.11)], seg=SEG, mat="rubber", M=Mb, caps=False)
-                ring(mb, Mb @ _T(0, 0, 0.1), 0.0148, 0.0018, mat="steel", n=SEG, seg=4)
+                lathe(mb, [(0.05, 0.0), (0.05, 0.012), (0.03, 0.06), (0.019, 0.08), (0.0135, 0.11)], seg=SEG, mat="rubber", M=Mb,
+                      caps=False)
+                ring(mb, Mb @ _T(0, 0, 0.1), 0.0148, 0.0018, mat="steel", n=SEG, seg=3)
                 mb.box((0.012, -0.004, 0.096), (0.024, 0.004, 0.104), "steel", bevel=0.001, seg=1, m=Mb)
                 outs.append((Mb @ Vector((0, 0, 0.11)), 0.0115))
             else:
@@ -2111,20 +2169,19 @@ def _entry_port(mb, x_wall, yc, zc, ncol=4, nrow=2, used=8):
 def _ground_bar(mb, x_wall, yc, zc, n=8, wire_ends=None):
     """Barra de tierra de cobre 600 × 100 × 6,4 mm sobre aisladores y ménsulas en el muro x = x_wall (sobresale a -X), con
     zapatas de dos barrenos y conductores verdes. wire_ends: puntos a donde llegan los conductores."""
-    M = _T(x_wall, yc, zc) @ _Rz(90) @ _Rx(90)
+    M = _T(x_wall, yc, zc) @ _Rz(-90) @ _Rx(90)
     for sx in (-1, 1):
         mb.box((sx * 0.33 - 0.015, -0.03, 0.0), (sx * 0.33 + 0.015, 0.03, 0.006), "steel", bevel=0.0015, seg=1, m=M)
-        lathe(mb, [(0.018, 0.006), (0.018, 0.012), (0.015, 0.016), (0.015, 0.03), (0.018, 0.034), (0.018, 0.045)], seg=SEG,
-              mat="plastic", M=M @ _T(sx * 0.3, 0, 0))
+        lathe(mb, [(0.018, 0.006), (0.015, 0.014), (0.015, 0.03), (0.018, 0.038), (0.018, 0.045)], seg=SEG, mat="plastic",
+              M=M @ _T(sx * 0.3, 0, 0), caps=False)
     mb.box((-0.3, -0.05, 0.045), (0.3, 0.05, 0.0514), "copper", bevel=0.0015, seg=1, m=M)
     ends = []
     for k in range(n):
         x = -0.26 + 0.52 * k / (n - 1)
         Ml = M @ _T(x, 0.0, 0.0514)
         mb.box((-0.009, -0.03, 0.0), (0.009, 0.035, 0.004), "copper", bevel=0.001, seg=1, m=Ml)
-        for zz in (-0.012, 0.012):
-            hexnut(mb, Ml @ _T(0, zz, 0.004), s=0.011, h=0.006, mat="steel")
-        lathe(mb, [(0.0065, 0.035), (0.008, 0.042), (0.008, 0.06), (0.0055, 0.064)], seg=16, mat="copper", M=Ml @ _Rx(-90) @ _T(0, -0.002, 0))
+        hexnut(mb, Ml @ _T(0, -0.01, 0.004), s=0.011, h=0.006, mat="steel")
+        lathe(mb, [(0.0065, 0.035), (0.008, 0.042), (0.008, 0.06), (0.0055, 0.064)], seg=13, mat="copper", M=Ml @ _Rx(-90) @ _T(0, -0.002, 0))
         ends.append(Ml @ Vector((0, 0.064, 0.002)))
     return ends
 
@@ -2182,3 +2239,153 @@ def _desk(mb, M, seed=0):
     wire(mb, [tuple(Ml @ Vector((0.165, 0.0, 0.008))), tuple(Ml @ Vector((0.21, -0.02, -0.01))), tuple(M @ Vector((0.38, 0.1, zt))),
               tuple(M @ Vector((0.4, 0.06, zt - 0.2))), tuple(M @ Vector((0.38, 0.02, zt - 0.35)))], 0.002, mat="cable", seg=13,
          bend=0.04, nseg=3)
+
+
+def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
+    """Equipamiento interior completo de la caseta prefabricada (piso interior z = 0; muros interiores en x = ±L/2, y = ±W/2;
+    plafón en z = H). Supuesto de puerta: vano de 1,0 m en el muro -Y centrado en x = -L/2 + 0,9; queda libre la zona
+    x ∈ [-L/2 + 0,35, -L/2 + 1,45] × y ∈ [-W/2, -W/2 + 1,0] hasta el plafón.
+    - Piso: loseta antiestática 600 × 600 × 3 mm con juntas biseladas (z 0..0,003; el equipo apoya en 0,003).
+    - Fila N (contra el muro +Y, frente a -Y): 6 racks 600 × 800 × 2000 (transmisión con router/IDU, ODF y switch; 2 de BBU con
+      jumpers amarillos en lazo; servidores; distribución CD + ODF; reserva con tapas ciegas).
+    - Fila S (contra el muro -Y, frente a +Y, a partir de x = -L/2 + 1,6): 4 racks 600 × 600 × 2000 (planta de rectificadores
+      48 V con controlador y distribución, 2 gabinetes de baterías de litio de 5 módulos, ODF / patch).
+    - Charolas tipo escalera de 300 mm a z 2,16 (cama) sobre cada fila y una transversal junto al muro +X, colgadas de trapecios con
+      varilla roscada; cables negros (RF/híbridos del puerto, fuerza CD) y amarillos (fibra) tendidos en la charola, que bajan a
+      cada rack por su pasacables de cepillo.
+    - Puerto de entrada de 8 botas en el muro +X (centro y = 0,6, z = 2,3) con los cables del ice bridge.
+    - 2 minisplits (muros -X y +X, z 2,25), panel de alarmas y extintor junto a la puerta (muro -X), barra de tierra de cobre
+      bajo el puerto con conductores verdes, escritorio abatible con laptop (muro -X), 3 luminarias LED 1200 × 300 en el
+      plafón sobre el pasillo (centros en (x, y, H) = (-1,6, -0,1), (0,0, -0,1), (1,6, -0,1))."""
+    from kit.clinic_equipo import extinguisher, split_indoor
+    r = rng(seed)
+    mb = MB()
+    x0, x1, y0, y1 = -L / 2, L / 2, -W / 2, W / 2
+    zf = 0.003
+    # ---- piso de loseta antiestática
+    xs_ = [x0 + 0.6 * k for k in range(int(L / 0.6) + 1)] + [x1]
+    ys_ = [y0 + 0.6 * k for k in range(int(W / 0.6) + 1)] + [y1]
+    xs_ = sorted(set(round(v, 4) for v in xs_ if x0 - 1e-6 <= v <= x1 + 1e-6))
+    ys_ = sorted(set(round(v, 4) for v in ys_ if y0 - 1e-6 <= v <= y1 + 1e-6))
+    for i in range(len(xs_) - 1):
+        for j in range(len(ys_) - 1):
+            if xs_[i + 1] - xs_[i] < 0.01 or ys_[j + 1] - ys_[j] < 0.01:
+                continue
+            mb.box((xs_[i] + 0.0004, ys_[j] + 0.0004, 0.0), (xs_[i + 1] - 0.0004, ys_[j + 1] - 0.0004, zf), "plastic", bevel=0.0009, seg=1)
+    # ---- racks
+    eq = {k: f() for k, f in (("sw", eq_switch), ("pp", eq_patch), ("odf", eq_odf), ("bbu", eq_bbu), ("rt", eq_router),
+                               ("sv", eq_server), ("b1", lambda: eq_blank(1)), ("b2", lambda: eq_blank(2)), ("cm", lambda: eq_cm(1)),
+                               ("rect", eq_rectifier), ("dcd", eq_dcdist), ("bat", eq_battery))}
+    rowN = [
+        [eq["b2"], eq["rt"], eq["rt"], eq["cm"], eq["sw"], None, eq["b2"], eq["b2"], eq["b2"], eq["cm"], eq["pp"], eq["odf"], eq["odf"]],
+        [eq["b2"], eq["bbu"], eq["bbu"], eq["bbu"], eq["cm"], eq["cm"], eq["b1"], eq["b2"], eq["b2"], eq["pp"], eq["cm"], eq["odf"],
+         eq["odf"]],
+        [eq["b2"], eq["bbu"], eq["bbu"], eq["cm"], eq["cm"], eq["b2"], eq["b2"], eq["b2"], eq["pp"], eq["cm"], eq["odf"]],
+        [eq["b2"], eq["sv"], eq["sv"], eq["sv"], None, eq["sv"], eq["b1"], eq["b2"], eq["sw"], eq["cm"], eq["pp"]],
+        [eq["b2"], eq["dcd"], None, eq["dcd"], eq["b2"], eq["b2"], eq["odf"], eq["cm"], eq["pp"]],
+        [eq["b2"], eq["b2"], eq["b2"], eq["b2"], eq["sw"], eq["b2"], eq["b2"]],
+    ]
+    jum = [4, 8, 6, 0, 0, 0]
+    rowS = [
+        [eq["b2"], eq["rect"], eq["rect"], eq["b1"], eq["dcd"], eq["b2"], eq["b2"], eq["b2"]],
+        [eq["b1"], eq["bat"], eq["bat"], eq["bat"], eq["bat"], eq["bat"], eq["b2"]],
+        [eq["b1"], eq["bat"], eq["bat"], eq["bat"], eq["bat"], eq["b2"], eq["b2"]],
+        [eq["b2"], eq["b2"], eq["odf"], eq["pp"], eq["cm"], eq["sw"], eq["b2"]],
+    ]
+    dN, dS = 0.8, 0.6
+    yN = y1 - 0.08 - dN / 2
+    yS = y0 + 0.08 + dS / 2
+    xN = [x0 + 1.1 + 0.6 * k for k in range(len(rowN))]
+    xS = [x0 + 1.6 + 0.3 + 0.6 * k for k in range(len(rowS))]
+    for k, (x, items) in enumerate(zip(xN, rowN)):
+        _rack(mb, _T(x, yN, zf - 0.0005), d=dN, items=items, jumpers=jum[k], seed=seed * 31 + k, sides=(k == 0, k == len(rowN) - 1))
+    for k, (x, items) in enumerate(zip(xS, rowS)):
+        _rack(mb, _T(x, yS, zf - 0.0005) @ _Rz(180), d=dS, items=items, seed=seed * 37 + k, sides=(k == len(rowS) - 1, k == 0))
+    # ---- charolas y soportes (bajo el puerto de entrada: las botas quedan sobre la cama de la charola)
+    zt = 2.16
+    yTN, yTS = yN + 0.18, yS - 0.09
+    xT = x1 - 0.45                                       # charola transversal
+    xa_N, xa_S = xN[0] - 0.3, xS[0] - 0.3
+    _ladder_tray(mb, (xa_N, yTN), (xT + 0.235, yTN), zt, rung_phase=0.15 + (xN[0] - xa_N) % 0.3)
+    _ladder_tray(mb, (xa_S, yTS), (xT + 0.235, yTS), zt, rung_phase=0.15 + (xS[0] - xa_S) % 0.3)
+    _ladder_tray(mb, (xT, yTS - 0.235), (xT, yTN + 0.235), zt + 0.0, rung_phase=0.2)
+    _ladder_tray(mb, (xT + 0.235, 0.7), (x1 - 0.06, 0.7), zt, rung_phase=0.1)
+    zu = zt - 0.012 - 0.002
+    for x in (xN[0] + 0.15, (xN[0] + xT) / 2 + 0.15, xT - 0.45):
+        _trapeze(mb, (x, yTN), (1, 0), zu, H)
+    for x in (xS[0] + 0.15, (xS[0] + xT) / 2 - 0.15):
+        _trapeze(mb, (x, yTS), (1, 0), zu, H)
+    for y in (-0.2, 0.95):                               # fuera del minisplit del muro +X
+        _trapeze(mb, (xT, y), (0, 1), zu, H)
+    # ---- puerto de entrada y cables
+    outs = _entry_port(mb, x1, 0.6, 2.3)
+    zb = zt + 0.0
+    groups = []
+    # cables RF / híbridos del puerto -> charola transversal (lado +X) -> fila N -> BBU / transmisión
+    route_p = [(x1 - 0.34, 0.6), (xT, 0.6), (xT, yTN), (xN[0] - 0.1, yTN)]
+    outs = sorted(outs, key=lambda e: (e[0].y, -e[0].z))
+    dests = [xN[0] - 0.05, xN[0] + 0.05, xN[2] - 0.1, xN[2] + 0.0, xN[2] + 0.1, xN[1] - 0.1, xN[1] + 0.0, xN[1] + 0.1]
+    for i, (pt, rc) in enumerate(outs):
+        o = -0.016 - 0.0245 * i                          # a la derecha del avance (lado exterior de las vueltas)
+        groups.append(("cable", rc, o, zb + rc, route_p, dests[i], pt, "N"))
+    # fuerza CD desde la planta (S1) -> fila S -> transversal (lado -X) -> fila N, una por rack
+    route_d = [(xS[0], yTS), (xT, yTS), (xT, yTN), (xN[0] - 0.1, yTN)]
+    for i in range(len(xN)):
+        o = 0.2 - 0.016 * i
+        groups.append(("cable", 0.0065, o, zb + 0.0065, route_d, xN[len(xN) - 1 - i] + 0.12, None, "N"))
+    # baterías -> planta (fila S)
+    for i, xb in enumerate(xS[1:3]):
+        groups.append(("cable", 0.009, -0.09 + 0.022 * i, zb + 0.009, [(xb, yTS), (xS[0], yTS)], xS[0] + 0.1 + 0.05 * i, "S", "S"))
+    # fibra (capa superior) desde la ODF de transmisión (N1) hacia los BBU y la ODF de distribución
+    route_f = [(xN[0], yTN), (xT - 0.3, yTN)]
+    for i, xd in enumerate((xN[1] - 0.05, xN[1] + 0.05, xN[2] - 0.05, xN[2] + 0.05, xN[4], xN[4] + 0.06)):
+        groups.append(("paint_yellow", 0.0035, -0.08 + 0.03 * i, zb + 0.026 + 0.0035, route_f, xd, "N1", "N"))
+    for (mat, rc, o, zc, route, xd, src, row) in groups:
+        P = _offset_route(route, o)
+        heading_x = route[-1][0] - route[-2][0]
+        seg_y = P[-1][1]
+        path = []
+        if isinstance(src, Vector):                     # sale de la bota: horizontal hacia -X y baja a la charola
+            path += [tuple(src), (src.x - 0.08, src.y, src.z), (P[0][0] - 0.02, P[0][1], zc + 0.02)]
+            P = P[1:] if len(P) > 1 else P
+        elif src == "N1" or src == "S" or src is None:  # sube desde el rack de origen
+            if src is None:
+                xr0, yr0 = xS[0] + 0.05 - 0.02 * (o * 50 % 3), yS - 0.17
+            elif src == "S":
+                xr0, yr0 = route[0][0] + 0.04, yS - 0.17
+            else:
+                xr0, yr0 = xN[0] + 0.04 * (o * 30 % 3) - 0.04, yN + 0.28
+            path += [(xr0, yr0, 1.98), (xr0, yr0, zc - 0.08), (P[0][0], P[0][1], zc)]
+        # recorrido por la charola hasta el punto de bajada xd
+        pts2 = []
+        for i in range(len(P) - 1):
+            pts2.append(P[i])
+        pts2.append((xd, seg_y))
+        for (x, y) in pts2:
+            path.append((x, y, zc))
+        y_ent = (yN + 0.28) if row == "N" else (yS - 0.17)
+        path += [(xd, seg_y, zc - 0.05), (xd, y_ent, 2.08), (xd, y_ent, 1.96)]
+        wire(mb, _dedupe(path), rc, mat=mat, seg=13, bend=0.05 if rc < 0.008 else 0.09, nseg=3)
+    # ---- equipo de muro
+    split = split_indoor(seed)
+    mb.join(split, _T(x0, -0.05, 2.25) @ _Rz(90))
+    mb.join(split, _T(x1, -0.75, 2.25) @ _Rz(-90))
+    _alarm_panel(mb, _MF(x0, -0.75, 1.25, "right"))
+    mb.join(extinguisher(seed), _T(x0, -1.32, 0.0) @ _Rz(90))
+    ends = _ground_bar(mb, x1, 0.6, 1.85)
+    ends2 = _ground_bar(mb, x1, 0.6, 0.45, n=6)
+    for k, e in enumerate(ends[:6]):
+        if k < 3:                                       # al plafón / charola (tierra de racks y del puerto)
+            wire(mb, [tuple(e), (e.x - 0.05, e.y, e.z + 0.12), (e.x - 0.12 - 0.02 * k, e.y + 0.02 * k, zt - 0.03), (xT, 0.6 + 0.05 * k, zt + 0.004)],
+                 0.0045, mat="sign_green", seg=13, bend=0.06, nseg=4)
+        else:                                           # a la barra inferior (halo)
+            e2 = ends2[k - 3]
+            wire(mb, [tuple(e), (e.x - 0.04, e.y, e.z - 0.08), (e2.x - 0.04, e2.y, e2.z + 0.12), tuple(e2)], 0.0045, mat="sign_green",
+                 seg=13, bend=0.05, nseg=4)
+    for k, e in enumerate(ends2[3:]):                   # bajan al piso (a la malla de tierra exterior)
+        wire(mb, [tuple(e), (e.x - 0.04, e.y, e.z - 0.1), (e.x - 0.02, e.y + 0.01, 0.04), (x1 - 0.004, e.y + 0.01, 0.02)], 0.0045,
+             mat="sign_green", seg=13, bend=0.04, nseg=4)
+    for xl in (-1.6, 0.0, 1.6):
+        _led_panel(mb, xl, -0.1, H)
+    _desk(mb, _T(x0, 0.25, 0) @ _Rz(-90), seed)
+    return mb

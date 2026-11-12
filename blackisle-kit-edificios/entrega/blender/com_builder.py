@@ -90,6 +90,7 @@ def cfg_com(bid="COM_1_antena"):
 
 # ------------------------------------------------------------------------------------------------------------ registros
 LIGHTS = []        # luminarias para el motor (interior de la caseta, arbotante, reflectores)
+DOOR_M = None      # matriz de la hoja de la puerta (para colgarle su letrero)
 PROXIES = []       # cajas de colisión de lo que va en Detalle/Mobiliario
 
 
@@ -104,6 +105,36 @@ def _proxy(piece, M, pad=0.0):
     mn = [min(p[i] for p in pts) - pad for i in range(3)]
     mx = [max(p[i] for p in pts) + pad for i in range(3)]
     _proxy_box(mn, mx)
+
+
+def rect_sweep(mb, pts, w, h, rr, mat, hint_fn, caps=True, n=3):
+    """Barre un perfil rectangular de esquinas boleadas (w a lo largo de `hint` lateral, h hacia afuera) por una polilínea 3D.
+    hint_fn(p) -> normal hacia afuera del muro en p (la cara plana de la canaleta se apoya en el muro)."""
+    prof = cl.rr_profile(w, h, rr, n=n)
+    P = [Vector(p) for p in pts]
+    rings = []
+    for i, p in enumerate(P):
+        a, b = P[max(i - 1, 0)], P[min(i + 1, len(P) - 1)]
+        T = (b - a).normalized()
+        N = Vector(hint_fn(p))
+        N = (N - T * N.dot(T)).normalized()
+        B = T.cross(N)
+        c = p + N * (h / 2)
+        rings.append([mb.bm.verts.new(c + B * px + N * py) for (px, py) in prof])
+    k = len(prof)
+    for i in range(len(rings) - 1):
+        for j in range(k):
+            jj = (j + 1) % k
+            mb.face([rings[i][j], rings[i][jj], rings[i + 1][jj], rings[i + 1][j]], mat)
+    if caps:
+        mb.face(list(reversed(rings[0])), mat)
+        mb.face(rings[-1], mat)
+
+
+def _wall_normal(p):
+    """Normal hacia afuera del muro de la caseta más cercano a p (para tender canaletas y cables por fuera)."""
+    d = {(0, -1, 0): abs(p[1] - SH_Y0), (0, 1, 0): abs(p[1] - SH_Y1), (-1, 0, 0): abs(p[0] - SH_X0), (1, 0, 0): abs(p[0] - SH_X1)}
+    return min(d, key=d.get)
 
 
 def _noise2(r, n):
@@ -291,18 +322,30 @@ def wall_services(det, r):
     sobre la puerta, estrobo de alarma, caja de conexión del generador, barra de tierras exterior y el puerto de entrada de
     cables con su capucha."""
     y0 = SH_Y0
-    for k, x in enumerate((-3.75, -2.20)):
+    for k, x in enumerate((-3.85, -2.20)):
         ac_ = cl.remap(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="high"),
                        {"metal_rust": "enamel", "metal_paint": "sign_white"})
         det.join(ac_, _T(x, y0, 0.78))
         _proxy_box((x - 0.42, y0 - 0.38, 0.55), (x + 0.42, y0, 1.36))
-        # tubería forrada (canaleta de PVC 80 x 60 con codos) de la condensadora al muro, arriba
-        pts = [(x + 0.30, y0 - 0.12, 1.18), (x + 0.30, y0 - 0.12, 1.40), (x + 0.30, y0 - 0.04, 1.52), (x + 0.30, y0 - 0.04, 2.55),
-               (x + 0.30, y0, 2.62)]
-        P = cl.fillet(pts, 0.06, 6)
-        for a, b in zip(P[:-1], P[1:]):
-            cl.rtube(det, a, b, 0.080, 0.060, "plastic", up=(1, 0, 0), r=0.006)
-        det.cyl((x + 0.30, y0 - 0.001, 2.62), (x + 0.30, y0 - 0.025, 2.62), 0.055, seg=32, mat="plastic")   # tapa pasamuro
+        # tubería forrada (canaleta de PVC 80 x 60 con codos): sube junto a la condensadora y, bajo el vuelo de la losa, rodea la
+        # esquina hasta el muro donde está la unidad interior (muro poniente y = 3,95 / oriente y = 3,25, a z 2,55 del piso interior)
+        zc = Z_CEIL - 0.13
+        xs_ = x + 0.30
+        if k == 0:
+            xe, ye = SH_X0, IN_CY - 0.05
+            tail = [(SH_X0 + 0.15, y0, zc), (SH_X0, y0, zc), (SH_X0, y0 + 0.15, zc), (xe, ye, zc)]
+        else:
+            xe, ye = SH_X1, IN_CY - 0.75
+            tail = [(SH_X1 - 0.15, y0, zc), (SH_X1, y0, zc), (SH_X1, y0 + 0.15, zc), (xe, ye, zc)]
+        P = cl.fillet([(xs_, y0, 1.20), (xs_, y0, zc - 0.10), (xs_, y0, zc), (xs_ + (-0.1 if k == 0 else 0.1), y0, zc)] + tail, 0.07, 6)
+        rect_sweep(det, P, 0.080, 0.060, 0.008, "plastic", _wall_normal)
+        # salida de la condensadora a la canaleta (tubo forrado de espuma negra)
+        det.tube(cl.fillet([(x + 0.30, y0 - 0.20, 1.02), (x + 0.30, y0 - 0.20, 1.12), (xs_, y0 - 0.04, 1.20)], 0.04, 6), 0.012,
+                 seg=14, mat="rubber")
+        # tapa del pasamuro donde la canaleta entra al muro
+        n_ = Vector(_wall_normal((xe, ye, zc)))
+        c_ = Vector((xe, ye, zc))
+        det.cyl(tuple(c_ + n_ * 0.001), tuple(c_ + n_ * 0.07), 0.062, seg=32, mat="plastic")
         # desagüe del condensado
         det.tube(cl.fillet([(x - 0.25, y0 - 0.18, 0.80), (x - 0.25, y0 - 0.18, 0.60), (x - 0.25, y0 - 0.26, Z_PAD + 0.12),
                             (x - 0.25, y0 - 0.34, Z_PAD + 0.12)], 0.04, 6), 0.008, seg=12, mat="plastic")
@@ -422,7 +465,7 @@ def wall_vents(det):
     """Toma de aire de emergencia (muro poniente, baja) y extractor con persiana de gravedad (muro oriente, alta): rejilla de
     lamas con su capucha contra lluvia, como las casetas prefabricadas de telecom."""
     from kit import clinic_servicios as cs
-    for (xw, y, z, rot, w, h) in ((SH_X0, 4.85, 1.35, -90, 0.62, 0.62), (SH_X1, 3.25, 2.45, 90, 0.46, 0.46)):
+    for (xw, y, z, rot, w, h) in ((SH_X0, 4.85, 1.35, -90, 0.62, 0.62), (SH_X1, 5.22, 2.30, 90, 0.46, 0.46)):
         W = _T(xw, y, 0.0) @ _Rz(rot)
         g = cl.MB()
         cs.louver_grille(g, _T(0, -0.001, z) @ _Rx(90), w, h, int(h / 0.05), mat="galvanized", back_mat="cable", t=0.008,
@@ -603,8 +646,54 @@ def _mod(name):
 
 
 def dress(det, furn, r):
-    """Equipo de los agentes (kit/tower.py, kit/antennas.py, kit/telecom.py). Si un módulo aún no existe, se omite."""
-    pass
+    """Equipo de los agentes (kit/tower.py, kit/antennas.py, kit/telecom.py). Si un módulo aún no existe, se omite.
+    Lo que se puede chocar deja su caja en PROXIES."""
+    tel = _mod("telecom")
+    if tel is None:
+        return
+
+    def put(piece, x, y, z=0.0, facing="-y", solid=True, M=None, mb=None):
+        Mx = M if M is not None else _T(x, y, z) @ face_to(facing)
+        if solid:
+            _proxy(piece, Mx)
+        (mb or furn).join(piece, Mx)
+
+    # interior de la caseta (racks, charolas, minisplits, alarmas, tierras, escritorio) y sus luminarias
+    furn.join(tel.shelter_interior(L=IN_L, W=IN_W, H=IN_H, seed=7), _T(IN_CX, IN_CY, Z_FLOOR))
+    for xl in (-1.6, 0.0, 1.6):
+        LIGHTS.append([round(IN_CX + xl, 3), round(IN_CY - 0.1, 3), round(Z_FLOOR + IN_H - 0.06, 3)])
+    for (a, b) in (((IN_CX - 2.4, IN_CY + 0.75), (IN_CX + 2.4, IN_CY + 1.55)), ((IN_CX - 1.2, IN_CY - 1.55), (IN_CX + 1.2, IN_CY - 0.9))):
+        _proxy_box((a[0], a[1], Z_FLOOR), (b[0], b[1], Z_FLOOR + 2.0))                 # filas de racks
+    # gabinetes exteriores en su losa (frente a la banqueta)
+    zc = Z_WALK + 0.06
+    for (x, kind) in ((2.35, "power"), (3.50, "battery"), (4.65, "telecom")):
+        put(tel.outdoor_cabinet(kind, seed=int(r.integers(1e6))), x, -1.50, zc)
+    # generador y tanque de diésel en su losa
+    zg = Z_WALK + 0.08
+    # tanque al poniente y generador al oriente con su tablero (-x) viendo al pasillo entre los dos
+    put(tel.fuel_tank(seed=int(r.integers(1e6))), 2.75, -5.95, zg)
+    put(tel.generator(seed=int(r.integers(1e6))), 5.85, -5.65, zg)
+    # mangueras de alimentación y retorno del tanque al generador, tendidas sobre la losa
+    for k in range(2):
+        xa, ya = 2.75 - 0.5 + 0.15 * k, -5.95 + 0.56 + 0.4
+        xb, yb = 5.85 - 1.23, -5.65 - 0.58 - 0.04 * k
+        z = zg + 0.0095 + 0.002
+        pts = cl.fillet([(xa, ya, z), (xa + 0.10, ya + 0.12 + 0.04 * k, z), (4.05 + 0.04 * k, ya + 0.12 + 0.04 * k, z),
+                         (4.28 + 0.04 * k, -5.05, z), (4.28 + 0.04 * k, yb + 0.05, z), (xb, yb, z)], 0.18, 8)
+        furn.tube(pts, 0.0095, seg=14, mat="rubber")
+    # marco H de acometida junto a la banqueta, viendo a ella
+    put(tel.meter_hframe(seed=int(r.integers(1e6))), -3.95, -4.60, Z_GRAVEL, "-x")
+    # postes de luz con reflector LED (uno con cámara) apuntando al centro del compound
+    put(tel.light_pole(6.0, seed=int(r.integers(1e6)), cctv=True), 0, 0, M=_T(-7.35, -1.0, Z_GRAVEL) @ _Rz(-90))
+    put(tel.light_pole(6.0, seed=int(r.integers(1e6)), cctv=False), 0, 0, M=_T(7.35, 7.0, Z_GRAVEL) @ _Rz(135))
+    LIGHTS.append([-6.9, -1.0, 6.0])
+    LIGHTS.append([7.0, 6.65, 6.0])
+    # letreros: en la hoja de la puerta (sigue a la hoja abierta) y en el muro junto a la puerta
+    sg = tel.signs()
+    if DOOR_M is not None:
+        det.join(sg["AUTHORIZED PERSONNEL ONLY"], DOOR_M @ _T(0.45, -0.0012, 1.42))
+    det.join(sg["SITE ID 2047"], _T(DX1 + FRAME + 0.30, SH_Y0 - 0.001, 1.55))
+    det.join(sg["DANGER HIGH VOLTAGE"], _T(SH_X0 - 0.001, 3.30, 1.82) @ _Rz(-90))
 
 
 # ------------------------------------------------------------------------------------------------- ensamble
@@ -621,7 +710,8 @@ def build_com(bid="COM_1_antena", collection_root=None, dress_on=True, **kw):
     r = rng(cfg["seed"])
     shelter_shell(shell, roof)
     roof_details(det)
-    door(det)
+    global DOOR_M
+    DOOR_M = door(det)
     wall_services(det, r)
     wall_vents(det)
     anchor_clips(det)

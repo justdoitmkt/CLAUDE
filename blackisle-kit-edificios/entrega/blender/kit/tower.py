@@ -147,7 +147,6 @@ def ring_extrude(mb, outer, inner, z0, z1, mat):
 def prism(mb, prof, M, x0, x1, mat, planes=None, caps=True):
     """Barra prismática: perfil 2D (y, z) en el marco M (eje X local), de x0 a x1. `planes` = (plano0, plano1) opcional, cada
     plano (punto, normal) en mundo: los extremos se cortan oblicuos sobre esos planos (cortes a inglete contra placas)."""
-    org = M.translation
     ax = Vector((M[0][0], M[1][0], M[2][0]))
     rings = []
     for k, xe in enumerate((x0, x1)):
@@ -161,7 +160,6 @@ def prism(mb, prof, M, x0, x1, mat, planes=None, caps=True):
                     p = p + ax * ((q - p).dot(n) / den)
             ring.append(p)
         rings.append(ring)
-    del org
     return skin(mb, rings, mat, cap0=caps, cap1=caps)
 
 
@@ -189,8 +187,8 @@ def plate_m(mb, outline, t, mat, M, center=True):
 
 def weld_ring(mb, M, r, w=0.006, seg=32, mat=GALV):
     """Cordón de soldadura perimetral (sección redondeada) alrededor de un tubo de radio r, apoyado en z = 0 local hacia +Z."""
-    prof = [(r - 0.001, w * 1.05), (r + w * 0.45, w * 0.75), (r + w * 0.9, 0.0005), (r - 0.001, -0.0006)]
-    lathe(mb, prof, seg=seg, mat=mat, M=M, closed=True, caps=False)
+    prof = [(r - 0.0008, w * 1.05), (r + w * 0.45, w * 0.75), (r + w * 0.9, -0.0004)]
+    lathe(mb, prof, seg=seg, mat=mat, M=M, closed=False, caps=False)
 
 
 # ================================================================================================== tornillería (prefabs)
@@ -232,7 +230,7 @@ def bolt_pf(d, grip, mat=GALV, stub=0.55, head_washer=False, wseg=12):
     hn = 0.8 * d
     _hex(b, -tw - hn, hn + 0.0003, s, mat=mat)
     if stub > 0:
-        _stub(b, -tw - hn + 0.001, -tw - hn - stub * d, d * 0.47, mat=mat, seg=10 if d < 0.014 else 12)
+        _stub(b, -tw - hn + 0.001, -tw - hn - stub * d, d * 0.47, mat=mat, seg=12)
     z0 = grip - 0.0003
     if head_washer:
         _lat(b, [(rw, z0), (rw, z0 + tw)], wseg, mat)
@@ -257,7 +255,7 @@ def nut_pf(d, mat=GALV, washer=True, stub=0.5, wseg=12):
     hn = 0.8 * d
     _hex(b, z, hn + 0.0003, 1.5 * d, mat=mat)
     if stub > 0:
-        _stub(b, z + hn - 0.001, z + hn + stub * d, d * 0.47, mat=mat, seg=10 if d < 0.014 else 12)
+        _stub(b, z + hn - 0.001, z + hn + stub * d, d * 0.47, mat=mat, seg=12)
     _PF[key] = b
     return b
 
@@ -271,7 +269,7 @@ def bolt_at(mb, p_nut_face, axis_to_head, d, grip, xhint=None, **kw):
     mb.join(bolt_pf(d, grip, **kw), frame(axis_to_head, xhint, p_nut_face))
 
 
-def ubolt(mb, M, rp, d=0.012, reach=0.03, mat=GALV, seg=10, bend_seg=9):
+def ubolt(mb, M, rp, d=0.012, reach=0.03, mat=GALV, seg=12, bend_seg=9):
     """Perno en U alrededor de un tubo de radio rp. Local: el tubo va a lo largo de Y por el origen; la U lo abraza por el lado
     -X y sus dos patas salen hacia +X, atraviesan una placa cuya cara trasera está en x = reach y llevan tuerca y arandela."""
     rb = rp + d / 2 + 0.0008
@@ -282,7 +280,7 @@ def ubolt(mb, M, rp, d=0.012, reach=0.03, mat=GALV, seg=10, bend_seg=9):
         pts.append((rb * math.cos(a), 0.0, rb * math.sin(a)))
     pts += [(0.0, 0.0, -rb), (L, 0.0, -rb)]
     mb.tube([M @ Vector(p) for p in pts], d / 2, seg=seg, mat=mat)
-    nf = nut_pf(d, mat=mat, stub=0.0)
+    nf = nut_pf(d, mat=mat, stub=0.0, washer=False, wseg=12)
     for zz in (rb, -rb):
         mb.join(nf, M @ frame((1, 0, 0), (0, 0, 1), (reach, 0.0, zz)))
 
@@ -466,7 +464,6 @@ def build_legs(mb, G):
                 start = p0 - d0 * 0.012
             else:
                 start = p0 + d0 * (gap / 2 + tf - 0.004)
-            d1 = G.leg_dir(i, z1 - 0.01) if z1 < G.zk else (G.leg_dir(i, G.zk - 0.5) if z0 < G.zk < z1 else Vector((0, 0, 1)))
             if s == len(G.zsec) - 2:
                 end = G.P(i, z1) - Vector((0, 0, 0.012))
             else:
@@ -478,7 +475,6 @@ def build_legs(mb, G):
                 mb.tube(path, rt, seg=seg, mat=GALV)
             else:
                 mb.tube([start, end], rt, seg=seg, mat=GALV)
-            del d1
         # bridas en cada junta: disco inferior (del tramo de abajo) + disco superior + 8 tornillos M24
         for j, zj in enumerate(G.joints):
             dj = G.leg_dir(i, zj - 0.01)
@@ -494,11 +490,11 @@ def build_legs(mb, G):
             for k in range(8):
                 a = ph + 2 * PI * (k + 0.5) / 8
                 q = Mlo @ Vector((rb * math.cos(a), rb * math.sin(a), gap + tf))
-                mb.join(bolt_pf(bolt_d, 2 * tf + gap, stub=0.6, wseg=16), frame(-dj, None, q))
+                mb.join(bolt_pf(bolt_d, 2 * tf + gap, stub=0.6, wseg=12), frame(-dj, None, q))
         # remate superior: tapa abombada soldada
         pt = G.P(i, G.h) - Vector((0, 0, 0.012))
         rt = G.od_leg[-1] / 2
-        lathe(mb, [(rt + 0.004, 0.0), (rt + 0.004, 0.008), (rt * 0.8, 0.016), (rt * 0.4, 0.021), (0.0, 0.022)], seg=24, mat=GALV,
+        lathe(mb, [(rt + 0.0012, -0.01), (rt + 0.0016, 0.008), (rt * 0.8, 0.016), (rt * 0.4, 0.021), (0.0, 0.022)], seg=24, mat=GALV,
               M=_T(*pt))
 
 
@@ -506,7 +502,7 @@ def build_step_bolts(mb, G, leg=0, z0=1.25, step=0.40):
     """Escalones de pie 5/8" × 9" alternados a ±50° de la dirección radial de la pata, cada 0,40 m (0,80 m por lado)."""
     d = 0.0159
     boss = MB()
-    lathe(boss, [(0.017, -0.006), (0.017, 0.022), (0.0155, 0.0245)], seg=16, mat=GALV)
+    _lat(boss, [(0.017, -0.006), (0.017, 0.022), (0.0155, 0.0245)], 12, GALV, cap0=False)
     head = MB()
     lathe(head, [(d * 0.47, 0.0), (d * 0.47, 0.176)], seg=12, mat=GALV, caps=False)
     _hex(head, 0.176, 0.011, 0.024)
@@ -792,29 +788,29 @@ def build_supports(mb, G):
         yp = yh - rh - 0.0025                                                   # cara frontal de la placa extrema
         for xa in (-0.25, 0.25):
             _rtube(mb, (xa, yb + 0.039, zh), (xa, yp - 0.0115, zh), 0.05, 0.08, (0, 0, 1))
-            mb.box((xa - 0.055, yp - 0.012, zh - 0.07), (xa + 0.055, yp, zh + 0.07), GALV, bevel=0.002)
+            mb.box((xa - 0.055, yp - 0.012, zh - 0.07), (xa + 0.055, yp, zh + 0.07), GALV, bevel=0.002, seg=1)
             for dx in (-0.04, 0.04):
                 M = Matrix(((0, 1, 0, xa + dx), (-1, 0, 0, yh), (0, 0, 1, zh), (0, 0, 0, 1)))
-                ubolt(mb, M, rh, d=0.010, reach=rh + 0.0025 + 0.012, seg=10, bend_seg=7)
+                ubolt(mb, M, rh, d=0.010, reach=rh + 0.0025 + 0.012, seg=12, bend_seg=7)
         # ménsulas de los largueros de la escalera de ascenso (ángulo de clip: ala contra el larguero, ala contra el travesaño)
         for sgn in (-1, 1):
             xr = G.x_lad + sgn * 0.225
             xa = xr + sgn * 0.0065
             xb = xa + sgn * 0.008
-            mb.box((min(xa, xb), G.y_lad - 0.02, zh - 0.05), (max(xa, xb), yb - 0.0005, zh + 0.05), GALV, bevel=0.0015)
+            mb.box((min(xa, xb), G.y_lad - 0.02, zh - 0.05), (max(xa, xb), yb - 0.0005, zh + 0.05), GALV, bevel=0.0015, seg=1)
             xc_ = xa + sgn * 0.075
-            mb.box((min(xb, xc_), yb - 0.0085, zh - 0.05), (max(xb, xc_), yb - 0.0005, zh + 0.05), GALV, bevel=0.0015)
+            mb.box((min(xb, xc_), yb - 0.0085, zh - 0.05), (max(xb, xc_), yb - 0.0005, zh + 0.05), GALV, bevel=0.0015, seg=1)
             bolt_at(mb, Vector((xr - sgn * 0.006, G.y_lad + 0.005, zh)), Vector((sgn, 0, 0)), 0.012, 0.0205, (0, 0, 1))
             bolt_at(mb, Vector((xa + sgn * 0.045, yb + 0.004, zh)), Vector((0, -1, 0)), 0.012, 0.0125, (0, 0, 1), stub=0.3)
         # separadores de la escalerilla de cables (canal en Z desde el ala trasera del larguero hasta el travesaño)
         for sgn in (-1, 1):
             xm = G.x_cab + sgn * 0.272
             yr = G.y_lad + 0.025
-            mb.box((xm - 0.004, yr + 0.0085, zh - 0.05), (xm + 0.004, yb - 0.0085, zh + 0.05), GALV, bevel=0.0015)
-            mb.box((xm - 0.021, yr + 0.0005, zh - 0.05), (xm + 0.021, yr + 0.0085, zh + 0.05), GALV, bevel=0.0015)
-            mb.box((xm - 0.021, yb - 0.0085, zh - 0.05), (xm + 0.021, yb - 0.0005, zh + 0.05), GALV, bevel=0.0015)
-            bolt_at(mb, Vector((xm, yr - 0.005, zh)), Vector((0, 1, 0)), 0.010, 0.0135, (0, 0, 1), stub=0.3)
-            bolt_at(mb, Vector((xm, yb + 0.004, zh)), Vector((0, -1, 0)), 0.010, 0.0125, (0, 0, 1), stub=0.3)
+            mb.box((xm - 0.004, yr + 0.0085, zh - 0.05), (xm + 0.004, yb - 0.0085, zh + 0.05), GALV, bevel=0.0015, seg=1)
+            mb.box((xm - 0.022, yr + 0.0005, zh - 0.05), (xm + 0.022, yr + 0.0085, zh + 0.05), GALV, bevel=0.0015, seg=1)
+            mb.box((xm - 0.022, yb - 0.0085, zh - 0.05), (xm + 0.022, yb - 0.0005, zh + 0.05), GALV, bevel=0.0015, seg=1)
+            bolt_at(mb, Vector((xm - sgn * 0.0135, yr - 0.005, zh)), Vector((0, 1, 0)), 0.010, 0.0135, (0, 0, 1), stub=0.3)
+            bolt_at(mb, Vector((xm + sgn * 0.0135, yb + 0.004, zh)), Vector((0, -1, 0)), 0.010, 0.0125, (0, 0, 1), stub=0.3)
 
 
 def build_climb_ladder(mb, G):
@@ -828,7 +824,7 @@ def build_climb_ladder(mb, G):
         # largueros en tramos de 6 m con placas de empalme
         cuts = [z0] + [6.0 * k + 1.5 for k in range(1, 8) if 6.0 * k + 1.5 < ztop - 1.0] + [ztop]
         for a, b in zip(cuts[:-1], cuts[1:]):
-            mb.box((xr - 0.006, yl - 0.03, a + 0.002), (xr + 0.006, yl + 0.03, b - 0.002), GALV, bevel=0.002)
+            mb.box((xr - 0.006, yl - 0.03, a + 0.002), (xr + 0.006, yl + 0.03, b - 0.002), GALV, bevel=0.002, seg=1)
         for zc in cuts[1:-1]:
             for side in (-1, 1):
                 x0 = xr + side * 0.0065
@@ -847,8 +843,8 @@ def build_climb_ladder(mb, G):
     for sx in (-1, 1):
         xr = xl + sx * 0.225
         xo = xr + sx * 0.0065
-        mb.box((min(xo, xo + sx * 0.008), yl - 0.035, 0.1), (max(xo, xo + sx * 0.008), yl + 0.035, 0.2), GALV, bevel=0.0015)
-        mb.box((min(xo, xo + sx * 0.08), yl - 0.035, 0.1), (max(xo, xo + sx * 0.08), yl + 0.035, 0.108), GALV, bevel=0.0015)
+        mb.box((min(xo, xo + sx * 0.008), yl - 0.035, 0.1075), (max(xo, xo + sx * 0.008), yl + 0.035, 0.2), GALV, bevel=0.0015, seg=1)
+        mb.box((min(xo, xo + sx * 0.08), yl - 0.035, 0.1), (max(xo, xo + sx * 0.08), yl + 0.035, 0.108), GALV, bevel=0.0015, seg=1)
         mb.join(nut_pf(0.012, stub=0.8), _T(xo + sx * 0.05, yl, 0.108))
         for dz in (0.13, 0.17):
             bolt_at(mb, Vector((xr - sx * 0.0065, yl, dz)), Vector((sx, 0, 0)), 0.010, 0.0215, (0, 0, 1), stub=0.35)
@@ -862,20 +858,19 @@ def build_climb_ladder(mb, G):
     k = 0
     while z < ztop - 0.12:
         if z > 1.0 and k % 6 == 0 and not any(abs(z - c) < 0.17 for c in [6.0 * j + 1.5 for j in range(1, 8)]):
-            mb.box((xl - 0.045, yl + 0.0128, z - 0.035), (xl + 0.045, yl + 0.0208, z + 0.035), GALV, bevel=0.0015)
-            mb.box((xl - 0.045, yr - 0.0005, z - 0.035), (xl + 0.045, yr + 0.0025, z + 0.035), GALV, bevel=0.001)
+            mb.box((xl - 0.045, yl + 0.0128, z - 0.035), (xl + 0.045, yl + 0.0208, z + 0.035), GALV, bevel=0.0015, seg=1)
+            mb.box((xl - 0.045, yr - 0.0005, z - 0.035), (xl + 0.045, yr + 0.0025, z + 0.035), GALV, bevel=0.001, seg=1)
             for dz in (-0.023, 0.023):
                 bolt_at(mb, Vector((xl, yl + 0.0208, z + dz)), Vector((0, -1, 0)), 0.008, yl + 0.0208 - yr + 0.004, (0, 0, 1),
                         stub=0.0)
         z += 0.30
         k += 1
     # tope superior del riel y escuadra de salida
-    mb.box((xl - 0.022, yr - 0.034, ztop - 0.05), (xl + 0.022, yr + 0.002, ztop - 0.04), GALV, bevel=0.002)
+    mb.box((xl - 0.022, yr - 0.034, ztop - 0.05), (xl + 0.022, yr + 0.002, ztop - 0.04), GALV, bevel=0.002, seg=1)
 
 
 def build_cable_ladder(mb, G):
     """Escalerilla vertical de cables: largueros de ángulo 50×50×5, peldaños de canal unicanal 41×21 cada 0,40 m atornillados."""
-    from kit.clinic_equipo import angle_l
     xc, yl = G.x_cab, G.y_lad
     z0, z1 = G.z_cl0, G.z_top - 0.20
     for sx in (-1, 1):
@@ -884,7 +879,6 @@ def build_cable_ladder(mb, G):
         prof = [(sx * px, py) for (px, py) in prof]
         M = Matrix(((0, 1, 0, xi), (0, 0, 1, yl - 0.025), (1, 0, 0, 0), (0, 0, 0, 1)))
         prism(mb, prof, M, z0, z1, GALV)
-    del angle_l
     rungs = []
     z = z0 + 0.05
     prof = rr_pts2(0.021, 0.041, 0.003, 2)
@@ -959,7 +953,7 @@ def build_cables(mb, G):
             top = z_run - 0.45
         else:
             top = zbb - 0.015
-        for zc in clamps:
+        for zc in clamps[::2]:
             if cz + 0.05 < zc < top - 0.1:
                 pts.append((x + float(r.uniform(-0.0012, 0.0012)), y + float(r.uniform(-0.001, 0.001)), zc))
         pts.append((x, y, top))
@@ -989,9 +983,9 @@ def build_cables(mb, G):
         mb.box((xc - 0.215, yrf - 0.0945, zc - 0.02), (xc + 0.215, yrf - 0.0475, zc + 0.02), "rubber", bevel=0.004, seg=1)
         mb.box((xc - 0.22, yrf - 0.0985, zc - 0.017), (xc + 0.22, yrf - 0.0948, zc + 0.017), "steel", bevel=0.0012, seg=1)
         for sx in (-1, 1):
-            mb.cyl((xc + sx * 0.2, yrf + 0.021, zc), (xc + sx * 0.2, yrf - 0.0985, zc), 0.004, seg=10, mat="steel", caps=False)
-            mb.join(nut_pf(0.008, mat="steel", stub=0.9, wseg=10), frame((0, -1, 0), (0, 0, 1), (xc + sx * 0.2, yrf - 0.0985, zc)))
-            mb.join(nut_pf(0.008, mat="steel", stub=0.0, wseg=10), frame((0, 1, 0), (0, 0, 1), (xc + sx * 0.2, yrf + 0.021, zc)))
+            mb.cyl((xc + sx * 0.2, yrf + 0.021, zc), (xc + sx * 0.2, yrf - 0.0985, zc), 0.004, seg=12, mat="steel", caps=False)
+            mb.join(nut_pf(0.008, mat="steel", stub=0.9, wseg=12), frame((0, -1, 0), (0, 0, 1), (xc + sx * 0.2, yrf - 0.0985, zc)))
+            mb.join(nut_pf(0.008, mat="steel", stub=0.0, washer=False), frame((0, 1, 0), (0, 0, 1), (xc + sx * 0.2, yrf + 0.021, zc)))
     # cajas de distribución (OVP) con prensaestopas, colgadas del peldaño
     zt = zbb + 0.42
     for (bx, ids) in boxes:
@@ -1003,7 +997,7 @@ def build_cables(mb, G):
                 lathe(mb, [(c["r"] + 0.006, zbb + 0.002), (c["r"] + 0.006, zbb - 0.012), (c["r"] + 0.003, zbb - 0.016),
                            (c["r"] + 0.0015, zbb - 0.03)], seg=16, mat="plastic", M=_T(c["x"], c["y"], 0.0), caps=True)
         for zz in (zbb - 0.02, zt + 0.02):
-            mb.join(nut_pf(0.008, mat="steel", stub=0.0, wseg=10), frame((0, -1, 0), (0, 0, 1), (bx, yrf - 0.004, zz)))
+            mb.join(nut_pf(0.008, mat="steel", stub=0.0, wseg=12), frame((0, -1, 0), (0, 0, 1), (bx, yrf - 0.004, zz)))
     # conduit de la baliza: sale por arriba de la caja central
     lathe(mb, [(0.016, zt - 0.002), (0.016, zt + 0.02), (0.0125, zt + 0.026)], seg=16, mat="plastic", M=_T(xc, yrf - 0.054, 0.0))
     G.conduit0 = Vector((xc, yrf - 0.054, zt + 0.02))
@@ -1048,7 +1042,7 @@ def build_cables(mb, G):
         xx = xl - 0.21 + 0.06 * k
         yy0 = 0.3219 if any(abs(xx - q[0]) < 1e-6 for q in lugs) else 0.3179
         for zz in (zg - 0.022, zg + 0.022):
-            mb.join(nut_pf(0.010, mat="steel", stub=0.0, wseg=10), frame((0, 1, 0), (1, 0, 0), (xx, yy0, zz)))
+            mb.join(nut_pf(0.010, mat="steel", stub=0.0, wseg=12), frame((0, 1, 0), (1, 0, 0), (xx, yy0, zz)))
     for (xx, kind) in lugs:
         mb.box((xx - 0.011, 0.3179, zg - 0.035), (xx + 0.011, 0.3219, zg + 0.035), "copper", bevel=0.001, seg=1)
         lathe(mb, [(0.0085, 0.0), (0.0085, 0.03), (0.006, 0.036)], seg=12, mat="copper",
@@ -1063,7 +1057,7 @@ def build_cables(mb, G):
             mb.box((xc - 0.291, 0.2455, zl - 0.012), (xc - 0.269, 0.2495, zl + 0.05), "copper", bevel=0.001, seg=1)
             lathe(mb, [(0.0085, 0.0), (0.0085, 0.03), (0.006, 0.036)], seg=12, mat="copper",
                   M=frame((0, 0, -1), (1, 0, 0), (xc - 0.28, 0.258, zl - 0.012)))
-            mb.join(nut_pf(0.010, mat="steel", stub=0.0, wseg=10), frame((0, 1, 0), (1, 0, 0), (xc - 0.28, 0.2495, zl + 0.025)))
+            mb.join(nut_pf(0.010, mat="steel", stub=0.0, wseg=12), frame((0, 1, 0), (1, 0, 0), (xc - 0.28, 0.2495, zl + 0.025)))
             path[-1] = Vector((xc - 0.28, 0.258, zl - 0.045))
         else:
             path = [p0, p0 + Vector((0, 0.05, -0.15)), Vector((xx + 0.2, 0.5, 0.6)), Vector((xx + 0.25, 0.55, -0.15))]
@@ -1180,27 +1174,27 @@ def _leg_ring(mb, G, i, z0, z1, ear_dir):
         bolt_at(mb, q, e, 0.012, 0.022, (0, 0, 1), stub=0.4)
 
 
-def _crossover(mb, n, t, base_xy, v_rail, z_c, rr, rp, pw=0.17):
+def _crossover(mb, n, t, base_xy, v_rail, z_c, rr, rp, pw=0.17, rr_ref=0.0241):
     """Placa de cruce: une el pasamanos (eje horizontal a lo largo de t) con un tubo de montaje vertical, con 2 pernos en U
     por lado. Devuelve la posición del eje del tubo."""
     n = Vector((n.x, n.y, 0.0)).normalized()
     t = Vector((t.x, t.y, 0.0)).normalized()
     up = Vector((0, 0, 1))
     b0 = Vector((base_xy[0], base_xy[1], z_c))
-    vc = v_rail + rr + 0.002 + 0.006
+    vc = v_rail + rr_ref + 0.002 + 0.006
     pc = b0 + n * vc
     M = Matrix(((t.x, up.x, n.x, pc.x), (t.y, up.y, n.y, pc.y), (0, 1, 0, pc.z), (0, 0, 0, 1)))
     mb.box((-pw / 2, -pw / 2, -0.006), (pw / 2, pw / 2, 0.006), GALV, bevel=0.002, seg=2, m=M)
-    vp = v_rail + rr + 0.002 + 0.012 + 0.0005 + rp
+    vp = v_rail + rr_ref + 0.002 + 0.012 + 0.0005 + rp
     ux = max(rp + 0.016, 0.06)
     for su in (-1, 1):
         o = b0 + n * v_rail + t * (su * ux)
         Mu = Matrix(((n.x, t.x, 0, o.x), (n.y, t.y, 0, o.y), (0, 0, 1, o.z), (0, 0, 0, 1)))
-        ubolt(mb, Mu, rr, d=0.010, reach=rr + 0.002 + 0.012, seg=10, bend_seg=7)
+        ubolt(mb, Mu, rr, d=0.010, reach=vc + 0.006 - v_rail, seg=12, bend_seg=7)
     for sz in (-1, 1):
         o = b0 + n * vp + up * (sz * 0.06)
         Mu = Matrix(((-n.x, 0, t.x, o.x), (-n.y, 0, t.y, o.y), (0, 1, 0, o.z), (0, 0, 0, 1)))
-        ubolt(mb, Mu, rp, d=0.012, reach=rp + 0.0005 + 0.012, seg=10, bend_seg=7)
+        ubolt(mb, Mu, rp, d=0.012, reach=rp + 0.0005 + 0.012, seg=12, bend_seg=7)
     return b0 + n * vp
 
 
@@ -1317,7 +1311,7 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         M = Matrix(((tdir.x, 0, nout.x, q.x), (tdir.y, 0, nout.y, q.y), (0, 1, 0, z_f - 0.125), (0, 0, 0, 1)))
         mb.plate([(-0.045, 0.0), (0.045, 0.0), (0.045, 0.085), (-0.045, 0.085)], 0.0085, GALV, m=M)
         for (dz, su) in ((0.025, 1), (0.06, -1)):
-            bolt_at(mb, Vector((q.x, q.y, z_f - 0.125 + dz)) - nout * 0.0065 + Vector((tdir.x, tdir.y, 0)) * (0.036 * su),
+            bolt_at(mb, Vector((q.x, q.y, z_f - 0.125 + dz)) - Vector((nout.x, nout.y, 0)) * 0.0065 + Vector((tdir.x, tdir.y, 0)) * (0.036 * su),
                     Vector((nout.x, nout.y, 0)), 0.010, 0.015, (0, 0, 1), stub=0.3)
     # postes de esquina (en los vértices del recorte, sobre la bisectriz)
     for i in range(kq):
@@ -1331,7 +1325,7 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         q = b + m * 0.0005
         tdir = Vector((-m.y, m.x))
         M = Matrix(((tdir.x, 0, m.x, q.x), (tdir.y, 0, m.y, q.y), (0, 1, 0, z_f - 0.125), (0, 0, 0, 1)))
-        mb.plate([(-0.03, 0.0), (0.03, 0.0), (0.03, 0.085), (-0.03, 0.085)], 0.0085 / max(m.dot(n0), 0.3) + 0.004, GALV, m=M)
+        mb.plate([(-0.018, 0.0), (0.018, 0.0), (0.018, 0.085), (-0.018, 0.085)], 0.0085 / max(m.dot(n0), 0.3) + 0.004, GALV, m=M)
     # --- tubos de montaje con placas de cruce al pasamanos y a la rodillera
     out = []
     for (n, t, v_edge, u, rp, z0, z1) in pipes:
@@ -1343,4 +1337,265 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         _mount_pipe(mb, pa, z0, z1, rp)
         out.append(dict(pos=(round(pa.x, 4), round(pa.y, 4)), z0=round(z0, 3), z1=round(z1, 3), od=round(2 * rp, 4),
                         facing=(round(n.x, 4), round(n.y, 4), 0.0)))
+    return out
+
+
+# ================================================================================================== remate superior
+def build_top(mb, G):
+    """Mástil central (tubo Ø114 sobre 3 brazos PTR a las patas), pararrayos de 2 m, ménsula de baliza, conduit de la baliza
+    y bajada de pararrayos de cobre por la pata 2 hasta la oreja de tierra."""
+    za = G.h - 0.08
+    rm = 0.057
+    for i in range(3):
+        a = ang2(LEG_ANG[i])
+        R = G.R(za)
+        rl = G.r_leg(za)
+        _leg_ring(mb, G, i, za - 0.06, za + 0.06, Vector((-a.y, a.x, 0)))
+        M = frame_xz(a, (0, 0, 1), Vector((0, 0, za)))
+        prism(mb, rr_pts2(0.06, 0.06, 0.006, 3), M, rm - 0.004, R - rl - 0.0118, GALV)
+        mb.plate([(rm - 0.002, -0.0305), (rm + 0.10, -0.0305), (rm - 0.002, -0.11)], 0.008, GALV,
+                 m=M @ Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, 1, 0, 0), (0, 0, 0, 1))) @ _T(0, 0, -0.004))
+    z0m, z1m = G.h - 0.45, G.h + 1.0
+    lathe(mb, [(rm, z0m), (rm, z1m)], seg=24, mat=GALV, caps=True)
+    weld_ring(mb, _T(0, 0, z1m), rm, w=0.006, seg=24)
+    lathe(mb, [(0.098, z1m), (0.1, z1m + 0.002), (0.1, z1m + 0.014), (0.098, z1m + 0.016)], seg=32, mat=GALV)
+    for k in range(4):
+        u = ang2(45.0 + 90.0 * k)
+        _rib(mb, Vector((0, 0, z1m)), u, rm - 0.003, 0.094, -0.09, -0.004, 0.008)
+    zr = z1m + 0.016
+    lathe(mb, [(0.032, zr - 0.001), (0.032, zr + 0.03), (0.022, zr + 0.045), (0.016, zr + 0.06)], seg=24, mat=GALV)
+    for k in range(3):
+        a = 2 * PI * k / 3
+        mb.join(nut_pf(0.010, stub=0.4), _T(0.075 * math.cos(a), 0.075 * math.sin(a), zr))
+    lathe(mb, [(0.0115, zr + 0.055), (0.0095, zr + 1.0), (0.0075, zr + 1.92), (0.0045, zr + 1.97), (0.0, zr + 1.985)], seg=16,
+          mat="copper", caps=True)
+    # ménsula de la baliza de obstrucción
+    dL = ang2(-30.0)
+    sL = Vector((0, 0, 1)).cross(dL)
+    zb = z1m - 0.1
+    M = frame_xz(dL, (0, 0, 1), Vector((0, 0, zb)))
+    prism(mb, rr_pts2(0.05, 0.05, 0.005, 3), M, rm - 0.004, 0.42, GALV)
+    mb.box((0.418, -0.026, -0.026), (0.424, 0.026, 0.026), GALV, bevel=0.0015, seg=1, m=M)
+    pl = dL * 0.36 + Vector((0, 0, zb + 0.025))
+    lathe(mb, [(0.083, pl.z - 0.0003), (0.085, pl.z + 0.002), (0.085, pl.z + 0.01), (0.083, pl.z + 0.012)], seg=32, mat=GALV,
+          M=_T(pl.x, pl.y, 0.0))
+    for k in range(4):
+        a = PI / 4 + PI / 2 * k
+        mb.join(nut_pf(0.008, stub=0.6), _T(pl.x + 0.062 * math.cos(a), pl.y + 0.062 * math.sin(a), pl.z + 0.012))
+    kb0 = Vector((0, 0, zb - 0.28)) + dL * (rm - 0.003)
+    kb1 = Vector((0, 0, zb - 0.025)) + dL * 0.26
+    _rtube(mb, kb0, kb1, 0.04, 0.008, sL, r=0.0025, n=2)
+    G.light = (round(pl.x, 4), round(pl.y, 4), round(pl.z + 0.012, 4))
+    # caja de conexión bajo la ménsula y conduit desde la caja de distribución
+    jb = dL * 0.25 + Vector((0, 0, zb - 0.025))
+    mb.box((jb.x - 0.04, jb.y - 0.04, jb.z - 0.085), (jb.x + 0.04, jb.y + 0.04, jb.z - 0.0005), "aluminium", bevel=0.004, seg=2)
+    c0 = G.conduit0
+    rc = 0.0105
+    am = math.radians(60.0)
+    mside = Vector((math.cos(am), math.sin(am), 0)) * (rm + rc + 0.002)
+    zt = G.z_top
+    path = [c0, Vector((c0.x, c0.y, G.h - 0.62)), Vector((mside.x, mside.y, G.h - 0.62)), Vector((mside.x, mside.y, zb - 0.06))]
+    for k in range(1, 6):
+        a = am - math.radians(90.0) * k / 5
+        path.append(Vector((math.cos(a) * (rm + rc + 0.002), math.sin(a) * (rm + rc + 0.002), zb - 0.06)))
+    path.append(jb + Vector((0, 0, -0.06)) - dL * 0.04)
+    mb.tube(fillet([tuple(p) for p in path], 0.08, 6), rc, seg=12, mat="steel")
+    lathe(mb, [(rc + 0.0015, zt + 0.0055), (rc + 0.006, zt + 0.006), (rc + 0.006, zt + 0.03), (rc + 0.0015, zt + 0.035)], seg=16,
+          mat="rubber", M=_T(c0.x, c0.y, 0.0))
+    mb.box((c0.x - 0.045, c0.y - 0.045, zt - 0.0003), (c0.x + 0.045, c0.y + 0.045, zt + 0.006), GALV, bevel=0.0015, seg=1)
+    for (dx, dy) in ((-0.035, -0.035), (0.035, -0.035), (-0.035, 0.035), (0.035, 0.035)):
+        mb.join(nut_pf(0.006, mat="steel", stub=0.0, wseg=12), _T(c0.x + dx, c0.y + dy, zt + 0.006))
+    for zz in (G.h + 0.25, G.h + 0.7):
+        mb.box((mside.x - 0.016, mside.y - 0.016, zz - 0.012), (mside.x + 0.016, mside.y + 0.016, zz + 0.012), "steel", bevel=0.003,
+               seg=1, m=None)
+    # bajada de pararrayos (cobre desnudo Ø11) por la pata 2, engrapada cada 1,5 m, hasta la oreja de tierra
+    a2 = LEG_ANG[2]
+    ad = math.radians(a2 + 45.0)
+    dirc = Vector((math.cos(ad), math.sin(ad), 0))
+    rcu = 0.0055
+
+    def on_leg(z, extra=0.0, ang=None):
+        d = dirc if ang is None else ang2(ang)
+        return G.P(2, z) + d * (G.r_leg(z) + 0.024 + extra)
+    a120 = ang2(120.0)
+    Z = Vector((0, 0, 1))
+    pts = [a120 * 0.0385 + Z * (zr + 0.02), a120 * 0.118 + Z * (zr + 0.014), a120 * 0.112 + Z * (z1m - 0.1),
+           a120 * (rm + 0.0065) + Z * (z1m - 0.22), a120 * (rm + 0.0065) + Z * (za + 0.07)]
+    a150 = ang2(150.0)
+    rl2 = G.r_leg(za)
+    pts.append(a150 * 0.2 + Z * (za + 0.03 + rcu + 0.0015))
+    pts.append(a150 * (G.R(za) - rl2 - 0.11) + Z * (za + 0.03 + rcu + 0.0015))
+    cL = G.P(2, za)
+    for ang in (180.0, 120.0, 60.0):
+        q = Vector((cL.x, cL.y, 0)) + ang2(a2 + ang) * (rl2 + 0.03)
+        pts.append(Vector((q.x, q.y, G.h + 0.004)))
+    pts.append(on_leg(za - 0.2, 0.0, a2 + 45.0))
+    flz = [zj for zj in G.joints]
+    z = za - 0.6
+    while z > 1.1:
+        near = [zj for zj in flz if abs(z - zj) < 0.4]
+        if not near:
+            pts.append(on_leg(z))
+        z -= 0.75
+    # jogs alrededor de las bridas
+    full = []
+    for p in pts:
+        full.append(p)
+    pts2 = []
+    for i, p in enumerate(full):
+        pts2.append(p)
+        if i + 1 < len(full):
+            q = full[i + 1]
+            for zj in flz:
+                if q.z < zj < p.z:
+                    rf = G.od_leg[G.joints.index(zj)] / 2 + 0.088
+                    for dz in (0.2, 0.13, -0.13, -0.2):
+                        ext = (rf + 0.016) - (G.r_leg(zj + dz) + 0.024) if abs(dz) < 0.15 else 0.0
+                        pts2.append(on_leg(zj + dz, ext))
+    tabz = 0.915
+    rl0 = G.od_leg[0] / 2
+    pt_tab = G.P(2, tabz) + ang2(a2 + 12.0) * (rl0 + 0.05)
+    pts2 += [on_leg(1.25), on_leg(1.0, 0.0, a2 + 25.0), Vector((pt_tab.x, pt_tab.y, tabz + rcu - 0.001))]
+    path = fillet([tuple(p) for p in pts2], 0.05, 4)
+    mb.tube(path, rcu, seg=12, mat="copper")
+    for p in pts2[7:-3:2]:
+        c = G.P(2, p.z)
+        u = (Vector((p.x, p.y, 0)) - Vector((c.x, c.y, 0))).normalized()
+        sd = Vector((0, 0, 1)).cross(u)
+        rlz = G.r_leg(p.z)
+        if (Vector((p.x, p.y, 0)) - Vector((c.x, c.y, 0))).length > rlz + 0.04:
+            continue
+        Mc = Matrix(((u.x, sd.x, 0, c.x), (u.y, sd.y, 0, c.y), (0, 0, 1, p.z), (0, 0, 0, 1)))
+        mb.box((rlz - 0.003, -0.013, -0.014), (rlz + 0.024 + rcu + 0.004, 0.013, 0.014), "copper", bevel=0.003, seg=1, m=Mc)
+
+
+def build_sign(mb, G):
+    """Letrero de advertencia en la pata 0 (inglés), con abrazaderas de banda."""
+    from kit.clinic_servicios import text3d
+    z0, z1 = 0.97, 1.21
+    c = G.P(0, (z0 + z1) / 2)
+    rl = G.od_leg[0] / 2
+    u = ang2(LEG_ANG[0])
+    for zz in (z0 + 0.04, z1 - 0.04):
+        cc = G.P(0, zz)
+        lathe(mb, [(rl + 0.0006, zz - 0.012), (rl + 0.0026, zz - 0.012), (rl + 0.0026, zz + 0.012), (rl + 0.0006, zz + 0.012)],
+              seg=32, mat="steel", M=_T(cc.x, cc.y, 0.0), closed=True, caps=False)
+    d = rl + 0.012
+    side = Vector((0, 0, 1)).cross(u)
+    M = Matrix(((side.x, 0, u.x, c.x + u.x * d), (side.y, 0, u.y, c.y + u.y * d), (0, 1, 0, c.z), (0, 0, 0, 1)))
+    w, h = 0.30, 0.24
+    mb.box((-w / 2, -h / 2, -0.0015), (w / 2, h / 2, 0.0015), "sign_white", bevel=0.001, seg=1, m=M)
+    mb.box((-w / 2 + 0.008, h / 2 - 0.07, 0.0015), (w / 2 - 0.008, h / 2 - 0.008, 0.0025), "sign_red", bevel=0.0, m=M)
+    mb.box((-0.03, -h / 2 + 0.01, -0.012), (0.03, h / 2 - 0.01, -0.0015), "steel", bevel=0.001, seg=1, m=M)
+    text3d(mb, "DANGER", 0.042, 0.0012, "sign_white", M @ _T(0, h / 2 - 0.058, 0.0024), res=2, bold=True)
+    for k, line in enumerate(("RF RADIATION", "NO CLIMBING", "AUTHORIZED PERSONNEL ONLY")):
+        text3d(mb, line, 0.022 if k < 2 else 0.0155, 0.001, "cable", M @ _T(0, h / 2 - 0.105 - 0.04 * k, 0.0014), res=2,
+               bold=k < 2)
+    for sx in (-1, 1):
+        mb.join(nut_pf(0.006, mat="steel", stub=0.0, wseg=12), M @ _T(sx * 0.12, 0.0, 0.0015))
+
+
+# ================================================================================================== ensamble y montajes
+def _platform_specs(G):
+    """Datos de las dos plataformas y sus tubos de montaje (los mismos números para construir y para reportar)."""
+    top = dict(z_f=G.z_top, v_out=1.5, cut=0.45, knee=G.z_top - (G.nodes[-3] + G.nodes[-2]) / 2)
+    pipes_t = []
+    for k in range(3):
+        n = ang2(FACE_ANG[k])
+        t = Vector((-n.y, n.x, 0))
+        for u in (-1.4, 0.0, 1.4):
+            pipes_t.append((n, t, top["v_out"], u, 0.0365, G.z_top - 0.95, G.z_top + 2.55))
+    top["pipes"] = pipes_t
+    top["holes"] = [(G.x_lad - 0.30, G.x_lad + 0.30, G.y_lad - 0.60, G.y_lad + 0.045), (G.x_cab - 0.03, G.x_cab + 0.03, 0.1255, 0.1855)]
+    mw = dict(z_f=G.z_mw, v_out=1.05, cut=0.35, knee=G.z_mw - (G.nodes[-7] + G.nodes[-6]) / 2)
+    clip_m = 2 * mw["v_out"] - mw["cut"]
+    pipes_m = []
+    for i in (1, 2):
+        a = ang2(LEG_ANG[i])
+        t = Vector((-a.y, a.x, 0))
+        pipes_m.append((a, t, clip_m, 0.0, 0.05715, G.z_mw - 0.6, G.z_mw + 1.4))
+    mw["pipes"] = pipes_m
+    mw["holes"] = [(G.x_lad - 0.30, G.x_lad + 0.30, G.y_lad - 0.60, G.y_lad + 0.045),
+                   (G.x_cab - 0.31, G.x_cab + 0.31, G.y_lad - 0.13, G.y_lad + 0.045)]
+    return top, mw
+
+
+def _pipe_axis(n, t, v_edge, u, rp):
+    vp = v_edge + 0.033 + 0.0241 + 0.002 + 0.012 + 0.0005 + rp
+    p = n * vp + t * u
+    return Vector((p.x, p.y, 0.0))
+
+
+def _mw_boxes(mb, G, specs):
+    """Caja de remate (supresor/tierra) del cable de cada plato, abrazada al tubo de montaje por su costado."""
+    for (n, t, v_edge, u, rp, z0, z1) in specs["pipes"]:
+        pa = _pipe_axis(n, t, v_edge, u, rp)
+        sg = 1 if pa.x > 0 else -1
+        am = math.atan2(pa.y, pa.x)
+        tv = Vector((-math.sin(am), math.cos(am), 0.0)) * sg
+        nn = Vector((math.cos(am), math.sin(am), 0.0))
+        zb = G.z_mw + 0.15
+        c = pa + tv * (rp + 0.003 + 0.05)
+        M = Matrix(((nn.x, tv.x, 0, c.x), (nn.y, tv.y, 0, c.y), (0, 0, 1, 0), (0, 0, 0, 1)))
+        mb.box((-0.06, -0.05, zb), (0.06, 0.05, zb + 0.24), "aluminium", bevel=0.006, seg=2, m=M)
+        lathe(mb, [(0.0155, zb + 0.002), (0.0155, zb - 0.014), (0.012, zb - 0.02), (0.0105, zb - 0.032)], seg=16, mat="plastic",
+              M=_T(pa.x + tv.x * 0.075, pa.y + tv.y * 0.075, 0.0))
+        for zz in (zb + 0.05, zb + 0.19):
+            lathe(mb, [(rp + 0.0005, zz - 0.009), (rp + 0.0025, zz - 0.009), (rp + 0.0025, zz + 0.009), (rp + 0.0005, zz + 0.009)],
+                  seg=32, mat="steel", M=_T(pa.x, pa.y, 0.0), closed=True, caps=False)
+
+
+def lattice_tower(h=42.0, base_w=5.0, top_w=1.6, seed=0):
+    """Torre autosoportada de 3 patas tubulares (ver docstring del módulo). Origen en el centroide al nivel del suelo."""
+    G = Geo(h, base_w, top_w)
+    mb = MB()
+    build_base(mb, G, seed)
+    build_legs(mb, G)
+    build_step_bolts(mb, G)
+    build_bracing(mb, G)
+    build_supports(mb, G)
+    build_climb_ladder(mb, G)
+    build_cable_ladder(mb, G)
+    build_cables(mb, G)
+    top, mw = _platform_specs(G)
+    for sp in (mw, top):
+        build_platform(mb, G, sp["z_f"], sp["v_out"], sp["cut"], sp["holes"], sp["knee"], sp["pipes"])
+    _mw_boxes(mb, G, mw)
+    build_top(mb, G)
+    build_sign(mb, G)
+    mb.meta = tower_mounts(h, base_w, top_w)
+    return mb
+
+
+def tower_mounts(h=42.0, base_w=5.0, top_w=1.6):
+    """Puntos de montaje para el ensamblador del sitio (metros, mundo de la torre; facing = normal horizontal hacia afuera).
+    sector: 3 sectores × 3 tubos Ø73 (x, y, z0..z1) con altura sugerida del centro de la antena (antenna_z).
+    rru: un RRU por tubo, colgado del mismo tubo bajo el piso (centro rru_z), mirando hacia afuera.
+    dish: 2 tubos Ø114 en las esquinas de la plataforma de microondas (centro del plato dish_z).
+    light: base de la baliza (cara superior de la placa). cable_exit: centro del haz de cables donde inicia el puente de hielo."""
+    G = Geo(h, base_w, top_w)
+    top, mw = _platform_specs(G)
+    out = dict(sector=[], rru=[], dish=[], light=[], cable_exit=[])
+    for j, (n, t, v_edge, u, rp, z0, z1) in enumerate(top["pipes"]):
+        pa = _pipe_axis(n, t, v_edge, u, rp)
+        az = FACE_ANG[j // 3]
+        base = dict(sector=j // 3, azimuth_deg=az, pipe_pos=(round(pa.x, 4), round(pa.y, 4)), pipe_z=(round(z0, 3), round(z1, 3)),
+                    pipe_od=round(2 * rp, 4), pipe_len=round(z1 - z0, 3), facing=(round(n.x, 4), round(n.y, 4), 0.0))
+        out["sector"].append(dict(base, antenna_z=round(G.z_top + 1.30, 3),
+                                  pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_top + 1.30, 3))))
+        out["rru"].append(dict(base, rru_z=round(G.z_top - 0.45, 3),
+                               pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_top - 0.45, 3))))
+    for (n, t, v_edge, u, rp, z0, z1) in mw["pipes"]:
+        pa = _pipe_axis(n, t, v_edge, u, rp)
+        out["dish"].append(dict(pipe_pos=(round(pa.x, 4), round(pa.y, 4)), pipe_z=(round(z0, 3), round(z1, 3)), pipe_od=round(2 * rp, 4),
+                                pipe_len=round(z1 - z0, 3), facing=(round(n.x, 4), round(n.y, 4), 0.0), dish_z=round(G.z_mw + 0.75, 3),
+                                pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_mw + 0.75, 3))))
+    zb = G.h + 1.0 - 0.1
+    pl = ang2(-30.0) * 0.36
+    out["light"].append(dict(pos=(round(pl.x, 4), round(pl.y, 4), round(zb + 0.025 + 0.012, 4)), up=(0.0, 0.0, 1.0),
+                             plate_d=0.17, bolt_circle=0.124))
+    ye = G.rin(G.z_exit) + 0.30
+    out["cable_exit"].append(dict(pos=(round(G.x_cab, 4), round(ye, 4), round(G.z_exit - 0.0235, 4)), dir=(0.0, 1.0, 0.0),
+                                  bundle_w=0.40, bundle_h=0.075, tray_top_z=round(G.z_exit - 0.047 - 0.013 - 0.0225 + 0.0105, 4),
+                                  n_cables=18, n_black=16, n_yellow_fiber=2))
     return out
