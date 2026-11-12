@@ -906,11 +906,11 @@ def dress(furn, r):
         put(st.wall_calendar(seed=43), SX1 - TS, -5.3, S_FFL + 1.55, "-x", solid=False)
         put(st.crate_stack(seed=44), 14.9, yi0 + 0.45, S_FFL, "-x")
         for k, (y, stock) in enumerate(((-6.85, "canned"), (-5.55, "dry"), (-4.25, "household"))):
-            put(st.grocery_shelving(1.2, seed=45 + k, stock=stock), SX0 + TS + 0.22, y, S_FFL, "+x")
+            put(st.grocery_shelving(1.2, seed=45 + k, stock=stock), SX0 + TS, y, S_FFL, "+x")          # espalda al muro poniente
         for k, (x, stock) in enumerate(((10.45, "dry"), (11.75, "canned"))):
-            put(st.grocery_shelving(1.2, seed=48 + k, stock=stock), x, yi1 - 0.22, S_FFL, "+y")
-        put(st.beer_cooler(seed=50), 13.05, yi1 - 0.36, S_FFL, "+y")
-        put(st.chalkboard(seed=51), 14.75, yi1, S_FFL + 1.25, "+y", solid=False)
+            put(st.grocery_shelving(1.2, seed=48 + k, stock=stock), x, yi1, S_FFL, "-y")               # espalda al muro del fondo
+        put(st.beer_cooler(seed=50), 13.05, yi1 - 0.37, S_FFL, "-y")
+        put(st.chalkboard(seed=51), 14.75, yi1, S_FFL + 1.25, "-y", solid=False)
         put(st.hand_scale(seed=52), 14.05, -3.6, S_FFL + 0.95, "-x", solid=False)
         put(st.cash_box(seed=53), 14.1, -5.2, S_FFL + 0.95, "-x", solid=False)
         put(cl.trash_bin(pedal=False), 12.9, -6.9, S_FFL)
