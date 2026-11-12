@@ -22,7 +22,7 @@ from mathutils import Matrix, Vector, noise
 from kit.common import MB
 
 CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache_tela")
-VERSION = 8
+VERSION = 9
 
 
 def _key(name, params):
@@ -123,6 +123,10 @@ def _collider_mesh(name, co, flat, lens):
         except ValueError:
             pass
         k += n
+    # normales hacia afuera: la colisión de tela usa el sentido de la cara (con normales invertidas la sábana
+    # atravesaba la cara de arriba del colchón y quedaba dentro, apoyada en la de abajo)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ob = _new_obj(name, bm)
     ob.modifiers.new("col", "COLLISION")
     ob.collision.thickness_outer = 0.004
@@ -212,54 +216,103 @@ def _rounded_slab(L, W, H, r, crown, seg_l=40, seg_w=22, seg_h=8, fowler=0.0, hi
     return rings
 
 
-def mattress(mb, M, L=1.9, W=0.86, H=0.13, seed=0, mat="vinyl", piping="vinyl", fowler=0.0, hinge=0.15):
-    """Colchón de hospital: hule espuma forrado de vinilo, esquinas redondeadas, abombado, vivos perimetrales y cierre."""
-    rings = _rounded_slab(L, W, H, 0.035, 0.012, fowler=fowler, hinge=hinge)
-    nr = len(rings[0])
-    vs = [[mb.bm.verts.new(M @ Vector(p)) for p in ring] for ring in rings]
-    for i in range(len(vs) - 1):
-        for k in range(nr):
-            f = mb.face([vs[i][k], vs[i][(k + 1) % nr], vs[i + 1][(k + 1) % nr], vs[i + 1][k]], mat)
-            f.smooth = True
-    for ring, rev in ((vs[0], False), (vs[-1], True)):
-        c = sum((v.co for v in ring), Vector()) / nr
-        cv = mb.bm.verts.new(c)
-        for k in range(nr):
-            a, b = ring[k], ring[(k + 1) % nr]
-            f = mb.face([cv, b, a] if not rev else [cv, a, b], mat)
-            f.smooth = True
-    # vivos (ribetes) en las aristas superior e inferior: tubo de 4 mm siguiendo el contorno, remuestreado cada 2 cm para que
-    # siga el quiebre del respaldo
-    def bent(x, y, z):
-        if fowler > 0 and y > hinge:
-            t = min(1.0, (y - hinge) / 0.25)
-            ang = math.radians(fowler) * (t * t * (3 - 2 * t))
-            dy = y - hinge
-            return Vector((x, hinge + dy * math.cos(ang) - z * math.sin(ang), dy * math.sin(ang) + z * math.cos(ang)))
-        return Vector((x, y, z))
+RE = 0.035          # radio de todas las aristas del colchón (hule espuma forrado)
+CROWN = 0.012       # abombado de la cara superior
 
-    corners = ((W / 2 - 0.035, -L / 2 + 0.035, -math.pi / 2), (W / 2 - 0.035, L / 2 - 0.035, 0.0), (-W / 2 + 0.035, L / 2 - 0.035, math.pi / 2),
-               (-W / 2 + 0.035, -L / 2 + 0.035, math.pi))
+
+def _sstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def _crown(x, y, z, W, L, H, crown=CROWN):
+    """Abombado del colchón; la ropa que lo cubre usa la misma función para seguirlo a distancia constante."""
+    xc = np.clip(x, -W / 2, W / 2)
+    yc = np.clip(y, -L / 2, L / 2)
+    cr = crown * (1 - (2 * xc / W) ** 2) * (1 - (2 * yc / L) ** 4)
+    return np.where(z > H / 2, cr * np.clip(z / H, 0.0, 1.2), 0.0)
+
+
+def _rbox_arrays(W, L, H, re=RE, step=0.05, n_round=5):
+    """Caja de W x L x H (z de 0 a H) con las 12 aristas y las 8 esquinas redondeadas de radio `re`: cubo subdividido cuyos
+    vértices se proyectan sobre la caja interior desplazada `re` (rejilla con muestreo angular uniforme en los redondeos)."""
+    inner = np.array([W / 2 - re, L / 2 - re, H / 2 - re])
+
+    def samples(a):
+        n = max(1, int(round(2 * a / step)))
+        band = a + re * np.tan(np.linspace(0, np.pi / 4, n_round + 1))[1:]
+        return np.concatenate([-band[::-1], np.linspace(-a, a, n + 1), band])
+    S = [samples(a) for a in inner]
+    E = inner + re
+    bm = bmesh.new()
+    vmap = {}
+
+    def vert(p):
+        k = tuple(np.round(p, 7))
+        v = vmap.get(k)
+        if v is None:
+            q = np.clip(p, -inner, inner)
+            d = p - q
+            pos = q + re * d / np.linalg.norm(d)
+            v = vmap[k] = bm.verts.new((float(pos[0]), float(pos[1]), float(pos[2] + H / 2)))
+        return v
+    for ax in range(3):
+        i1, i2 = [k for k in range(3) if k != ax]
+        for sgn in (-1, 1):
+            g1, g2 = S[i1], S[i2]
+            grid = []
+            for x1 in g1:
+                row = []
+                for x2 in g2:
+                    p = np.zeros(3)
+                    p[ax], p[i1], p[i2] = sgn * E[ax], x1, x2
+                    row.append(vert(p))
+                grid.append(row)
+            for i in range(len(g1) - 1):
+                for j in range(len(g2) - 1):
+                    bm.faces.new([grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.verts.index_update()
+    co = np.array([v.co[:] for v in bm.verts], np.float64)
+    flat = np.array([v.index for f in bm.faces for v in f.verts], np.int32)
+    lens = np.array([len(f.verts) for f in bm.faces], np.int32)
+    bm.free()
+    return co, flat, lens
+
+
+def mattress(mb, M, L=1.9, W=0.86, H=0.13, seed=0, mat="vinyl", piping="vinyl", fowler=0.0, hinge=0.15):
+    """Colchón de hospital: hule espuma forrado de vinilo con las 12 aristas redondeadas (r 35 mm, también en planta), abombado,
+    vivos (ribetes) sobre la línea de costura a 45° de las aristas superior e inferior y cierre lateral; quiebre Fowler opcional."""
+    co, flat, lens = _rbox_arrays(W, L, H)
+    co[:, 2] += _crown(co[:, 0], co[:, 1], co[:, 2], W, L, H)
+    co = bend_fowler(co, fowler, hinge)
+    _to_mb(mb, co, flat, lens, mat, M)
+    # vivos: tubo de 4 mm sobre la costura (a 45° del redondeo), remuestreado cada 2 cm para seguir el quiebre del respaldo
+    a, b = W / 2 - RE, L / 2 - RE
+    rp = (RE + 0.0015) * math.cos(math.pi / 4)
     outline = []
-    for (cx, cy, a0) in corners:
+    for (cx, cy, a0) in ((a, -b, -math.pi / 2), (a, b, 0.0), (-a, b, math.pi / 2), (-a, -b, math.pi)):
         for k in range(9):
-            a = a0 + (math.pi / 2) * k / 8
-            outline.append(Vector((cx + 0.036 * math.cos(a), cy + 0.036 * math.sin(a), 0.0)))
+            ang = a0 + (math.pi / 2) * k / 8
+            outline.append(Vector((cx + rp * math.cos(ang), cy + rp * math.sin(ang), 0.0)))
     outline.append(outline[0])
     dense = [outline[0]]
     for p0, p1 in zip(outline[:-1], outline[1:]):
         n = max(1, int((p1 - p0).length / 0.02))
         for k in range(1, n + 1):
             dense.append(p0.lerp(p1, k / n))
-    for zf in (H - 0.004, 0.004):
-        mb.tube([tuple(M @ bent(p.x, p.y, zf)) for p in dense], 0.004, seg=6, mat=piping)
+    for zf in (H - RE + rp, RE - rp):
+        pts = np.array([(p.x, p.y, zf) for p in dense])
+        pts[:, 2] += _crown(pts[:, 0], pts[:, 1], pts[:, 2], W, L, H)
+        pts = bend_fowler(pts, fowler, hinge)
+        mb.tube([tuple(M @ Vector(p)) for p in pts], 0.004, seg=6, mat=piping)
     # cierre lateral (cremallera): dientes a media altura en un costado, siguiendo el quiebre
     n = 120
     for k in range(n):
         y0 = -L / 2 + 0.15 + k * (L - 0.3) / n
         y1 = y0 + (L - 0.3) / n * 0.7
-        c0, c1 = bent(W / 2, y0, H / 2), bent(W / 2, y1, H / 2)
-        mb.box(M @ (c0 + Vector((-0.002, 0, -0.004))), M @ (Vector((c1.x + 0.002, c1.y, c0.z + 0.004))), "steel", bevel=0.0)
+        c0, c1 = bend_fowler(np.array([[W / 2, y0, H / 2], [W / 2, y1, H / 2]]), fowler, hinge)
+        mb.box(M @ Vector((c0[0] - 0.002, c0[1], c0[2] - 0.004)), M @ Vector((c1[0] + 0.002, c1[1], c0[2] + 0.004)), "steel", bevel=0.0)
     del seed
 
 
@@ -328,6 +381,10 @@ def _drape_sim(size, res, z0, colliders, seed, stiff, frames, thickness, pin_edg
         worst = max(worst, float(np.max(np.linalg.norm(pts - np.roll(pts, 1, axis=0), axis=1))))
     if worst > rest * 6 + thickness * 4:
         raise RuntimeError(f"tela inestable: arista de {worst:.3f} m (reposo {rest:.3f})")
+    if zmax > 0 and pin_edge is None:
+        inside = float(np.mean(co[:, 2] < zmax - 0.05))
+        if inside > 0.5:
+            raise RuntimeError(f"tela atravesó el colisionador: {inside:.0%} de los vértices bajo su cara superior")
     return out
 
 
@@ -344,6 +401,230 @@ def bend_fowler(co, fowler, hinge):
     co[sel, 1] = (hinge + dy * np.cos(ang) - z * np.sin(ang))[sel]
     co[sel, 2] = (dy * np.sin(ang) + z * np.cos(ang))[sel]
     return co
+
+
+# ------------------------------------------------------------------------------------------------- tendido de cama a la medida
+def _perlin(X, Y, s):
+    return np.array([noise.noise(Vector((float(x), float(y), s))) for x, y in zip(X.ravel(), Y.ravel())]).reshape(X.shape)
+
+
+def _wrap(u, v, off, W, L, H, re=RE, tuck=0.05, bump=0.0, bump_w=0.3):
+    """Coloca el punto (u, v) de una tela plana tendida sobre el colchón a `off` de su forro: plano arriba, luego rodea la
+    arista (radio re + off), baja por el costado, rodea la arista inferior y se remete `tuck` bajo el colchón. En las esquinas
+    la distancia al rectángulo interior es radial (esquina redondeada como la del colchón). `bump` levanta la tela sobre el vivo
+    a 45° de cada arista."""
+    a, b = W / 2 - re, L / 2 - re
+    qx, qy = np.clip(u, -a, a), np.clip(v, -b, b)
+    dx, dy = u - qx, v - qy
+    t = np.hypot(dx, dy)
+    tn = np.maximum(t, 1e-12)
+    nx, ny = dx / tn, dy / tn
+    R = re + off
+    zc = H - re
+    t1 = 0.5 * np.pi * R
+    t2 = t1 + (H - 2 * re)
+    t3 = t2 + 0.5 * np.pi * R
+    th = np.clip(t / R, 0, np.pi / 2)
+    Rb = R + bump * np.exp(-((th - np.pi / 4) / bump_w) ** 2)
+    rho, z = Rb * np.sin(th), zc + Rb * np.cos(th)
+    side = t > t1
+    rho = np.where(side, R, rho)
+    z = np.where(side, zc - (t - t1), z)
+    th2 = np.clip((t - t2) / R, 0, np.pi / 2)
+    Rb2 = R + bump * np.exp(-((th2 - np.pi / 4) / bump_w) ** 2)
+    low = t > t2
+    rho = np.where(low, Rb2 * np.cos(th2), rho)
+    z = np.where(low, re - Rb2 * np.sin(th2), z)
+    under = t > t3
+    rho = np.where(under, -(t - t3), rho)
+    z = np.where(under, re - R, z)
+    x, y = qx + nx * rho, qy + ny * rho
+    z = z + _crown(x, y, z, W, L, H)
+    del tuck
+    return np.stack([x, y, z], -1)
+
+
+def _band(R, H, re=RE, tuck=0.05, n_side=3):
+    """Valores de distancia t (desde el borde del rectángulo interior) para muestrear la vuelta de la tela: arista (8),
+    costado (n_side), arista inferior (4) y remetido (1)."""
+    t1 = 0.5 * np.pi * R
+    t2 = t1 + (H - 2 * re)
+    t3 = t2 + 0.5 * np.pi * R
+    return np.concatenate([np.linspace(0, t1, 9)[1:], np.linspace(t1, t2, n_side + 1)[1:], np.linspace(t2, t3, 5)[1:], [t3 + tuck]])
+
+
+def _axis(inner, R, H, step, lo_end=True, hi_end=True, lo=None, hi=None, n_side=3):
+    band = _band(R, H, n_side=n_side)
+    lo_ = -inner if lo is None else lo
+    hi_ = inner if hi is None else hi
+    parts = [-inner - band[::-1]] if lo_end else []
+    parts.append(np.linspace(lo_, hi_, max(2, int(round((hi_ - lo_) / step))) + 1))
+    if hi_end:
+        parts.append(inner + band)
+    return np.concatenate(parts)
+
+
+def _grid_normals(P):
+    N = np.cross(np.gradient(P, axis=1), np.gradient(P, axis=0))
+    return N / np.maximum(np.linalg.norm(N, axis=-1, keepdims=True), 1e-12)
+
+
+def _grid_to_mb(mb, M, P, mat):
+    nv, nu, _ = P.shape
+    vs = [[mb.bm.verts.new(M @ Vector(P[j, i])) for i in range(nu)] for j in range(nv)]
+    mi = mb.mi(mat)
+    for j in range(nv - 1):
+        for i in range(nu - 1):
+            f = mb.bm.faces.new([vs[j][i], vs[j][i + 1], vs[j + 1][i + 1], vs[j + 1][i]])
+            f.material_index = mi
+            f.smooth = True
+
+
+def _ridges(U, V, specs):
+    """Arrugas: crestas gaussianas que se adelgazan hacia las puntas. spec = (cx, cy, ángulo, largo, ancho, alto)."""
+    D = np.zeros_like(U)
+    for (cx, cy, ang, length, w, A) in specs:
+        dx, dy = U - cx, V - cy
+        ca, sa = math.cos(ang), math.sin(ang)
+        al, pe = dx * ca + dy * sa, -dx * sa + dy * ca
+        env = np.clip(1 - (2 * al / length) ** 2, 0, 1)
+        we = w * (0.45 + 0.55 * np.sqrt(env))
+        D += A * np.exp(-(pe / np.maximum(we, 1e-4)) ** 2) * env ** 1.5
+    return D
+
+
+def _gathers(U, V, a, b, t_lo, t_hi, k, A, seed, corners="all"):
+    """Frunces de esquina: la tela que sobra al rodear la esquina redondeada se junta en `k` pliegues verticales que crecen
+    hacia abajo (donde la tela se remete o la jala el resorte)."""
+    dx, dy = np.abs(U) - a, np.abs(V) - b
+    m = (dx > 0) & (dy > 0)
+    if corners == "foot":
+        m &= V < 0
+    t = np.hypot(np.maximum(dx, 0), np.maximum(dy, 0))
+    phi = np.arctan2(np.maximum(dy, 0), np.maximum(dx, 0))
+    ph = (np.sign(U) * 1.7 + np.sign(V) * 2.9 + seed) % (2 * np.pi)
+    phi_w = phi + 0.06 * np.sin(3 * phi + ph)
+    env = np.sqrt(np.clip(np.sin(2 * phi), 0, 1)) * _sstep(t_lo, t_hi, t)
+    D = A * env * (0.5 + 0.5 * np.sin(4 * k * phi_w + ph)) ** 1.5
+    return np.where(m, D, 0.0)
+
+
+def bed_linens(mb, M, L=1.9, W=0.86, H=0.13, seed=0, blanket=True, fowler=0.0, hinge=0.15):
+    """Tendido de cama de hospital hecho a la medida del colchón (no simulado: cada capa sigue el forro a distancia fija y se
+    remete bajo el colchón, como se tiende en un hospital):
+    - sábana bajera remetida en los 4 lados: frunces en las esquinas, arrugas de tensión que salen de las esquinas de la
+      cabecera, pliegues de planchado (uno a lo largo y uno a lo ancho) y ondulación suave; levanta sobre los vivos.
+    - cobija (si `blanket`): de la mitad del colchón al pie, remetida al pie y a los costados con esquina de hospital (pliegue
+      diagonal en el costado con el escalón de la solapa), pliegues anchos y blandos, dobladillo de 7 mm en el borde superior.
+    - sábana superior: entra bajo la cobija, sale 8-12 cm y se dobla de regreso sobre ella (embozo) con un doblez redondeado,
+      ondas que cruzan el doblez y dobladillo en el borde libre.
+    Sin cobija: cobija doblada en tres al pie.  Todo se dobla con el quiebre Fowler igual que el colchón."""
+    rr = np.random.default_rng(seed + 101)
+    a, b = W / 2 - RE, L / 2 - RE
+    OFF_S, OFF_A, OFF_K = 0.003, 0.0045, 0.012
+    sd = float(seed) * 7.31
+
+    def bend(P):
+        sh = P.shape
+        return bend_fowler(P.reshape(-1, 3), fowler, hinge).reshape(sh)
+
+    def hem(P, N, inset, r, mat, row=-1):
+        c = bend(P[row] - N[row] * inset)
+        mb.tube([tuple(M @ Vector(p)) for p in c], r, seg=8, mat=mat)
+
+    y1 = float(rr.uniform(0.0, 0.14))
+    e, cw = float(rr.uniform(0.08, 0.12)), float(rr.uniform(0.20, 0.26))
+    yf = y1 + e
+    # ---- 1) sábana bajera
+    R = RE + OFF_S
+    U, V = np.meshgrid(_axis(a, R, H, 0.015, n_side=6), _axis(b, R, H, 0.015, n_side=6))
+    P = _wrap(U, V, OFF_S, W, L, H, bump=0.0045, bump_w=0.25)
+    D = 0.0013 * _perlin(U * 4, V * 4, sd) + 0.0005 * _perlin(U * 12, V * 12, sd + 3)
+    vis = _sstep(yf + 0.02, yf + 0.09, V) if blanket else np.ones_like(V)
+    pil = _sstep(0.30, 0.36, np.abs(U)) + _sstep(0.22, 0.28, np.abs(V - 0.68))
+    pil = np.clip(pil, 0, 1)                                             # bajo la almohada no hay arrugas que la atraviesen
+    specs = [(float(rr.uniform(-0.02, 0.02)), 0.0, math.pi / 2, 2.2, 0.016, 0.0009),       # pliegue de planchado a lo largo
+             (0.0, float(rr.uniform(0.40, 0.50)), 0.0, 1.0, 0.016, 0.0008)]                # y a lo ancho
+    for sx in (-1, 1):                                                  # tensión desde las esquinas de la cabecera
+        for _ in range(2):
+            ang = math.radians(float(rr.uniform(20, 55)))
+            ln = float(rr.uniform(0.16, 0.30))
+            cx = sx * (a - ln * 0.35 * math.cos(ang))
+            cy = b - ln * 0.35 * math.sin(ang) - float(rr.uniform(0.0, 0.08))
+            specs.append((cx, cy, math.pi - ang if sx > 0 else ang, ln, float(rr.uniform(0.018, 0.026)), float(rr.uniform(0.003, 0.0045))))
+    lo_y = (yf + 0.08) if blanket else (-b + 0.05)
+    for _ in range(7):                                                  # arrugas sueltas donde se sentó o se acomodó alguien
+        specs.append((float(rr.uniform(-0.33, 0.33)), float(rr.uniform(lo_y, 0.42)), float(rr.uniform(0, math.pi)),
+                      float(rr.uniform(0.12, 0.34)), float(rr.uniform(0.018, 0.03)), float(rr.uniform(0.0025, 0.0042))))
+    D += _ridges(U, V, specs) * vis * pil
+    D += _gathers(U, V, a, b, 0.25 * 0.5 * np.pi * R, 0.5 * np.pi * R + H - 2 * RE, 4, 0.0065, sd)
+    Pd = P + _grid_normals(P) * D[..., None]
+    _grid_to_mb(mb, M, bend(Pd), "linen")
+    if not blanket:
+        yb, xb, rz = -0.62, float(rr.uniform(-0.03, 0.03)), math.radians(float(rr.uniform(-4, 4)))
+
+        def base(x, y):                                     # apoyo: el abombado del colchón bajo la cobija
+            gx = xb + x * math.cos(rz) - y * math.sin(rz)
+            gy = yb + x * math.sin(rz) + y * math.cos(rz)
+            return _crown(gx, gy, np.full_like(gx, H), W, L, H) - 0.0015
+        folded_blanket(mb, M @ Matrix.Translation((xb, yb, H + OFF_S)) @ Matrix.Rotation(rz, 4, "Z"), w=0.74, d=0.36, layers=3,
+                       seed=seed, mat="wool_blue", base=base)
+        return
+    # ---- 2) cobija
+    R = RE + OFF_K
+    vs = np.concatenate([-b - _band(R, H, n_side=8)[::-1], np.linspace(-b, -b + 0.30, 28),
+                         np.linspace(-b + 0.30, y1, max(2, int(round((y1 + b - 0.30) / 0.022))) + 1)[1:]])
+    U, V = np.meshgrid(_axis(a, R, H, 0.022, n_side=8), vs)          # malla fina en costados y pie: pliegue de esquina
+    P = _wrap(U, V, OFF_K, W, L, H, bump=0.0015, bump_w=0.45)
+    fade = _sstep(yf - cw - 0.01, yf - cw - 0.12, V)                    # nada bajo el embozo que lo atraviese
+    D = (0.0034 * _perlin(U * 3.0, V * 3.0, sd + 11) + 0.0011 * _perlin(U * 9, V * 9, sd + 12)) * (0.2 + 0.8 * fade)
+    specs = []
+    for _ in range(6):                                                  # pliegues anchos de la lana
+        specs.append((float(rr.uniform(-0.32, 0.32)), float(rr.uniform(-0.78, y1 - 0.25)), math.pi / 2 + float(rr.uniform(-0.6, 0.6)),
+                      float(rr.uniform(0.30, 0.75)), float(rr.uniform(0.03, 0.05)), float(rr.uniform(0.005, 0.009))))
+    D += _ridges(U, V, specs) * fade
+    D += _gathers(U, V, a, b, 0.4 * np.pi * R, 0.5 * np.pi * R + H - 2 * RE, 3, 0.006, sd + 5, corners="foot")
+    # esquina de hospital: pliegue diagonal en el costado, del canto superior (≈ 24 cm del pie) a la esquina inferior del pie,
+    # con el escalón de la solapa doblada encima
+    t1 = 0.5 * np.pi * R
+    t2 = t1 + H - 2 * RE
+    dxs = np.abs(U) - a
+    p0, p1 = np.array([t1, -b + 0.24]), np.array([t2 + 0.01, -b])
+    dvec = (p1 - p0) / np.linalg.norm(p1 - p0)
+    rel_x, rel_y = dxs - p0[0], V - p0[1]
+    al = rel_x * dvec[0] + rel_y * dvec[1]
+    pe = -rel_x * dvec[1] + rel_y * dvec[0]
+    span = np.linalg.norm(p1 - p0)
+    win = _sstep(0.45 * t1, 0.85 * t1, dxs) * _sstep(-0.03, 0.01, al) * _sstep(span + 0.03, span - 0.01, al)
+    crease = 0.005 * np.exp(-(pe / 0.011) ** 2) + 0.0035 * _sstep(0.005, -0.009, pe) * _sstep(-0.16, -0.10, pe)
+    D += crease * win
+    Pd = P + _grid_normals(P) * D[..., None]
+    Nd = _grid_normals(Pd)
+    _grid_to_mb(mb, M, bend(Pd), "wool_blue")
+    hem(Pd, Nd, 0.0035, 0.0035, "wool_blue")
+    # ---- 3) sábana superior con embozo: capa A bajo la cobija -> doblez -> capa B de regreso sobre la cobija
+    rho = 0.0032
+    ys_a = np.arange(y1 - 0.06, yf, 0.015)
+    al_f = np.linspace(-np.pi / 2, np.pi / 2, 9)[1:-1]
+    ys_b = np.linspace(yf, yf - cw, max(3, int(cw / 0.015)) + 1)
+    ys = np.concatenate([ys_a, yf + rho * np.cos(al_f), ys_b])
+    offb = (OFF_A + 0.0035) + (2 * rho - 0.0035) * np.exp(-(yf - ys_b) / 0.03)
+    offb = offb + (0.0155 - offb) * _sstep(y1 + 0.025, y1 - 0.005, ys_b)
+    offs = np.concatenate([np.full(len(ys_a), OFF_A), OFF_A + rho + rho * np.sin(al_f), offb])
+    sgn = np.concatenate([np.ones(len(ys_a) + len(al_f) // 2), -np.ones(len(al_f) - len(al_f) // 2 + len(ys_b))])
+    us = _axis(a, RE + 0.01, H, 0.018)
+    U, Ys = np.meshgrid(us, ys)
+    OFF = np.broadcast_to(offs[:, None], U.shape)
+    P = _wrap(U, Ys, OFF, W, L, H, bump=0.002, bump_w=0.4)
+    N = _grid_normals(P) * sgn[:, None, None]
+    specs = [(float(rr.uniform(-0.34, 0.34)), yf - 0.02, math.pi / 2 + float(rr.uniform(-0.25, 0.25)), float(rr.uniform(0.08, 0.16)),
+              0.016, float(rr.uniform(0.0008, 0.0016))) for _ in range(5)]
+    D = 0.0004 * _perlin(U * 6, Ys * 6, sd + 21) + _ridges(U, Ys, specs)
+    D = np.maximum(D, -0.0006)
+    Pd = P + N * D[..., None]
+    _grid_to_mb(mb, M, bend(Pd), "linen")
+    Nd = _grid_normals(Pd) * sgn[:, None, None]
+    hem(Pd, Nd, 0.0012, 0.0018, "linen")
 
 
 def drape(mb, M, name, size, res, z0, colliders_fn, mat, seed=0, stiff=12.0, frames=60, thickness=0.003, pin=None, pre_fold=None,
@@ -367,54 +648,55 @@ def drape(mb, M, name, size, res, z0, colliders_fn, mat, seed=0, stiff=12.0, fra
 
 
 # -------------------------------------------------------------------------------------------------------------- cobija
-def folded_blanket(mb, M, w=0.86, d=0.42, layers=3, t=0.012, seed=0, mat="wool_blue"):
-    """Cobija doblada en `layers` pliegues: capas con dobleces redondeados alternos (S), bordes con caída y ruido de pelusa."""
-    rr = np.random.default_rng(seed)
-    nx, ny = 34, 14
-    H = layers * t * 1.6
-    rows = []
-    # recorrido en S en el plano Y-Z: capa k va de un extremo al otro; el doblez es una semicircunferencia de radio = paso/2
-    step = H / layers
-    path = []
-    for k in range(layers):
-        y0, y1 = (-d / 2, d / 2) if k % 2 == 0 else (d / 2, -d / 2)
-        zc = step * (k + 0.5)
-        for j in range(ny + 1):
-            path.append((y0 + (y1 - y0) * j / ny, zc))
-        if k < layers - 1:
-            cy = y1
-            for j in range(1, 8):
-                a = math.pi * j / 8
-                sgn = 1 if k % 2 == 0 else -1
-                path.append((cy + sgn * step / 2 * math.sin(a), zc + step / 2 * (1 - math.cos(a))))
-    for i in range(nx + 1):
-        x = -w / 2 + w * i / nx
-        ring = []
-        for (y, z) in path:
-            sag = 0.004 * math.sin(math.pi * i / nx)
-            fz = 0.0025 * noise.noise(Vector((x * 9 + seed, y * 9, z * 9)))
-            ring.append((x * (1 - 0.01 * (z / H)), y, z - sag + fz))
-        rows.append(ring)
-    n = len(path)
-    top = [[mb.bm.verts.new(M @ Vector(p)) for p in ring] for ring in rows]
-    bot = [[mb.bm.verts.new(M @ Vector((p[0], p[1], p[2] - t))) for p in ring] for ring in rows]
-    for i in range(nx):
-        for j in range(n - 1):
-            for (A, B, flip) in ((top, top, False), (bot, bot, True)):
-                q = [A[i][j], A[i + 1][j], B[i + 1][j + 1], B[i][j + 1]]
-                f = mb.face(list(reversed(q)) if flip else q, mat)
-                f.smooth = True
-    for i in (0, nx):
-        for j in range(n - 1):
-            q = [top[i][j], top[i][j + 1], bot[i][j + 1], bot[i][j]]
-            f = mb.face(q if i == 0 else list(reversed(q)), mat)
-            f.smooth = True
-    for j in (0, n - 1):
-        for i in range(nx):
-            q = [top[i][j], bot[i][j], bot[i + 1][j], top[i + 1][j]]
-            f = mb.face(q if j == 0 else list(reversed(q)), mat)
-            f.smooth = True
-    del rr
+def folded_blanket(mb, M, w=0.86, d=0.42, layers=3, t=0.012, seed=0, mat="wool_blue", base=None):
+    """Cobija de lana doblada en `layers` capas: bulto blando con aristas redondeadas (no placas), lomos de los dobleces
+    redondos en los dos extremos alternados, canales entre capas en los costados abiertos, capas corridas unas sobre otras,
+    lomo superior abombado, pelusa (ruido fino) y caída que copia el abombado de lo que tiene abajo.
+    base(x, y) -> desplazamiento z del apoyo en coordenadas locales (p. ej. el abombado del colchón)."""
+    rr = np.random.default_rng(seed + 7)
+    h = layers * t * 1.45
+    re = min(h * 0.45, 0.022)
+    co, flat, lens = _rbox_arrays(w, d, h, re=re, step=0.02, n_round=4)
+    x, y, z = co[:, 0].copy(), co[:, 1].copy(), co[:, 2].copy()
+    sd = float(seed) * 3.7 + 0.5
+    zl = np.clip(z / h, 0, 1) * layers                      # coordenada de capa (0..layers)
+    # capas corridas: cada capa se desplaza unos mm en x/y; se interpola suave entre capas
+    sh = rr.uniform(-0.008, 0.008, (layers + 1, 2))
+    k0 = np.clip(np.floor(zl).astype(int), 0, layers - 1)
+    fr = zl - k0
+    fr = fr * fr * (3 - 2 * fr)
+    x += sh[k0, 0] * (1 - fr) + sh[k0 + 1, 0] * fr
+    y += sh[k0, 1] * (1 - fr) + sh[k0 + 1, 1] * fr
+    # canales entre capas en los costados abiertos (|x| cerca del canto) y lomos de los dobleces en los extremos y
+    side = _sstep(w / 2 - re - 0.01, w / 2 - 0.002, np.abs(x))
+    endy = _sstep(d / 2 - re - 0.01, d / 2 - 0.002, np.abs(y))
+    groove = np.zeros_like(z)
+    for k in range(1, layers):
+        groove += np.exp(-((zl - k) / 0.16) ** 2)
+    # en un extremo el doblez abre las capas 1-2 y en el otro las 2-3: el canal del extremo cerrado es más leve
+    fold_end = np.where(y > 0, 1.0, -1.0)
+    end_g = np.zeros_like(z)
+    for k in range(1, layers):
+        closed = (k % 2 == 1) == (fold_end > 0)
+        end_g += np.exp(-((zl - k) / 0.18) ** 2) * np.where(closed, 0.35, 1.0)
+    inward = 0.0035 * groove * side + 0.003 * end_g * endy
+    nx = np.sign(x) * side
+    ny = np.sign(y) * endy
+    nn = np.maximum(np.hypot(nx, ny), 1e-9)
+    x -= inward * nx / nn * (nn > 1e-6)
+    y -= inward * ny / nn * (nn > 1e-6)
+    # lomo superior abombado y pelusa
+    top = _sstep(h * 0.6, h, z)
+    z += top * (0.006 * (1 - (2 * x / w) ** 2) * (1 - (2 * y / d) ** 4))
+    X, Y, Z = x * 6, y * 6, z * 6
+    z += 0.0018 * np.array([noise.noise(Vector((a_ + sd, b_, c_))) for a_, b_, c_ in zip(X, Y, Z)]) * top
+    fz = np.array([noise.noise(Vector((a_ * 4 + sd, b_ * 4, c_ * 4))) for a_, b_, c_ in zip(X, Y, Z)])
+    x += 0.0007 * fz
+    y += 0.0007 * fz
+    if base is not None:
+        z += base(x, y)
+    co = np.stack([x, y, z], -1)
+    _to_mb(mb, co, flat, lens, mat, M)
 
 
 # -------------------------------------------------------------------------------------------------------------- cortinas

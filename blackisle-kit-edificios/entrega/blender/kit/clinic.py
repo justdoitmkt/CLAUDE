@@ -493,7 +493,8 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
     """Cama hospitalaria manual de 2 manivelas (≈ 2,10 × 0,98; colchón arriba a 0,66): bastidor de PTR 50×30, patas de PTR
     40×40, rodajas de 125 mm (2 con freno), plataforma de 4 secciones con malla electrosoldada (respaldo con ángulo `fowler`),
     cabecera y piecera de tubo doblado con barrotes, barandales abatibles, defensas giratorias, portasueros, manivelas;
-    colchón de vinilo con vivos, sábana y cobija simuladas, almohada inflada por presión.
+    colchón de vinilo con vivos, tendido a la medida (bajera remetida, cobija con esquinas de hospital, embozo de la
+    sábana superior), almohada inflada por presión.
     Cabecera hacia +Y, pie hacia -Y."""
     from kit import softgoods as sg
     r = rng(seed)
@@ -545,17 +546,7 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
     Mm = _T(0, 0.0, zd)
     sg.mattress(mb, Mm, Lm, Wm, Hm, seed=seed, fowler=fowler, hinge=hinge)
     if made:
-        # las telas se simulan sobre el colchón plano y luego siguen el quiebre del respaldo (como una sábana ajustable)
-        col = sg.mattress_collider_arrays(Lm, Wm, Hm)
-        bend = (lambda co: sg.bend_fowler(co, fowler, hinge)) if fowler > 0 else None
-        sg.drape(mb, Mm, "sabana", (Wm + 0.22, Lm + 0.16), (38, 68), Hm + 0.04, lambda: [col], "linen", seed=seed % 3, stiff=10.0,
-                 frames=55, post=bend)
-        if blanket:
-            off = np.array([0, -0.32, 0], np.float32)
-            sg.drape(mb, Mm @ _T(0, -0.32, 0), "cobija", (Wm + 0.34, 1.25), (34, 46), Hm + 0.08,
-                     lambda: [(col[0] - off, col[1], col[2])], "wool_blue", seed=seed % 3, stiff=18.0,
-                     frames=55, thickness=0.006, pre_fold=0.42,
-                     post=(lambda co: sg.bend_fowler(co + off, fowler, hinge) - off) if fowler > 0 else None)
+        sg.bed_linens(mb, Mm, Lm, Wm, Hm, seed=seed, blanket=blanket, fowler=fowler, hinge=hinge)
         a = math.radians(fowler)
         yp, zp = 0.68, Hm + 0.016
         if fowler > 0:
