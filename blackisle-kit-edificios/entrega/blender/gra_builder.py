@@ -332,12 +332,16 @@ def barn_roof(roof, det, inter):
             for (p, q) in ((a, k), (k, top)):
                 _, _, N = _plane_frame(p, q)
                 cl.rtube(inter, tuple(p - N * 0.115), tuple(q - N * 0.115), 0.045, 0.14, "wood", up=tuple(N), r=0.004)
-            # cartabones de triplay a los dos lados del quiebre (unen par bajo, par alto y tirante), con clavos
-            kp = k - Vector((0, 0, 0.2))
+            # cartabones de triplay a los dos lados del quiebre: siguen el eje de los dos pares (20 cm bajo la lámina) y bajan
+            # hacia el tirante; ningún vértice sale arriba de la lámina
+            kp = k - Vector((0, 0, 0.20))
+            d_lo = Vector((s * (BX1 - KNEE[0]), 0, -(KNEE[1] - H_EAVE))).normalized()     # par bajo, hacia el alero
+            d_up = Vector((-s * KNEE[0], 0, RIDGE - KNEE[1])).normalized()               # par alto, hacia la cumbrera
+            pts = [kp + d_lo * 0.40, kp + Vector((0, 0, 0.03)), kp + d_up * 0.40, kp + Vector((0, 0, -0.30))]
+            outline = [(p.x - kp.x, p.z - kp.z) for p in pts]
             for dy in (-0.0345, 0.0345 + 0.012):
                 Mg = _T(kp.x, yy + dy, kp.z) @ _Rx(90)
-                inter.plate([(s * 0.30, -0.42), (s * 0.30, 0.10), (-s * 0.42, 0.14), (-s * 0.42, -0.02)][::(1 if s > 0 else -1)],
-                            0.012, "wood_grey", m=Mg)
+                inter.plate(outline, 0.012, "wood_grey", m=Mg)
         inter.box((-KNEE[0] + 0.05, yy - 0.022, KNEE[1] - 0.06), (KNEE[0] - 0.05, yy + 0.022, KNEE[1] + 0.08), "wood", bevel=0.004)
         yy += 1.0
     for s in (-1, 1):
