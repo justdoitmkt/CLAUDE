@@ -476,3 +476,15 @@ grafiti `ref_grafiti_planta_baja_1` en las vistas exteriores. 8 imágenes + 2 ho
   tienda, pórtico, mostrador, abarrotes y fondo. Arreglado: el cruce de las cruces del portón (diagonales coplanares → la
   segunda en dos tramos que topan contra la primera).
 - **Triángulos antes de hornear**: estructura/detalle ~0,33 M (techo 170 k, detalle 134 k, interior 30 k) + mobiliario 0,77 M.
+- **Horneado y kit UE5** (atlas de muros a 4K: con 8K y 1,1 M de triángulos el horneado se quedaba sin memoria): exportación
+  validada (todas las comprobaciones OK). SM_GRA_1_tienda: Estructura 199 930 · Detalle 131 637 · **Mobiliario 767 630** ·
+  Vidrio 2 730 · Colision 9 144 + cajas de la utilería (31 012) triángulos; 66,05 MiB; `kit_ue5_descargas/BLACKISLE_UE5_GRA_1_tienda.zip`
+  30,4 MiB; común rehecho (75,7 MiB) con T10/T11/T12 y los materiales nuevos.
+- **Revisión de las vistas texturizadas** (patio, tienda, costado, tejaban, trasera, granero, interior): arreglados antes del
+  horneado final (1) los cartabones del quiebre, que asomaban como dientes sobre la lámina; (2) las tarimas recargadas,
+  giradas sobre su centro (media tarima bajo el piso: fallaba base_en_suelo); (3) aplanado de la tienda menos gastado
+  (wear 0,15); (4) la vista previa enciende los focos del granero y las luminarias de la tienda (interiores negros).
+- **Por debajo del estándar, dicho con honestidad**: cuerdas, alambres, peldaños y tubos chicos de 4–8 lados se facetan a
+  < 1 m; los costales no son simulación de tela (trama insinuada); los hilos de púas van cada 30 cm (los reales, 10–13 cm);
+  la mercancía de los anaqueles sale de unas pocas piezas repetidas con variación; las letras del pizarrón usan la fuente de
+  Blender inclinada, no letra a mano; el refrigerador de cerveza no tiene condensador atrás (va contra el muro).

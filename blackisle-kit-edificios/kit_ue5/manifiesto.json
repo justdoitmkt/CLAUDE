@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "3997318",
+ "version_repo": "34b7b88",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -3164,7 +3164,7 @@
     "Detalle": {
      "nombre": "SM_GRA_1_tienda_Detalle",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Detalle.glb",
-     "triangulos": 131633,
+     "triangulos": 131637,
      "ranuras": [
       "BLK_wood_red",
       "BLK_paint_white",
@@ -3191,7 +3191,7 @@
     "Mobiliario": {
      "nombre": "SM_GRA_1_tienda_Mobiliario",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Mobiliario.glb",
-     "triangulos": 767632,
+     "triangulos": 767630,
      "ranuras": [
       "BLK_sign_white",
       "BLK_steel",
@@ -3235,7 +3235,7 @@
     "Colision": {
      "nombre": "SM_GRA_1_tienda_Colision",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Colision.glb",
-     "triangulos": 31011,
+     "triangulos": 31012,
      "ranuras": [
       "BLK_colision"
      ],
@@ -3289,11 +3289,11 @@
    "medidas_m": {
     "x": 27.878,
     "y": 21.153,
-    "z": 9.166,
+    "z": 8.777,
     "min": [
      -12.078,
      -10.866,
-     -0.471
+     -0.082
     ],
     "max": [
      15.8,
@@ -3340,9 +3340,9 @@
     "Colision_ranuras": true,
     "Colision_un_uv": true,
     "Colision_color0": true,
-    "base_en_suelo": false
+    "base_en_suelo": true
    },
-   "ok": false,
+   "ok": true,
    "mib_total": 66.05,
    "fachada_principal": {
     "eje_blender": "-y",
