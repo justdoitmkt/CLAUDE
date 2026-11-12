@@ -26,8 +26,53 @@ TEX = os.path.join(ENT, "texturas")
 # ------------------------------------------------------------------------------------------------
 # 1. exterior / interior
 # ------------------------------------------------------------------------------------------------
-def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5):
-    """Clasifica cada cara: exterior si al menos un rayo (normal + 4 inclinaciones de 35°) escapa sin chocar en max_dist.
+def _footprint_grid(bm, mw, cell=0.25, zmin=1.0):
+    """Planta del edificio como rejilla 2D: celdas cubiertas por caras hacia arriba por encima de `zmin` (losas de piso, de
+    azotea, de balcón). Devuelve inside(x, y) -> bool. Sin caras así (cabañas) devuelve siempre False."""
+    from mathutils.geometry import intersect_point_tri_2d
+    cells = set()
+    for f in bm.faces:
+        n = (mw.to_3x3() @ f.normal).normalized()
+        if n.z < 0.9:
+            continue
+        pts = [(mw @ v.co) for v in f.verts]
+        if sum(p.z for p in pts) / len(pts) < zmin:
+            continue
+        p2 = [Vector((p.x, p.y)) for p in pts]
+        x0, x1 = min(p.x for p in p2), max(p.x for p in p2)
+        y0, y1 = min(p.y for p in p2), max(p.y for p in p2)
+        for i in range(int(math.floor(x0 / cell)), int(math.floor(x1 / cell)) + 1):
+            for j in range(int(math.floor(y0 / cell)), int(math.floor(y1 / cell)) + 1):
+                if (i, j) in cells:
+                    continue
+                q = Vector(((i + 0.5) * cell, (j + 0.5) * cell))
+                if any(intersect_point_tri_2d(q, p2[0], p2[k], p2[k + 1]) for k in range(1, len(p2) - 1)):
+                    cells.add((i, j))
+    grown = set(cells)                                  # cierra rendijas de una celda (juntas, bordes de losa)
+    for (i, j) in cells:
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                grown.add((i + di, j + dj))
+    return lambda x, y: (int(math.floor(x / cell)), int(math.floor(y / cell))) in grown
+
+
+def _inside_run(inside, c, d, step=0.2, cap=12.0):
+    """Recorrido horizontal (m) del rayo dentro de la planta antes de salir. Rayos casi verticales: 0."""
+    h = Vector((d.x, d.y))
+    if h.length < 0.3:
+        return 0.0
+    h.normalize()
+    s = 0.0
+    while s < cap and inside(c.x + h.x * s, c.y + h.y * s):
+        s += step
+    return s
+
+
+def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5, max_inside=3.0):
+    """Clasifica cada cara: exterior si al menos un rayo (normal + 4 inclinaciones de 35°) escapa sin chocar en max_dist y,
+    antes de salir de la planta del edificio, recorre dentro de ella como mucho `max_inside` m. Lo segundo evita que la cara
+    interior de un muro de fachada pase por exterior porque su rayo cruza una enfilada de puertas y sale por la fachada de
+    enfrente (APT_D); logias, galerías, balcones y el rincón de la L quedan dentro de esos 3 m.
     `others`: objetos que también tapan (detalles, interior). Devuelve (obj_ext, obj_int) — nuevos objetos con las caras separadas."""
     dg = bpy.context.evaluated_depsgraph_get()
     occl = [obj] + [o for o in others if o.type == "MESH"]
@@ -46,6 +91,7 @@ def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     mw = obj.matrix_world
+    inside = _footprint_grid(bm, mw)
     ext = []
     for f in bm.faces:
         c = mw @ f.calc_center_median()
@@ -59,7 +105,7 @@ def split_exterior(obj, others=(), max_dist=60.0, n_dirs=5):
         free = False
         for d in dirs:
             hit = tree.ray_cast(c + n * 0.004, d, max_dist)
-            if hit[0] is None:
+            if hit[0] is None and _inside_run(inside, c, d) <= max_inside:
                 free = True
                 break
         ext.append(free)

@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><title>loading</title></head><body style="margin:0;background:#a9bccf">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+// Captura exterior de un GLB con GLTFLoader (r169): encuadre por la caja, azimut/elevación desde la URL, sol con sombras y cielo.
+// Deja en window.info las métricas del cargador (triángulos, mallas, materiales, COLOR_0, caja, tiempo de carga, llamadas).
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const W = 1280, H = 720, az = +(q.get('az') ?? -35), el = +(q.get('el') ?? 15);
+const r = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0xa9bccf);
+sc.add(new THREE.HemisphereLight(0xe2ecff, 0x8a7a60, 1.0));
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sc.add(sun); sc.add(sun.target);
+const cam = new THREE.PerspectiveCamera(40, W / H, 0.1, 1000);
+const t0 = performance.now();
+new GLTFLoader().load(q.get('glb'), g => {
+  const load_ms = Math.round(performance.now() - t0);
+  let tris = 0, meshes = 0, withColor = 0; const mats = new Set();
+  g.scene.traverse(m => {
+    if (!m.isMesh) return;
+    m.castShadow = m.receiveShadow = true; meshes++;
+    const gi = m.geometry; tris += (gi.index ? gi.index.count : gi.attributes.position.count) / 3;
+    if (gi.attributes.color) withColor++;
+    (Array.isArray(m.material) ? m.material : [m.material]).forEach(mm => mats.add(mm.name));
+  });
+  sc.add(g.scene);
+  const box = new THREE.Box3().setFromObject(g.scene), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const R = size.length() / 2, d = R / Math.sin(THREE.MathUtils.degToRad(cam.fov / 2)) * 0.8;
+  const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el);
+  // az medido desde el frente (+Z de glTF = −Y de Blender), positivo hacia +X
+  cam.position.set(ctr.x + d * Math.cos(e) * Math.sin(a), ctr.y + d * Math.sin(e), ctr.z + d * Math.cos(e) * Math.cos(a));
+  cam.lookAt(ctr); cam.updateProjectionMatrix();
+  sun.position.set(ctr.x + 30, ctr.y + 40, ctr.z + 25); sun.target.position.copy(ctr); sun.target.updateMatrixWorld();
+  const s = Math.max(size.x, size.z) * 0.8;
+  Object.assign(sun.shadow.camera, {left: -s, right: s, top: s, bottom: -s, near: 1, far: 200}); sun.shadow.camera.updateProjectionMatrix();
+  r.render(sc, cam);
+  const f = v => +v.toFixed(2);
+  window.info = {tris, meshes, materials: [...mats], meshes_with_color: withColor, size: size.toArray().map(f), min: box.min.toArray().map(f),
+                 load_ms, gl: r.info.render.triangles, calls: r.info.render.calls};
+  document.title = 'ready';
+}, undefined, e => { document.title = 'error: ' + e; });
+</script></body></html>
