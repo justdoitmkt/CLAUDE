@@ -3,7 +3,19 @@
 Rama `claude/gracious-dirac-5f11li` · carpeta `blackisle-kit-edificios/entrega/` · detalle cronológico en `ESTADO.md`.
 
 ## 1. Los 7 modelos (números medidos)
-<!-- TABLA -->
+| Modelo | Triángulos (GLB) | MiB | Materiales | Texturas en memoria (MB) | Caja X × Y × Z (m, con base) | z mín | Validación |
+|---|---|---|---|---|---|---|---|
+| APT_A_5p | 850 875 | 61.9 | 14 | 253 | 20.9 × 20.2 × 20.3 | -0.07 | OK |
+| APT_B_4p | 761 627 | 55.1 | 14 | 253 | 20.9 × 16.4 × 17.1 | -0.19 | OK |
+| APT_C_3p | 610 293 | 44.8 | 14 | 253 | 18.4 × 18.4 × 14.0 | -0.07 | OK |
+| APT_D_4p | 762 354 | 54.7 | 14 | 253 | 22.6 × 14.6 × 17.0 | -0.19 | OK |
+| CAB_1_tablones | 320 489 | 24.1 | 12 | 120 | 17.6 × 12.4 × 9.1 | -0.12 | OK |
+| CAB_2_pilotes | 183 246 | 15.3 | 12 | 120 | 13.4 × 12.4 × 6.6 | -0.15 | OK |
+| CAB_3_ladrillo | 260 734 | 22.7 | 13 | 141 | 14.4 × 15.1 × 9.1 | -0.12 | OK |
+
+Medido en el GLB final (2026-11-12) con `export_validate.py` y cargado en three r169 (`render_qa/<ID>_threejs_info.json`):
+21–32 mallas y 21–32 llamadas de dibujo por modelo, `COLOR_0` en todas las mallas salvo los atlas, 0 avisos del cargador.
+La memoria de texturas es la decodificada en GPU (RGBA + mipmaps), no el tamaño del archivo.
 
 Todos: metros, +Y arriba (glTF), origen en el centro de la planta y a nivel del suelo (z = 0), fachada principal hacia +Z de glTF
 (−Y de Blender). La caja incluye la base de arena (3 m alrededor del edificio). Sin cámaras, luces ni Draco.
@@ -63,40 +75,65 @@ new GLTFLoader().load('modelos/APT_A_5p.glb', (g) => {
    modelos). Se usó **Nano Banana 2.1 a 1k (1,5 créditos)** con autorización expresa del usuario (2026-10-09). Total: 105,0 créditos.
 2. **Presupuesto de triángulos:** el brief pedía 200–450 k por departamento (techo 600 k) y 150–300 k por cabaña. La orden del usuario
    de construir **todo el interior** (cuartos, corredores, núcleos de escalera, puertas) no cabe ahí. Decisión R8 registrada (2026-10-10):
-   techo de **700 k** por departamento. Medido en el GLB: APT_C 596 k (dentro); APT_B 740 k y APT_D 742 k (+6 %); **APT_A 821 k (+17 %)**,
-   el piloto, con fachada y celosía más densas. CAB_TRIS_NOTE
+   techo de **700 k** por departamento. Medido en el GLB final: APT_C 610 k (dentro); APT_B 762 k y APT_D 762 k (+9 %); **APT_A 851 k
+   (+22 %)**, el piloto, con fachada y celosía más densas. El vestido interior de la ronda 3 suma 15–31 k por edificio.
+   Cabañas: CAB_2 183 k y CAB_3 261 k dentro de 150–300 k; **CAB_1 320 k (+7 %)** por el armazón a la vista y los tablones sueltos.
    Palancas ya aplicadas: teja en nivel `low`, A/C en `low`, canalón solo frente/fondo, hojas de puerta saqueadas. Para el juego hacen falta
    LOD (ver §6).
 3. **Horneado (§4.7):** un atlas único para todo el modelo dejaba decenas de miles de islas de 1–3 px (piezas sueltas). Atlas únicos solo en
    superficies continuas (muros exteriores `walls_main`/`walls_rest` y terreno `skirt`). Detalles, techo, interior, hierba y escombro llevan
    **PBR repetible a escala real** (`KHR_texture_transform`) + **oclusión por vértice** en `COLOR_0`. También se quitaron el atlas `interior`
    previsto y la AO en un 2.º canal UV: `COLOR_0` lo resuelve sin texturas extra.
-4. **Aplanado interior:** el repetible T2 (pintura naranja descascarada) se veía saturado y a escala de juguete dentro de los cuartos.
-   El interior usa la variante `T2_old_plaster_paint_int.png` (saturación × 0,2, gris sucio) a 1,2 m por repetición.
+4. **Aplanado interior:** el repetible T2 (pintura naranja descascarada) se veía saturado y a escala de juguete dentro de los cuartos,
+   y su primera variante gris se repetía como papel tapiz. El interior usa `T2_plaster_int_2k.png` (2048², 2,4 m por repetición,
+   generada con un sombreador periódico por construcción: T1, K1 y K2 a repeticiones enteras + ruido 4D sobre un toro).
 5. **Conceptos de APT_B y APT_D rehechos (v3):** la regla del usuario (cero escaleras exteriores) invalidó la torre de escalera de B y la
    escalera de emergencia de D. Los modelos siguen los heroes v3. La pieza firma de D pasó a ser los balcones colgados, las buhardillas y
    las celosías de escalera.
 6. **R4 en el grafiti:** la corona y la estrella de 5 puntas de la hoja de íconos y la corona de `C02_isla_negra` salían de la
    biblioteca generada. Juntas forman simbología de una alianza de pandillas real, así que se borraron y los paneles de los 4 departamentos
-   se regeneraron. Palabras y crews: solo los de la lista (crews ficticios KAOS, ZORO, NOVA, REXO).
-7. **Tamaño de archivo:** los GLB de departamento pesan 44–59 MiB (sin Draco, como pide el brief). Están por debajo del límite de 100 MB
+   se regeneraron. La revisión de aceptación encontró además dos estrellas de 5 puntas decorativas dentro de la pieza ZORO: borradas
+   del recorte (`S02_zoro.png`) y paneles regenerados. Palabras y crews: solo los de la lista (crews ficticios KAOS, ZORO, NOVA, REXO).
+7. **Tamaño de archivo:** los GLB de departamento pesan 45–62 MiB (sin Draco, como pide el brief). Están por debajo del límite de 100 MB
    de GitHub, pero por encima del aviso de 50 MB.
-8. **Validación en Three.js por software:** el contenedor no tiene GPU. Carga, sombras, texturas y recorridos se probaron con three r169 en
+8. **Interior vestido, no amueblado:** la orden del usuario era la estructura completa por dentro; el plan decía "sin mobiliario, con
+   escombro". La revisión de aceptación pidió escala humana en los cuartos: `interior_dress.py` pone escombro de aplanado, basura,
+   focos colgando, apagadores y contactos, y algún colchón o silla rota, solo donde detecta un cuarto cerrado. No hay cocinas ni baños
+   amueblados.
+9. **Validación en Three.js por software:** el contenedor no tiene GPU. Carga, sombras, texturas y recorridos se probaron con three r169 en
    Chromium + SwiftShader. No hay medición de FPS en GPU real.
 
 ## 6. Problemas conocidos
-1. **Memoria de texturas:** ~221 MB por departamento y ~120–125 MB por cabaña (PNG sin comprimir en GPU). Los 11 repetibles son las mismas
-   imágenes en los 7 GLB, pero van embebidos en cada archivo y three.js no los comparte: con los 7 cargados, ≈ 1,25 GB.
+1. **Memoria de texturas:** ~253 MB por departamento y 120–141 MB por cabaña (decodificadas en GPU). Los repetibles son las mismas
+   imágenes en los 7 GLB, pero van embebidos en cada archivo y three.js no los comparte: con los 7 cargados, ≈ 1,4 GB.
    Recomendado: convertir a **KTX2/Basis** (p. ej. `gltf-transform etc1s/uastc`, 4–6× menos) y/o cachear las texturas repetibles por nombre
    en `mapa.html`.
 2. **Atlas de muros suave de cerca:** 4096² para ~800 m² de fachada dan ≈ 1,4 px/cm. A 2 m, el grafiti y la pintura descascarada se ven
-   blandos. Se nota sobre todo en APT_A y APT_D. Mejora posible: mapa de detalle repetible encima del atlas o atlas de 8192 para la PB.
-3. **z-fighting residual** (medido con `blender/tests/zfight.py`, caras coplanares visibles a < 1,2 mm): ZF_NOTE
-4. **Sin LOD ni colisionadores:** 600–820 k triángulos por departamento a distancia de mapa. Para el juego conviene un LOD a ~30 % y otro
+   blandos. La ronda 3 duplicó la resolución de la banda de PB dentro de `walls_main` (islas ×2,0) y subió su normal a 2048, pero sigue
+   por debajo de la densidad de pantalla a 2 m. Mejora posible: mapa de detalle repetible encima del atlas o atlas de 8192 para la PB.
+   En las cabañas, algunas caras interiores junto a ventanas van al atlas exterior y se ven más borrosas que el repetible de madera.
+3. **z-fighting residual** (`blender/tests/zfight.py --dedupe`, caras coplanares del mismo sentido a < 1,2 mm que se ven): **0 m² en los 7** tras
+   `coplanar.py`, que antes de hornear borra las caras cubiertas por otra coplanar y hunde 3 mm las parcialmente cubiertas
+   (APT_D tenía 16 m² visibles: descansos de escalera sobre la losa y cabezas de muro bajo la azotea). El detector usa el mismo umbral
+   que la limpieza: solapes casi coplanares a más de 1,2 mm no los ve; en los recorridos no se observó parpadeo.
+4. **Sin LOD ni colisionadores:** 610–851 k triángulos por departamento a distancia de mapa. Para el juego conviene un LOD a ~30 % y otro
    de caja, más colisionadores simplificados por nivel (muros, losas, rampas de escalera). Unas 30 llamadas de dibujo por modelo.
 5. **Interiores a oscuras sin iluminación de juego:** solo entra luz por ventanas y puertas. Las capturas de `render_qa/recorrido/` usan
    dos bombillas puntuales por toma. En el mapa hacen falta luces interiores o una sonda de luz/irradiancia.
-6. **CAB_2 (tapanco):** altura libre baja bajo la cumbrera y acceso por escalera de mano. El juego necesita una mecánica de trepar (o un
-   volumen de escalera).
+6. **CAB_2 (tapanco):** piso a 4,60 m con 1,2–1,5 m libres bajo el faldón (no se puede estar de pie) y acceso por escalera de mano.
+   El juego necesita una mecánica de trepar y agacharse (o un volumen de escalera).
 7. **Daños y escombro interior** son geometría estática; ninguna pieza está separada para destrucción.
 8. **Validación visual en SwiftShader** (sin GPU): sombras PCF y antialias pueden verse distintos en GPU real.
+
+## 7. Revisión de aceptación
+- **2026-10-28, sobre la versión anterior de los 4 departamentos** (workflow: un revisor por modelo contra R12, R4, color y la regla
+  del usuario, y un verificador independiente que intenta refutar cada hallazgo medio o grave). Veredictos: APT_A rechazo,
+  APT_B aceptar con correcciones, APT_C rechazo, APT_D aceptar con correcciones. 13 hallazgos confirmados, 5 refutados.
+  Todos los confirmados se atacaron en la ronda 3 del pipeline (detalle en `ESTADO.md`) y los 7 modelos se re-hornearon con ella.
+- **Comprobado con mis ojos en el GLB final** (recorridos y capturas Three.js de los 7): muros grises en B y C, ático de A cubierto,
+  sin cuartos negros, sin hueco negro ni panel de fachada en C, machón de D interior, vidrio oscuro, aplanado sin repetición
+  visible, escombro con textura, grafiti de C legible a 15 m, cuartos con escombro, basura y focos.
+- **Pendiente:** no se repitió la revisión de aceptación con verificadores sobre la versión final, ni se pasó por primera vez a
+  las 3 cabañas (estas sí tuvieron auditoría de circulación y geometría con verificación). Hallazgos menores que quedan a la vista:
+  laja de escombro de pie en C_01, colchones lisos y claros, rendijas de luz bajo los tramos de escalera de C, cantos rectos sin
+  desconches fuera de las zonas dañadas.

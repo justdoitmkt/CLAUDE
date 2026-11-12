@@ -19,7 +19,7 @@ def row(bid):
 
 
 if __name__ == "__main__":
-    print("| Modelo | Triángulos (GLB) | MB | Materiales | Texturas en memoria (MB) | Caja X × Y × Z (m, con base) | z mín | Validación |")
+    print("| Modelo | Triángulos (GLB) | MiB | Materiales | Texturas en memoria (MB) | Caja X × Y × Z (m, con base) | z mín | Validación |")
     print("|---|---|---|---|---|---|---|---|")
     for b in IDS:
         print(row(b))
