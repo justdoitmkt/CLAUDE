@@ -1,0 +1,20 @@
+{
+ "tris": 243955,
+ "mem_mb": 133.0,
+ "materials": [
+  "BLK_brick",
+  "BLK_concrete",
+  "BLK_fabric",
+  "BLK_glass",
+  "BLK_metal_paint",
+  "BLK_metal_rust",
+  "BLK_mortar",
+  "BLK_plaster",
+  "BLK_plastic",
+  "BLK_sand",
+  "BLK_vegetation",
+  "BLK_wood",
+  "BLK_wood_dark",
+  "BLK_wood_grey"
+ ]
+}
