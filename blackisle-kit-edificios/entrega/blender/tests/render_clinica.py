@@ -28,6 +28,10 @@ pieces = [
     ("mampara", cl.lead_screen()), ("letrero", cl.sign_plate("EXAM 1", 0.5, 0.15)), ("salida", cl.exit_sign()),
     ("extintor", cl.extinguisher()), ("ventilador", cl.ceiling_fan()), ("reja", cl.window_grille(1.5, 1.2)),
 ]
+import numpy as _np  # noqa: E402
+_cm = MB()
+cl.curtain_track(_cm, [(-1.0, -1.1), (1.0, -1.1), (1.0, 1.1)], 2.7, 0.35, _np.random.default_rng(3), open_runs=(1,))
+pieces.append(("cortina", _cm))
 objs = []
 mb_all = MB()
 cols = 6
@@ -39,6 +43,11 @@ o = mb_all.finish("clinica", None, merge=0)
 objs.append(o)
 print("tris", tri_count(objs))
 shots = {
+    "silla_ruedas": dict(azim=-50, elev=14, dist=1.9, target=Vector((2.6 * 1, -2.8, 0.5)), fov=50),
+    "bancada": dict(azim=-30, elev=20, dist=2.6, target=Vector((0.0, 0.0, 0.45)), fov=50),
+    "mesa_exploracion": dict(azim=-40, elev=20, dist=2.6, target=Vector((0.0, -2.8, 0.6)), fov=50),
+    "silla_oficina": dict(azim=-30, elev=15, dist=1.6, target=Vector((2.6, 0.0, 0.5)), fov=50),
+    "cortina_toma": dict(azim=-30, elev=10, dist=4.2, target=Vector((2.6 * 0, -14.0, 1.4)), fov=50),
     "todo": dict(azim=-25, elev=30, fov=45),
     "camas": dict(azim=-30, elev=18, dist=6.0, target=Vector((2.6 * 3.5, 0.0, 0.6)), fov=50),
     "consultorio": dict(azim=-30, elev=18, dist=6.5, target=Vector((2.6 * 1.5, -2.8, 0.6)), fov=50),

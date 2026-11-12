@@ -12,7 +12,18 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 from kit import port
-from kit.common import MB, rng
+from kit.common import MB as _MB
+from kit.common import rng
+
+
+class MB(_MB):
+    """MB del mobiliario: toda caja lleva bisel real (regla R-AAA: nada de aristas de cartón). bevel=0 explícito lo quita."""
+
+    def box(self, mn, mx, mat="concrete", bevel=None, seg=2, m=None):
+        if bevel is None:
+            d = min(abs(mx[0] - mn[0]), abs(mx[1] - mn[1]), abs(mx[2] - mn[2]))
+            bevel = min(0.004, d * 0.22) if d > 0.002 else 0.0
+        return super().box(mn, mx, mat, bevel=bevel, seg=seg, m=m)
 
 PI = math.pi
 
@@ -122,9 +133,22 @@ def exit_sign(lit=True):
 
 
 # ------------------------------------------------------------------------------------------------------------ utilidades
-def shell_strip(mb, prof, width, t, mat, m=None, taper=None):
-    """Concha delgada (asiento moldeado, respaldo): perfil [(y, z)] barrido a lo ancho en X (±width/2), espesor t hacia el lado
-    izquierdo del recorrido. taper(i) -> factor de ancho por punto (esquinas redondeadas)."""
+def _catmull(prof, n=4):
+    P = [Vector((0.0, y, z)) for y, z in prof]
+    out = []
+    for i in range(len(P) - 1):
+        p0, p1, p2, p3 = P[max(i - 1, 0)], P[i], P[i + 1], P[min(i + 2, len(P) - 1)]
+        for k in range(n):
+            t = k / n
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3))
+    out.append(P[-1])
+    return [(p.y, p.z) for p in out]
+
+
+def shell_strip(mb, prof, width, t, mat, m=None, taper=None, smooth_n=4, edge_seg=5):
+    """Concha moldeada (asiento, respaldo, lona): perfil [(y, z)] suavizado y barrido a lo ancho en X (±width/2) con canto
+    redondo de espesor t (semicírculos en los bordes laterales). taper(s) con s en 0..1 a lo largo del perfil -> factor de ancho."""
+    prof = _catmull(prof, smooth_n) if smooth_n > 1 else prof
     pts = [Vector((0.0, y, z)) for y, z in prof]
     n = len(pts)
     rings = []
@@ -133,28 +157,65 @@ def shell_strip(mb, prof, width, t, mat, m=None, taper=None):
         b = pts[min(i + 1, n - 1)]
         d = (b - a).normalized()
         nrm = Vector((0.0, -d.z, d.y))
-        k = taper(i) if taper else 1.0
-        hw = width / 2 * k
-        q = p + nrm * t
-        ring = [Vector((-hw, p.y, p.z)), Vector((hw, p.y, p.z)), Vector((hw, q.y, q.z)), Vector((-hw, q.y, q.z))]
+        k = taper(i / (n - 1)) if taper else 1.0
+        hw = width / 2 * k - t / 2
+        ring = []
+        for j in range(edge_seg + 1):                       # canto derecho (x+), de cara inferior a superior
+            ang = -PI / 2 + PI * j / edge_seg
+            ring.append(Vector((hw + t / 2 * math.cos(ang), 0, 0)) + p + nrm * (t / 2 + t / 2 * math.sin(ang)))
+        for j in range(edge_seg + 1):                       # canto izquierdo (x-)
+            ang = PI / 2 + PI * j / edge_seg
+            ring.append(Vector((-hw + t / 2 * math.cos(ang), 0, 0)) + p + nrm * (t / 2 + t / 2 * math.sin(ang)))
         rings.append([mb.bm.verts.new((m @ v) if m is not None else v) for v in ring])
+    kk = len(rings[0])
     for i in range(n - 1):
         A, B = rings[i], rings[i + 1]
-        for j in range(4):
-            k2 = (j + 1) % 4
-            mb.face([A[j], A[k2], B[k2], B[j]], mat)
-    mb.face(list(reversed(rings[0])), mat)
-    mb.face(rings[-1], mat)
+        for j in range(kk):
+            j2 = (j + 1) % kk
+            f = mb.face([A[j], A[j2], B[j2], B[j]], mat)
+            f.smooth = True
+    for ring, rev in ((rings[0], True), (rings[-1], False)):
+        c = sum((v.co for v in ring), Vector()) / kk
+        cv = mb.bm.verts.new(c)
+        for j in range(kk):
+            q = [cv, ring[j], ring[(j + 1) % kk]]
+            f = mb.face(list(reversed(q)) if rev else q, mat)
+            f.smooth = True
 
 
 def rbox(mb, mn, mx, mat, r=0.01, m=None):
-    """Caja con aristas verticales achaflanadas (muebles de lámina y laminado)."""
-    x0, y0, z0 = mn
-    x1, y1, z1 = mx
-    c = min(r, (x1 - x0) / 3, (y1 - y0) / 3)
-    outline = [(x0 + c, y0), (x1 - c, y0), (x1, y0 + c), (x1, y1 - c), (x1 - c, y1), (x0 + c, y1), (x0, y1 - c), (x0, y0 + c)]
-    M = (m if m is not None else Matrix()) @ _T(0, 0, z0)
-    mb.plate(outline, z1 - z0, mat, m=M)
+    """Caja con las 12 aristas redondeadas (muebles de lámina, laminados, cojines firmes)."""
+    mb.box(mn, mx, mat, bevel=r, seg=3, m=m)
+
+
+def cushion(mb, M, w, d, h, mat="vinyl", r=None, crown=0.008, piping=True, seg=(24, 18)):
+    """Cojín tapizado: sección de esquinas redondeadas, abombado superior y vivo perimetral. Origen: centro de la base."""
+    from kit import softgoods as sg
+    r = r if r is not None else min(h * 0.45, 0.03)
+    rings = sg._rounded_slab(d, w, h, r, crown, seg_l=seg[0], seg_w=seg[1])
+    nr = len(rings[0])
+    vs = [[mb.bm.verts.new(M @ Vector(p)) for p in ring] for ring in rings]
+    for i in range(len(vs) - 1):
+        for k in range(nr):
+            f = mb.face([vs[i][k], vs[i][(k + 1) % nr], vs[i + 1][(k + 1) % nr], vs[i + 1][k]], mat)
+            f.smooth = True
+    for ring, rev in ((vs[0], False), (vs[-1], True)):
+        c = sum((v.co for v in ring), Vector()) / nr
+        cv = mb.bm.verts.new(c)
+        for k in range(nr):
+            a_, b_ = ring[k], ring[(k + 1) % nr]
+            f = mb.face([cv, b_, a_] if not rev else [cv, a_, b_], mat)
+            f.smooth = True
+    if piping:
+        pts = []
+        cr = r * 1.02
+        for (cx, cy, a0) in ((w / 2 - cr, -d / 2 + cr, -PI / 2), (w / 2 - cr, d / 2 - cr, 0.0), (-w / 2 + cr, d / 2 - cr, PI / 2),
+                             (-w / 2 + cr, -d / 2 + cr, PI)):
+            for k in range(7):
+                a = a0 + PI / 2 * k / 6
+                pts.append((cx + cr * math.cos(a), cy + cr * math.sin(a)))
+        pts.append(pts[0])
+        mb.tube([tuple(M @ Vector((x, y, h - r * 0.35))) for (x, y) in pts], 0.0035, seg=6, mat=mat)
 
 
 def caster(mb, p, r=0.04, mat="rubber", swivel=0.0):
@@ -174,55 +235,84 @@ def seat_shell(mb, M, w=0.46):
     """Asiento moldeado de polipropileno: asiento con borde de cascada + respaldo inclinado unidos por la curva."""
     prof = [(-0.22, 0.025), (-0.235, 0.0), (-0.20, -0.012), (-0.08, -0.02), (0.05, -0.018), (0.15, -0.005), (0.19, 0.03),
             (0.215, 0.12), (0.235, 0.24), (0.255, 0.36), (0.262, 0.42), (0.25, 0.45)]
-    n = len(prof)
-    shell_strip(mb, prof, w, 0.007, "plastic_blue", m=M,
-                taper=lambda i: 0.86 if i in (0, n - 1) else (0.95 if i in (1, n - 2) else 1.0))
+    shell_strip(mb, prof, w, 0.008, "plastic_blue", m=M,
+                taper=lambda s_: 0.9 + 0.1 * math.sin(PI * min(1.0, s_ * 1.15)) ** 0.35)
 
 
 def chair_row(n=4, seed=0, empty=()):
-    """Bancada de n asientos sobre viga de acero (sala de espera): viga 60x60, 2 patas en T con regatones, ménsulas."""
+    """Bancada de n asientos (sala de espera): viga de PTR 60×40 con tapones, 2 patas en T de PTR con regatones de hule,
+    ménsulas atornilladas bajo cada concha, soporte de respaldo por detrás, conchas de polipropileno de canto redondo y
+    descansabrazos moldeados en los extremos y entre asientos."""
     r = rng(seed)
     mb = MB()
     pitch = 0.53
     L = n * pitch
     x0 = -L / 2
     zb = 0.33
-    mb.box((x0 + 0.05, -0.03, zb - 0.03), (x0 + L - 0.05, 0.03, zb + 0.03), "steel")
-    for xl in (x0 + 0.35, x0 + L - 0.35):
-        mb.box((xl - 0.025, -0.025, 0.03), (xl + 0.025, 0.025, zb - 0.03), "steel")
-        mb.box((xl - 0.02, -0.26, 0.0), (xl + 0.02, 0.26, 0.04), "steel")
-        for yy in (-0.24, 0.24):
-            mb.cyl((xl, yy, 0.0), (xl, yy, 0.012), 0.022, seg=8, mat="rubber")
-        port.gusset(mb, _T(xl, 0, zb - 0.03) @ _Rz(90) @ _Rx(180), 0.12, 0.1, t=0.006, mat="steel")
+    rtube(mb, (x0 + 0.02, 0.0, zb), (x0 + L - 0.02, 0.0, zb), 0.04, 0.06, "steel", up=(0, 0, 1), r=0.005)
+    for x in (x0 + 0.02, x0 + L - 0.02):
+        rbox(mb, (x - 0.006 if x > 0 else x - 0.0, -0.022, zb - 0.032), (x + (0.0 if x > 0 else 0.006), 0.022, zb + 0.032), "plastic", r=0.004)
+    for xl in (x0 + 0.38, x0 + L - 0.38):
+        rtube(mb, (xl, 0.0, 0.035), (xl, 0.0, zb - 0.03), 0.05, 0.04, "steel", up=(0, 1, 0), r=0.004)
+        rtube(mb, (xl, -0.27, 0.02), (xl, 0.27, 0.02), 0.05, 0.035, "steel", up=(0, 0, 1), r=0.004)
+        for yy in (-0.25, 0.25):
+            port.lathe(mb, [(0.0, -0.002), (0.024, -0.002), (0.026, 0.004), (0.024, 0.012), (0.0, 0.012)], seg=14, mat="rubber",
+                       M=_T(xl, yy, -0.0))
+        for s_ in (-1, 1):
+            port.gusset(mb, _T(xl, s_ * 0.02, zb - 0.03) @ _Rz(90 * s_) @ _Rx(180), 0.11, 0.09, t=0.005, mat="steel")
+    seat_xs = []
     for i in range(n):
+        xc = x0 + pitch * (i + 0.5)
+        seat_xs.append(xc)
         if i in empty:
             continue
-        xc = x0 + pitch * (i + 0.5)
-        mb.box((xc - 0.02, -0.12, zb + 0.03), (xc + 0.02, 0.12, zb + 0.045), "steel")
-        mb.box((xc - 0.02, 0.15, zb + 0.03), (xc + 0.02, 0.19, zb + 0.30), "steel")
+        rbox(mb, (xc - 0.09, -0.12, zb + 0.03), (xc + 0.09, 0.12, zb + 0.045), "steel", r=0.004)
+        for (dx, dy) in ((-0.07, -0.09), (0.07, -0.09), (-0.07, 0.09), (0.07, 0.09)):
+            port.bolt(mb, _T(xc + dx, dy, zb + 0.045), d=0.008, stud=0.002, mat="steel")
+        # soporte de respaldo: solera doblada que sube POR DETRÁS de la concha
+        mb.sweep(rr_profile(0.05, 0.008, 0.003), fillet([(xc, 0.12, zb + 0.038), (xc, 0.255, zb + 0.038), (xc, 0.30, zb + 0.15),
+                                                         (xc, 0.315, zb + 0.36)], 0.04, 8), mat="steel", normal=(1, 0, 0))
         seat_shell(mb, _T(xc, 0.0, zb + 0.07) @ _Rz(float(r.uniform(-0.6, 0.6))))
-        if i < n - 1 and i % 2 == 1:     # brazo entre asientos
-            xa = xc + pitch / 2
-            mb.box((xa - 0.012, -0.18, zb + 0.03), (xa + 0.012, -0.15, zb + 0.24), "steel")
-            mb.box((xa - 0.02, -0.24, zb + 0.24), (xa + 0.02, 0.08, zb + 0.27), "plastic_blue")
+    for k in range(n + 1):                                        # descansabrazos en extremos y entre asientos
+        xa = x0 + pitch * k + (0.03 if k == 0 else (-0.03 if k == n else 0.0))
+        mb.sweep(rr_profile(0.03, 0.012, 0.004), fillet([(xa, 0.02, zb + 0.032), (xa, -0.06, zb + 0.032), (xa, -0.12, zb + 0.24)], 0.04, 8),
+                 mat="steel", normal=(1, 0, 0))
+        cushion(mb, _T(xa, -0.04, zb + 0.24), 0.05, 0.3, 0.03, mat="plastic_blue", r=0.012, crown=0.002, piping=False, seg=(12, 10))
     return mb
 
 
 def office_chair(seed=0):
-    """Silla de oficina: estrella de 5 brazos con rodajas, pistón, asiento y respaldo tapizados (vinilo)."""
+    """Silla secretarial: base de 5 brazos (perfil de nylon), rodajas dobles, pistón con fuelle telescópico, mecanismo con palanca,
+    asiento y respaldo tapizados (cojines con vivo), soporte de respaldo de solera doblada y descansabrazos de tubo con cojín."""
     r = rng(seed)
     mb = MB()
     for k in range(5):
-        a = 2 * PI * k / 5 + float(r.uniform(0, 0.3))
-        p = (0.30 * math.cos(a), 0.30 * math.sin(a))
-        mb.tube([(0, 0, 0.09), (p[0] * 0.9, p[1] * 0.9, 0.075)], 0.016, seg=6, mat="plastic")
-        caster(mb, (p[0], p[1], 0.0), r=0.026, swivel=math.degrees(a))
-    mb.cyl((0, 0, 0.07), (0, 0, 0.12), 0.04, seg=12, mat="plastic")
-    mb.cyl((0, 0, 0.12), (0, 0, 0.40), 0.02, seg=10, mat="steel")
-    mb.box((-0.07, -0.08, 0.40), (0.07, 0.08, 0.43), "plastic")
-    rbox(mb, (-0.23, -0.22, 0.43), (0.23, 0.22, 0.49), "vinyl", r=0.05)
-    mb.box((-0.03, 0.19, 0.43), (0.03, 0.23, 0.70), "plastic")
-    rbox(mb, (-0.21, 0.21, 0.62), (0.21, 0.27, 0.95), "vinyl", r=0.05, m=_T(0, 0.24, 0.62) @ _Rx(-8) @ _T(0, -0.24, -0.62))
+        a = 2 * PI * k / 5 + float(r.uniform(0, 0.2))
+        d = Vector((math.cos(a), math.sin(a), 0))
+        st = [(0.04, 0.05, 0.05, 0.085), (0.18, 0.045, 0.04, 0.075), (0.29, 0.04, 0.035, 0.07)]
+        port.loft(mb, st, seg=10, mat="cable", M=Matrix(((d.x, -d.y, 0, 0), (d.y, d.x, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))), ex=2.6)
+        p = d * 0.3
+        mb.cyl((p.x, p.y, 0.055), (p.x, p.y, 0.07), 0.012, seg=8, mat="steel")
+        for sx in (-1, 1):
+            Mc = _T(p.x, p.y, 0.025) @ Matrix.Rotation(a + float(r.uniform(-0.4, 0.4)), 4, "Z") @ _T(sx * 0.012, 0, 0) @ _Ry(90)
+            port.lathe(mb, [(0.004, -0.007), (0.024, -0.007), (0.025, 0.0), (0.024, 0.007), (0.004, 0.007)], seg=16, mat="cable", M=Mc)
+        rbox(mb, (p.x - 0.008, p.y - 0.018, 0.035), (p.x + 0.008, p.y + 0.018, 0.06), "cable", r=0.004)
+    port.lathe(mb, [(0.0, 0.05), (0.045, 0.05), (0.045, 0.1), (0.0, 0.1)], seg=16, mat="cable")
+    port.lathe(mb, [(0.03, 0.1), (0.03, 0.2), (0.026, 0.205), (0.026, 0.3), (0.022, 0.305), (0.022, 0.37)], seg=16, mat="cable",
+               caps=False)
+    mb.cyl((0, 0, 0.37), (0, 0, 0.41), 0.014, seg=12, mat="steel")
+    rbox(mb, (-0.09, -0.11, 0.405), (0.09, 0.11, 0.44), "cable", r=0.008)
+    mb.tube([(0.08, -0.05, 0.42), (0.17, -0.12, 0.41)], 0.005, seg=6, mat="steel")
+    port.lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.012, 0.03), (0.0, 0.035)], seg=10, mat="cable", M=_T(0.17, -0.12, 0.41) @ _Ry(90))
+    rbox(mb, (-0.22, -0.21, 0.44), (0.22, 0.21, 0.455), "cable", r=0.006)
+    cushion(mb, _T(0, 0, 0.455), 0.47, 0.45, 0.07, mat="vinyl", r=0.03, crown=0.01, seg=(18, 18))
+    mb.sweep(rr_profile(0.06, 0.008, 0.003), fillet([(0, 0.12, 0.43), (0, 0.27, 0.43), (0, 0.29, 0.55), (0, 0.28, 0.72)], 0.05, 8),
+             mat="cable", normal=(1, 0, 0))
+    cushion(mb, _T(0, 0.255, 0.86) @ _Rx(-82), 0.44, 0.40, 0.06, mat="vinyl", r=0.028, crown=0.008, seg=(16, 18))
+    for s_ in (-1, 1):
+        x = s_ * 0.25
+        mb.tube(fillet([(s_ * 0.2, 0.0, 0.44), (x, 0.0, 0.47), (x, 0.0, 0.62), (x, -0.12, 0.64)], 0.03, 6), 0.011, seg=10, mat="cable")
+        cushion(mb, _T(x, -0.02, 0.635), 0.06, 0.24, 0.028, mat="cable", r=0.012, crown=0.0, piping=False, seg=(12, 10))
     return mb
 
 
@@ -516,128 +606,262 @@ def iv_stand(seed=0, bag=True):
 
 
 def curtain_track(mb, pts, z, drop, r, open_runs=(), mat="linen"):
-    """Riel de cortina al plafón (perfil de aluminio con colgantes) y cortina plisada que cuelga hasta `drop` sobre el piso.
-    pts: polilínea en planta; open_runs: índices de tramos con la cortina recogida (solo un paño plegado junto al extremo)."""
+    """Riel de cortina al plafón: perfil C de aluminio con soportes atornillados, carros deslizantes con ganchos y cortina
+    simulada (kit.softgoods.curtain). pts: polilínea en planta; open_runs: tramos con la cortina recogida junto al inicio."""
+    from kit import softgoods as sg
     for (a, b) in zip(pts[:-1], pts[1:]):
-        mb.box((min(a[0], b[0]) - 0.012, min(a[1], b[1]) - 0.012, z - 0.03), (max(a[0], b[0]) + 0.012, max(a[1], b[1]) + 0.012, z - 0.012),
-               "aluminium")
-    for p in pts[::max(1, len(pts) - 1)]:
-        mb.cyl((p[0], p[1], z - 0.012), (p[0], p[1], z), 0.006, seg=5, mat="aluminium")
+        A, B = Vector((a[0], a[1], z - 0.02)), Vector((b[0], b[1], z - 0.02))
+        Mf, L = port.frame_on(A, B, (0, 0, 1))
+        prof = [(-0.012, -0.012), (0.012, -0.012), (0.012, 0.012), (0.004, 0.012), (0.004, 0.009), (0.009, 0.009), (0.009, -0.009),
+                (-0.009, -0.009), (-0.009, 0.009), (-0.004, 0.009), (-0.004, 0.012), (-0.012, 0.012)]
+        rings = [[mb.bm.verts.new(Mf @ Vector((x, py, pz))) for (py, pz) in prof] for x in (0.0, L)]
+        k = len(prof)
+        for j in range(k):
+            mb.face([rings[0][j], rings[0][(j + 1) % k], rings[1][(j + 1) % k], rings[1][j]], "aluminium")
+        mb.face(list(reversed(rings[0])), "aluminium")
+        mb.face(rings[1], "aluminium")
+        n_sup = max(2, int(L / 0.9) + 1)
+        for i in range(n_sup):
+            p = A.lerp(B, (i + 0.5) / n_sup)
+            mb.cyl((p.x, p.y, z - 0.008), (p.x, p.y, z), 0.02, seg=12, mat="aluminium")
+            mb.cyl((p.x, p.y, z - 0.008), (p.x, p.y, z - 0.002), 0.005, seg=6, mat="steel")
     for i, (a, b) in enumerate(zip(pts[:-1], pts[1:])):
         A, B = Vector((a[0], a[1], 0)), Vector((b[0], b[1], 0))
         L = (B - A).length
         d = (B - A).normalized()
-        nrm = Vector((-d.y, d.x, 0))
-        if i in open_runs:
-            L2, A2 = 0.35, A
-        else:
-            L2, A2 = L * float(r.uniform(0.85, 1.0)), A
-        n = max(4, int(L2 / 0.06))
-        top, bot = z - 0.04, drop
-        rows = []
+        hang = 0.35 if i in open_runs else max(0.4, L - 0.05)
+        M = Matrix(((d.x, -d.y, 0, A.x), (d.y, d.x, 0, A.y), (0, 0, 1, z - 0.045), (0, 0, 0, 1)))
+        sg.curtain(mb, M, hang, z - 0.045 - drop, seed=int(r.integers(0, 3)), gathered=(2.6 if i in open_runs else 1.7), mat=mat)
+        n = max(2, int(hang / 0.11))
         for k in range(n + 1):
-            t = k / n
-            amp = 0.035 if i not in open_runs else 0.06
-            off = nrm * (amp * math.sin(t * n * PI / 2 * 2))
-            p = A2 + d * (L2 * t) + off
-            rows.append([(p.x, p.y, top), (p.x, p.y, bot)])
-        th = 0.004
-        vf, vb = [], []
-        for (pt, pb) in rows:
-            vf.append((mb.bm.verts.new(pt), mb.bm.verts.new(pb)))
-            vb.append((mb.bm.verts.new((pt[0] + nrm.x * th, pt[1] + nrm.y * th, pt[2])),
-                       mb.bm.verts.new((pb[0] + nrm.x * th, pb[1] + nrm.y * th, pb[2]))))
-        for k in range(n):
-            mb.face([vf[k][1], vf[k + 1][1], vf[k + 1][0], vf[k][0]], mat)
-            mb.face([vb[k][0], vb[k + 1][0], vb[k + 1][1], vb[k][1]], mat)
-            mb.face([vf[k][0], vf[k + 1][0], vb[k + 1][0], vb[k][0]], mat)
-            mb.face([vb[k][1], vb[k + 1][1], vf[k + 1][1], vf[k][1]], mat)
-        mb.face([vf[0][0], vb[0][0], vb[0][1], vf[0][1]], mat)
-        mb.face([vf[n][1], vb[n][1], vb[n][0], vf[n][0]], mat)
-        for k in range(0, n + 1, 2):
-            p = rows[k][0]
-            mb.cyl((p[0], p[1], top), (p[0], p[1], z - 0.012), 0.002, seg=4, mat="aluminium")
+            p = A + d * (hang * k / n)
+            mb.box((p.x - 0.006, p.y - 0.006, z - 0.032), (p.x + 0.006, p.y + 0.006, z - 0.022), "plastic")
+            mb.tube([(p.x, p.y, z - 0.032), (p.x, p.y, z - 0.042), (p.x + d.x * 0.006, p.y + d.y * 0.006, z - 0.047)], 0.0012, seg=4,
+                    mat="steel")
 
 
 def exam_table(seed=0):
-    """Mesa de exploración: gabinete de lámina con cajones, colchoneta de vinilo con cabecera levantada, rollo de papel y banco
-    de dos peldaños."""
+    """Mesa de exploración: gabinete de lámina con 3 cajones y puerta (jaladeras, rodapié), colchoneta tapizada en dos secciones
+    (asiento y cabecera reclinada 28° con mecanismo), vivos, rollo de papel con su despachador y la hoja corriendo sobre la
+    colchoneta, estribos plegables y banco de dos peldaños con huella de hule estriada."""
     mb = MB()
-    rbox(mb, (-0.30, -0.9, 0.0), (0.30, 0.9, 0.62), "plastic", r=0.02)
-    for (y0, y1) in ((-0.85, -0.45), (-0.4, 0.0), (0.05, 0.45)):
-        mb.box((-0.304, y0, 0.08), (-0.30, y1, 0.55), "plastic")
-        mb.box((-0.32, (y0 + y1) / 2 - 0.06, 0.48), (-0.304, (y0 + y1) / 2 + 0.06, 0.5), "steel")
-    rbox(mb, (-0.31, -0.92, 0.62), (0.31, 0.45, 0.72), "vinyl", r=0.04)
-    rbox(mb, (-0.31, 0.0, 0.0), (0.31, 0.5, 0.1), "vinyl", r=0.04, m=_T(0, 0.45, 0.66) @ _Rx(28))
-    mb.box((-0.27, -0.88, 0.72), (0.27, 0.42, 0.722), "paper")
-    mb.cyl((-0.26, 0.95, 0.75), (0.26, 0.95, 0.75), 0.05, seg=12, mat="paper")
-    for x in (-0.28, 0.28):
-        mb.box((x - 0.01, 0.88, 0.62), (x + 0.01, 0.96, 0.78), "steel")
-    rbox(mb, (-0.25, -1.35, 0.0), (0.25, -1.0, 0.2), "steel", r=0.01)
-    rbox(mb, (-0.25, -1.2, 0.2), (0.25, -1.0, 0.4), "steel", r=0.01)
-    mb.box((-0.24, -1.34, 0.2), (0.24, -1.2, 0.205), "rubber")
-    mb.box((-0.24, -1.19, 0.4), (0.24, -1.01, 0.405), "rubber")
+    rbox(mb, (-0.30, -0.9, 0.06), (0.30, 0.9, 0.62), "plastic", r=0.012)
+    mb.box((-0.29, -0.89, 0.0), (0.29, 0.89, 0.06), "rubber")
+    for (y0, y1) in ((-0.86, -0.46), (-0.42, -0.02), (0.02, 0.42), (0.46, 0.86)):
+        rbox(mb, (-0.312, y0, 0.36), (-0.3, y1, 0.58), "plastic", r=0.004)
+        rbox(mb, (-0.335, (y0 + y1) / 2 - 0.07, 0.535), (-0.312, (y0 + y1) / 2 + 0.07, 0.55), "steel", r=0.004)
+    rbox(mb, (-0.312, -0.86, 0.09), (-0.3, 0.86, 0.33), "plastic", r=0.004)
+    rbox(mb, (-0.33, 0.6, 0.18), (-0.312, 0.62, 0.28), "steel", r=0.003)
+    rbox(mb, (-0.31, -0.92, 0.615), (0.31, 0.47, 0.64), "plastic", r=0.006)
+    cushion(mb, _T(0, -0.225, 0.64), 0.6, 1.36, 0.075, mat="vinyl", r=0.03, crown=0.006, seg=(34, 18))
+    Mh = _T(0, 0.47, 0.64) @ _Rx(28)
+    cushion(mb, Mh @ _T(0, 0.27, 0), 0.6, 0.54, 0.075, mat="vinyl", r=0.03, crown=0.006, seg=(16, 18))
+    for x in (-0.24, 0.24):
+        mb.tube([(x, 0.5, 0.6), (x, 0.62, 0.66), (x, 0.72, 0.75)], 0.01, seg=8, mat="steel")
+    # despachador y rollo de papel en la cabecera
+    Mr = Mh @ _T(0, 0.58, 0.04)
+    for x in (-0.29, 0.29):
+        rbox(mb, (x - 0.008, -0.03, -0.05), (x + 0.008, 0.03, 0.08), "steel", r=0.003, m=Mr)
+    mb.cyl(Mr @ Vector((-0.3, 0, 0.04)), Mr @ Vector((0.3, 0, 0.04)), 0.008, seg=8, mat="steel")
+    port.lathe(mb, [(0.008, -0.27), (0.055, -0.27), (0.057, -0.265), (0.057, 0.265), (0.055, 0.27), (0.008, 0.27)], seg=24, mat="paper",
+               M=Mr @ _T(0, 0, 0.04) @ _Ry(90))
+    # hoja de papel corriendo sobre la colchoneta (sigue cabecera y asiento, con ondulaciones y borde rasgado al pie)
+    r = rng(seed)
+    nx, ny = 16, 60
+    pts = []
+    for j in range(ny + 1):
+        t = j / ny
+        if t < 0.25:
+            q = Mh @ Vector((0, 0.54 - 0.54 * t / 0.25, 0.0785))
+        else:
+            q = Vector((0, 0.47 - (0.47 + 0.86) * (t - 0.25) / 0.75, 0.7185))
+        pts.append(q)
+    top, bot = [], []
+    for j, q in enumerate(pts):
+        rt, rb = [], []
+        for i in range(nx + 1):
+            x = -0.25 + 0.5 * i / nx
+            wob = 0.0025 * math.sin(j * 0.7 + i * 0.4 + seed) * (0.3 + 0.7 * abs(x) / 0.25)
+            yy = q.y - (float(r.uniform(0, 0.025)) if j == ny else 0.0)
+            rt.append(mb.bm.verts.new((x, yy, q.z + 0.0018 + wob)))
+            rb.append(mb.bm.verts.new((x, yy, q.z + 0.001 + wob)))
+        top.append(rt)
+        bot.append(rb)
+    for j in range(ny):                                    # hoja con espesor (sólido cerrado)
+        for i in range(nx):
+            f = mb.face([top[j][i], top[j][i + 1], top[j + 1][i + 1], top[j + 1][i]], "paper")
+            f.smooth = True
+            f = mb.face([bot[j + 1][i], bot[j + 1][i + 1], bot[j][i + 1], bot[j][i]], "paper")
+            f.smooth = True
+    for j in range(ny):
+        for (i, k) in ((0, 0), (nx, 1)):
+            q = [top[j][i], top[j + 1][i], bot[j + 1][i], bot[j][i]]
+            mb.face(q if k == 0 else list(reversed(q)), "paper")
+    for (j, k) in ((0, 0), (ny, 1)):
+        for i in range(nx):
+            q = [top[j][i], bot[j][i], bot[j][i + 1], top[j][i + 1]]
+            mb.face(q if k == 0 else list(reversed(q)), "paper")
+    # estribos plegados
+    for x in (-0.18, 0.18):
+        mb.tube(fillet([(x, -0.92, 0.6), (x, -1.02, 0.6), (x, -1.02, 0.5)], 0.02, 6), 0.007, seg=8, mat="steel")
+        port.lathe(mb, [(0.0, 0.0), (0.03, 0.0), (0.035, 0.03), (0.03, 0.06), (0.0, 0.06)], seg=12, mat="rubber",
+                   M=_T(x, -1.02, 0.5) @ _Rx(90))
+    # banco de dos peldaños
+    for (y0, y1, z1) in ((-1.42, -1.0, 0.2), (-1.24, -1.0, 0.4)):
+        for x in (-0.24, 0.22):
+            rbox(mb, (x, y0, 0.0), (x + 0.02, y1, z1), "steel", r=0.004)
+        rbox(mb, (-0.24, y0, z1 - 0.02), (0.24, y1, z1), "steel", r=0.004)
+        k = 0
+        y = y0 + 0.015
+        while y < y1 - 0.02:
+            rbox(mb, (-0.22, y, z1), (0.22, y + 0.012, z1 + 0.006), "rubber", r=0.002)
+            y += 0.022
+            k += 1
     return mb
 
 
+def _tire(mb, M, R, rt, n=72, m=12, tread=True, mat="rubber"):
+    """Llanta tórica con dibujo: anillo de radio R y sección rt; el dibujo alterna salientes sobre la banda."""
+    rings = []
+    for i in range(n):
+        a = 2 * PI * i / n
+        ring = []
+        for j in range(m):
+            b = 2 * PI * j / m
+            rr = rt
+            if tread and math.cos(b) > 0.55 and (i % 2 == 0):
+                rr *= 1.07
+            p = Vector(((R + rr * math.cos(b)) * math.cos(a), (R + rr * math.cos(b)) * math.sin(a), rr * math.sin(b)))
+            ring.append(mb.bm.verts.new(M @ p))
+        rings.append(ring)
+    for i in range(n):
+        A, B = rings[i], rings[(i + 1) % n]
+        for j in range(m):
+            f = mb.face([A[j], A[(j + 1) % m], B[(j + 1) % m], B[j]], mat)
+            f.smooth = True
+
+
 def wheelchair(seed=0):
-    """Silla de ruedas: bastidor de tubo, asiento y respaldo de vinilo (lona), ruedas traseras de 24" con aro y rayos, ruedas
-    delanteras giratorias, descansapiés y descansabrazos."""
+    """Silla de ruedas plegable estándar: bastidor de tubo Ø 22 con dobleces reales, tijera plegable bajo el asiento, lonas de
+    vinilo con comba y costuras, descansabrazos acolchados, guardafangos, ruedas traseras de 24" (llanta con dibujo, rin, 18
+    rayos cruzados por lado, aro de impulso con 4 separadores y eje rápido), frenos de palanca, horquillas con ruedas de 8",
+    descansapiés abatibles con estribos estriados y talonera, manerales con puños y antivuelco."""
     r = rng(seed)
     mb = MB()
     W = 0.46
-    for s in (-1, 1):
-        x = s * W / 2
-        mb.tube([(x, -0.32, 0.12), (x, -0.28, 0.5), (x, 0.2, 0.5), (x, 0.24, 0.95), (x, 0.32, 0.98)], 0.011, seg=6, mat="steel")
-        mb.tube([(x, -0.3, 0.16), (x, 0.18, 0.16), (x, 0.2, 0.5)], 0.011, seg=6, mat="steel")
-        mb.tube([(x, -0.25, 0.68), (x, 0.12, 0.68)], 0.011, seg=6, mat="steel")
-        mb.box((x - 0.025, -0.2, 0.68), (x + 0.025, 0.1, 0.71), "vinyl")
-        mb.cyl((x, 0.30, 0.98), (x, 0.36, 0.985), 0.016, seg=8, mat="rubber")
-        # rueda trasera
-        xw = s * (W / 2 + 0.05)
-        Mw = _T(xw, 0.1, 0.3) @ _Ry(90)
-        port.lathe(mb, [(0.27, -0.012), (0.3, -0.012), (0.3, 0.012), (0.27, 0.012)], seg=36, mat="rubber", M=Mw, caps=False)
-        port.lathe(mb, [(0.255, -0.008), (0.27, -0.008), (0.27, 0.008), (0.255, 0.008)], seg=36, mat="steel", M=Mw, caps=False)
-        for k in range(12):
-            a = 2 * PI * k / 12
-            mb.cyl(Mw @ Vector((0.03 * math.cos(a), 0.03 * math.sin(a), 0)), Mw @ Vector((0.256 * math.cos(a + 0.2), 0.256 * math.sin(a + 0.2), 0)),
-                   0.0015, seg=3, mat="steel")
-        mb.cyl(Mw @ Vector((0, 0, -0.03)), Mw @ Vector((0, 0, 0.03)), 0.03, seg=10, mat="steel")
-        Mp = _T(xw + s * 0.03, 0.1, 0.3) @ _Ry(90)
-        port.lathe(mb, [(0.255, -0.006), (0.265, -0.006), (0.265, 0.006), (0.255, 0.006)], seg=28, mat="steel", M=Mp, caps=False)
-        caster(mb, (x, -0.3, 0.0), r=0.065, swivel=float(r.uniform(-20, 20)))
-        mb.tube([(x, -0.28, 0.45), (x, -0.42, 0.14)], 0.01, seg=6, mat="steel")
-        xa, xb = sorted((x, x - s * 0.17))
-        mb.box((xa, -0.5, 0.12), (xb, -0.36, 0.13), "plastic")
-    # lona de asiento y respaldo (combas)
-    shell_strip(mb, [(-0.27, 0.0), (-0.1, -0.025), (0.08, -0.025), (0.19, 0.0)], W - 0.02, 0.005, "vinyl", m=_T(0, 0, 0.5))
-    shell_strip(mb, [(0.0, 0.0), (0.03, 0.2), (0.035, 0.42)], W - 0.02, 0.005, "vinyl", m=_T(0, 0.21, 0.52))
+    ty = 0.0111
+    for s_ in (-1, 1):
+        x = s_ * W / 2
+        # costado: barra inferior, poste delantero, riel de asiento, respaldo con manubrio
+        mb.tube(fillet([(x, -0.30, 0.17), (x, 0.17, 0.17), (x, 0.21, 0.5), (x, 0.24, 0.94), (x, 0.36, 0.99)], 0.05, 8), ty, seg=12,
+                mat="steel")
+        mb.tube(fillet([(x, -0.30, 0.17), (x, -0.30, 0.52), (x, 0.19, 0.52)], 0.04, 8), ty, seg=12, mat="steel")
+        port.lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.017, 0.01), (0.016, 0.11), (0.015, 0.12), (0.0, 0.12)], seg=14, mat="rubber",
+                   M=_T(x, 0.28, 0.99) @ _Rx(-90))                                      # puño del manubrio
+        # descansabrazos
+        mb.tube(fillet([(x, -0.22, 0.52), (x, -0.22, 0.70), (x, 0.13, 0.70), (x, 0.15, 0.52)], 0.03, 6), 0.0095, seg=10, mat="steel")
+        cushion(mb, _T(x, -0.04, 0.705), 0.055, 0.32, 0.03, mat="vinyl", r=0.012, crown=0.003, piping=False, seg=(14, 10))
+        rbox(mb, (x - 0.003 * s_ - 0.002, -0.12, 0.53), (x - 0.003 * s_ + 0.002, 0.12, 0.69), "plastic", r=0.01)
+        # rueda trasera 24"
+        xw = s_ * (W / 2 + 0.055)
+        Mw = _T(xw, 0.12, 0.305) @ _Ry(90)
+        _tire(mb, Mw, 0.286, 0.0165, n=96, m=12)
+        port.lathe(mb, [(0.262, -0.012), (0.27, -0.012), (0.272, -0.006), (0.272, 0.006), (0.27, 0.012), (0.262, 0.012), (0.258, 0.0),
+                        (0.262, -0.012)], seg=72, mat="aluminium", M=Mw, caps=False)
+        port.lathe(mb, [(0.0, -0.035), (0.022, -0.035), (0.022, 0.035), (0.0, 0.035)], seg=16, mat="aluminium", M=Mw)
+        for fl in (-0.03, 0.03):
+            port.lathe(mb, [(0.0, fl - 0.002), (0.034, fl - 0.002), (0.034, fl + 0.002), (0.0, fl + 0.002)], seg=18, mat="aluminium", M=Mw)
+        for k in range(18):
+            fl = -0.03 if k % 2 else 0.03
+            a = 2 * PI * k / 18
+            a2 = a + (0.35 if k % 2 else -0.35)
+            p0 = Mw @ Vector((0.03 * math.cos(a), 0.03 * math.sin(a), fl))
+            p1 = Mw @ Vector((0.259 * math.cos(a2), 0.259 * math.sin(a2), 0.0))
+            mb.cyl(p0, p1, 0.0011, seg=4, mat="steel")
+        Mp = _T(xw + s_ * 0.035, 0.12, 0.305) @ _Ry(90)
+        _tire(mb, Mp, 0.268, 0.0085, n=72, m=8, tread=False, mat="aluminium")
+        for k in range(4):
+            a = PI / 2 * k + PI / 4
+            mb.cyl(Mp @ Vector((0.268 * math.cos(a), 0.268 * math.sin(a), 0.0)), Mw @ Vector((0.266 * math.cos(a), 0.266 * math.sin(a), 0.0)),
+                   0.004, seg=6, mat="aluminium")
+        mb.cyl((xw - s_ * 0.05, 0.12, 0.305), (xw + s_ * 0.04, 0.12, 0.305), 0.006, seg=8, mat="steel")
+        port.lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.008), (0.006, 0.012), (0.0, 0.012)], seg=10, mat="steel",
+                   M=_T(xw + s_ * 0.04, 0.12, 0.305) @ _Ry(90 * s_))
+        # freno de palanca
+        mb.box((x + s_ * 0.012 - 0.008, -0.05, 0.43), (x + s_ * 0.012 + 0.008, 0.0, 0.47), "steel")
+        mb.tube([(x + s_ * 0.02, -0.02, 0.45), (x + s_ * 0.04, -0.09, 0.56)], 0.006, seg=8, mat="steel")
+        port.lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.012, 0.05), (0.0, 0.06)], seg=10, mat="rubber",
+                   M=_T(x + s_ * 0.04, -0.09, 0.56) @ Matrix.Rotation(math.atan2(-0.07, 0.11), 4, "X"))
+        mb.box((x + s_ * 0.035, 0.02, 0.4), (x + s_ * 0.045, 0.08, 0.42), "steel")
+        # horquilla y rueda delantera 8"
+        port.lathe(mb, [(0.0, 0.0), (0.018, 0.0), (0.018, 0.06), (0.0, 0.06)], seg=12, mat="steel", M=_T(x, -0.30, 0.17))
+        yaw = float(r.uniform(-25, 25))
+        Mf = _T(x, -0.30, 0.17) @ _Rz(yaw)
+        for sx in (-1, 1):
+            mb.tube([tuple(Mf @ Vector((sx * 0.022, 0.0, -0.005))), tuple(Mf @ Vector((sx * 0.022, -0.04, -0.07)))], 0.005, seg=6, mat="steel")
+        _tire(mb, Mf @ _T(0, -0.04, -0.07) @ _Ry(90), 0.085, 0.016, n=40, m=10, tread=False)
+        port.lathe(mb, [(0.0, -0.016), (0.075, -0.016), (0.075, 0.016), (0.0, 0.016)], seg=28, mat="plastic", M=Mf @ _T(0, -0.04, -0.07) @ _Ry(90))
+        # descansapiés abatible
+        mb.tube(fillet([(x, -0.27, 0.48), (x - s_ * 0.0, -0.40, 0.35), (x - s_ * 0.02, -0.45, 0.14)], 0.05, 6), 0.0095, seg=10, mat="steel")
+        Mfp = _T(x - s_ * 0.02, -0.47, 0.13) @ _Rz(float(r.uniform(-8, 8)))
+        xa, xb = sorted((0.0, -s_ * 0.17))
+        rbox(mb, (xa, -0.08, 0.0), (xb, 0.07, 0.012), "plastic", r=0.004, m=Mfp)
+        for k in range(6):
+            yy = -0.07 + k * 0.025
+            mb.box((xa + 0.01, yy, 0.012), (xb - 0.01, yy + 0.008, 0.016), "plastic", m=Mfp)
+        mb.tube([tuple(Mfp @ Vector((xa + 0.02, 0.07, 0.012))), tuple(Mfp @ Vector((xa + 0.02, 0.1, 0.09))),
+                 tuple(Mfp @ Vector((xb - 0.02, 0.1, 0.09))), tuple(Mfp @ Vector((xb - 0.02, 0.07, 0.012)))], 0.004, seg=6, mat="rubber")
+        # antivuelco
+        mb.tube(fillet([(x, 0.19, 0.18), (x, 0.32, 0.12), (x, 0.38, 0.1)], 0.03, 6), 0.0095, seg=10, mat="steel")
+        port.lathe(mb, [(0.0, -0.01), (0.022, -0.01), (0.022, 0.01), (0.0, 0.01)], seg=12, mat="rubber", M=_T(x, 0.38, 0.09) @ _Ry(90))
+    # tijera plegable bajo el asiento
+    for (y0, y1) in ((-0.2, 0.15), (0.15, -0.2)):
+        mb.tube([(-W / 2, y0, 0.52), (W / 2, y1, 0.2)], 0.0105, seg=10, mat="steel")
+    mb.cyl((-0.01, -0.025, 0.36), (0.01, -0.025, 0.36), 0.014, seg=10, mat="steel")
+    # lonas: asiento con comba y respaldo, con dobladillo y costura
+    shell_strip(mb, [(-0.28, 0.0), (-0.2, -0.018), (-0.05, -0.032), (0.08, -0.03), (0.17, -0.012), (0.2, 0.0)], W + 0.02, 0.006, "vinyl",
+                m=_T(0, 0, 0.525), smooth_n=4)
+    shell_strip(mb, [(0.0, 0.0), (0.035, 0.12), (0.045, 0.25), (0.04, 0.38), (0.03, 0.44)], W + 0.02, 0.006, "vinyl",
+                m=_T(0, 0.2, 0.52) @ _Rx(-6), smooth_n=4)
+    for x in (-W / 2 - 0.004, W / 2 + 0.004):
+        mb.tube([(x, -0.27, 0.528), (x, 0.19, 0.528)], 0.003, seg=5, mat="vinyl")
     return mb
 
 
 def stretcher(seed=0):
-    """Camilla de traslado: bastidor de tubo, base con 4 rodajas, colchoneta de vinilo, barandales y manerales."""
+    """Camilla de traslado: base con cubierta de plástico, columna hidráulica con fuelle, 4 rodajas de 150 mm (dos con freno),
+    bastidor con colchoneta tapizada y sábana, barandales abatibles, manerales y portasueros plegado."""
     r = rng(seed)
     mb = MB()
-    L, W = 1.95, 0.62
-    for (x, y) in ((-W / 2 + 0.05, -L / 2 + 0.1), (W / 2 - 0.05, -L / 2 + 0.1), (-W / 2 + 0.05, L / 2 - 0.1), (W / 2 - 0.05, L / 2 - 0.1)):
-        caster(mb, (x, y, 0.0), r=0.06, swivel=float(r.uniform(0, 360)))
-    mb.box((-W / 2 + 0.03, -L / 2 + 0.08, 0.17), (W / 2 - 0.03, L / 2 - 0.08, 0.2), "steel")
-    for y in (-0.5, 0.5):
-        mb.box((-0.04, y - 0.04, 0.2), (0.04, y + 0.04, 0.6), "steel")
-    mb.box((-W / 2, -L / 2, 0.6), (W / 2, L / 2, 0.63), "steel")
-    rbox(mb, (-W / 2 + 0.02, -L / 2 + 0.02, 0.63), (W / 2 - 0.02, L / 2 - 0.02, 0.71), "vinyl", r=0.05)
-    rbox(mb, (-W / 2 + 0.01, -L / 2 + 0.04, 0.70), (W / 2 - 0.01, L / 2 - 0.3, 0.712), "linen", r=0.05)
-    for s in (-1, 1):
-        xr = s * (W / 2 + 0.015)
-        mb.tube([(xr, -0.6, 0.63), (xr, -0.6, 0.9), (xr, 0.6, 0.9), (xr, 0.6, 0.63)], 0.01, seg=6, mat="steel")
+    L, W = 1.95, 0.64
+    for (sx, sy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        caster_pro(mb, _T(sx * (W / 2 - 0.06), sy * (L / 2 - 0.12), 0.0), d=0.15, brake=(sy > 0), swivel=float(r.uniform(-40, 40)))
+    rbox(mb, (-W / 2 + 0.03, -L / 2 + 0.06, 0.19), (W / 2 - 0.03, L / 2 - 0.06, 0.24), "steel", r=0.012)
+    rbox(mb, (-W / 2 + 0.05, -L / 2 + 0.1, 0.24), (W / 2 - 0.05, L / 2 - 0.1, 0.31), "sign_white", r=0.03)
+    for y in (-0.45, 0.45):
+        port.lathe(mb, [(0.0, 0.0), (0.06, 0.0), (0.06, 0.02)] + [(0.05 + 0.008 * (k % 2), 0.02 + 0.02 * k) for k in range(12)] +
+                   [(0.05, 0.26), (0.0, 0.26)], seg=16, mat="rubber", M=_T(0, y, 0.31))
+        mb.cyl((0, y, 0.57), (0, y, 0.61), 0.05, seg=16, mat="steel")
+    rbox(mb, (-W / 2, -L / 2, 0.61), (W / 2, L / 2, 0.64), "steel", r=0.008)
+    cushion(mb, _T(0, 0, 0.64), W - 0.04, L - 0.06, 0.075, mat="vinyl", r=0.03, crown=0.006, seg=(40, 18))
+    rbox(mb, (-W / 2 + 0.01, -L / 2 + 0.06, 0.712), (W / 2 - 0.01, L / 2 - 0.35, 0.718), "linen", r=0.003)
+    for s_ in (-1, 1):
+        xr = s_ * (W / 2 + 0.02)
+        mb.tube(fillet([(xr, -0.62, 0.62), (xr, -0.62, 0.92), (xr, 0.62, 0.92), (xr, 0.62, 0.62)], 0.05, 8), 0.0105, seg=10,
+                mat="steel")
+        for z in (0.72, 0.82):
+            mb.tube([(xr, -0.62, z), (xr, 0.62, z)], 0.008, seg=8, mat="steel", caps=False)
     for yy in (-L / 2 - 0.08, L / 2 + 0.08):
-        mb.tube([(-W / 2 + 0.06, yy * 0.95, 0.6), (-W / 2 + 0.06, yy, 0.8), (W / 2 - 0.06, yy, 0.8), (W / 2 - 0.06, yy * 0.95, 0.6)],
-                0.012, seg=6, mat="steel")
+        sg_ = 1 if yy > 0 else -1
+        mb.tube(fillet([(-W / 2 + 0.07, yy - sg_ * 0.07, 0.62), (-W / 2 + 0.07, yy, 0.82), (W / 2 - 0.07, yy, 0.82),
+                        (W / 2 - 0.07, yy - sg_ * 0.07, 0.62)], 0.05, 8), 0.013, seg=12, mat="steel")
+        for x in (-W / 2 + 0.07, W / 2 - 0.07):
+            port.lathe(mb, [(0.0, 0.0), (0.019, 0.0), (0.019, 0.1), (0.0, 0.1)], seg=12, mat="rubber",
+                       M=_T(x, yy - sg_ * 0.035, 0.73) @ Matrix.Rotation(-sg_ * 0.6, 4, "X"))
+    mb.tube([(W / 2 - 0.02, L / 2 - 0.02, 0.6), (W / 2 - 0.02, L / 2 - 0.02, 1.05)], 0.011, seg=10, mat="steel")
     return mb
 
 
-# ----------------------------------------------------------------------------------------------------------- muebles
 def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
     """Escritorio metálico con cubierta laminada, pedestal de cajones, monitor, teclado, teléfono, carpetas y papeles."""
     r = rng(seed)

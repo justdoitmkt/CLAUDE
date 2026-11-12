@@ -22,7 +22,7 @@ from mathutils import Matrix, Vector, noise
 from kit.common import MB
 
 CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache_tela")
-VERSION = 5
+VERSION = 6
 
 
 def _key(name, params):
@@ -415,3 +415,75 @@ def folded_blanket(mb, M, w=0.86, d=0.42, layers=3, t=0.012, seed=0, mat="wool_b
             f = mb.face(q if j == 0 else list(reversed(q)), mat)
             f.smooth = True
     del rr
+
+
+# -------------------------------------------------------------------------------------------------------------- cortinas
+def _curtain_sim(hang_w, fabric_w, drop, seed):
+    """Cortina fruncida: pliegues de paso y fondo variables (no un acanalado), algunos pliegues que se cruzan en diagonal hacia
+    el pie, dobladillo con peso (filas inferiores más pesadas) y fijación solo en los colgantes."""
+    nx = max(16, int(fabric_w / 0.02))
+    nz = max(12, int(drop / 0.03))
+    rr = np.random.default_rng(seed)
+    c = fabric_w / hang_w
+    # fase acumulada con periodos aleatorios
+    periods = rr.uniform(0.08, 0.15, 400)
+    amps = rr.uniform(0.55, 1.25, 400)
+    def pleat(xh):
+        k, x0 = 0, 0.0
+        while k < 399 and x0 + periods[k] < xh:
+            x0 += periods[k]
+            k += 1
+        t = (xh - x0) / periods[k]
+        base = periods[k] / math.pi * math.sqrt(max(c * c - 1.0, 0.0)) * 0.55
+        return amps[k] * base * math.sin(2 * math.pi * t)
+    bm = bmesh.new()
+    rows = []
+    drift = rr.uniform(-0.04, 0.04)
+    for j in range(nz + 1):
+        fz = j / nz
+        z = -drop * fz
+        row = []
+        for i in range(nx + 1):
+            xh = i / nx * hang_w
+            x = xh + drift * fz * fz * math.sin(math.pi * i / nx)
+            y = pleat(xh + 0.03 * math.sin(fz * 3.0 + i * 0.05) * fz) * (1.0 - 0.2 * fz) + float(rr.normal(0, 0.0006))
+            row.append(bm.verts.new((x, y, z)))
+        rows.append(row)
+    for j in range(nz):
+        for i in range(nx):
+            bm.faces.new([rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]])
+    ob = _new_obj("_curtain", bm)
+    vg = ob.vertex_groups.new(name="pin")
+    step = max(1, int(round(0.1 / (hang_w / nx))))
+    vg.add([v.index for v in ob.data.vertices if v.co.z > -0.001 and int(round(v.co.x / (hang_w / nx))) % step == 0], 1.0, "REPLACE")
+    md = ob.modifiers.new("cloth", "CLOTH")
+    st = md.settings
+    st.quality = 7
+    st.mass = 0.25
+    st.tension_stiffness = 10
+    st.compression_stiffness = 6
+    st.shear_stiffness = 3
+    st.bending_stiffness = 0.05
+    st.air_damping = 2.0
+    st.vertex_group_mass = "pin"
+    so = ob.modifiers.new("solid", "SOLIDIFY")
+    so.thickness = 0.002
+    out = _simulate(ob, 50)
+    _cleanup([ob])
+    co = out[0].copy()
+    # dobladillo: los 4 cm de abajo, doble tela (ligeramente más gruesos hacia afuera)
+    zmin = co[:, 2].min()
+    hem = co[:, 2] < zmin + 0.04
+    co[hem, 1] *= 1.04
+    return co, out[1], out[2]
+
+
+def curtain(mb, M, hang_w, drop, seed=0, gathered=1.8, mat="linen"):
+    """Cortina colgada de su riel con caída simulada: tela de ancho hang_w × gathered fruncida en hang_w, plisado natural,
+    dobladillo abajo. Origen: extremo izquierdo del riel (z = 0 = colgantes); cuelga hacia -Z a lo largo de +X."""
+    hw = round(hang_w * 10) / 10
+    co, flat, lens = _cached("curtain", dict(w=hw, f=round(hw * gathered, 2), d=round(drop, 2), s=seed),
+                             lambda: _curtain_sim(hw, hw * gathered, drop, seed))
+    co = co.copy()
+    co[:, 0] *= hang_w / hw
+    _to_mb(mb, co, flat, lens, mat, M)
