@@ -1,16 +1,16 @@
 {
- "tris": 1353504,
- "mem_mb": 271.3,
+ "tris": 1991221,
+ "mem_mb": 282.0,
  "materials": [
   "BLK_aluminium",
   "BLK_brick",
   "BLK_cable",
   "BLK_ceiling_tile",
   "BLK_concrete",
+  "BLK_enamel",
   "BLK_fabric",
   "BLK_glass",
   "BLK_linen",
-  "BLK_metal_paint",
   "BLK_metal_rust",
   "BLK_mortar",
   "BLK_paint_green",
@@ -35,6 +35,7 @@
   "BLK_wood",
   "BLK_wood_dark",
   "BLK_wood_grey",
+  "BLK_wood_varnish",
   "BLK_wool_blue"
  ]
 }

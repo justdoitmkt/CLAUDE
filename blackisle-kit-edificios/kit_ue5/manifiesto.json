@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "11e522f",
+ "version_repo": "c52c8b5",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -2444,7 +2444,7 @@
     "Estructura": {
      "nombre": "SM_HOS_1_pueblo_Estructura",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Estructura.glb",
-     "triangulos": 10028,
+     "triangulos": 10168,
      "ranuras": [
       "HOS_1_pueblo_walls_main",
       "HOS_1_pueblo_walls_rest",
@@ -2460,12 +2460,12 @@
       "BLK_wood_varnish",
       "BLK_plaster"
      ],
-     "mib": 0.7
+     "mib": 0.71
     },
     "Detalle": {
      "nombre": "SM_HOS_1_pueblo_Detalle",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Detalle.glb",
-     "triangulos": 388928,
+     "triangulos": 388886,
      "ranuras": [
       "BLK_paint_green",
       "BLK_aluminium",
@@ -2493,12 +2493,12 @@
       "BLK_fabric",
       "BLK_wood"
      ],
-     "mib": 20.55
+     "mib": 20.54
     },
     "Mobiliario": {
      "nombre": "SM_HOS_1_pueblo_Mobiliario",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Mobiliario.glb",
-     "triangulos": 1574659,
+     "triangulos": 1574647,
      "ranuras": [
       "BLK_sign_white",
       "BLK_steel",
@@ -2537,11 +2537,11 @@
     "Colision": {
      "nombre": "SM_HOS_1_pueblo_Colision",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Colision.glb",
-     "triangulos": 9006,
+     "triangulos": 9144,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 0.38
+     "mib": 0.39
     }
    },
    "texturas": {
@@ -2950,7 +2950,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 103.25,
+   "mib_total": 103.26,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "pórtico de 4 columnas con COMMUNITY HOSPITAL en el pretil; la cochera de ambulancias queda al oriente (+x)"
