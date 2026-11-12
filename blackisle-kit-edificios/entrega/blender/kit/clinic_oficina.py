@@ -560,8 +560,8 @@ def _binder(mb, M, bw, dd, hh, mat, label):
            "paper", bevel=0.0)
     zh = hh * 0.22
     Mr = M @ _T(0, -dd / 2, zh) @ _Rx(90)
-    lathe_closed(mb, [(0.0103, -0.0015), (0.0138, -0.0015), (0.0132, 0.0019), (0.0106, 0.0017)], 12, "steel", Mr)
-    port.lathe(mb, [(0.0106, -0.0012), (0.0106, 0.0009)], seg=12, mat="cable", M=Mr)
+    lathe_closed(mb, [(0.0103, -0.0015), (0.0138, -0.0015), (0.0132, 0.0023), (0.0106, 0.0021)], 12, "steel", Mr)
+    port.lathe(mb, [(0.0106, -0.0012), (0.0106, 0.0013)], seg=12, mat="cable", M=Mr)
     lw = bw / 2 - 0.007
     mb.box((-lw, -dd / 2 - 0.0016, hh - 0.125), (lw, -dd / 2 + 0.0008, hh - 0.022), "paper", bevel=0.0, m=M)
     for z in (hh - 0.125, hh - 0.022):
