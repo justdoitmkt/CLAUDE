@@ -18,7 +18,13 @@ from mathutils import Vector  # noqa: E402
 
 ENT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "CAB_1_tablones": "CAB_1",
-          "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3"}
+          "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3", "MUE_1_carga": "MUE_1"}
+
+
+EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
+    "MUE_1_carga": [("playa", (-14.0, -52.0, 1.7), (2.0, 4.0, 3.5), 30), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
+                    ("atraque", (30.0, 64.0, 1.2), (20.0, 51.0, 1.8), 28)],
+}
 
 
 class NT:
@@ -189,13 +195,37 @@ def main():
                 built[key] = build_material(f"PV_{key}", specs[key], tdir_c, tdir_m)
             me.materials[i] = built[key]
     # suelo, cielo y sol
-    bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, -0.001))
-    g = bpy.context.active_object
     gm = bpy.data.materials.new("suelo")
     gm.use_nodes = True
     gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.32, 0.31, 0.29, 1)
     gm.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.95
-    g.data.materials.append(gm)
+    if bid.startswith("MUE_"):
+        # muelle: playa (z 0) que baja bajo la cubierta hasta el lecho y mar a su nivel (el kit no trae ni una ni otro)
+        lv = d.get("niveles_m", {})
+        sea = float(lv.get("mar", -0.5))
+        gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.46, 0.40, 0.31, 1)
+        me = bpy.data.meshes.new("playa")
+        me.from_pydata([(-220, -160, 0.0), (220, -160, 0.0), (220, -1.0, 0.0), (-220, -1.0, 0.0), (220, 30, -4.0),
+                        (-220, 30, -4.0), (220, 260, -8.0), (-220, 260, -8.0)], [], [(0, 1, 2, 3), (3, 2, 4, 5), (5, 4, 6, 7)])
+        g = bpy.data.objects.new("playa", me)
+        sc.collection.objects.link(g)
+        g.data.materials.append(gm)
+        wm = bpy.data.materials.new("mar")
+        wm.use_nodes = True
+        pb = wm.node_tree.nodes["Principled BSDF"]
+        pb.inputs["Base Color"].default_value = (0.02, 0.06, 0.07, 1)
+        pb.inputs["Roughness"].default_value = 0.06
+        pb.inputs["Transmission Weight"].default_value = 0.6
+        pb.inputs["IOR"].default_value = 1.33
+        me = bpy.data.meshes.new("mar")
+        me.from_pydata([(-220, -6.0, sea), (220, -6.0, sea), (220, 260, sea), (-220, 260, sea)], [], [(0, 1, 2, 3)])
+        wo = bpy.data.objects.new("mar", me)
+        sc.collection.objects.link(wo)
+        wo.data.materials.append(wm)
+    else:
+        bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, -0.001))
+        g = bpy.context.active_object
+        g.data.materials.append(gm)
     w = bpy.data.worlds.new("w")
     sc.world = w
     w.use_nodes = True
@@ -235,6 +265,11 @@ def main():
     sc.render.filepath = os.path.join(out, f"{bid}_ue5_exterior.png")
     bpy.ops.render.render(write_still=True)
     print("[preview] exterior", sc.render.filepath, flush=True)
+    for (nm, c, t, lens) in EXTRA_VIEWS.get(bid, ()):
+        look(Vector(c), t, lens=lens)
+        sc.render.filepath = os.path.join(out, f"{bid}_ue5_{nm}.png")
+        bpy.ops.render.render(write_still=True)
+        print("[preview]", nm, sc.render.filepath, flush=True)
     shots = json.load(open(os.path.join(ENT, "visor", "recorrido", f"shots_{PREFIX[bid]}.json")))
     s = next((x for x in shots if x.get("lampA")), shots[0])
     for k in ("lampA", "lampB"):

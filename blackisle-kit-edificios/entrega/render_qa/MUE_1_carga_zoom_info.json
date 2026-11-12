@@ -1,0 +1,45 @@
+{
+ "tris": 531340,
+ "stats": {
+  "deck": {
+   "piles": 117
+  },
+  "berth": {
+   "bollards": 12,
+   "tyres": 20,
+   "timbers": 13,
+   "ladders": 3
+  },
+  "warehouse": {
+   "lamina_front": {
+    "sheets": 36,
+    "missing": 2,
+    "bent": 3
+   },
+   "lamina_back": {
+    "sheets": 32,
+    "missing": 6,
+    "bent": 1
+   },
+   "lamina_west": {
+    "sheets": 51,
+    "missing": 13,
+    "bent": 5
+   },
+   "lamina_east": {
+    "sheets": 53,
+    "missing": 3,
+    "bent": 3
+   },
+   "roof": {
+    "sheets": 88,
+    "missing": 12,
+    "skylights": 6
+   },
+   "mezzanine": {
+    "z": 5.7,
+    "risers": 12
+   }
+  }
+ }
+}

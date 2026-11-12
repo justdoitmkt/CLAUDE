@@ -1,12 +1,12 @@
 {
- "tris": 385374,
+ "tris": 515132,
  "stats": {
   "deck": {
    "piles": 117
   },
   "berth": {
    "bollards": 12,
-   "tyres": 18,
+   "tyres": 20,
    "timbers": 13,
    "ladders": 3
   },

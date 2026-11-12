@@ -5,7 +5,8 @@ Léelo completo antes de tocar el proyecto. La especificación exacta de materia
 `manifiesto.json`; `importar_blackisle.py` la aplica desde el editor.
 
 ## 1. Qué hay que lograr
-Importar los 7 modelos y **reemplazar con ellos los edificios y cabañas provisionales que ya existen en el nivel**.
+Importar los 8 modelos (7 edificios y el muelle de carga) y **reemplazar con ellos los edificios, cabañas y muelle
+provisionales que ya existen en el nivel**.
 El resultado tiene que verse como un edificio real y abandonado:
 - **Vidrio que se ve como vidrio:** translúcido, con reflejos y suciedad, y con las roturas que trae el modelo.
 - **Cada material con su forma y su tono exactos:** concreto gris gastado, aplanado descascarado, madera, ladrillo, teja,
@@ -23,9 +24,10 @@ El resultado tiene que verse como un edificio real y abandonado:
 | CAB_1_tablones | Cabaña de tablón, 2 niveles, porche lateral | puerta delantera (el porche queda al costado oeste) |
 | CAB_2_pilotes | Casa sobre pilotes con veranda y tapanco | veranda con la escalera exterior |
 | CAB_3_ladrillo | PB de ladrillo y planta alta de tabla | porche delantero con escalones |
+| MUE_1_carga | Muelle de carga sobre pilotes con nave de acero, caseta, contenedores, grúa y frente de atraque | la rampa ancha que sube desde la playa (el atraque mira a +Y, al mar) |
 
-Todos tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
-departamentos hay entrada delantera y trasera en PB.
+Los edificios tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
+departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1.
 
 ## 2. Contenido
 ```
@@ -43,7 +45,8 @@ kit_ue5/
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
 ## 3. Las 5 piezas de cada modelo
-Las cinco comparten el pivote: centro de la planta a nivel del suelo. Colócalas en el mismo punto y con el mismo giro.
+Las cinco comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
+punto y con el mismo giro.
 
 | Pieza | Qué lleva | Nanite | Colisión | Notas |
 |---|---|---|---|---|
@@ -56,6 +59,30 @@ Las cinco comparten el pivote: centro de la planta a nivel del suelo. Colócalas
 Escaleras: peldaño de 17 × 28 cm, válido con el step height por defecto de 45 cm. Puertas de 0,8–1,4 m de ancho y
 2,0–2,3 m de alto. Pisos a 15 cm sobre el suelo (losa de desplante), así que las entradas tienen un escalón de 15 cm.
 
+### 3.1 El muelle de carga (MUE_1_carga)
+No trae terreno ni agua: el mapa pone la playa y el mar. Cotas en metros de Blender (z arriba), con el pivote del modelo
+en (0, 0, 0) = eje de la rampa en la orilla de la cubierta, a nivel de la arena:
+
+| Elemento | Cota / posición |
+|---|---|
+| Arena (pie de la rampa) | z = 0 en y = −25 |
+| Nivel del mar | z = −0,5 |
+| Cubierta y rampa arriba | z = +2,5 (la rampa sube al 10 % de y −25 a y 0) |
+| Punta de los pilotes | z = −7 (quedan bajo el agua y el lecho) |
+| Cimiento de la rampa | baja hasta z = −0,8 (enterrado en la arena) |
+
+- **Colocación:** pon el pivote sobre la línea de costa, con −Y de Blender hacia tierra. El pie de la rampa debe tocar la
+  arena del mapa y el agua del mapa debe quedar 0,5 m por debajo del pivote. Si el mar del mapa está a otra altura,
+  sube o baja el muelle completo hasta que el agua quede en z = −0,5 del modelo. Los niveles van en
+  `manifiesto.json → modelos.MUE_1_carga.niveles_m`.
+- **Planta:** la rampa mide 47,4 m de ancho libre (todo el ancho de la cubierta) y 25 m de largo. La cubierta es una L:
+  48 × 40 m hacia el mar y un espigón de 78 × 12 m cuyo frente norte (+Y) es el atraque, con defensas de llanta y de
+  madera, bitas y escaleras marinas. El barco atraca contra ese frente. Alrededor de la nave quedan carriles de 9 m o más para
+  vehículos.
+- **Colisión:** la pieza Colision incluye formas simples para la grúa, los postes y las bitas. Los pilotes, barandales y
+  objetos sueltos no tienen colisión (pieza Detalle).
+- **Grúa:** es estática. La pluma apunta al atraque.
+
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).
 2. Plugins activos: **Python Editor Script Plugin** e importador glTF (Interchange, activo por defecto en UE 5.1+).
@@ -64,7 +91,7 @@ Escaleras: peldaño de 17 × 28 cm, válido con el step height por defecto de 45
    ```python
    import sys; sys.path.append(r"RUTA/A/kit_ue5")
    import importar_blackisle as ib
-   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 7 modelos, en /Game/BlackIsle
+   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 8 modelos, en /Game/BlackIsle
    ib.verificar()            # medidas en cm contra el manifiesto, ranuras con material del kit, ejes
    ```
 4. **Reemplaza los provisionales.** Identifica en el nivel qué actor provisional corresponde a cada modelo; si no es
@@ -112,8 +139,10 @@ sufijos al nombre de la ranura: el script busca el nombre del manifiesto conteni
   importar se pierde (*Vertex Color Import Option* distinto de *Replace*), todo se ve plano.
 
 ## 6. Comprobaciones antes de entregar
-- [ ] `ib.verificar()` da OK en los 7. Medidas aproximadas en m (x × y × z de Blender, sin escombro):
-      ver `manifiesto.json → modelos.<ID>.medidas_m`.
+- [ ] `ib.verificar()` da OK en los 8. Medidas en m (x × y × z de Blender, sin escombro): ver
+      `manifiesto.json → modelos.<ID>.medidas_m`; la de la malla Estructura sola está en `medidas_estructura_m`.
+- [ ] Muelle: el pie de la rampa toca la arena, el agua queda 3 m bajo la cubierta (cubierta +2,5, mar −0,5) y los
+      pilotes entran en el agua sin verse flotando.
 - [ ] Ninguna ranura con material gris por defecto ni con los materiales que crea el importador glTF.
 - [ ] Vidrio translúcido y con reflejo, no gris opaco.
 - [ ] Muros de concreto gris (no naranja ni rosados) y madera con veta y relieve.

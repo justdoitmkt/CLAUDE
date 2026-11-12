@@ -172,7 +172,13 @@ def main():
         one_uv(o)
         ensure_ao(o)
     # la colisión se arma antes de sacar el vidrio (no se usa: es solo forma) y de unir
-    col = collision_mesh([by_suffix(s) for s in COLLISION_FROM if by_suffix(s)], f"SM_{bid}_Colision")
+    extra = []
+    if bid.startswith("MUE_"):              # muelle: grúa, postes y bitas son Detalle; su colisión va como formas simples
+        import mue_builder
+        extra.append(mue_builder.collision_proxies().finish(f"{bid}_colx", bpy.context.scene.collection, merge=0))
+    col = collision_mesh([by_suffix(s) for s in COLLISION_FROM if by_suffix(s)] + extra, f"SM_{bid}_Colision")
+    for o in extra:
+        bpy.data.objects.remove(o)
     glass = [g for g in (split_glass(o) for o in list(objs.values())) if g]
     parts = {}
     for gname, sufs in GROUPS.items():
@@ -203,6 +209,7 @@ def main():
         bpy.ops.import_scene.gltf(filepath=os.path.join(kit, d["archivo"]))
     imp = {o.name: o for o in bpy.data.objects if o.type == "MESH"}
     mins, maxs = np.full(3, np.inf), np.full(3, -np.inf)           # edificio (sin el escombro suelto)
+    smin, smax = np.full(3, np.inf), np.full(3, -np.inf)           # solo la malla de Estructura
     emin, emax = np.full(3, np.inf), np.full(3, -np.inf)           # escombro exterior
     checks = {}
     for k, d in info["mallas"].items():
@@ -219,6 +226,8 @@ def main():
             emin, emax = np.minimum(emin, co.min(0)), np.maximum(emax, co.max(0))
         elif k != "Colision":
             mins, maxs = np.minimum(mins, co.min(0)), np.maximum(maxs, co.max(0))
+        if k == "Estructura":
+            smin, smax = np.minimum(smin, co.min(0)), np.maximum(smax, co.max(0))
     r3 = lambda a: [round(float(x), 3) for x in a]  # noqa: E731
     dims = (maxs - mins).tolist()
     info["medidas_m"] = dict(x=round(dims[0], 3), y=round(dims[1], 3), z=round(dims[2], 3), min=r3(mins), max=r3(maxs),
@@ -226,8 +235,22 @@ def main():
                              escombro_max=r3(emax) if np.isfinite(emax).all() else None,
                              nota="ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta "
                                   "a nivel del suelo. Sin terreno: el edificio apoya en z = 0.")
-    # apoya en z = 0; las zapatas de los pilotes y los dados de las cabañas se entierran hasta 0,15 m (quedan bajo el piso del mapa)
-    checks["base_en_suelo"] = -0.2 <= float(mins[2]) <= 0.06
+    sd = (smax - smin).tolist()
+    info["medidas_estructura_m"] = dict(x=round(sd[0], 3), y=round(sd[1], 3), z=round(sd[2], 3), min=r3(smin), max=r3(smax))
+    if bid.startswith("MUE_"):
+        import mue_builder as mu
+        info["medidas_m"]["nota"] = ("ejes de Blender (z arriba, metros). Pivote (0, 0, 0) = eje de la rampa en la orilla de la "
+                                     "cubierta, a nivel de la arena; la rampa baja hacia -y hasta el pie (y = %.0f, z = 0) y "
+                                     "el muelle entra al mar hacia +y. Sin terreno ni agua: la arena va a z = 0, el mar a z = "
+                                     "%.1f, la cubierta queda a z = +%.1f y los pilotes bajan a z = %.1f (bajo el agua y el "
+                                     "lecho)." % (mu.RAMP_Y0, mu.SEA_Z, mu.DECK_Z, mu.PILE_BOT))
+        info["niveles_m"] = dict(arena=0.0, mar=mu.SEA_Z, cubierta=mu.DECK_Z, punta_pilotes=mu.PILE_BOT, pie_rampa_y=mu.RAMP_Y0)
+        # la rampa entierra su cimiento 0,8 m en la arena y los pilotes llegan a -7 m
+        checks["base_en_suelo"] = (mu.PILE_BOT - 0.1 <= float(mins[2]) <= mu.PILE_BOT + 0.1 and
+                                   -0.85 <= float(smin[2]) <= -0.75)
+    else:
+        # apoya en z = 0; las zapatas de los pilotes y los dados de las cabañas se entierran hasta 0,15 m (bajo el piso del mapa)
+        checks["base_en_suelo"] = -0.2 <= float(mins[2]) <= 0.06
     info["comprobaciones"] = checks
     info["ok"] = all(checks.values())
     info["mib_total"] = round(sum(d["mib"] for d in info["mallas"].values()), 2)

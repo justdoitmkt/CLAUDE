@@ -37,6 +37,10 @@ SIZES_CAB = {   # cabañas: superficie ~1/4 de un edificio -> mitad de resoluci�
     "walls_main": (2048, 1024, 1024), "walls_rest": (2048, 1024, 1024), "details": (2048, 1024, 1024),
     "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
 }
+SIZES_MUE = {   # muelle: ~2x la superficie exterior de un edificio -> atlas principal de 8K para conservar la densidad
+    "walls_main": (8192, 2048, 1024), "walls_rest": (4096, 1024, 1024), "details": (2048, 2048, 1024),
+    "roof": (2048, 1024, 1024), "skirt": (2048, 512, 512),
+}
 INTERIOR_AO = 1024
 BAND_SCALE = 2.0   # islas de la banda de PB (grafiti, lo que el jugador ve de cerca) ampliadas dentro de walls_main; antes 1,4
 
@@ -562,7 +566,7 @@ def main():
     nb = scale_band_islands(main_o, band_top, BAND_SCALE) if has_g else 0
     log("islas de banda ampliadas:", nb)
     mem = 0.0
-    sizes = SIZES_CAB if bid.startswith("CAB") else SIZES
+    sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith("MUE") else SIZES)
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles

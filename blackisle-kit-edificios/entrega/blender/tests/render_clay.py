@@ -42,6 +42,8 @@ SHOTS_EXTRA = {
         "rampa_pie": dict(azim=-40, elev=4, dist=9.0, target=Vector((-21.0, -24.0, 0.8)), fov=60),
         "atraque": dict(azim=165, elev=6, dist=13.0, target=Vector((22.0, 52.0, 2.0)), fov=58),
         "grua": dict(azim=135, elev=8, dist=24.0, target=Vector((43.0, 49.0, 7.5)), fov=55),
+        "esquina": dict(azim=-30, elev=6, dist=5.0, target=Vector((-10.6, 10.0, 3.3)), fov=55),
+        "esquina_e": dict(azim=30, elev=6, dist=5.0, target=Vector((10.6, 10.0, 3.3)), fov=55),
     },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
@@ -49,6 +51,17 @@ SHOTS_EXTRA = {
     },
 }
 shots.update(SHOTS_EXTRA.get(bid, {}))
+if bid.startswith("MUE_"):
+    # muelle: playa a z 0 que baja bajo la cubierta y mar a -0,5 (el piso automático quedaría en el fondo de los pilotes)
+    me = bpy.data.meshes.new("_playa")
+    me.from_pydata([(-200, -150, 0.0), (200, -150, 0.0), (200, -1.0, 0.0), (-200, -1.0, 0.0), (200, 30, -4.0), (-200, 30, -4.0)],
+                   [], [(0, 1, 2, 3), (3, 2, 4, 5)])
+    bpy.context.scene.collection.objects.link(bpy.data.objects.new("_playa", me))
+    me = bpy.data.meshes.new("_mar")
+    me.from_pydata([(-200, -4.0, -0.5), (200, -4.0, -0.5), (200, 250, -0.5), (-200, 250, -0.5)], [], [(0, 1, 2, 3)])
+    bpy.context.scene.collection.objects.link(bpy.data.objects.new("_mar", me))
+    for v in shots.values():
+        v["ground"] = False
 only = argv[argv.index("--only") + 1].split(",") if "--only" in argv else list(shots)
 for name in only:
     clay_render(objs, f"{out}/{bid}_{tag}_{name}.png", res=R, samples=S, **dict(shots[name]))

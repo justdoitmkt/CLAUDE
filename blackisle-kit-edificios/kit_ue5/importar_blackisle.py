@@ -7,7 +7,7 @@ el manifiesto es la especificación y el script es una forma de cumplirla (ver L
 Uso (consola Python del editor: Output Log -> "Python"):
     import sys; sys.path.append(r"RUTA/A/kit_ue5")          # la carpeta que contiene este archivo
     import importar_blackisle as ib
-    ib.importar_todo()                                      # texturas + materiales + mallas de los 7 modelos (unos minutos)
+    ib.importar_todo()                                      # texturas + materiales + mallas de los 8 modelos (unos minutos)
     ib.verificar()                                          # medidas, ranuras de material y ejes, modelo por modelo
     ib.colocar("APT_A_5p", unreal.Vector(0, 0, 0), yaw=0)   # pone un edificio (5 actores enganchados al de Estructura)
     ib.reemplazar("Edificio_Placeholder_01", "APT_A_5p")    # lo pone donde está un actor existente y oculta ese actor
@@ -441,10 +441,13 @@ def verificar():
             continue
         b = sm.get_bounding_box()
         ext = [b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z]
-        exp = blender_a_ue((d["medidas_m"]["x"], d["medidas_m"]["y"], d["medidas_m"]["z"]))
+        me = d.get("medidas_estructura_m")       # fichas nuevas: medidas exactas de la malla de Estructura
+        mm = me or d["medidas_m"]
+        exp = blender_a_ue((mm["x"], mm["y"], mm["z"]))
         expv = [abs(exp.x), abs(exp.y), abs(exp.z)]
-        # la Estructura no lleva los detalles que sobresalen (barandales, bajantes, A/C): puede ser algo menor
-        okm = all(0.80 * e <= g <= 1.02 * e for g, e in zip(ext, expv))
+        # sin medidas_estructura_m se compara contra el modelo completo: la Estructura no lleva los detalles que sobresalen
+        lo = 0.98 if me else 0.80
+        okm = all(lo * e <= g <= 1.02 * e for g, e in zip(ext, expv))
         sin = [str(st.get_editor_property("material_slot_name")) for i, st in enumerate(sm.get_editor_property("static_materials"))
                if st.get_editor_property("material_interface") is None or
                not st.get_editor_property("material_interface").get_name().startswith("MI_")]

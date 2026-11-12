@@ -47,6 +47,11 @@ CONTAINERS = [   # (x, y, giro en grados, z, puertas abiertas)  origen: esquina 
     dict(x=-23.3, y=2.5, rot=90, z=DECK_Z, open=False),
 ]
 C_L, C_W, C_H = 6.058, 2.438, 2.591
+CRANE_XY = (DECK_B[1] - 11.0, DECK_B[3] - 3.0)
+POLES = [   # ((x, y), inclinación en grados, sin luminaria)
+    ((DECK_A[1] - 0.8, DECK_A[2] + 1.2), 0.0, False), ((DECK_A[0] + 0.8, DECK_A[2] + 1.2), 0.0, False),
+    ((DECK_A[0] + 0.8, DECK_A[3] - 1.0), 6.0, False), ((DECK_B[0] + 30.0, DECK_B[3] - 1.2), 0.0, False),
+    ((DECK_B[1] - 0.8, DECK_B[2] + 1.2), 0.0, True), ((DECK_A[1] - 0.8, DECK_A[3] - 6.0), 0.0, False)]
 P_TRAP, D_TRAP = 0.20, 0.032          # lámina trapezoidal: paso y peralte
 SHEET_T = 0.0015
 
@@ -303,18 +308,56 @@ def build_deck(shell, inter, det, r):
             brace((xb, a + 0.25, 1.2), (xb, b - 0.25, -2.2))
             brace((xb, a + 0.25, -2.2), (xb, b - 0.25, 1.2))
             brace((xb, a + 0.25, 1.25), (xb, b - 0.25, 1.25))
+    # juntas de dilatación de la losa: solera de acero de 8 cm al ras, por los carriles (no pasan bajo la nave ni la caseta)
+    def joint(p0, p1):
+        det.box((min(p0[0], p1[0]) - (0.04 if p0[0] == p1[0] else 0), min(p0[1], p1[1]) - (0.04 if p0[1] == p1[1] else 0), DECK_Z),
+                (max(p0[0], p1[0]) + (0.04 if p0[0] == p1[0] else 0), max(p0[1], p1[1]) + (0.04 if p0[1] == p1[1] else 0),
+                 DECK_Z + 0.006), "metal_rust")
+    joint((ax0 + w, 5.0), (ax1 - w, 5.0))
+    joint((ax0 + w, 37.5), (ax1 - w, 37.5))
+    joint((ax0 + w, by0), (ax1 - w, by0))
+    for x in (-19.0, 17.0):
+        joint((x, ay0 + w), (x, by0 - 0.04))
+    for x in (6.0, 18.0, 30.0, 39.5, 50.0):
+        joint((x, by0 + 0.04), (x, by1 - w))
     # largueros longitudinales bajo la cubierta A (entre vigas cabezal, en algunas líneas de pilotes)
     for xp in xa[::2]:
         det.box((xp - 0.2, ya[0] + 0.4, 1.7), (xp + 0.2, ya[-1] - 0.4, DECK_Z - SLAB_T), "concrete")
     return dict(piles=len(piles))
 
 
+def berth_layout():
+    """Ejes x de las bitas del frente de atraque y de las escaleras marinas."""
+    bx0, bx1 = DECK_B[0], DECK_B[1]
+    return [bx0 + 5.0 + 8.0 * k for k in range(int((bx1 - bx0 - 6) / 8) + 1)], (bx0 + 14.5, bx0 + 38.5, bx0 + 62.5)
+
+
+def bollard_xy():
+    xs_b, lad = berth_layout()
+    by0, by1, bx1 = DECK_B[2], DECK_B[3], DECK_B[1]
+    return [(x, by1 - 0.75) for x in xs_b if not any(abs(x - l) < 1.0 for l in lad)] + [(bx1 - 0.75, by0 + 3.0),
+                                                                                       (bx1 - 0.75, by1 - 4.0)]
+
+
+def collision_proxies():
+    """Formas simples que se suman a la malla de colisión del kit: la grúa, los postes y las bitas son Detalle (sin colisión)."""
+    mb = MB()
+    cx, cy = CRANE_XY
+    mb.cyl((cx, cy, DECK_Z), (cx, cy, DECK_Z + 0.45), 1.3, seg=16, mat="concrete")
+    mb.cyl((cx, cy, DECK_Z + 0.45), (cx, cy, DECK_Z + 4.6), 0.75, seg=16, mat="concrete")
+    mb.cyl((cx, cy, DECK_Z + 4.6), (cx, cy, DECK_Z + 8.4), 2.4, seg=16, mat="concrete")
+    for ((x, y), _, _) in POLES:
+        mb.cyl((x, y, DECK_Z), (x, y, DECK_Z + 8.6), 0.16, seg=8, mat="concrete")
+    for (x, y) in bollard_xy():
+        mb.box((x - 0.26, y - 0.22, DECK_Z), (x + 0.26, y + 0.22, DECK_Z + 0.6), "concrete")
+    return mb
+
+
 def build_berth(det, r):
     """Frente de atraque: guarnición, bitas, defensas de llanta y de madera, escaleras marinas, cabos."""
     bx0, bx1, by0, by1 = DECK_B
     stats = dict(bollards=0, tyres=0, timbers=0, ladders=0)
-    xs_b = [bx0 + 5.0 + 8.0 * k for k in range(int((bx1 - bx0 - 6) / 8) + 1)]
-    lad = (bx0 + 14.5, bx0 + 38.5, bx0 + 62.5)
+    xs_b, lad = berth_layout()
     # guarnición (con cortes en las escaleras)
     cuts = sorted([(x - 0.6, x + 0.6) for x in lad])
     cur = bx0
@@ -455,7 +498,7 @@ def build_ramp(shell, inter, det, r):
     x = -W + 0.8
     while x < W - 0.5:
         for yb_ in (-0.27, 0.27):
-            port.bolt(det, _T(x, yb_, DECK_Z + 0.012), d=0.02, stud=0.0)
+            port.bolt(det, _T(x, yb_, DECK_Z + 0.012), d=0.02, stud=0.006)
         x += 1.2
     # estribo: viga de apoyo bajo la orilla de la cubierta (y 0..1)
     det.box((-RAMP_X - RAMP_WALL, 0.0, 1.3), (RAMP_X + RAMP_WALL, 1.0, DECK_Z - SLAB_T), "concrete")
@@ -472,9 +515,9 @@ def wh_openings():
     return {
         "front": [("shutter_big", (8.0, 14.0, 0.0, 5.5)), ("door", (17.0, 18.0, 0.0, 2.1))],
         "back": [("shutter_big_open", (8.0, 14.0, 0.0, 5.5))],
-        "east": [("shutter_open", (5.0, 9.0, 0.0, 4.5)), ("shutter", (15.0, 19.0, 0.0, 4.5))]
+        "east": [("shutter_open", (1.4, 5.4, 0.0, 4.5)), ("shutter", (7.0, 11.0, 0.0, 4.5))]
                 + [("clerestory", (a, a + 4.0, 5.9, 6.9)) for a in (1.0, 7.0, 13.0, 19.0)],
-        "west": [("door", (5.0, 6.0, 0.0, 2.1))] + [("clerestory", (a, a + 4.0, 5.9, 6.9)) for a in (1.0, 7.0, 13.0, 19.0)],
+        "west": [("door", (6.3, 7.3, 0.0, 2.1))] + [("clerestory", (a, a + 4.0, 5.9, 6.9)) for a in (1.0, 7.0, 13.0, 19.0)],
     }
 
 
@@ -497,8 +540,10 @@ def build_warehouse(shell, inter, det, roof, r):
         L = a1 - a0
         M = ac.panel_matrix(side, a0, a1, face, DECK_Z)
         cut = [o for _, o in ops[side] if o[2] < PL]
-        wall_with_openings(shell, L, PL, 0.25, [(o[0], o[1], 0.0, PL + 0.01) for o in cut], mat_out="concrete", mat_in="concrete",
-                           mat_reveal="concrete", m=M)
+        # el zócalo de los costados arranca dentro del de frente y fondo: en la esquina no quedan caras coplanares encimadas
+        e = 0.25 if side in ("west", "east") else 0.0
+        wall_with_openings(shell, L - 2 * e, PL, 0.25, [(o[0] - e, o[1] - e, 0.0, PL + 0.01) for o in cut], mat_out="concrete",
+                           mat_in="concrete", mat_reveal="concrete", m=M @ _T(e, 0, 0))
         if side in ("front", "back"):
             ztop = lambda u, side=side, a0=a0: (roof_z((a0 + u) if side == "front" else (WH["x1"] - u)) - DECK_Z) - 0.012  # noqa
             Mc = M @ _T(0.0, 0.0, 0.0)
@@ -531,29 +576,48 @@ def build_warehouse(shell, inter, det, roof, r):
                 factory_window(det, Mo, w, h, r)
     # marcos rígidos (Interior: dan colisión), largueros, contravientos
     xc = WH["x1"] - 0.1515 - 0.2
-    frames = [WH["y0"] + 0.45, 10.0, 16.0, 22.0, WH["y1"] - 0.45]
+    frames = [WH["y0"] + 0.45, 16.0, 22.0, 28.0, WH["y1"] - 0.45]
+    zbp = DECK_Z + 0.055                                   # lecho de mortero 3 cm + placa base 25 mm
+
+    def base_plate(x, y, ax="x"):
+        hx, hy = (0.30, 0.20) if ax == "x" else (0.20, 0.30)
+        inter.box((x - hx - 0.03, y - hy - 0.03, DECK_Z), (x + hx + 0.03, y + hy + 0.03, DECK_Z + 0.03), "concrete")
+        inter.box((x - hx, y - hy, DECK_Z + 0.03), (x + hx, y + hy, zbp), "metal_rust")
+        for (bx, by) in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            port.bolt(det, _T(x + bx * (hx - 0.045), y + by * (hy - 0.06), zbp), d=0.03, stud=0.035)
     for yf in frames:
         for sg in (-1, 1):
             x = sg * xc
             zt = roof_z(x) - 0.2 - 0.02
-            inter.box((x - 0.2, yf - 0.2, DECK_Z), (x + 0.2, yf + 0.2, DECK_Z + 0.025), "metal_rust")
-            member(inter, (x, yf, DECK_Z + 0.025), (x, yf, zt - 0.2), i_sec(0.40, 0.25), "metal_paint", up=(1, 0, 0))
+            base_plate(x, yf)
+            member(inter, (x, yf, zbp), (x, yf, zt - 0.2), i_sec(0.40, 0.25), "metal_paint", up=(1, 0, 0))
             p0 = Vector((x, yf, zt - 0.22))
             p1 = Vector((0.0, yf, roof_z(0.0) - 0.2 - 0.22))
             member(inter, p0, p1, i_sec(0.42, 0.2), "metal_paint", up=(0, 0, 1))
             # cartela en el codo
             member(inter, (x, yf, zt - 1.1), (x - sg * 1.2, yf, zt - 0.22 + 1.2 * tp - 0.21), [(-0.006, 0.006, -0.12, 0.12)],
                    "metal_paint")
+    # postes de hastial en los marcos extremos (sostienen los largueros de las fachadas frente y fondo)
+    for yf in (frames[0], frames[-1]):
+        for x in (-5.0, 5.0):
+            base_plate(x, yf, ax="y")
+            member(inter, (x, yf, zbp), (x, yf, roof_z(x) - 0.66), i_sec(0.30, 0.18, tw=0.009, tf=0.012), "metal_paint",
+                   up=(0, 1, 0))
     # largueros del techo (Z) y largueros de muro (C)
     nP = 8
+    zs = port.z_sec(0.2, 0.07, 0.003)
     for sg in (-1, 1):
+        nr = Vector((sg * math.sin(math.radians(WH["pitch"])), 0.0, math.cos(math.radians(WH["pitch"]))))
         for k in range(nP + 1):
             x = sg * (WH["x1"] + 0.1 - k * (WH["x1"] + 0.1 - 0.35) / nP)
             z = roof_z(x)
-            if r.random() < 0.04:
-                continue
-            det.box((x - 0.035, WH["y0"] - WH["ovh"] + 0.05, z - 0.2), (x + 0.035, WH["y1"] + WH["ovh"] - 0.05, z - 0.002),
-                    "metal_paint")
+            c = Vector((x, 0.0, z)) - nr * 0.102
+            port.member(det, (c.x, WH["y0"] - WH["ovh"] + 0.05, c.z), (c.x, WH["y1"] + WH["ovh"] - 0.05, c.z), zs, "metal_paint",
+                        up=tuple(nr))
+            if abs(x) <= xc + 0.05:
+                for yf in frames:                       # clip de larguero atornillado a la viga
+                    det.box((x + 0.0016, yf - 0.004, z - 0.235), (x + 0.08, yf + 0.004, z - 0.06), "metal_paint")
+                    port.bolt(det, _T(x - 0.0015, yf + 0.03, z - 0.13) @ Matrix.Rotation(-math.pi / 2, 4, "Y"), d=0.016, stud=0.01)
     for side in ("front", "back", "west", "east"):
         a0, a1, face = wh_side(side)
         M = ac.panel_matrix(side, a0, a1, face, DECK_Z)
@@ -561,14 +625,33 @@ def build_warehouse(shell, inter, det, roof, r):
         for zg in (1.95, 3.9, 5.85, 7.35):
             if side in ("front", "back") and zg > 7.0:
                 continue
+            gt = MB()
             for (ua, ub) in _gaps(0.3, L - 0.3, [o for _, o in ops[side] if o[2] < zg + 0.1 < o[3] + 0.2]):
-                det.box((ua, 0.0016, zg - 0.08), (ub, 0.15, zg + 0.08), "metal_paint", m=M)
+                port.member(gt, (ua, 0.0, zg), (ub, 0.0, zg),
+                            [(0.0016, 0.0046, -0.08, 0.08), (0.0046, 0.066, 0.077, 0.08), (0.0046, 0.066, -0.08, -0.077),
+                             (0.063, 0.066, 0.058, 0.077), (0.063, 0.066, -0.077, -0.058)], "metal_paint", up=(0, 0, 1))
+            det.join(gt, M)
     # contravientos en cruz (barras) en las crujías extremas del techo
+    def rod(p0, p1, t=0.3):
+        p0, p1 = Vector(p0), Vector(p1)
+        det.cyl(p0, p1, 0.012, seg=6, mat="metal_rust")
+        Mf, Lr = port.frame_on(p0, p1)
+        port.lathe(det, [(0.0125, -0.17), (0.016, -0.14), (0.016, -0.11), (0.024, -0.1), (0.024, 0.1), (0.016, 0.11),
+                         (0.016, 0.14), (0.0125, 0.17)], seg=8, mat="metal_rust",
+                   M=Mf @ _T(Lr * t, 0, 0) @ Matrix.Rotation(math.pi / 2, 4, "Y"))
     for (ya, yb) in ((frames[0], frames[1]), (frames[-2], frames[-1])):
         for sg in (-1, 1):
             xa, xb = sg * (xc - 0.1), sg * 0.4
-            det.cyl((xa, ya, roof_z(xa) - 0.25), (xb, yb, roof_z(xb) - 0.25), 0.012, seg=4, mat="metal_rust")
-            det.cyl((xa, yb, roof_z(xa) - 0.25), (xb, ya, roof_z(xb) - 0.25), 0.012, seg=4, mat="metal_rust")
+            rod((xa, ya + 0.12, roof_z(xa) - 0.25), (xb, yb - 0.12, roof_z(xb) - 0.25), 0.3)
+            rod((xa, yb - 0.12, roof_z(xa) - 0.25), (xb, ya + 0.12, roof_z(xb) - 0.25), 0.7)
+        x = -xc
+        z0, z1 = DECK_Z + PL + 0.35, DECK_Z + WH["eave"] - 0.9
+        rod((x, ya + 0.14, z0), (x, yb - 0.14, z1), 0.35)
+        rod((x, yb - 0.14, z0), (x, ya + 0.14, z1), 0.65)
+        for (yy, zz) in ((ya + 0.125, z0), (ya + 0.125, z1), (yb - 0.125, z0), (yb - 0.125, z1)):
+            sgn = 1 if yy < (ya + yb) / 2 else -1
+            det.box((x - 0.005, min(yy, yy + sgn * 0.16), zz - 0.07), (x + 0.005, max(yy, yy + sgn * 0.16), zz + 0.07),
+                    "metal_paint")
     # esquineros y tapajuntas del alero
     for (x, y) in ((WH["x0"], WH["y0"]), (WH["x1"], WH["y0"]), (WH["x0"], WH["y1"]), (WH["x1"], WH["y1"])):
         sx = -1 if x < 0 else 1
@@ -808,9 +891,9 @@ def build_containers(shell, r):
 
 # ------------------------------------------------------------------------------------------------------------ grúa, postes
 def build_crane(det, r):
-    """Grúa de pedestal (kit.port) en el espigón, pluma hacia el mar a 38°, gancho a media altura sobre el agua."""
-    cx, cy = DECK_B[1] - 11.0, DECK_B[3] - 3.0
-    det.join(port.pedestal_crane(int(r.integers(1e6)), yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3), _T(cx, cy, DECK_Z))
+    """Grúa de pedestal (kit.port) junto al frente de atraque: pluma sobre el barco (+y) a 38°, gancho en reposo a ~5 m."""
+    cx, cy = CRANE_XY
+    det.join(port.pedestal_crane(int(r.integers(1e6)), yaw=158.0, luff=38.0, boom_len=15.0, hook_z=2.5), _T(cx, cy, DECK_Z))
 
 
 def light_pole(det, p, r, lean=0.0, broken=False, yaw=None):
@@ -877,10 +960,11 @@ def rope_coil(mb, p, r, R=0.4, turns=5):
     mb.tube(pts, 0.022, seg=6, mat="plastic")
 
 
-def sand_drift(mb, p, sx, sy, h, r):
-    """Montículo bajo de arena (domo achatado)."""
+def sand_drift(mb, p, sx, sy, h, r, zf=None):
+    """Montículo bajo de arena (domo achatado); zf(x, y) da la cota del piso bajo el montículo (rampa)."""
     n, m = 10, 4
     cx, cy, cz = p
+    zf = zf or (lambda x, y: cz)
     rings = []
     for j in range(1, m + 1):
         t = j / m
@@ -888,16 +972,17 @@ def sand_drift(mb, p, sx, sy, h, r):
         for i in range(n):
             a = 2 * math.pi * i / n
             k = float(r.uniform(0.85, 1.1))
-            ring.append(mb.bm.verts.new((cx + sx * t * k * math.cos(a), cy + sy * t * k * math.sin(a), cz + h * (1 - t * t))))
+            px, py = cx + sx * t * k * math.cos(a), cy + sy * t * k * math.sin(a)
+            ring.append(mb.bm.verts.new((px, py, zf(px, py) + h * (1 - t * t))))
         rings.append(ring)
-    top = mb.bm.verts.new((cx, cy, cz + h))
+    top = mb.bm.verts.new((cx, cy, zf(cx, cy) + h))
     for i in range(n):
         mb.face([top, rings[0][i], rings[0][(i + 1) % n]], "sand")
     for j in range(m - 1):
         for i in range(n):
             a, b = rings[j], rings[j + 1]
             mb.face([a[i], b[i], b[(i + 1) % n], a[(i + 1) % n]], "sand")
-    bot = [mb.bm.verts.new((v.co.x, v.co.y, cz - 0.002)) for v in rings[-1]]
+    bot = [mb.bm.verts.new((v.co.x, v.co.y, zf(v.co.x, v.co.y) - 0.002)) for v in rings[-1]]
     for i in range(n):
         mb.face([rings[-1][i], bot[i], bot[(i + 1) % n], rings[-1][(i + 1) % n]], "sand")
     mb.face(list(reversed(bot)), "sand")
@@ -922,7 +1007,7 @@ def build_props(inter, det, sk, r):
     for (p, sz, rot) in ((W(1.4, 9.0), (1.2, 1.0, 1.0), 4), (W(1.6, 10.3), (1.0, 1.0, 0.8), -3), (W(1.5, 9.2), (0.9, 0.8, 0.7), 12),
                          (W(17.5, 3.0), (1.5, 1.2, 1.1), 20), (W(6.5, 22.2), (1.3, 1.0, 1.0), 0)):
         crate(inter, p, sz, r, rot=rot)
-    for p in (W(1.2, 16.5), W(1.8, 17.3), W(1.1, 17.9), W(20.5, 10.0), W(19.7, 10.6)):
+    for p in (W(1.2, 16.5), W(1.8, 17.3), W(1.1, 17.9), W(20.5, 13.0), W(19.8, 13.6)):
         drum(inter, p, r)
     drum(det, W(14.5, 11.0), r, lying=True, rot=40)
     drum(det, W(6.0, 14.0), r, lying=True, rot=-20)
@@ -958,9 +1043,7 @@ def build_props(inter, det, sk, r):
         det.join(dm.chunk(size=float(r.uniform(0.15, 0.4)), seed=int(r.integers(1e6)), kind="slab", detail="low"),
                  _T(float(r.uniform(hx0 - 1.5, hx1 + 2)), float(r.uniform(hy0 - 1.2, hy1 + 1.2)), z))
     # postes de luz en las orillas (uno inclinado y uno sin luminaria) y cable hacia la nave
-    poles = [((ax1 - 0.8, ay0 + 1.2), 0.0, False), ((ax0 + 0.8, ay0 + 1.2), 0.0, False), ((ax0 + 0.8, ay1 - 1.0), 6.0, False),
-             ((bx0 + 30.0, by1 - 1.2), 0.0, False), ((bx1 - 0.8, by0 + 1.2), 0.0, True), ((ax1 - 0.8, ay1 - 6.0), 0.0, False)]
-    for (pp, lean, broken) in poles:
+    for (pp, lean, broken) in POLES:
         light_pole(det, pp, r, lean=lean, broken=broken)
     det.join(sv.cable_bundle([(ax1 - 0.8, ay1 - 6.0, z + 7.6), (X1 + 0.05, Y1 - 4.0, z + 6.9)], n=3, sag=0.8,
                              seed=int(r.integers(1e6)), detail="low"))
@@ -969,6 +1052,12 @@ def build_props(inter, det, sk, r):
     for (M, u) in ((ac.panel_matrix("front", X0, X1, Y0, z), 17.5), (ac.panel_matrix("east", Y0, Y1, X1, z), 7.0),
                    (ac.panel_matrix("back", X0, X1, Y1, z), 11.0)):
         det.join(sv.light_fixture("bracket", seed=int(r.integers(1e6)), detail="mid"), M @ _T(u, -0.04, 6.0))
+    # arena que el viento sube a la rampa: contra los pretiles y una lengua delgada en el pie
+    rz = lambda x, y: ramp_z(y)  # noqa: E731
+    for (x, y, sx_, sy_, h) in ((-RAMP_X + 0.55, -21.0, 0.6, 3.6, 0.16), (RAMP_X - 0.55, -22.5, 0.55, 2.4, 0.13),
+                                (-RAMP_X + 0.5, -12.0, 0.45, 1.8, 0.08), (-6.0, -23.6, 5.5, 0.9, 0.05),
+                                (9.0, -23.9, 3.5, 0.6, 0.04)):
+        sand_drift(inter, (x, y, ramp_z(y)), sx_, sy_, h, r, zf=rz)
     # en la arena junto a la rampa (pieza Escombro)
     sk.join(dm.rubble_pile(radius=1.2, seed=int(r.integers(1e6)), n=34, detail="low"), _T(-RAMP_X - 2.5, RAMP_Y0 + 3.0, 0.0))
     sk.join(dm.rubble_pile(radius=0.8, seed=int(r.integers(1e6)), n=20, detail="low"), _T(RAMP_X + 2.0, RAMP_Y0 + 12.0, 0.0))
