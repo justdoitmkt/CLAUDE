@@ -868,37 +868,49 @@ def courtyard(inter, det, r):
 
 
 def _palm(det, x, y, z, r):
-    """Palmera joven: tronco anillado y curvo, 11 frondas arqueadas con folíolos."""
+    """Palmera joven (cocotera): tronco curvo con cicatrices anulares y bota de vainas arriba; 12 frondas pinnadas con raquis
+    arqueado y caído, 30 pares de folíolos largos y angostos con pliegue en V que cuelgan; 3 frondas secas colgando."""
     H = 3.4
-    pts = []
-    radii = []
     lean = Vector((float(r.uniform(-0.3, 0.3)), float(r.uniform(-0.3, 0.3)), 0))
-    for i in range(25):
-        t = i / 24
-        p = Vector((x, y, z + H * t)) + lean * (t * t)
-        pts.append(tuple(p))
-        radii.append(0.13 - 0.04 * t + (0.012 if i % 2 == 0 else 0.0))
-    det.tube(pts, 0.12, seg=14, mat="wood_grey", radii=radii)
+    pts, radii = [], []
+    for i in range(41):
+        t = i / 40
+        pts.append(tuple(Vector((x, y, z + H * t)) + lean * (t * t)))
+        radii.append(0.135 - 0.045 * t + (0.009 if i % 2 == 0 else -0.002))
+    det.tube(pts, 0.12, seg=16, mat="wood_grey", radii=radii)
     top = Vector(pts[-1])
-    for k in range(11):
-        a = 2 * math.pi * k / 11 + float(r.uniform(-0.2, 0.2))
-        el = float(r.uniform(15, 55))
-        L = float(r.uniform(1.4, 1.9))
+    port.lathe(det, [(0.0, -0.15), (0.11, -0.15), (0.13, 0.0), (0.1, 0.18), (0.05, 0.28), (0.0, 0.3)], seg=14, mat="wood",
+               M=Matrix.Translation(top))
+    for k in range(15):
+        a = 2 * math.pi * k / 15 + float(r.uniform(-0.15, 0.15))
+        dead = k < 3
+        el = float(r.uniform(-55, -35)) if dead else float(r.uniform(5, 50))
+        L = float(r.uniform(1.6, 2.1)) * (0.8 if dead else 1.0)
         d = Vector((math.cos(a), math.sin(a), 0))
         side = Vector((-d.y, d.x, 0))
-        prev = top
-        n = 14
+        n = 30
+        prev = top + Vector((0, 0, 0.12))
+        mat_r = "wood_grey" if dead else "vegetation"
         for j in range(1, n + 1):
             t = j / n
-            p = top + d * (L * t * math.cos(math.radians(el))) + Vector((0, 0, L * t * math.sin(math.radians(el)) - 0.9 * L * t * t * 0.6))
-            det.cyl(tuple(prev), tuple(p), 0.012 * (1 - 0.7 * t), seg=5, mat="vegetation")
-            for sgn in (-1, 1):
-                lf = 0.32 * math.sin(math.pi * min(1, t * 1.1)) + 0.05
-                tip = p + side * sgn * lf + Vector((0, 0, -0.12 * lf)) + d * 0.05
-                v0 = det.bm.verts.new(prev)
-                v1 = det.bm.verts.new(p)
-                v2 = det.bm.verts.new(tip)
-                det.face([v0, v1, v2], "vegetation")
+            droop = 1.1 * L * t * t * (0.35 if dead else 0.55)
+            p = top + Vector((0, 0, 0.12)) + d * (L * t * math.cos(math.radians(el))) + \
+                Vector((0, 0, L * t * math.sin(math.radians(el)) - droop))
+            det.cyl(tuple(prev), tuple(p), 0.014 * (1 - 0.75 * t) + 0.002, seg=5, mat=mat_r)
+            if j > 2:
+                tang = (p - prev).normalized()
+                for sgn in (-1, 1):
+                    lf = (0.55 * math.sin(math.pi * min(1.0, (t - 0.05) / 0.95)) + 0.06) * (0.7 if dead else 1.0)
+                    sp = (side * sgn * math.cos(math.radians(28)) + Vector((0, 0, -math.sin(math.radians(28))))).normalized()
+                    tip = p + sp * lf + tang * lf * 0.25 + Vector((0, 0, -0.18 * lf))
+                    midp = p.lerp(tip, 0.5) + Vector((0, 0, -0.04 * lf))
+                    w = 0.022 * (1 - 0.4 * t)
+                    up = Vector((0, 0, 1)) * w
+                    base0, base1 = p - tang * w, p + tang * w
+                    v = [det.bm.verts.new(c) for c in (base0, midp + up * 0.6, tip, midp - up * 0.6 + tang * 0.0, base1)]
+                    det.face([v[0], v[1], v[2]], mat_r)
+                    det.face([v[0], v[2], v[3]], mat_r)
+                    det.face([v[4], v[1], v[0]], mat_r)
             prev = p
 
 
