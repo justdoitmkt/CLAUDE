@@ -5,7 +5,7 @@ Léelo completo antes de tocar el proyecto. La especificación exacta de materia
 `manifiesto.json`; `importar_blackisle.py` la aplica desde el editor.
 
 ## 1. Qué hay que lograr
-Importar los 10 modelos (7 edificios, el muelle de carga, el hospital y el granero con tienda) y **reemplazar con ellos los edificios, cabañas,
+Importar los 11 modelos (7 edificios, el muelle de carga, el hospital, el granero con tienda y el sitio de antena) y **reemplazar con ellos los edificios, cabañas,
 muelle y hospital provisionales que ya existen en el nivel**.
 El resultado tiene que verse como un edificio real y abandonado:
 - **Vidrio que se ve como vidrio:** translúcido, con reflejos y suciedad, y con las roturas que trae el modelo.
@@ -26,9 +26,11 @@ El resultado tiene que verse como un edificio real y abandonado:
 | CAB_3_ladrillo | PB de ladrillo y planta alta de tabla | porche delantero con escalones |
 | MUE_1_carga | Muelle de carga sobre pilotes con nave de acero, caseta, contenedores, grúa y frente de atraque | la rampa ancha que sube desde la playa (el atraque mira a +Y, al mar) |
 | HOS_1_pueblo | Hospital rural de una planta EN USO: urgencias, consultorios, farmacia, rayos X, encamados, patio y cochera de ambulancias | pórtico de 4 columnas con "COMMUNITY HOSPITAL" en el pretil (cochera al oriente, +X) |
+| GRA_1_tienda | Granero en uso con tienda comunitaria al lado (medicinas, comida, munición, cerveza) | hastial del granero con el portón corredizo (la tienda queda al oriente, +X) |
+| COM_1_antena | Sitio celular actual EN USO: torre de 42 m con antenas 5G, caseta de equipos, generador, malla con púas | portón doble del compound y puerta de la caseta (la torre queda al fondo, +X +Y) |
 
 Los edificios tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
-departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1, el hospital en §3.2 y el granero con tienda en §3.3.
+departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1, el hospital en §3.2, el granero con tienda en §3.3 y el sitio de antena en §3.4.
 
 ## 2. Contenido
 ```
@@ -40,13 +42,13 @@ kit_ue5/
                           + T_BLK_vidrio_suciedad
   comun/geometria/        SM_BLK_Ejes.glb (marcador para medir la conversión de ejes)
   modelos/<ID>/           SM_<ID>_Estructura / _Detalle / _Escombro / _Vidrio / _Colision .glb
-                          (+ SM_<ID>_Mobiliario.glb en el hospital y en el granero)
+                          (+ SM_<ID>_Mobiliario.glb en el hospital, el granero y el sitio de antena)
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
-## 3. Las piezas de cada modelo (5; el hospital y el granero traen una sexta, Mobiliario)
+## 3. Las piezas de cada modelo (5; el hospital, el granero y el sitio de antena traen una sexta, Mobiliario)
 Todas comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
 punto y con el mismo giro.
 
@@ -55,7 +57,7 @@ punto y con el mismo giro.
 | Estructura | carcasa (muros con atlas), interior (muros, losas, escaleras, puertas, escombro y basura interior), techo | sí | ninguna | la colisión la da la pieza Colision |
 | Detalle | ventanas, barandales, servicios (A/C, medidores, cables, tinacos), ropa, daño | sí | ninguna | los barandales no bloquean (§7) |
 | Escombro | escombro exterior suelto (montones, trozos, varillas) | no | compleja como simple | opcional: se puede mover o borrar |
-| Mobiliario | hospital y granero: mobiliario, equipo, utilería y luminarias | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
+| Mobiliario | hospital, granero y sitio de antena: mobiliario, equipo, utilería, malla y luminarias | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
 | Vidrio | todo el vidrio (ventanas, puertas, esquirlas) | **no** (translúcido) | ninguna | sin proyectar sombra |
 | Colision | carcasa + interior con caras coplanares fundidas (misma forma, pocos triángulos) | no | compleja como simple | **invisible**; da la colisión de muros, pisos y escaleras |
 
@@ -119,6 +121,27 @@ con portón) hacia -y.
 - **Mobiliario:** la utilería (pacas, costales, corrales, mercancía…) va en `SM_GRA_1_tienda_Mobiliario`; su colisión son
   cajas simples dentro de Colision. Las luces: focos del granero y luminarias de la tienda en `focos_m_blender`.
 
+### 3.4 El sitio de antena (COM_1_antena)
+Sitio celular de 2026 que da cobertura a una ciudad costera chica (no futurista: equipo actual real). Pivote al centro del
+compound a nivel del terreno (z = 0); portón hacia -y. Sin terreno: la plataforma construida (guarnición, grava, banquetas y
+losas) sí viene en el modelo.
+- **Compound** (x -8..8, y -8..8): malla ciclónica de 2,4 m tejida de verdad con brazos a 45° y 3 hilos de púas, sobre
+  guarnición de concreto; portón doble de 4 m al sur, cama de grava, banquetas en paños con junta, losas de equipo, bolardos.
+- **Torre** (centroide en x 4,0 / y 4,3, 42 m + pararrayos a 45 m): autosoportada de 3 patas tubulares galvanizadas con
+  bridas, contraventeo en X, escalones de pie, escalera con riel anticaídas, escalerilla interior de cables, plataforma de
+  microondas (32,5 m) con 2 platos y plataforma de sectores (39,9 m) con 6 paneles de 8 puertos, 3 AAU 5G 64T64R, 6 RRU con
+  jumpers y baliza roja. Puente de cables (ice bridge) con 18 troncales hasta el puerto de la caseta.
+- **Caseta** (x -6,4..-0,6, y 2,35..5,65): prefabricada de concreto con puerta de lámina (entreabierta), 2 condensadoras,
+  arbotante LED, rejillas, puerto de cables y barra de tierras. Dentro: 10 racks en dos filas, charolas con cableado,
+  rectificador, baterías, minisplits, alarma, extintor y escritorio.
+- **Equipo exterior:** 3 gabinetes (energía, baterías, telecom), generador diésel de 30 kVA con tanque de doble pared y
+  mangueras, marco H con medidor y desconectador, 2 postes con reflector LED (uno con cámara).
+- **Grafiti:** pocas piezas chicanas (placa STATIK, roll call y dos firmas) solo en la trasera de la caseta.
+- **Mobiliario:** la malla, el portón, el puente de cables y todo el equipo del compound y de la caseta van en
+  `SM_COM_1_antena_Mobiliario`; la torre con sus antenas va en `SM_COM_1_antena_Detalle`. Colisión: cajas simples de malla,
+  patas de la torre, equipo y racks dentro de Colision. Luces en `focos_m_blender`: 3 luminarias de la caseta, arbotante y
+  2 reflectores.
+
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).
 2. Plugins activos: **Python Editor Script Plugin** e importador glTF (Interchange, activo por defecto en UE 5.1+).
@@ -127,7 +150,7 @@ con portón) hacia -y.
    ```python
    import sys; sys.path.append(r"RUTA/A/kit_ue5")
    import importar_blackisle as ib
-   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 10 modelos, en /Game/BlackIsle
+   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 11 modelos, en /Game/BlackIsle
    ib.verificar()            # medidas en cm contra el manifiesto, ranuras con material del kit, ejes
    ```
 4. **Reemplaza los provisionales.** Identifica en el nivel qué actor provisional corresponde a cada modelo; si no es

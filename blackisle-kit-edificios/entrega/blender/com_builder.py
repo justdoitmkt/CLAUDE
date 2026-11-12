@@ -146,7 +146,7 @@ def _noise2(r, n):
 
 
 # ------------------------------------------------------------------------------------------------------------ caseta
-def shelter_shell(shell, roof):
+def shelter_shell(shell, roof, inter):
     """Caseta prefabricada: cuatro muros de concreto de 10 cm con las esquinas en chaflán, losa de piso integrada (z 0,15–0,30)
     y losa de techo con vuelo de 10 cm, aristas boleadas y pendiente hacia atrás. Vano de la puerta y del puerto de cables."""
     zb, zt = Z_PAD, Z_CEIL + 0.01                   # el muro entra 1 cm en la losa de techo (sin caras coplanares)
@@ -168,8 +168,8 @@ def shelter_shell(shell, roof):
         if sx * sy < 0:
             q = list(reversed(q))
         shell.poly(q, "concrete")
-    # losa de piso (canto bajo los muros; la cara superior es el piso de la caseta)
-    shell.box((SH_X0 + SH_T - 0.002, SH_Y0 + SH_T - 0.002, zb), (SH_X1 - SH_T + 0.002, SH_Y1 - SH_T + 0.002, Z_FLOOR),
+    # losa de piso (canto bajo los muros; la cara superior es el piso de la caseta): va en el grupo Interior
+    inter.box((SH_X0 + SH_T - 0.002, SH_Y0 + SH_T - 0.002, zb), (SH_X1 - SH_T + 0.002, SH_Y1 - SH_T + 0.002, Z_FLOOR),
               "concrete", bevel=0.0)
     # losa de techo: aristas boleadas de 2 cm, pendiente de 4 cm hacia atrás
     x0, x1, y0, y1 = SH_X0 - ROOF_OVH, SH_X1 + ROOF_OVH, SH_Y0 - ROOF_OVH, SH_Y1 + ROOF_OVH
@@ -919,7 +919,7 @@ def build_com(bid="COM_1_antena", collection_root=None, dress_on=True, **kw):
     out = {k: [] for k in cols}
     shell, det, inter, roof, furn = MB(), MB(), MB(), MB(), MB()
     r = rng(cfg["seed"])
-    shelter_shell(shell, roof)
+    shelter_shell(shell, roof, inter)
     roof_details(det)
     global DOOR_M
     DOOR_M = door(det)
