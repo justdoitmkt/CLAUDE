@@ -574,12 +574,15 @@ def rooftop(roof, det, r):
     # condensadoras de minisplit en el muro trasero y oriente, con su tubería forrada
     Mb = ac.panel_matrix("back", X0, X1, Y1, 0.0)
     for x in (-10.0, -5.4, 4.6, 8.4, 13.4):                    # entre ventanas y puerta de servicio, nunca sobre un vano
-        det.join(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="mid"), Mb @ _T(X1 - x, 0, 2.05))
+        ac_ = cl.remap(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="mid"),
+                       {"metal_rust": "enamel", "metal_paint": "sign_white"})            # equipo en servicio: lámina esmaltada
+        det.join(ac_, Mb @ _T(X1 - x, 0, 2.05))
         det.tube([tuple(Mb @ Vector((X1 - x + 0.3, -0.12, 2.35))), tuple(Mb @ Vector((X1 - x + 0.3, -0.06, 2.9))),
                   tuple(Mb @ Vector((X1 - x + 0.3, 0.05, 2.95)))], 0.018, seg=8, mat="plastic")
-    det.join(sv.meter_box(seed=int(r.integers(1e6)), open_door=False, detail="high"), Mb @ _T(X1 - 3.9, 0, 1.4))
-    det.join(sv.conduit([(X1 - 3.9, 0.0, 1.92), (X1 - 3.9, 0.0, 3.3), (X1 - 4.2, 0.0, 3.3), (X1 - 4.2, 0.0, PARA - 0.15)],
-                        seed=int(r.integers(1e6)), detail="high"), Mb)                # conduit del medidor hacia la azotea
+    det.join(cl.remap(sv.meter_box(seed=int(r.integers(1e6)), open_door=False, detail="high"),
+                      {"metal_rust": "enamel", "metal_paint": "enamel"}), Mb @ _T(X1 - 3.9, 0, 1.4))
+    det.join(cl.remap(sv.conduit([(X1 - 3.9, 0.0, 1.92), (X1 - 3.9, 0.0, 3.3), (X1 - 4.2, 0.0, 3.3), (X1 - 4.2, 0.0, PARA - 0.15)],
+                                 seed=int(r.integers(1e6)), detail="high"), {"metal_rust": "steel", "metal_paint": "steel"}), Mb)                # conduit del medidor hacia la azotea
 
 
 # ------------------------------------------------------------------------------------------------------------ letreros
