@@ -303,3 +303,17 @@ Re-horneado completo de los 7 con el pipeline de la ronda 3 (`scripts/cadena_hor
 renders Cycles, recorrido interior y capturas exteriores en Three.js r169 revisados con mis ojos. Números en `REPORTE.md` §1.
 z-fighting visible (`tests/zfight.py --dedupe`): 0 m² en los 7. Toma 04 de CAB_2 rehecha agachada (la cámara estaba dentro de la
 lámina; el tapanco tiene 1,2–1,5 m libres).
+
+## Kit para Unreal Engine 5 (2026-11-12)
+Pedido del usuario: un kit que otro chat lea e importe en UE5 para reemplazar los edificios provisionales, con vidrio que se
+vea como vidrio y materiales con su forma y tono exactos; **sin arena ni pasto alrededor** (solo el suelo propio del edificio),
+el escombro exterior como pieza suelta. Hecho:
+- `bake_apt.py --ue` re-horneó los atlas de muros **sin la arena** (tapaba el zócalo hasta 0,32 m) y separó los materiales por
+  tipo (`BLK_*`); `export_ue5.py` escribe un GLB por pieza (Estructura, Detalle, Escombro, Vidrio, Colision) con el mismo pivote.
+- Texturas PBR de los 11 repetibles (normal DirectX + ORM), máscara de suciedad del vidrio, marcador de ejes, `manifiesto.json`,
+  `importar_blackisle.py` (Python del editor de Unreal) y `LEEME_UE5.md`. Validación por reimportación OK en los 7.
+- Vista previa en Cycles armada solo con los archivos del kit: `render_qa/ue5/<ID>_ue5_{exterior,interior}.png`.
+- Descargas: `kit_ue5_descargas/` (ZIP común 53 MiB + uno por modelo, 9–31 MiB).
+- No probado dentro de Unreal (no hay motor en este contenedor): el script sigue la API de Python de UE 5.x y el LEEME deja la
+  especificación para corregirlo si alguna llamada cambia en la versión del proyecto.
+
