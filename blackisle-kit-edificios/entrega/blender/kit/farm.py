@@ -442,9 +442,28 @@ def hay_stack(nx=3, ny=2, nz=3, seed=0):
     tmp = MB()
     tmp.join(pool[used % 6], _bale_M(WX / 2 + H / 2 + float(r.uniform(0.2, 0.35)), float(r.uniform(-0.2, 0.2)) * DY, 0.0,
                                      90 + float(r.uniform(-12, 12)), side=True))
-    for v in tmp.bm.verts:                                        # de canto: los popotes del lado de abajo se doblan contra el piso
-        if v.co.z < 0.0018:
-            v.co.z = 0.0018
+    bm = tmp.bm                                                   # de canto: fuera los popotes que quedarían bajo el piso
+    seen = set()
+    kill = []
+    for f in bm.faces:
+        if f in seen:
+            continue
+        comp, stack = [], [f]
+        seen.add(f)
+        while stack:
+            g = stack.pop()
+            comp.append(g)
+            for e in g.edges:
+                for h_ in e.link_faces:
+                    if h_ not in seen:
+                        seen.add(h_)
+                        stack.append(h_)
+        if len(comp) < 40 and any(v.co.z < 0.0015 for g in comp for v in g.verts):
+            kill += comp
+    bmesh.ops.delete(bm, geom=kill, context="FACES")
+    for v in bm.verts:
+        if v.co.z < 0.0:
+            v.co.z = 0.0
     mb.join(tmp)
     return mb
 
@@ -524,7 +543,7 @@ def loose_hay(w=1.2, d=0.8, h=0.15, seed=0):
 
 
 # ======================================================================================================== costales y tarima
-def _sack_rings(r, lying, N=32):
+def _sack_rings(r, lying, N=40):
     """Malla del costal (anillos horizontales de superelipse de -a..a en X y -b..b en Y, base en z = 0): devuelve los anillos
     (listas de Vector), las alturas t y la altura de la costura superior. De pie: base plana y 'panza' baja por el peso; acostado:
     las dos puntas cosidas (orejas) y el cuerpo aplastado."""
@@ -733,7 +752,7 @@ def pallet(seed=0):
     ≤ 2 000 triángulos."""
     r = rng(seed)
     mb = MB()
-    LX, LY = 1.20, 1.00
+    LY = 1.00
     tb, hs = 0.016, 0.089
     zs0, zs1 = tb, tb + hs
     ys = (-LY / 2 + 0.019 + 0.005, 0.0, LY / 2 - 0.019 - 0.005)
@@ -861,7 +880,7 @@ def wheelbarrow(seed=0):
     r = rng(seed)
     mb = MB()
     paint = ["sign_red", "sign_red", "paint_green", "paint_yellow"][int(r.integers(0, 4))]
-    zb = 0.312
+    zb = 0.309
     cy = 0.04
     t = 0.0022
     dents = [(Vector((float(r.uniform(-0.3, 0.3)), float(r.uniform(-0.4, 0.3)), float(r.uniform(0.4, 0.58)))), float(r.uniform(0.04, 0.07)),
@@ -936,11 +955,11 @@ def wheelbarrow(seed=0):
         lathe(mb, gp, seg=12, mat="rubber", M=Mg, caps=False)
         # pata: tubo del larguero al piso con pie aplanado, riostra al larguero
         top = Vector((sx * 0.262, 0.47, 0.335))
-        foot = Vector((sx * 0.29, 0.42, 0.022))
+        foot = Vector((sx * 0.29, 0.42, 0.0182))
         mb.tube(_dedupe(fillet([tuple(top + Vector((0, 0, 0.004))), tuple(foot + Vector((0, 0.0, 0.03))), tuple(foot), tuple(foot + Vector((0, -0.07, 0)))],
                                0.03, 4), 1e-4), 0.0125, seg=8, mat="steel")
         lathe(mb, [(0.0, -0.022), (0.016, -0.022), (0.018, -0.012), (0.016, 0.0), (0.013, 0.012), (0.0, 0.013)], seg=8, mat="rubber",
-              M=_T(foot.x, foot.y - 0.04, 0.022) @ _Rx(90))
+              M=_T(foot.x, foot.y - 0.04, 0.0182) @ _Rx(90))
         mid = foot.lerp(top, 0.45)
         mb.tube([tuple(mid), (sx * 0.226, 0.13, 0.262)], 0.009, seg=6, mat="steel")
         port.bolt(mb, _T(top.x + sx * 0.016, top.y, top.z) @ _Ry(90 * sx), d=0.008, stud=0.006, mat="steel")
@@ -958,7 +977,7 @@ def wheelbarrow(seed=0):
             hexnut(mb, _T(xb, y, zb - 0.025) @ _Rx(180), s=0.013, h=0.007, mat="steel")
             lathe(mb, [(0.004, -0.004), (0.004, 0.0)], seg=6, mat="steel", M=_T(xb, y, zb - 0.032), caps=True)
     # ---- rueda neumática de 16"
-    Mw = _T(0, -0.585, 0.1985) @ _Ry(90)
+    Mw = _T(0, -0.585, 0.1972) @ _Ry(90)
     _tire_tread(mb, Mw, 0.152, 0.047, n=54, m=12)
     rim_p = [(0.112, -0.034), (0.118, -0.04), (0.122, -0.036), (0.118, -0.028), (0.112, -0.02), (0.106, -0.008), (0.106, 0.008),
              (0.112, 0.02), (0.118, 0.028), (0.122, 0.036), (0.118, 0.04), (0.112, 0.034)]
@@ -1023,13 +1042,13 @@ def pitchfork(seed=0):
         for i in range(1, len(P)):
             acc.append(acc[-1] + (P[i] - P[i - 1]).length)
         radii = [0.0007 + 0.0040 * min(a_ / 0.16, 1.0) ** 0.75 for a_ in acc]
-        mb.tube([tuple(p) for p in P], 0.0045, seg=6, mat=metal, radii=radii, caps=True)
+        mb.tube([tuple(p) for p in P], 0.0045, seg=8, mat=metal, radii=radii, caps=True)
     # cuello forjado: abraza la unión de los tres dientes y sube adelgazándose hasta la virola
     revolve(mb, [(0.0, 0.296), (0.011, 0.303), (0.0145, 0.318), (0.012, 0.334), (0.0088, 0.352), (0.0095, 0.372), (0.0125, 0.386),
                  (0.0, 0.387)], metal, seg=12, M=_T(0, dy(0.33), 0) @ Matrix.Scale(1.0, 4) , caps=False,
             rmod=lambda a_: 1.0 + 0.25 * math.cos(a_) ** 2)
     _ferrule(mb, 0.385, 0.50, 0.0125, 0.0165, mat=metal, seg=14)
-    _handle(mb, 0.495, 1.66, 0.0158, 0.0145, r, mat=["wood", "wood_grey", "wood_varnish"][int(r.integers(0, 3))])
+    _handle(mb, 0.495, 1.66, 0.0158, 0.0145, r, mat=["wood", "wood_grey", "wood_varnish"][int(r.integers(0, 3))], seg=16)
     return mb
 
 
@@ -1041,7 +1060,7 @@ def shovel(seed=0):
     r = rng(seed)
     mb = MB()
     Lb, hw0, t = 0.30, 0.118, 0.002
-    nu, nv = 10, 11
+    nu, nv = 12, 13
 
     def hw(v):
         return hw0 * (1 - (1 - min(v / 0.62, 1.0)) ** 2.2) ** 0.55
@@ -1086,7 +1105,7 @@ def shovel(seed=0):
     for s_ in (-1, 1):
         lathe(mb, [(0.0042, -0.0005), (0.0038, 0.0012), (0.002, 0.0022), (0.0, 0.0025)], seg=8, mat="metal_rust",
               M=_T(0, top.y + 0.004 + s_ * 0.0172, top.z + 0.07) @ _Rx(-90 * s_))
-    _handle(mb, top.z + 0.112, top.z + 1.22, 0.0158, 0.0148, r, mat=["wood", "wood_grey", "wood_varnish"][int(r.integers(0, 3))])
+    _handle(mb, top.z + 0.112, top.z + 1.22, 0.0158, 0.0148, r, mat=["wood", "wood_grey", "wood_varnish"][int(r.integers(0, 3))], seg=16)
     mb.transform(_T(0, -(top.y + 0.004), 0))                     # el mango queda sobre el eje Z
     return mb
 
@@ -1309,7 +1328,7 @@ def _hammer(mb, M, rr):
     """Martillo de uña acostado: mango de madera ovalado, cabeza con cara torneada, ojo con cuña y uña curva partida."""
     revolve(mb, [(0.0, 0.0), (0.012, 0.0), (0.0135, 0.02), (0.0125, 0.12), (0.011, 0.22), (0.0105, 0.285), (0.008, 0.3), (0.0, 0.3)],
             "wood_varnish", seg=10, M=M @ _T(0, 0, 0.0125) @ _Ry(90), rmod=lambda a: 1.0 - 0.18 * math.sin(a) ** 2)
-    Mh = M @ _T(0.3, 0, 0.0125)
+    Mh = M @ _T(0.3, 0, 0.0136)
     revolve(mb, [(0.0, -0.05), (0.0125, -0.05), (0.0145, -0.046), (0.0145, -0.03), (0.0115, -0.02), (0.0115, 0.0)], "steel", seg=12,
             M=Mh @ _Rx(90), caps=False)
     slab(mb, Mh @ _T(0, 0.01, -0.012) @ _Rz(0), 0.03, 0.04, 0.024, rc=0.006, re=0.003, mat="steel", nc=2, ne=1)
@@ -1379,7 +1398,8 @@ def _pliers(mb, M, rr):
 def _screwdriver(mb, M, rr, L=0.22, flat=True):
     """Desarmador: mango con estrías y tapa, virola, vástago redondo y punta plana o de cruz. Acostado sobre su costado."""
     rh = 0.0145
-    Ma = M @ _T(0, 0, rh) @ _Ry(90)
+    tilt = math.degrees(math.atan2(rh - 0.0035, L - 0.06))       # descansa en el mango y en la punta
+    Ma = M @ _T(0.06, 0, 0) @ _Ry(tilt) @ _T(-0.06, 0, rh) @ _Ry(90)
     revolve(mb, [(0.0, 0.0), (0.011, 0.0), (rh, 0.01), (rh, 0.07), (0.012, 0.09), (0.008, 0.1), (0.0, 0.1)],
             ["plastic_blue", "sign_red", "paint_yellow"][int(rr.integers(0, 3))], seg=12, M=Ma,
             rmod=lambda a: 1.0 - 0.07 * (0.5 + 0.5 * math.cos(6 * a)) ** 4)
@@ -1441,8 +1461,8 @@ def workbench(w=2.0, seed=0):
     _vise(mb, _T(-w / 2 + 0.32, -D / 2 + 0.02, H), r, open_=float(r.uniform(0.015, 0.05)),
           paint=["plastic_blue", "paint_green", "paint_green"][int(r.integers(0, 3))])
     # ---- herramientas sobre la cubierta
-    _hammer(mb, _T(-0.12, -0.16, H) @ _Rz(float(r.uniform(-25, 5))) @ _Rx(-90) @ _T(0, -0.0125, 0) @ _Rx(90), r)
-    _wrench(mb, _T(0.18, -0.24, H) @ _Rz(float(r.uniform(10, 50))), )
+    _hammer(mb, _T(-0.12, -0.16, H) @ _Rz(float(r.uniform(-25, 5))), r)
+    _wrench(mb, _T(0.18, -0.24, H - 0.0012) @ _Rz(float(r.uniform(10, 50))), )
     _saw(mb, _T(0.15, -0.02, H) @ _Rz(float(r.uniform(-12, 12)) + 180) @ _Ry(1.3), r)
     _pliers(mb, _T(-0.38, 0.12, H) @ _Rz(float(r.uniform(0, 360))), r)
     _screwdriver(mb, _T(0.5, -0.2, H) @ _Rz(float(r.uniform(70, 110))), r)
@@ -1603,7 +1623,6 @@ def hoist(drop=2.0, seed=0):
     hk = [(0.0, 0.0, -0.064), (0.014, 0.0, -0.062), (0.022, 0.0, -0.05), (0.02, 0.0, -0.036), (0.008, 0.0, -0.028), (-0.008, 0.0, -0.03),
           (-0.02, 0.0, -0.042), (-0.026, 0.0, -0.066), (-0.02, 0.0, -0.09), (0.0, 0.0, -0.1)]
     hk = [(x, y + 0.0, z - 0.011) for (x, y, z) in hk]
-    hk = [(x, y, z) for (x, y, z) in hk]
     mb.tube(_dedupe(fillet(hk, 0.008, 2), 1e-4), 0.006, seg=6, mat="steel",
             radii=None)
     zb = -0.11
@@ -1619,8 +1638,8 @@ def hoist(drop=2.0, seed=0):
         rz = Rs + 0.02 + (0.012 if math.sin(a) > 0 else 0.004) * abs(math.sin(a))
         outline.append((rx * math.cos(a), rz * math.sin(a)))
     for sy in (-1, 1):
-        bplate(mb, outline, 0.005, "paint_yellow", M=_T(0, sy * 0.021 + (0.005 if sy < 0 else 0.0) * 0 - (0.0 if sy > 0 else 0.005) + 0.0, zc)
-               @ _Rx(-90) @ _T(0, 0, 0) if sy > 0 else _T(0, -0.021, zc) @ _Rx(-90) @ _T(0, 0, -0.005), e=0.0015)
+        y0 = 0.021 if sy > 0 else -0.026                           # cachete de 5 mm a cada lado de la garrucha
+        bplate(mb, outline, 0.005, "paint_yellow", M=_T(0, y0, zc) @ _Rx(-90), e=0.0015)
     revolve(mb, [(0.012, -0.016), (Rs, -0.016), (Rs + 0.002, -0.013), (Rs - 0.006, -0.006), (Rs - 0.01, 0.0), (Rs - 0.006, 0.006),
                  (Rs + 0.002, 0.013), (Rs, 0.016), (0.012, 0.016)], "steel", seg=18, M=_T(0, 0, zc) @ _Rx(90), caps=False)
     revolve(mb, [(0.0, -0.016), (0.012, -0.016), (0.012, 0.016), (0.0, 0.016)], "steel", seg=10, M=_T(0, 0, zc) @ _Rx(90))
@@ -1644,7 +1663,7 @@ def hoist(drop=2.0, seed=0):
     pts = []
     for (a_, b_) in zip(path[:-1], path[1:]):
         A, B = Vector(a_), Vector(b_)
-        n = max(1, int((B - A).length / (0.018 if (A - Vector((0, 0, zc))).length < 0.12 else 0.2)))
+        n = max(1, int((B - A).length / (0.021 if (A - Vector((0, 0, zc))).length < 0.12 else 0.2)))
         for k in range(n):
             pts.append(A.lerp(B, k / n))
     pts.append(Vector(path[-1]))
@@ -1980,7 +1999,7 @@ def stall_partition(L=3.0, h=1.4, gate=True, seed=0):
     return mb
 
 
-def split_rail(mb, p0, p1, w, t, rr, mat="wood_grey", seg=7, face=(0, -1, 0)):
+def split_rail(mb, p0, p1, w, t, rr, mat="wood_grey", seg=9, face=(0, -1, 0)):
     """Morillo partido (rajado de un tronco): sección de cuña con cara rajada plana hacia `face` y lomo de corteza; aristas y
     caras irregulares, torcido y combado."""
     M, L = port.frame_on(p0, p1, face)
@@ -2020,7 +2039,7 @@ def pen_fence(L=4.0, h=1.3, seed=0):
         r0 = float(r.uniform(0.065, 0.078))
         rp.append(r0)
         log_post(pm, (x, 0.0, -0.06), (x + float(r.uniform(-0.03, 0.03)), float(r.uniform(-0.02, 0.02)), h + float(r.uniform(0.05, 0.16))),
-                 r0, r0 * 0.88, "wood_grey", r, seg=10, rings=7, crook=0.022, checks=2)
+                 r0, r0 * 0.88, "wood_grey", r, seg=12, rings=10, crook=0.022, checks=2)
     tree = BVHTree.FromBMesh(pm.bm)
     mb.join(pm)
 
@@ -2030,13 +2049,12 @@ def pen_fence(L=4.0, h=1.3, seed=0):
     zr = [h - 0.12, h * 0.6, h * 0.22]
     for b in range(nb):
         for k, z in enumerate(zr):
-            x0 = xs[b] - (0.0 if b == 0 else -0.0) - 0.08 * (b == 0)
             x1 = xs[b + 1] + (0.08 if b == nb - 1 else 0.06)
             x0 = xs[b] - (0.08 if b == 0 else 0.06)
             dz = float(r.uniform(-0.03, 0.03))
             dz1 = dz + float(r.uniform(-0.04, 0.04))
             tk = float(r.uniform(0.05, 0.065))
-            stack = 0.055 if (b % 2 == 1) else 0.0                 # en los postes intermedios un morillo va sobre el otro
+            stack = 0.074 if (b % 2 == 1) else 0.0                 # en los postes intermedios un morillo va sobre el otro
             ya = front(xs[b], z + dz) + 0.007 - (stack if b > 0 else 0.0)
             yb_ = front(xs[b + 1], z + dz1) + 0.007 - (stack if b < nb - 1 else 0.0) * 0.0
             if b % 2 == 1:
@@ -2047,7 +2065,7 @@ def pen_fence(L=4.0, h=1.3, seed=0):
                 for dzn in (-0.025, 0.02):
                     nail(mb, _T(xp + float(r.uniform(-0.02, 0.02)), yp - tk + 0.004, zp + dzn) @ _Rx(90), r=0.006, seg=5, mat="metal_rust")
     # amarres de alambre: 3 vueltas alrededor del poste y el morillo
-    for (xi, k) in ((0, 1), (nb, 0), (min(1, nb), 2)):
+    for (xi, k) in sorted({(0, 1), (nb, 0), (min(1, nb), 2), (nb, 2), (min(1, nb), 0)}):
         x = xs[xi]
         z = zr[k]
         R = rp[xi] + 0.06

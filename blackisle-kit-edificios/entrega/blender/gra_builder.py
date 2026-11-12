@@ -868,7 +868,7 @@ def dress(furn, r):
         put(farm.shovel(seed=11), 0, 0, M=_T(XP_AISLE + 0.20, -0.25, FLOOR_B) @ _Rx(-10) @ _Rz(-15))
         put(farm.wheelbarrow(seed=12), 0.7, -2.6, FLOOR_B, "+x")
         for (x, y) in ((-0.6, 2.2), (0.9, 5.5), (-1.2, -6.2)):
-            put(farm.loose_hay(1.3, 0.9, seed=int(x * 10 + y)), x, y, FLOOR_B, solid=False)
+            put(farm.loose_hay(1.3, 0.9, seed=int(abs(x * 10 + y)) + 70), x, y, FLOOR_B, solid=False)
         # corrales vacíos al oriente: divisiones y frentes con puerta
         for y in FRAMES:
             put(farm.stall_partition(XP_WALL - XP_AISLE - 0.12, gate=False, seed=int(y + 20)), 0, 0,
