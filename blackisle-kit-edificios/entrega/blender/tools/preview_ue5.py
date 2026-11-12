@@ -22,7 +22,7 @@ PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "C
 
 
 EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
-    "MUE_1_carga": [("playa", (-14.0, -52.0, 1.7), (2.0, 4.0, 3.5), 30), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
+    "MUE_1_carga": [("playa", (-12.0, -38.0, 2.6), (3.0, 8.0, 4.0), 26), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
                     ("atraque", (30.0, 64.0, 1.2), (20.0, 51.0, 1.8), 28)],
 }
 
@@ -169,6 +169,7 @@ def main():
     kit = os.path.abspath(argv[argv.index("--kit") + 1] if "--kit" in argv else os.path.join(ENT, "..", "kit_ue5"))
     out = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ENT, "render_qa", "ue5")
     samples = int(argv[argv.index("--samples") + 1]) if "--samples" in argv else 64
+    solo = set(argv[argv.index("--solo") + 1].split(",")) if "--solo" in argv else None     # p. ej. --solo playa,mar
     os.makedirs(out, exist_ok=True)
     man = json.load(open(os.path.join(kit, "manifiesto.json")))
     d = man["modelos"][bid]
@@ -263,9 +264,12 @@ def main():
     dist = R / math.sin(math.radians(22)) * 0.95
     look(ctr + Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) * dist, ctr)
     sc.render.filepath = os.path.join(out, f"{bid}_ue5_exterior.png")
-    bpy.ops.render.render(write_still=True)
-    print("[preview] exterior", sc.render.filepath, flush=True)
+    if solo is None or "exterior" in solo:
+        bpy.ops.render.render(write_still=True)
+        print("[preview] exterior", sc.render.filepath, flush=True)
     for (nm, c, t, lens) in EXTRA_VIEWS.get(bid, ()):
+        if solo is not None and nm not in solo:
+            continue
         look(Vector(c), t, lens=lens)
         sc.render.filepath = os.path.join(out, f"{bid}_ue5_{nm}.png")
         bpy.ops.render.render(write_still=True)
@@ -281,6 +285,8 @@ def main():
             lo = bpy.data.objects.new(k, L)
             lo.location = s[k]
             sc.collection.objects.link(lo)
+    if solo is not None and "interior" not in solo:
+        return
     look(Vector(s["cam"]), s["tgt"], lens=18)
     sc.render.filepath = os.path.join(out, f"{bid}_ue5_interior.png")
     bpy.ops.render.render(write_still=True)
