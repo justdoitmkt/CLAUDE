@@ -228,10 +228,13 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
                 break
             if all((p["x"] - b[0]) ** 2 + (p["y"] - b[1]) ** 2 > 3.0 ** 2 for b in bulbs) and r.random() < 0.85 * density:
                 bulbs.append((p["x"], p["y"]))
+                drop = r.uniform(0.25, 0.55)
                 tmp = MB()
-                ceiling_bulb(tmp, r, r.uniform(0.25, 0.55))
+                ceiling_bulb(tmp, r, drop)
                 mb.join(tmp, _T(p["x"], p["y"], p["zc"]))
                 st["bulb"] = st.get("bulb", 0) + 1
+                # centro de la bombilla (para poner una luz puntual en el motor), en metros, ejes de Blender
+                st.setdefault("bulb_pos", []).append([round(p["x"], 3), round(p["y"], 3), round(p["zc"] - drop - 0.09, 3)])
 
         # una pasada por tipo, cada una con su espaciado (entre piezas del mismo tipo) y su probabilidad
         def place(kind, ok, prob, gap, rad, put):

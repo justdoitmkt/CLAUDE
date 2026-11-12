@@ -264,7 +264,7 @@ def _graffiti_layer(nb, coord_obj, gmap, band_top):
     return col_acc, a_acc
 
 
-def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete"):
+def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0.88, 0.86), under="concrete", dust_h=0.35):
     """Material de look-dev para `name` (nombre canónico del kit). Concreto/aplanado llevan todas las capas; el resto, capas reducidas."""
     mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     nb = NB(mat)
@@ -364,7 +364,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         color = nb.mix(nb.math("MULTIPLY", moss, 0.85), color, (0.20, 0.25, 0.11, 1.0))
         # L7: arena y polvo en horizontales hacia arriba y en la base
         up = nb.math("GREATER_THAN", sep_n.outputs[2], 0.7)
-        ground = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], 0.35), clamp=True)
+        ground = nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", sep_p.outputs[2], dust_h), clamp=True)   # 0,35 m con duna; 0,12 sin
         nz2 = nb.n("ShaderNodeTexNoise", in_Scale=1.5, in_Detail=4.0)
         nb.link(co, nz2.inputs["Vector"])
         sand = nb.math("MULTIPLY", nb.math("MAXIMUM", nb.math("MULTIPLY", up, 0.6), ground), nz2.outputs["Fac"])

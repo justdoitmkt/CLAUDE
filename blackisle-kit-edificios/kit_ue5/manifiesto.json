@@ -1,0 +1,524 @@
+{
+ "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
+ "version_repo": "1637c54",
+ "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
+ "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
+ "partes": {
+  "Estructura": {
+   "nanite": true,
+   "colision": "ninguna",
+   "nota": "carcasa, interior (muros, losas, escaleras, puertas, vestido) y techo"
+  },
+  "Detalle": {
+   "nanite": true,
+   "colision": "ninguna",
+   "nota": "vanos, barandales, servicios, cables, daño"
+  },
+  "Escombro": {
+   "nanite": false,
+   "colision": "compleja como simple",
+   "nota": "escombro exterior suelto (sin terreno): se puede mover o borrar sin afectar al edificio"
+  },
+  "Vidrio": {
+   "nanite": false,
+   "colision": "ninguna",
+   "sombra": false,
+   "nota": "todo el vidrio; material translúcido"
+  },
+  "Colision": {
+   "nanite": false,
+   "colision": "compleja como simple",
+   "visible": false,
+   "nota": "carcasa + interior con caras coplanares fundidas: misma forma, pocos triángulos; invisible"
+  }
+ },
+ "materiales": {
+  "BLK_concrete": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_concrete_BC",
+    "N": "T_BLK_concrete_N",
+    "ORM": "T_BLK_concrete_ORM"
+   },
+   "UVEscala": 0.66667,
+   "Tinte": [
+    0.92,
+    0.92,
+    0.9
+   ],
+   "LumaMedia": 0.4,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T1_concrete.png a 3.0 m por repetición; rugosidad 0.9, metal 0.0 (en el ORM)"
+  },
+  "BLK_plaster": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_plaster_BC",
+    "N": "T_BLK_plaster_N",
+    "ORM": "T_BLK_plaster_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    0.97,
+    0.96,
+    0.93
+   ],
+   "LumaMedia": 0.5603,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.88, metal 0.0 (en el ORM)"
+  },
+  "BLK_wood": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_wood_BC",
+    "N": "T_BLK_wood_N",
+    "ORM": "T_BLK_wood_ORM"
+   },
+   "UVEscala": 1.25,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.0927,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T4_wood_weathered.png a 1.6 m por repetición; rugosidad 0.8, metal 0.0 (en el ORM)"
+  },
+  "BLK_wood_dark": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_wood_dark_BC",
+    "N": "T_BLK_wood_dark_N",
+    "ORM": "T_BLK_wood_dark_ORM"
+   },
+   "UVEscala": 1.11111,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.1012,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "W1_wood_dark_planks.png a 1.8 m por repetición; rugosidad 0.8, metal 0.0 (en el ORM)"
+  },
+  "BLK_wood_grey": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_wood_grey_BC",
+    "N": "T_BLK_wood_grey_N",
+    "ORM": "T_BLK_wood_grey_ORM"
+   },
+   "UVEscala": 1.11111,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.3747,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "W2_wood_grey_clapboard.png a 1.8 m por repetición; rugosidad 0.82, metal 0.0 (en el ORM)"
+  },
+  "BLK_brick": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_brick_BC",
+    "N": "T_BLK_brick_N",
+    "ORM": "T_BLK_brick_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.148,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "S1_brick_red_worn.png a 2.0 m por repetición; rugosidad 0.85, metal 0.0 (en el ORM)"
+  },
+  "BLK_tile": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_tile_BC",
+    "N": "T_BLK_tile_N",
+    "ORM": "T_BLK_tile_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.1989,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": true,
+   "nota": "T3_roof_tile.png a 2.0 m por repetición; rugosidad 0.75, metal 0.0 (en el ORM)"
+  },
+  "BLK_metal_rust": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_metal_rust_BC",
+    "N": "T_BLK_metal_rust_N",
+    "ORM": "T_BLK_metal_rust_ORM"
+   },
+   "UVEscala": 1.66667,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.0816,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "M1_rust_metal.png a 1.2 m por repetición; rugosidad 0.7, metal 0.3 (en el ORM)"
+  },
+  "BLK_metal_paint": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_metal_paint_BC",
+    "N": "T_BLK_metal_paint_N",
+    "ORM": "T_BLK_metal_paint_ORM"
+   },
+   "UVEscala": 1.66667,
+   "Tinte": [
+    0.62,
+    0.66,
+    0.62
+   ],
+   "LumaMedia": 0.0816,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "M1_rust_metal.png a 1.2 m por repetición; rugosidad 0.6, metal 0.3 (en el ORM)"
+  },
+  "BLK_roof_metal": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_roof_metal_BC",
+    "N": "T_BLK_roof_metal_N",
+    "ORM": "T_BLK_roof_metal_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.1318,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": true,
+   "nota": "R1_roof_corrugated_rust.png a 2.0 m por repetición; rugosidad 0.65, metal 0.35 (en el ORM)"
+  },
+  "BLK_roof_metal_light": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_roof_metal_light_BC",
+    "N": "T_BLK_roof_metal_light_N",
+    "ORM": "T_BLK_roof_metal_light_ORM"
+   },
+   "UVEscala": 1.0,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.2736,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": true,
+   "nota": "R2_roof_corrugated_light.png a 2.0 m por repetición; rugosidad 0.55, metal 0.4 (en el ORM)"
+  },
+  "BLK_aluminium": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.55,
+    0.56,
+    0.56
+   ],
+   "Rugosidad": 0.45,
+   "Metal": 1.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_fabric": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.9,
+    0.9,
+    0.9
+   ],
+   "Rugosidad": 0.95,
+   "Metal": 0.0,
+   "PesoVC": 1.0,
+   "dos_caras": true,
+   "nota": "COLOR_0 lleva el color desteñido de cada pieza (ropa, cortinas, colchones) x AO; Color queda casi blanco"
+  },
+  "BLK_cable": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.03,
+    0.03,
+    0.03
+   ],
+   "Rugosidad": 0.6,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_plastic": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.7,
+    0.69,
+    0.64
+   ],
+   "Rugosidad": 0.55,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_sand": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.74,
+    0.68,
+    0.54
+   ],
+   "Rugosidad": 0.97,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_vegetation": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.22,
+    0.28,
+    0.12
+   ],
+   "Rugosidad": 0.8,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": true,
+   "nota": ""
+  },
+  "BLK_mortar": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.58,
+    0.56,
+    0.52
+   ],
+   "Rugosidad": 0.95,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_paper": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.7,
+    0.67,
+    0.58
+   ],
+   "Rugosidad": 0.9,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_glass": {
+   "maestro": "M_BLK_Vidrio",
+   "Color": [
+    0.035,
+    0.042,
+    0.042
+   ],
+   "OpacidadLimpia": 0.16,
+   "OpacidadSucia": 0.55,
+   "RugosidadLimpia": 0.03,
+   "RugosidadSucia": 0.38,
+   "Especular": 0.5,
+   "EscalaSuciedad": 1.6,
+   "FuerzaSuciedad": 1.0,
+   "texturas": {
+    "Suciedad": "T_BLK_vidrio_suciedad"
+   },
+   "dos_caras": false,
+   "nota": "vidrio de 4 mm como prismas cerrados (cada esquirla tiene cara delantera y trasera): una cara. Translúcido con iluminación por píxel (Surface ForwardShading); malla sin Nanite."
+  }
+ },
+ "modelos": {
+  "CAB_2_pilotes": {
+   "id": "CAB_2_pilotes",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_CAB_2_pilotes_Estructura",
+     "archivo": "modelos/CAB_2_pilotes/SM_CAB_2_pilotes_Estructura.glb",
+     "triangulos": 124104,
+     "ranuras": [
+      "CAB_2_pilotes_walls_main",
+      "CAB_2_pilotes_walls_rest",
+      "BLK_wood",
+      "BLK_wood_grey",
+      "BLK_concrete",
+      "BLK_wood_dark",
+      "BLK_metal_rust",
+      "BLK_roof_metal_light"
+     ],
+     "mib": 6.56
+    },
+    "Detalle": {
+     "nombre": "SM_CAB_2_pilotes_Detalle",
+     "archivo": "modelos/CAB_2_pilotes/SM_CAB_2_pilotes_Detalle.glb",
+     "triangulos": 41494,
+     "ranuras": [
+      "BLK_wood_grey",
+      "BLK_metal_rust",
+      "BLK_concrete",
+      "BLK_wood",
+      "BLK_mortar",
+      "BLK_metal_paint",
+      "BLK_fabric"
+     ],
+     "mib": 2.92
+    },
+    "Vidrio": {
+     "nombre": "SM_CAB_2_pilotes_Vidrio",
+     "archivo": "modelos/CAB_2_pilotes/SM_CAB_2_pilotes_Vidrio.glb",
+     "triangulos": 2332,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 0.17
+    },
+    "Colision": {
+     "nombre": "SM_CAB_2_pilotes_Colision",
+     "archivo": "modelos/CAB_2_pilotes/SM_CAB_2_pilotes_Colision.glb",
+     "triangulos": 32364,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 1.61
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_CAB_2_pilotes_walls_main_BC",
+     "N": "T_CAB_2_pilotes_walls_main_N",
+     "ORM": "T_CAB_2_pilotes_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_CAB_2_pilotes_walls_rest_BC",
+     "N": "T_CAB_2_pilotes_walls_rest_N",
+     "ORM": "T_CAB_2_pilotes_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [],
+   "medidas_m": {
+    "x": 8.04,
+    "y": 9.561,
+    "z": 6.638,
+    "min": [
+     -4.02,
+     -6.01,
+     -0.15
+    ],
+    "max": [
+     4.02,
+     3.551,
+     6.488
+    ],
+    "escombro_min": null,
+    "escombro_max": null,
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 11.26,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "veranda con la escalera exterior"
+   },
+   "materiales_atlas": {
+    "CAB_2_pilotes_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_CAB_2_pilotes_walls_main_BC",
+      "N": "T_CAB_2_pilotes_walls_main_N",
+      "ORM": "T_CAB_2_pilotes_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "CAB_2_pilotes_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_CAB_2_pilotes_walls_rest_BC",
+      "N": "T_CAB_2_pilotes_walls_rest_N",
+      "ORM": "T_CAB_2_pilotes_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  }
+ }
+}

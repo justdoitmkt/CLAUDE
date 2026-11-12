@@ -25,6 +25,7 @@ INFILL = 0.15       # muro de relleno (block + aplanado)
 RECESS = 0.08       # rehundido del relleno respecto a la cara de columna
 PART = 0.10         # división interior
 GROUND = 0.15       # losa de desplante (z 0 → 0.15)
+SKIRT_TERRAIN = True  # False (kit UE5): sin arena ni hierba alrededor; el escombro exterior se conserva como pieza suelta
 
 
 # ----------------------------------------------------------------------------------------------
@@ -494,6 +495,8 @@ def build_skirt(cfg, mb, margin=3.0, cell=0.25, keep_clear=(), inset=0.15, fill_
     tuft_clear: distancia mínima de las matas a la planta (las hojas se inclinan hasta ~0,33 m).
     caps: [(x0, x1, y0, y1, zmax)] la arena no sube de zmax ahí (bajo escalones). cap_inside: tope de la arena dentro de la
     planta (bajo pisos elevados y decks). El parche abarca la unión de la planta (porches incluidos) + margin."""
+    if not SKIRT_TERRAIN:
+        return 0
     import numpy as np
     r = rng(cfg["seed"] + 303)
     xs, ys = cfg["xs"], cfg["ys"]

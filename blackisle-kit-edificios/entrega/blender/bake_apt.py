@@ -1,7 +1,10 @@
 """bake_apt.py — horneado final de un edificio de departamentos (fase F) y materiales glTF.
 
-Uso: /root/blk-venv/bin/python bake_apt.py --id APT_A_5p [--quick] [--blend]
+Uso: /root/blk-venv/bin/python bake_apt.py --id APT_A_5p [--quick] [--reuse] [--ue]
   --quick : tamaños 1/4 y pocas muestras (prueba del flujo completo).
+  --ue    : variante del kit para Unreal Engine 5: sin arena ni hierba alrededor (el escombro exterior queda como pieza suelta),
+            atlas de muros horneados sin la arena (texturas_ue/<ID>), materiales separados por tipo (vidrio, aluminio, tela...)
+            en vez del 'liso' combinado, y <ID>_ue.blend para blender/export_ue5.py.
 Atlas (brief §4.7 con el recorte de memoria aplicado): walls_main (cara principal + banda de grafiti de las 4 caras),
 walls_rest (resto del exterior de la carcasa), details (vanos, servicios, daño), roof (estructura + teja + canalón),
 skirt (arena + hierba). Interior: materiales repetibles a escala real (UV de caja) + AO horneada en el canal 'lightmap'.
@@ -353,6 +356,57 @@ def _fabric_tints(me, mat_idx, ls, lt):
     return out
 
 
+def ue_materials(objs):
+    """Kit UE5: un material por tipo con nombre común a los 7 modelos (BLK_<tipo>; el escombro usa BLK_concrete), sin fundir
+    los colores lisos. COLOR_0 = AO por esquina (x color desteñido por pieza en la tela); el color, la rugosidad, el metal, la
+    escala de los repetibles y el vidrio translúcido los pone el material de Unreal (kit_ue5/manifiesto.json). El material de
+    Blender es solo un marcador con un color aproximado para la vista previa."""
+    import numpy as np
+    cache = {}
+
+    def mat_for(name):
+        key = TILE_ALIAS.get(name, name)
+        if key not in cache:
+            mat = bpy.data.materials.new(f"BLK_{key}")
+            c = ld.BASE_COLORS.get(key, ((0.6, 0.6, 0.6), 0.8, 0.0))[0] if key not in TILE_TEX else TILE_TEX[key][4]
+            mat.diffuse_color = (*c, 1.0)
+            mat.use_backface_culling = key not in DOUBLE_SIDED and key not in ("glass",)
+            cache[key] = mat
+        return cache[key]
+    for obj in objs:
+        me = obj.data
+        if "Float2" in me.uv_layers and "UVMap" not in me.uv_layers:
+            me.uv_layers["Float2"].name = "UVMap"
+        old = [m.name.split(".")[0] for m in me.materials]
+        mi = np.zeros(len(me.polygons), dtype=np.int32)
+        me.polygons.foreach_get("material_index", mi)
+        if "fabric" in old:
+            ls = np.zeros(len(me.polygons), dtype=np.int32)
+            me.polygons.foreach_get("loop_start", ls)
+            lt = np.zeros(len(me.polygons), dtype=np.int32)
+            me.polygons.foreach_get("loop_total", lt)
+            ca = me.color_attributes["AO"]
+            cols = np.zeros(len(ca.data) * 4, dtype=np.float32)
+            ca.data.foreach_get("color", cols)
+            cols = cols.reshape(-1, 4)
+            k = old.index("fabric")
+            sel = np.repeat(mi, lt) == k
+            cols[sel, :3] *= _fabric_tints(me, k, ls, lt)[sel]
+            ca.data.foreach_set("color", cols.ravel())
+        new = [mat_for(nm) for nm in old]
+        uniq = []
+        for m in new:
+            if m not in uniq:
+                uniq.append(m)
+        remap = np.array([uniq.index(m) for m in new], dtype=np.int32)
+        me.materials.clear()
+        for m in uniq:
+            me.materials.append(m)
+        me.polygons.foreach_set("material_index", remap[mi])
+        me.update()
+    return sorted(m.name for m in cache.values())
+
+
 def tileable_materials(objs, prefix, uv_unit):
     """Sustituye los materiales de `objs` por repetibles a escala real (canal 'UVMap' de caja a `uv_unit` m por unidad) y funde
     los de color liso en un solo material 'liso' cuyo color va en COLOR_0 (color x AO). COLOR_0 multiplica el color base en glTF."""
@@ -438,10 +492,13 @@ def main():
     bid = argv[argv.index("--id") + 1] if "--id" in argv else "APT_A_5p"
     quick = "--quick" in argv
     reuse = "--reuse" in argv
-    out_tex = os.path.join(ENT, "texturas", bid if not quick else bid + "_quick")
+    ue = "--ue" in argv
+    out_tex = os.path.join(ENT, "texturas_ue" if ue else "texturas", bid if not quick else bid + "_quick")
     os.makedirs(out_tex, exist_ok=True)
     reset_scene()
     t0 = time.time()
+    if ue:
+        ab.SKIRT_TERRAIN = False
     res = builders.build(bid)
     cfg = res["cfg"]
     prefix = bid
@@ -451,8 +508,8 @@ def main():
     roof = g("Roof")[0]
     det = join(g("Details") + [dmg.get("Details"), dmg.get("Shell")], f"{prefix}_Details")
     inter = join(g("Interior") + [dmg.get("Interior")], f"{prefix}_Interior")
-    skirt = g("Skirt")[0]
-    log("construido", round(time.time() - t0), "s; tris", tri_count([shell, det, inter, roof, skirt]))
+    skirt = g("Skirt")[0] if g("Skirt") else None        # sin terreno (--ue) las cabañas no tienen nada en la base
+    log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt) if o]))
     # caras apoyadas en el terreno (cara inferior de la losa de desplante, pies de columna): nunca se ven y ocupaban medio atlas
     bm = bmesh.new()
     bm.from_mesh(shell.data)
@@ -474,25 +531,31 @@ def main():
     band_top = (cfg["h"][0] + ab.GROUND + 0.7) if has_g else -1.0
     main_o, rest_o = split_by(ext, lambda c, n: n.y < -0.5 or c.z < band_top, f"{prefix}_WallsMain", f"{prefix}_WallsRest")
     inter = join([inter, intr], f"{prefix}_Interior")
-    # la base: el terreno de arena va a su propio atlas; hierba, escombro y varillas pasan al grupo de detalles
-    sand_idx = [i for i, m in enumerate(skirt.data.materials) if m and m.name.split(".")[0] == "sand"]
-    sand_o, loose_o = _split_by_material(skirt, sand_idx, f"{prefix}_Sand", f"{prefix}_SkirtLoose")
-    # el terreno es un campo de alturas: el recálculo de normales de una malla abierta deja islas boca abajo, que en glTF
-    # (una sola cara) se verían como agujeros desde arriba
-    bm = bmesh.new()
-    bm.from_mesh(sand_o.data)
-    down = [f for f in bm.faces if f.normal.z < -0.05]
-    bmesh.ops.reverse_faces(bm, faces=down)
-    bm.to_mesh(sand_o.data)
-    bm.free()
-    log("arena: caras volteadas hacia arriba", len(down))
+    if ue:                                               # sin terreno: lo que queda en la base es escombro exterior suelto
+        sand_o, loose_o = None, skirt
+        if skirt is not None:
+            skirt.name = f"{prefix}_SkirtLoose"
+    else:
+        # la base: el terreno de arena va a su propio atlas; hierba, escombro y varillas pasan al grupo de detalles
+        sand_idx = [i for i, m in enumerate(skirt.data.materials) if m and m.name.split(".")[0] == "sand"]
+        sand_o, loose_o = _split_by_material(skirt, sand_idx, f"{prefix}_Sand", f"{prefix}_SkirtLoose")
+        # el terreno es un campo de alturas: el recálculo de normales de una malla abierta deja islas boca abajo, que en glTF
+        # (una sola cara) se verían como agujeros desde arriba
+        bm = bmesh.new()
+        bm.from_mesh(sand_o.data)
+        down = [f for f in bm.faces if f.normal.z < -0.05]
+        bmesh.ops.reverse_faces(bm, faces=down)
+        bm.to_mesh(sand_o.data)
+        bm.free()
+        log("arena: caras volteadas hacia arriba", len(down))
+    atlas_objs = [(main_o, "walls_main"), (rest_o, "walls_rest")] + ([] if ue else [(sand_o, "skirt")])
     log("split ok", round(time.time() - t0), "s")
     gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)),
                            cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
                            cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2) if has_g else None
-    for nm in sorted({m.name for o in (main_o, rest_o, sand_o) for m in o.data.materials}):
-        ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top, **cfg.get("lookdev", {}))
-    for o in (main_o, rest_o, sand_o):
+    for nm in sorted({m.name for o, _ in atlas_objs for m in o.data.materials}):
+        ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top, dust_h=0.12 if ue else 0.35, **cfg.get("lookdev", {}))
+    for o, _ in atlas_objs:
         t = time.time()
         ld.unwrap(o)
         log("unwrap", o.name, round(time.time() - t), "s", len(o.data.polygons), "caras")
@@ -500,7 +563,7 @@ def main():
     log("islas de banda ampliadas:", nb)
     mem = 0.0
     sizes = SIZES if bid.startswith("APT") else SIZES_CAB
-    for o, aid in ((main_o, "walls_main"), (rest_o, "walls_rest"), (sand_o, "skirt")):
+    for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles
     loose = [o for o in (det, roof, inter, loose_o) if o is not None and len(o.data.polygons)]
@@ -515,7 +578,7 @@ def main():
     box_uv_bm(bm, 2.0)
     bm.to_mesh(inter.data)
     bm.free()
-    mats = tileable_materials(loose, prefix, 2.0)
+    mats = ue_materials(loose) if ue else tileable_materials(loose, prefix, 2.0)
     mats_i = []
     tex_used = {TILE_TEX[k][0] for k in TILE_TEX}
     for fn in tex_used:                               # tamaño real de cada repetible (el aplanado interior es de 2048²)
@@ -523,10 +586,13 @@ def main():
         mem += mem_mb(w, h)
     log("materiales repetibles:", mats, mats_i)
     log(f"memoria de texturas decodificada ≈ {mem:.0f} MB")
-    blend = os.path.join(ENT, "blender", f"{bid}{'_quick' if quick else ''}.blend")
+    blend = os.path.join(ENT, "blender", f"{bid}{'_ue' if ue else ''}{'_quick' if quick else ''}.blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     log("guardado", blend, "total", round(time.time() - t0), "s")
-    json.dump(dict(tris=tri_count([main_o, rest_o, sand_o] + loose), mem_mb=round(mem, 1), materials=mats + mats_i),
+    if ue:                                               # focos colgando del vestido interior: posiciones para luces del motor
+        bulbs = res.get("stats", {}).get("interior_dress", {}).get("bulb_pos", [])
+        json.dump(dict(unidades="m, ejes de Blender (z arriba)", focos=bulbs), open(os.path.join(out_tex, "focos.json"), "w"))
+    json.dump(dict(tris=tri_count([o for o, _ in atlas_objs] + loose), mem_mb=round(mem, 1), materials=mats + mats_i),
               open(os.path.join(out_tex, "bake_info.json"), "w"), indent=1)
 
 
