@@ -16,7 +16,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 from kit import port
-from kit.clinic import MB, _Rx, _Ry, _Rz, _T, fillet, rbox, rr_profile, rtube, zloft
+from kit.clinic import MB, _Rx, _Ry, _Rz, _T, fillet, rbox, rr_profile, zloft
 from kit.common import rng
 
 PI = math.pi
@@ -1026,7 +1026,8 @@ def folding_chair(seed=0):
         _boot(mb, s * xf, F[0] - sf * F[1], sf)
         _boot(mb, s * xr, R0[0] - sr * R0[1], sr, r=0.012)
         d_ = Vector((0, Tp[0] - K[0], Tp[1] - K[1])).normalized()                     # tapón del poste
-        port.lathe(mb, [(0.0115, 0.0), (0.0118, 0.006), (0.0105, 0.011), (0.006, 0.0138)], seg=10, mat="rubber", M=_T(s * xf, Tp[0] - d_.y * 0.004, Tp[1] - d_.z * 0.004) @ _Rx(-math.degrees(math.atan2(d_.y, d_.z))))
+        port.lathe(mb, [(0.0115, 0.0), (0.0118, 0.006), (0.0105, 0.011), (0.006, 0.0138)], seg=10, mat="rubber",
+                   M=_T(s * xf, Tp[0] - d_.y * 0.004, Tp[1] - d_.z * 0.004) @ _Rx(-math.degrees(math.atan2(d_.y, d_.z))))
     # pivote de tijera: cruce de las rectas de pata delantera y trasera
     tz = (R0[0] - F[0] + sf * F[1] - sr * R0[1]) / (sf - sr)
     py = F[0] + sf * (tz - F[1])
