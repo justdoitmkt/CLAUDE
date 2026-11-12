@@ -513,3 +513,75 @@ ojos; en `refs_higgsfield/COM_1_antena/`:
   Las fuentes concretas de cada pieza se anotan en la sección de modelado.
 - **Grafiti (R-GRAF):** el usuario no fijó cantidad; un sitio de telecom vigilado lleva poco: unas cuantas placas y firmas
   chicanas solo en la trasera de la caseta. Biblioteca exclusiva nueva, sin números, coronas ni estrellas (R4).
+
+## COM_1_antena · modelado (2026-11-12)
+- **Ensamble** (`blender/com_builder.py`): compound de 16 × 16 m sobre guarnición de concreto en tramos con junta, cama de
+  grava ondulada con piedras sueltas, banquetas en paños de 1,5 m, losas de equipo y del portón, registros del anillo de
+  tierras, bolardos de tubo relleno pintados de amarillo. Caseta prefabricada de concreto 5,8 × 3,3 m (muros de 10 cm con
+  esquinas en chaflán, losa de techo con vuelo, gotero y pendiente, insertos de izaje, clips de anclaje al firme); puerta de
+  lámina de 36 × 84" entreabierta (marco con tope, burlete, 3 bisagras de nudillo, palanca, cerrojo, placa de patada,
+  cierrapuertas de brazo paralelo, umbral estriado, gotero); 2 condensadoras con canaleta que rodea la esquina hasta cada
+  minisplit interior; arbotante LED de aluminio fundido; estrobo; caja de conexión del generador; toma y extractor con
+  rejilla y capucha; puerto de 12 botas con capucha; barra de tierras exterior; 2 antenas GPS de sincronía en el techo con
+  su cable hasta el puerto. Torre girada para que su escalerilla de cables mire a la caseta; 18 troncales del pie de la torre
+  al puerto sobre el puente de cables (dos capas, flejes con hebilla, gaza de goteo, cada cable a la columna de botas de su
+  lado, sin cruces).
+- **Torre** (agente, `kit/tower.py`, 381 768 triángulos): 3 patas tubulares Ø219→Ø114 en tramos de 6 m con bridas de
+  8 tornillos, contraventeo en X con placa de cruce y zigzag en el tramo recto, cartelas y tornillería en cada nudo, dados
+  Ø1,0 m con placa base, 8 anclas y doble tuerca, escalones de pie de 5/8", escalera con riel rígido anticaídas, escalerilla
+  de cables con abrazaderas de bloque cada 1,2 m y 18 cables, plataforma de microondas (32,5 m) y de sectores (39,9 m) con
+  rejilla electroforjada real, rodapié, barandal con rodillera, tubos de montaje; mástil, pararrayos de cobre de 2 m,
+  bajada de tierra, ménsula de baliza, cajas de distribución, letrero RF. Ajuste mío: tubo de los platos de Ø114 a Ø76 para
+  casar con las monturas del kit de antenas.
+- **Antenas** (agente, `kit/antennas.py`): 6 paneles pasivos de 8 puertos 2688 × 301 × 181 mm con soportes de inclinación,
+  3 AAU 5G 64T64R de 795 × 395 mm con aletas, 6 RRU 4T4R de 480 × 270 × 140 mm (4 jumpers ½" con gaza de goteo y conectores
+  4.3-10 cada uno), colas de AAU y RRU peinadas bajo la plataforma hasta las cajas de distribución, 2 platos de microondas
+  (0,9 y 0,6 m) con radomo de tela y ODU, baliza roja L-810.
+- **Equipo del sitio** (agente, `kit/telecom.py`): malla ciclónica de 2" calibre 9 TEJIDA en geometría (modo ligero de una
+  sola malla, ~13,5 k triángulos por metro: pickets en zigzag entrelazados, orilla torcida, postes de 2-3/8" y terminales de
+  2-7/8", larguero de 1-5/8", barras de tensión con abrazaderas, riostras con tensor, brazos a 45° con 3 hilos de púas de
+  4 puntas cada 127 mm con flecha), portón doble de 4 m (bisagras de 180°, barra de caída, horquilla, cadena y candado),
+  puente de cables de canal C de 3" con postes de 3-1/2", 3 gabinetes exteriores 750 × 750 (energía, baterías, telecom con
+  A/C), generador de 30 kVA en caseta insonorizada con chimenea y tanque de diésel de doble pared con silletas y mangueras,
+  marco H con medidor y desconectador, 2 postes cónicos con reflector LED (uno con cámara), interior de la caseta (10 racks
+  en dos filas con equipo variado, charolas con cableado que baja a cada rack, minisplits, alarma, extintor, barras de
+  tierra, luminarias LED, escritorio abatible con laptop, loseta antiestática) y letreros en inglés.
+- **Fuentes web de las proporciones (R-AAA punto 7):**
+  - Torre: [OSHA 1910.24](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.24) (escalones de pie cada
+    12–18"), [OSHA 1910.23](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.23) (peldaños 10–14",
+    ancho libre ≥ 16"), [ROHN RSL](https://static1.squarespace.com/static/5e67ee40cd78d320f664bccd/t/5f0c8f2cce41d633e5c81641/1594658608627/15_2015_Rohn_SelfSupporting_RSL.pdf)
+    (torres autosoportadas con escalones y anticaídas, TIA-222), [CommScope 53628](https://Commscope.com/globalassets/digizuite/53628-bn-37378.pdf)
+    y [RFS CLAMP-105](https://www.scmsinc.com/rfs-clamp-105-non-insulated-bolt-on-cable-hanger-for-both-7-8-coaxial-cables-e100-e105-elliptical-waveguides.html)
+    (colgadores cada 0,9–1,2 m), [3 Star tower rules](https://www.3starinc.com/docs/upload_1566592221_rt-tower-rules.pdf)
+    (tornillos de 5/8"); tabla de proporciones de torres de 3 patas (base 3–8 m, cabeza 0,5–1,2 m).
+  - Antenas: CommScope 8P-2L6M-D4-V5 (2688 × 301 × 181 mm, 22,3 kg; andrew.com y everythingrf.com), Huawei AAU5613
+    (795 × 395 × 220 mm), Huawei RRU3256 (480 × 270 × 140 mm), CommScope VHLP3 de 0,9 m, plato de 0,6 m de bajo perfil
+    (fondo 330 mm), baliza L-810 (Flightlight Ø143 × 197 mm). Varios PDF de fabricante están bloqueados por la red de la
+    sesión: se usaron los extractos del buscador.
+  - Equipo: chainlinkfittings.com (brazos de 45° de 3 hilos, bisagras, barra de caída), licitación de bidnetdirect (postes
+    de 2-3/8" a ≤ 10 ft, púas de 4 puntas), CommScope WB-CY212 (puente de 24" × 12 ft), gabinete BT7575175 (1750 × 750 ×
+    750), Stephill SSDP30 y Cat (generador de 30 kVA ≈ 2050 × 1000 × 1490), tanque de 500–550 gal con silletas, Square D
+    ringless de 200 A, poste de 20 ft con base de 10,5", racks de 42U 600 × 1000 / 600 × 600 × 2000, charola escalera
+    Hammond CL.
+- **Revisión en arcilla a < 2 m** (`render_qa/COM_1_antena_r1_*`, 14 tomas: portón, caseta, equipo, trasera, puente,
+  sectores, microondas, interior, torre, esquinas y techo) y primeros planos de cada pieza. Arreglado en la revisión y en
+  la **segunda pasada de detalle (R-AAA punto 7)**: arbotante que se leía como bulto (rehecho como carcasa fundida de corte
+  total con aletas y difusor); gotero y capucha del puerto barridos hacia dentro del muro (perfil invertido); cable GPS que
+  cruzaba la losa (ahora rodea el canto, corre bajo el vuelo y entra por una bota); troncales que se cruzaban al entrar al
+  puerto (cada cable a la columna de botas de su lado); canaletas de los minisplits que terminaban en el muro frontal (ahora
+  rodean la esquina hasta cada unidad interior); tanque y generador intercambiados para que la manguera de combustible sea
+  corta; tubo de los platos Ø114 → Ø76 (las abrazaderas del plato no cerraban); registro de tierras bajo el poste de luz;
+  cerca con instancias (5,5 M triángulos realizada) cambiada por el modo ligero de una sola malla. Cilindros visibles de
+  24–48 lados, tubos y cables de 12–16.
+- **Horneado y kit UE5** (atlas de muros a 4K, la caseta lleva el grafiti): exportación validada (todas las comprobaciones
+  OK; la de base se ajustó al caso del sitio: los dados de la torre se entierran 0,6 m). SM_COM_1_antena: Estructura 408 ·
+  **Detalle 789 549** (torre y antenas) · **Mobiliario 1 078 091** (malla, portón, puente, equipo e interior) · Vidrio 412 ·
+  Colision 616 + cajas; 1,87 M triángulos antes de hornear; 132,5 MiB de GLB; `kit_ue5_descargas/BLACKISLE_UE5_COM_1_antena.zip`
+  30,7 MiB; común rehecho (91,8 MiB) con T13 galvanizado, T14 grava y los colores de cobre y radomo. El empaquetador acepta
+  ahora `--solo ID` para no reescribir los ZIP de los demás modelos (el común ya está cerca del límite de 95 MiB).
+- **Por debajo del estándar, dicho con honestidad**: el alambre de la malla ciclónica es de 3 lados en el modo ligero (la
+  silueta triangular se nota a < 0,5 m; con 4 lados la cerca costaría 1,1 M triángulos); tornillería chica, arandelas y
+  puertos de 8–16 lados; la rejilla de las plataformas no lleva dentado; los cables verticales de la torre van rectos;
+  el equipo de los racks se repite entre racks y los rieles de 19" no tienen perforación; generador y gabinetes solo con
+  puertas cerradas; las arrugas del radomo de tela son procedurales; los letreros tienen texto apenas poligonal a < 0,4 m;
+  el muro de la caseta es liso (así son las casetas prefabricadas) y su lectura depende del atlas y de lo que lleva colgado.

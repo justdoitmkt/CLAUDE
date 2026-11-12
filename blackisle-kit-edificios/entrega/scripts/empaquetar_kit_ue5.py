@@ -1,6 +1,7 @@
 """empaquetar_kit_ue5.py — ZIPs de descarga del kit UE5 (GitHub limita a 100 MB por archivo: uno común + uno por modelo).
 
-Uso: python3 scripts/empaquetar_kit_ue5.py
+Uso: python3 scripts/empaquetar_kit_ue5.py [--solo ID1,ID2]
+  --solo: rehace solo el común y los modelos indicados (los ZIP de los demás no cambian: no se reescriben en el historial).
 Escribe blackisle-kit-edificios/kit_ue5_descargas/BLACKISLE_UE5_comun.zip y BLACKISLE_UE5_<ID>.zip. Todos llevan rutas que
 empiezan por kit_ue5/: al descomprimirlos en la misma carpeta queda el kit completo tal como lo espera LEEME_UE5.md.
 Un modelo cuyo ZIP no cabe en 95 MB se reparte por archivos en BLACKISLE_UE5_<ID>.zip, BLACKISLE_UE5_<ID>_parte2.zip, ...
@@ -8,6 +9,7 @@ Un modelo cuyo ZIP no cabe en 95 MB se reparte por archivos en BLACKISLE_UE5_<ID
 """
 import json
 import os
+import sys
 import zipfile
 
 ENT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -33,7 +35,10 @@ def main():
             z.write(os.path.join(KIT, name), os.path.join("kit_ue5", name))
         add_tree(z, KIT, "comun")
     sizes["comun"] = os.path.getsize(f)
+    solo = sys.argv[sys.argv.index("--solo") + 1].split(",") if "--solo" in sys.argv else None
     for bid in man["modelos"]:
+        if solo is not None and bid not in solo:
+            continue
         for old in os.listdir(OUT):                       # partes viejas de este modelo
             if old.startswith(f"BLACKISLE_UE5_{bid}_parte"):
                 os.remove(os.path.join(OUT, old))
