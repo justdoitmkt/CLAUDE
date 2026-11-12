@@ -602,6 +602,9 @@ def main():
     if ue:                                               # focos colgando del vestido interior: posiciones para luces del motor
         bulbs = res.get("stats", {}).get("interior_dress", {}).get("bulb_pos", [])
         json.dump(dict(unidades="m, ejes de Blender (z arriba)", focos=bulbs), open(os.path.join(out_tex, "focos.json"), "w"))
+        prox = res.get("stats", {}).get("proxies")
+        if prox:                                         # cajas de colisión del mobiliario (lo usa export_ue5)
+            json.dump(dict(unidades="m, ejes de Blender", cajas=prox), open(os.path.join(out_tex, "proxies.json"), "w"))
     json.dump(dict(tris=tri_count([o for o, _ in atlas_objs] + loose), mem_mb=round(mem, 1), materials=mats + mats_i),
               open(os.path.join(out_tex, "bake_info.json"), "w"), indent=1)
 

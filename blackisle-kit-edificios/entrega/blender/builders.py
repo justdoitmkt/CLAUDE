@@ -11,6 +11,10 @@ def build(bid, **kw):
         import mue_builder
         kw.pop("dress_all", None)
         return mue_builder.build_mue(bid, **kw)
+    if bid.startswith("HOS_"):
+        import hos_builder
+        kw.pop("dress_all", None)
+        return hos_builder.build_hos(bid, **kw)
     if bid.startswith("CAB_"):
         import cabin_builder
         kw.pop("dress_all", None)

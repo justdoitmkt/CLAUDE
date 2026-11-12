@@ -22,7 +22,7 @@ from mathutils import Matrix, Vector, noise
 from kit.common import MB
 
 CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache_tela")
-VERSION = 6
+VERSION = 8
 
 
 def _key(name, params):
@@ -135,7 +135,7 @@ def _pillow_sim(w, d, puff, seed):
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
     bmesh.ops.scale(bm, vec=(w, d, 0.02), verts=bm.verts)
-    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=22, use_grid_fill=True)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=14, use_grid_fill=True)
     rr = np.random.default_rng(seed)
     for v in bm.verts:
         v.co.z += float(rr.normal(0, 0.0006))
@@ -259,7 +259,7 @@ def mattress(mb, M, L=1.9, W=0.86, H=0.13, seed=0, mat="vinyl", piping="vinyl", 
         y0 = -L / 2 + 0.15 + k * (L - 0.3) / n
         y1 = y0 + (L - 0.3) / n * 0.7
         c0, c1 = bent(W / 2, y0, H / 2), bent(W / 2, y1, H / 2)
-        mb.box(M @ (c0 + Vector((-0.002, 0, -0.004))), M @ (Vector((c1.x + 0.002, c1.y, c0.z + 0.004))), "steel")
+        mb.box(M @ (c0 + Vector((-0.002, 0, -0.004))), M @ (Vector((c1.x + 0.002, c1.y, c0.z + 0.004))), "steel", bevel=0.0)
     del seed
 
 
@@ -421,8 +421,8 @@ def folded_blanket(mb, M, w=0.86, d=0.42, layers=3, t=0.012, seed=0, mat="wool_b
 def _curtain_sim(hang_w, fabric_w, drop, seed):
     """Cortina fruncida: pliegues de paso y fondo variables (no un acanalado), algunos pliegues que se cruzan en diagonal hacia
     el pie, dobladillo con peso (filas inferiores más pesadas) y fijación solo en los colgantes."""
-    nx = max(16, int(fabric_w / 0.02))
-    nz = max(12, int(drop / 0.03))
+    nx = max(16, int(fabric_w / 0.03))
+    nz = max(12, int(drop / 0.05))
     rr = np.random.default_rng(seed)
     c = fabric_w / hang_w
     # fase acumulada con periodos aleatorios
@@ -466,9 +466,7 @@ def _curtain_sim(hang_w, fabric_w, drop, seed):
     st.bending_stiffness = 0.05
     st.air_damping = 2.0
     st.vertex_group_mass = "pin"
-    so = ob.modifiers.new("solid", "SOLIDIFY")
-    so.thickness = 0.002
-    out = _simulate(ob, 50)
+    out = _simulate(ob, 50)                  # una sola hoja: la tela es material de doble cara (linen en DOUBLE_SIDED)
     _cleanup([ob])
     co = out[0].copy()
     # dobladillo: los 4 cm de abajo, doble tela (ligeramente más gruesos hacia afuera)

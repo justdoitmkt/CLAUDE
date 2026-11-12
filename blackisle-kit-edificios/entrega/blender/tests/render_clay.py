@@ -45,6 +45,15 @@ SHOTS_EXTRA = {
         "esquina": dict(azim=-30, elev=6, dist=5.0, target=Vector((-10.6, 10.0, 3.3)), fov=55),
         "esquina_e": dict(azim=30, elev=6, dist=5.0, target=Vector((10.6, 10.0, 3.3)), fov=55),
     },
+    "HOS_1_pueblo": {
+        "calle": dict(azim=-25, elev=4, dist=34.0, target=Vector((3.0, -6.0, 2.4)), fov=55),
+        "urgencias": dict(azim=35, elev=6, dist=13.0, target=Vector((15.2, -9.0, 2.0)), fov=60),
+        "trasera": dict(azim=160, elev=10, dist=30.0, target=Vector((4.0, 8.0, 2.0)), fov=55),
+        "espera": dict(azim=60, elev=-2, dist=6.5, target=Vector((-8.0, -6.6, 1.3)), fov=75, ground=False),
+        "pasillo": dict(azim=90, elev=0, dist=9.0, target=Vector((-4.0, -2.9, 1.5)), fov=70, ground=False),
+        "encamados": dict(azim=-150, elev=6, dist=5.5, target=Vector((-9.0, 8.0, 1.0)), fov=75, ground=False),
+        "patio": dict(azim=-30, elev=35, dist=10.0, target=Vector((0.5, 1.1, 1.0)), fov=60),
+    },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
         "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),

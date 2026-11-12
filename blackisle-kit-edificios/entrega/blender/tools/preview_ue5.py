@@ -18,12 +18,16 @@ from mathutils import Vector  # noqa: E402
 
 ENT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "CAB_1_tablones": "CAB_1",
-          "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3", "MUE_1_carga": "MUE_1"}
+          "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3", "MUE_1_carga": "MUE_1",
+          "HOS_1_pueblo": "HOS_1"}
 
 
 EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
     "MUE_1_carga": [("playa", (-12.0, -38.0, 2.6), (3.0, 8.0, 4.0), 26), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
                     ("atraque", (30.0, 64.0, 1.2), (20.0, 51.0, 1.8), 28)],
+    "HOS_1_pueblo": [("calle", (-16.0, -34.0, 1.7), (2.0, -4.0, 2.6), 26), ("urgencias", (26.0, -24.0, 1.7), (15.0, -8.0, 2.2), 28),
+                     ("trasera", (12.0, 30.0, 2.0), (2.0, 10.0, 1.6), 26), ("pasillo", (-12.6, -2.9, 1.6), (6.0, -2.9, 1.5), 18),
+                     ("encamados", (-5.6, 5.0, 1.6), (-11.0, 9.0, 0.8), 18)],
 }
 
 

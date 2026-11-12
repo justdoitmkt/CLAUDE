@@ -176,6 +176,14 @@ def main():
     if bid.startswith("MUE_"):              # muelle: grúa, postes y bitas son Detalle; su colisión va como formas simples
         import mue_builder
         extra.append(mue_builder.collision_proxies().finish(f"{bid}_colx", bpy.context.scene.collection, merge=0))
+    tex_dir = argv[argv.index("--tex") + 1] if "--tex" in argv else os.path.join(ENT, "texturas_ue", bid)
+    fprox = os.path.join(tex_dir, "proxies.json")
+    if os.path.exists(fprox):               # mobiliario en Detalle: cajas de colisión registradas por el constructor
+        from kit.common import MB
+        pm = MB()
+        for (mn, mx) in json.load(open(fprox))["cajas"]:
+            pm.box(tuple(mn), tuple(mx), "concrete")
+        extra.append(pm.finish(f"{bid}_colp", bpy.context.scene.collection, merge=0))
     col = collision_mesh([by_suffix(s) for s in COLLISION_FROM if by_suffix(s)] + extra, f"SM_{bid}_Colision")
     for o in extra:
         bpy.data.objects.remove(o)

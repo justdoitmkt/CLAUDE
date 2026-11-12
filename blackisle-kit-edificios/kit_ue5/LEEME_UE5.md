@@ -5,8 +5,8 @@ Léelo completo antes de tocar el proyecto. La especificación exacta de materia
 `manifiesto.json`; `importar_blackisle.py` la aplica desde el editor.
 
 ## 1. Qué hay que lograr
-Importar los 8 modelos (7 edificios y el muelle de carga) y **reemplazar con ellos los edificios, cabañas y muelle
-provisionales que ya existen en el nivel**.
+Importar los 9 modelos (7 edificios, el muelle de carga y el hospital) y **reemplazar con ellos los edificios, cabañas,
+muelle y hospital provisionales que ya existen en el nivel**.
 El resultado tiene que verse como un edificio real y abandonado:
 - **Vidrio que se ve como vidrio:** translúcido, con reflejos y suciedad, y con las roturas que trae el modelo.
 - **Cada material con su forma y su tono exactos:** concreto gris gastado, aplanado descascarado, madera, ladrillo, teja,
@@ -25,9 +25,10 @@ El resultado tiene que verse como un edificio real y abandonado:
 | CAB_2_pilotes | Casa sobre pilotes con veranda y tapanco | veranda con la escalera exterior |
 | CAB_3_ladrillo | PB de ladrillo y planta alta de tabla | porche delantero con escalones |
 | MUE_1_carga | Muelle de carga sobre pilotes con nave de acero, caseta, contenedores, grúa y frente de atraque | la rampa ancha que sube desde la playa (el atraque mira a +Y, al mar) |
+| HOS_1_pueblo | Hospital rural de una planta EN USO: urgencias, consultorios, farmacia, rayos X, encamados, patio y cochera de ambulancias | pórtico de 4 columnas con "COMMUNITY HOSPITAL" en el pretil (cochera al oriente, +X) |
 
 Los edificios tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
-departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1.
+departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1 y el hospital en §3.2.
 
 ## 2. Contenido
 ```
@@ -83,6 +84,21 @@ en (0, 0, 0) = eje de la rampa en la orilla de la cubierta, a nivel de la arena:
   objetos sueltos no tienen colisión (pieza Detalle).
 - **Grúa:** es estática. La pluma apunta al atraque.
 
+### 3.2 El hospital (HOS_1_pueblo)
+Hospital rural de pueblo, **en funcionamiento** (limpio, pintura cuidada, grafiti solo en la barda y la cochera). Pivote al
+centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,45, plafón a +3,15, azotea a +3,65.
+- **Planta:** edificio de 28 × 20 m con patio interior; al frente sala de espera, recepción y urgencias; pasillo; consultorios,
+  farmacia y rayos X alrededor del patio; al fondo encamados, enfermería, dos baños, cocina y lavandería. Cochera de 2
+  ambulancias al oriente, unida por un pasillo cubierto con rampa a la puerta de urgencias. Barda perimetral con portón de
+  servicio al fondo.
+- **Mobiliario:** va en la pieza Detalle (camas, bancadas, silla de ruedas, camillas, mesas de exploración, rayos X, anaqueles,
+  baños, cocina, lavandería). Su colisión son **cajas simples** dentro de la pieza Colision; muros, pisos y escalones vienen
+  completos.
+- **Textos en inglés** en letreros 3D (COMMUNITY HOSPITAL, EMERGENCY, EXAM 1/2, PHARMACY, X-RAY, WARD, NURSES, EXIT…).
+- **Luces:** cada luminaria fluorescente es un foco en `modelos.HOS_1_pueblo.focos_m_blender`; `ib.focos(actor)` les pone
+  una luz puntual. Para un hospital encendido, súbeles los lúmenes (~2000) y temperatura 4000 K.
+- **Ambulancias:** no vienen en el kit (un vehículo no va dentro de la malla del edificio); la cochera tiene lugar para 2.
+
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).
 2. Plugins activos: **Python Editor Script Plugin** e importador glTF (Interchange, activo por defecto en UE 5.1+).
@@ -91,7 +107,7 @@ en (0, 0, 0) = eje de la rampa en la orilla de la cubierta, a nivel de la arena:
    ```python
    import sys; sys.path.append(r"RUTA/A/kit_ue5")
    import importar_blackisle as ib
-   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 8 modelos, en /Game/BlackIsle
+   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 9 modelos, en /Game/BlackIsle
    ib.verificar()            # medidas en cm contra el manifiesto, ranuras con material del kit, ejes
    ```
 4. **Reemplaza los provisionales.** Identifica en el nivel qué actor provisional corresponde a cada modelo; si no es
@@ -139,7 +155,7 @@ sufijos al nombre de la ranura: el script busca el nombre del manifiesto conteni
   importar se pierde (*Vertex Color Import Option* distinto de *Replace*), todo se ve plano.
 
 ## 6. Comprobaciones antes de entregar
-- [ ] `ib.verificar()` da OK en los 8. Medidas en m (x × y × z de Blender, sin escombro): ver
+- [ ] `ib.verificar()` da OK en los 9. Medidas en m (x × y × z de Blender, sin escombro): ver
       `manifiesto.json → modelos.<ID>.medidas_m`; la de la malla Estructura sola está en `medidas_estructura_m`.
 - [ ] Muelle: el pie de la rampa toca la arena, el agua queda 3 m bajo la cubierta (cubierta +2,5, mar −0,5) y los
       pilotes entran en el agua sin verse flotando.

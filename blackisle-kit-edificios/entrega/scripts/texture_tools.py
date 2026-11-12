@@ -502,7 +502,7 @@ def compose_graffiti_zones(width_m, height_m, px_per_m, zones, keepout, out, *, 
                 _stamp(cv, arr, *to_px(x, y), op=0.9, overspray=0.3)
                 taken.append((x - wm / 2, y - hm / 2, x + wm / 2, y + hm / 2))
                 break
-    for _ in range(int(total * 0.15)):
+    for _ in range(int(total * 0.15) if drips else 0):         # sin goteos propios (biblioteca exclusiva sin hoja de goteos)
         p = drips[int(r.integers(len(drips)))]
         arr = _load_piece(p, float(r.uniform(0.25, 0.55)), px_per_m, rgb=PAL[int(r.integers(4))] if r.random() < 0.5 else None)
         hm, wm = arr.shape[0] / px_per_m, arr.shape[1] / px_per_m

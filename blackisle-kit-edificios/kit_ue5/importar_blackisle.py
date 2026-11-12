@@ -7,7 +7,7 @@ el manifiesto es la especificación y el script es una forma de cumplirla (ver L
 Uso (consola Python del editor: Output Log -> "Python"):
     import sys; sys.path.append(r"RUTA/A/kit_ue5")          # la carpeta que contiene este archivo
     import importar_blackisle as ib
-    ib.importar_todo()                                      # texturas + materiales + mallas de los 8 modelos (unos minutos)
+    ib.importar_todo()                                      # texturas + materiales + mallas de los 9 modelos (unos minutos)
     ib.verificar()                                          # medidas, ranuras de material y ejes, modelo por modelo
     ib.colocar("APT_A_5p", unreal.Vector(0, 0, 0), yaw=0)   # pone un edificio (5 actores enganchados al de Estructura)
     ib.reemplazar("Edificio_Placeholder_01", "APT_A_5p")    # lo pone donde está un actor existente y oculta ese actor
@@ -518,7 +518,8 @@ def reemplazar(etiqueta_existente, bid, yaw_extra=0.0, borrar=False, con_escombr
 
 
 def focos(raiz, lumenes=800.0, temperatura=2700.0, radio_cm=650.0, sombras=False):
-    """Luz puntual en cada foco colgante del vestido interior (bombilla de 60 W ~ 800 lm, 2700 K). Solo departamentos."""
+    """Luz puntual en cada foco del modelo (departamentos: focos colgantes, 60 W ~ 800 lm, 2700 K; hospital: luminarias
+    fluorescentes; usa lumenes=2000, temperatura=4000)."""
     label = raiz.get_actor_label()
     bid = next((b for b in MAN["modelos"] if f"_{b}_" in label + "_" or label.startswith(f"BLK_{b}")), None)
     pts = MAN["modelos"][bid].get("focos_m_blender", []) if bid else []

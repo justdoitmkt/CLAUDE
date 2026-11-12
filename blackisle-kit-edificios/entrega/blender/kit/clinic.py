@@ -384,7 +384,7 @@ def rtube(mb, p0, p1, w, h, mat, up=(0, 0, 1), r=0.004, caps=True):
 
 def _spoke(r):
     sp = MB()
-    sp.box((0.018, -0.0035, 0.0), (r * 0.66, 0.0035, 0.0045), "plastic")
+    sp.box((0.018, -0.0035, 0.0), (r * 0.66, 0.0035, 0.0045), "plastic", bevel=0.0)
     return sp
 
 
@@ -409,11 +409,11 @@ def caster_pro(mb, M, d=0.125, brake=False, swivel=0.0, mat_tire="rubber"):
     prof = [(r * 0.72, -0.0185), (r * 0.9, -0.017), (r - 0.004, -0.0145), (r - 0.0008, -0.011), (r, -0.006), (r - 0.0025, -0.0045),
             (r - 0.0025, -0.0025), (r, -0.0015), (r, 0.0015), (r - 0.0025, 0.0025), (r - 0.0025, 0.0045), (r, 0.006),
             (r - 0.0008, 0.011), (r - 0.004, 0.0145), (r * 0.9, 0.017), (r * 0.72, 0.0185)]
-    port.lathe(mb, prof, seg=40, mat=mat_tire, M=Mw, caps=False)
-    port.lathe(mb, [(0.016, -0.019), (r * 0.72, -0.0185), (r * 0.72, 0.0185), (0.016, 0.019)], seg=40, mat="plastic", M=Mw,
+    port.lathe(mb, prof, seg=32, mat=mat_tire, M=Mw, caps=False)
+    port.lathe(mb, [(0.016, -0.019), (r * 0.72, -0.0185), (r * 0.72, 0.0185), (0.016, 0.019)], seg=32, mat="plastic", M=Mw,
                caps=False)
     for sgn in (-1, 1):                               # cara del rin rehundida con rayos
-        port.lathe(mb, [(0.016, sgn * 0.019), (0.02, sgn * 0.012), (r * 0.66, sgn * 0.012), (r * 0.72, sgn * 0.0185)], seg=40,
+        port.lathe(mb, [(0.016, sgn * 0.019), (0.02, sgn * 0.012), (r * 0.66, sgn * 0.012), (r * 0.72, sgn * 0.0185)], seg=32,
                    mat="plastic", M=Mw, caps=False)
         for k in range(6):
             a = 2 * PI * k / 6
@@ -547,11 +547,11 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
         # las telas se simulan sobre el colchón plano y luego siguen el quiebre del respaldo (como una sábana ajustable)
         col = sg.mattress_collider_arrays(Lm, Wm, Hm)
         bend = (lambda co: sg.bend_fowler(co, fowler, hinge)) if fowler > 0 else None
-        sg.drape(mb, Mm, "sabana", (Wm + 0.22, Lm + 0.16), (44, 80), Hm + 0.04, lambda: [col], "linen", seed=seed % 3, stiff=10.0,
+        sg.drape(mb, Mm, "sabana", (Wm + 0.22, Lm + 0.16), (38, 68), Hm + 0.04, lambda: [col], "linen", seed=seed % 3, stiff=10.0,
                  frames=55, post=bend)
         if blanket:
             off = np.array([0, -0.32, 0], np.float32)
-            sg.drape(mb, Mm @ _T(0, -0.32, 0), "cobija", (Wm + 0.34, 1.25), (40, 56), Hm + 0.08,
+            sg.drape(mb, Mm @ _T(0, -0.32, 0), "cobija", (Wm + 0.34, 1.25), (34, 46), Hm + 0.08,
                      lambda: [(col[0] - off, col[1], col[2])], "wool_blue", seed=seed % 3, stiff=18.0,
                      frames=55, thickness=0.006, pre_fold=0.42,
                      post=(lambda co: sg.bend_fowler(co + off, fowler, hinge) - off) if fowler > 0 else None)
@@ -1168,8 +1168,8 @@ def window_grille(w, h, seed=0, mat="paint_green"):
         x0 = i * w / n
         c = Vector((x0 + w / n / 2, -0.024, zm + (h - 0.03 - zm) / 2))
         rad = min(w / n, h - 0.03 - zm) * 0.38
-        pts = [(c.x + rad * math.cos(a), c.y, c.z + rad * math.sin(a)) for a in [k * 2 * PI / 12 for k in range(13)]]
-        mb.tube(pts, 0.005, seg=5, mat=mat)
+        pts = [(c.x + rad * math.cos(a), c.y, c.z + rad * math.sin(a)) for a in [k * 2 * PI / 10 for k in range(11)]]
+        mb.tube(pts, 0.005, seg=4, mat=mat)
     for z in (0.15, h - 0.15):
         for x in (0.0, w):
             mb.box((x - 0.02, -0.02, z - 0.01), (x + 0.02, 0.05, z + 0.01), mat)

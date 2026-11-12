@@ -268,6 +268,11 @@ def _graffiti_layer(nb, coord_obj, gmap, band_top):
         # selección por orientación de la cara
         nidx, nsgn = info["normal"]
         facing = nb.math("GREATER_THAN", nb.math("MULTIPLY", sep_n.outputs[nidx], nsgn), 0.6)
+        if info.get("depth"):            # capa limitada a una franja de profundidad (varios muros que miran al mismo lado)
+            dax, dlo, dhi = info["depth"]
+            dc = sep_p.outputs[dax]
+            inside = nb.math("MULTIPLY", nb.math("GREATER_THAN", dc, dlo), nb.math("LESS_THAN", dc, dhi))
+            facing = nb.math("MULTIPLY", facing, inside)
         a = nb.math("MULTIPLY", t.outputs["Alpha"], facing)
         if col_acc is None:
             col_acc, a_acc = t.outputs["Color"], a
@@ -460,10 +465,11 @@ def graffiti_map(prefix, faces_info, x0, x1, y0, y1):
     rel = {"front": (("x", x0, 1.0), (1, -1.0)), "back": (("x", x1, -1.0), (1, 1.0)),
            "west": (("y", y1, -1.0), (0, -1.0)), "east": (("y", y0, 1.0), (0, 1.0))}
     gm = {}
-    for side, info in faces_info.items():
+    for key, info in faces_info.items():
+        side = info.get("side", key)            # varias capas por lado: clave libre + 'side' + 'depth' [eje, mín, máx]
         u_from, normal = rel[side]
-        gm[side] = dict(width_m=info["width_m"], height_m=info["height_m"], u_from=u_from, normal=normal,
-                        png=os.path.join(TEX, "graffiti", f"{prefix}_{side}.png"))
+        gm[key] = dict(width_m=info["width_m"], height_m=info["height_m"], u_from=u_from, normal=normal, depth=info.get("depth"),
+                       png=os.path.join(TEX, "graffiti", f"{prefix}_{key}.png"))
     return gm
 
 
