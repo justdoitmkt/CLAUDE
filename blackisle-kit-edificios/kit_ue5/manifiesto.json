@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "e5cd01e",
+ "version_repo": "05fe4a7",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -264,6 +264,132 @@
    "dos_caras": true,
    "nota": "R2_roof_corrugated_light.png a 2.0 m por repetición; rugosidad 0.55, metal 0.4 (en el ORM)"
   },
+  "BLK_terrazzo": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_terrazzo_BC",
+    "N": "T_BLK_terrazzo_N",
+    "ORM": "T_BLK_terrazzo_ORM"
+   },
+   "UVEscala": 1.33333,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.3876,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T5_terrazo.png a 1.5 m por repetición; rugosidad 0.32, metal 0.0 (en el ORM)"
+  },
+  "BLK_tile_white": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_tile_white_BC",
+    "N": "T_BLK_tile_white_N",
+    "ORM": "T_BLK_tile_white_ORM"
+   },
+   "UVEscala": 3.33333,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.6955,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T6_azulejo_blanco.png a 0.6 m por repetición; rugosidad 0.22, metal 0.0 (en el ORM)"
+  },
+  "BLK_ceiling_tile": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_ceiling_tile_BC",
+    "N": "T_BLK_ceiling_tile_N",
+    "ORM": "T_BLK_ceiling_tile_ORM"
+   },
+   "UVEscala": 1.63934,
+   "Tinte": [
+    1,
+    1,
+    1
+   ],
+   "LumaMedia": 0.6224,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T7_plafon.png a 1.22 m por repetición; rugosidad 0.92, metal 0.0 (en el ORM)"
+  },
+  "BLK_paint_mint": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_paint_mint_BC",
+    "N": "T_BLK_paint_mint_N",
+    "ORM": "T_BLK_paint_mint_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    0.66,
+    0.84,
+    0.7
+   ],
+   "LumaMedia": 0.5603,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.72, metal 0.0 (en el ORM)"
+  },
+  "BLK_paint_green": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_paint_green_BC",
+    "N": "T_BLK_paint_green_N",
+    "ORM": "T_BLK_paint_green_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    0.11,
+    0.33,
+    0.2
+   ],
+   "LumaMedia": 0.5603,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.66, metal 0.0 (en el ORM)"
+  },
+  "BLK_paint_white": {
+   "maestro": "M_BLK_Repetible",
+   "texturas": {
+    "BC": "T_BLK_paint_white_BC",
+    "N": "T_BLK_paint_white_N",
+    "ORM": "T_BLK_paint_white_ORM"
+   },
+   "UVEscala": 0.83333,
+   "Tinte": [
+    1.02,
+    1.02,
+    1.0
+   ],
+   "LumaMedia": 0.5603,
+   "PesoVC": 0.75,
+   "AOFuerza": 1.0,
+   "NormalFuerza": 1.0,
+   "MacroFuerza": 0.3,
+   "dos_caras": false,
+   "nota": "T2_plaster_int_2k.png a 2.4 m por repetición; rugosidad 0.78, metal 0.0 (en el ORM)"
+  },
   "BLK_aluminium": {
    "maestro": "M_BLK_Color",
    "Color": [
@@ -366,6 +492,149 @@
    "Metal": 0.0,
    "PesoVC": 0.75,
    "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_plastic_blue": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.05,
+    0.17,
+    0.5
+   ],
+   "Rugosidad": 0.45,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_linen": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.8,
+    0.8,
+    0.78
+   ],
+   "Rugosidad": 0.9,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": true,
+   "nota": ""
+  },
+  "BLK_sign_red": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.55,
+    0.04,
+    0.04
+   ],
+   "Rugosidad": 0.5,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_sign_white": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.84,
+    0.84,
+    0.82
+   ],
+   "Rugosidad": 0.45,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_sign_blue": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.02,
+    0.15,
+    0.52
+   ],
+   "Rugosidad": 0.45,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_sign_green": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.02,
+    0.38,
+    0.11
+   ],
+   "Rugosidad": 0.45,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_paint_yellow": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.72,
+    0.5,
+    0.04
+   ],
+   "Rugosidad": 0.6,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_vinyl": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.07,
+    0.2,
+    0.19
+   ],
+   "Rugosidad": 0.5,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_steel": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.6,
+    0.61,
+    0.62
+   ],
+   "Rugosidad": 0.35,
+   "Metal": 1.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_rubber": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.025,
+    0.025,
+    0.025
+   ],
+   "Rugosidad": 0.8,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": false,
+   "nota": ""
+  },
+  "BLK_wool_blue": {
+   "maestro": "M_BLK_Color",
+   "Color": [
+    0.1,
+    0.17,
+    0.33
+   ],
+   "Rugosidad": 0.97,
+   "Metal": 0.0,
+   "PesoVC": 0.75,
+   "dos_caras": true,
    "nota": ""
   },
   "BLK_glass": {
@@ -2125,6 +2394,514 @@
       "BC": "T_MUE_1_carga_walls_rest_BC",
       "N": "T_MUE_1_carga_walls_rest_N",
       "ORM": "T_MUE_1_carga_walls_rest_ORM"
+     },
+     "AOFuerza": 1.0
+    }
+   }
+  },
+  "HOS_1_pueblo": {
+   "id": "HOS_1_pueblo",
+   "mallas": {
+    "Estructura": {
+     "nombre": "SM_HOS_1_pueblo_Estructura",
+     "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Estructura.glb",
+     "triangulos": 10570,
+     "ranuras": [
+      "HOS_1_pueblo_walls_main",
+      "HOS_1_pueblo_walls_rest",
+      "BLK_terrazzo",
+      "BLK_ceiling_tile",
+      "BLK_concrete",
+      "BLK_steel",
+      "BLK_paint_white",
+      "BLK_paint_mint",
+      "BLK_paint_green",
+      "BLK_sign_white",
+      "BLK_tile_white",
+      "BLK_wood",
+      "BLK_plaster"
+     ],
+     "mib": 0.72
+    },
+    "Detalle": {
+     "nombre": "SM_HOS_1_pueblo_Detalle",
+     "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Detalle.glb",
+     "triangulos": 1334016,
+     "ranuras": [
+      "BLK_paint_green",
+      "BLK_aluminium",
+      "BLK_rubber",
+      "BLK_concrete",
+      "BLK_paint_white",
+      "BLK_metal_paint",
+      "BLK_metal_rust",
+      "BLK_plastic",
+      "BLK_paint_mint",
+      "BLK_steel",
+      "BLK_sign_red",
+      "BLK_sign_white",
+      "BLK_mortar",
+      "BLK_paint_yellow",
+      "BLK_roof_metal_light",
+      "BLK_brick",
+      "BLK_cable",
+      "BLK_wood_dark",
+      "BLK_sign_blue",
+      "BLK_plastic_blue",
+      "BLK_vegetation",
+      "BLK_paper",
+      "BLK_wood",
+      "BLK_sign_green",
+      "BLK_vinyl",
+      "BLK_linen",
+      "BLK_wool_blue",
+      "BLK_wood_grey",
+      "BLK_fabric"
+     ],
+     "mib": 66.42
+    },
+    "Vidrio": {
+     "nombre": "SM_HOS_1_pueblo_Vidrio",
+     "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Vidrio.glb",
+     "triangulos": 8918,
+     "ranuras": [
+      "BLK_glass"
+     ],
+     "mib": 0.57
+    },
+    "Colision": {
+     "nombre": "SM_HOS_1_pueblo_Colision",
+     "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Colision.glb",
+     "triangulos": 9511,
+     "ranuras": [
+      "BLK_colision"
+     ],
+     "mib": 0.39
+    }
+   },
+   "texturas": {
+    "walls_main": {
+     "BC": "T_HOS_1_pueblo_walls_main_BC",
+     "N": "T_HOS_1_pueblo_walls_main_N",
+     "ORM": "T_HOS_1_pueblo_walls_main_ORM"
+    },
+    "walls_rest": {
+     "BC": "T_HOS_1_pueblo_walls_rest_BC",
+     "N": "T_HOS_1_pueblo_walls_rest_N",
+     "ORM": "T_HOS_1_pueblo_walls_rest_ORM"
+    }
+   },
+   "focos_m_blender": [
+    [
+     -12.333,
+     -8.365,
+     3.065
+    ],
+    [
+     -12.333,
+     -5.495,
+     3.065
+    ],
+    [
+     -9.398,
+     -8.365,
+     3.065
+    ],
+    [
+     -9.398,
+     -5.495,
+     3.065
+    ],
+    [
+     -6.463,
+     -8.365,
+     3.065
+    ],
+    [
+     -6.463,
+     -5.495,
+     3.065
+    ],
+    [
+     -3.527,
+     -8.365,
+     3.065
+    ],
+    [
+     -3.527,
+     -5.495,
+     3.065
+    ],
+    [
+     -0.72,
+     -8.365,
+     3.065
+    ],
+    [
+     -0.72,
+     -5.495,
+     3.065
+    ],
+    [
+     1.72,
+     -8.365,
+     3.065
+    ],
+    [
+     1.72,
+     -5.495,
+     3.065
+    ],
+    [
+     4.402,
+     -8.365,
+     3.065
+    ],
+    [
+     4.402,
+     -5.495,
+     3.065
+    ],
+    [
+     7.088,
+     -8.365,
+     3.065
+    ],
+    [
+     7.088,
+     -5.495,
+     3.065
+    ],
+    [
+     9.773,
+     -8.365,
+     3.065
+    ],
+    [
+     9.773,
+     -5.495,
+     3.065
+    ],
+    [
+     12.458,
+     -8.365,
+     3.065
+    ],
+    [
+     12.458,
+     -5.495,
+     3.065
+    ],
+    [
+     -12.545,
+     -2.9,
+     3.065
+    ],
+    [
+     -10.036,
+     -2.9,
+     3.065
+    ],
+    [
+     -7.527,
+     -2.9,
+     3.065
+    ],
+    [
+     -5.018,
+     -2.9,
+     3.065
+    ],
+    [
+     -2.509,
+     -2.9,
+     3.065
+    ],
+    [
+     0.0,
+     -2.9,
+     3.065
+    ],
+    [
+     2.509,
+     -2.9,
+     3.065
+    ],
+    [
+     5.018,
+     -2.9,
+     3.065
+    ],
+    [
+     7.527,
+     -2.9,
+     3.065
+    ],
+    [
+     10.036,
+     -2.9,
+     3.065
+    ],
+    [
+     12.545,
+     -2.9,
+     3.065
+    ],
+    [
+     -11.63,
+     -0.32,
+     3.065
+    ],
+    [
+     -11.63,
+     2.52,
+     3.065
+    ],
+    [
+     -7.2,
+     -0.32,
+     3.065
+    ],
+    [
+     -7.2,
+     2.52,
+     3.065
+    ],
+    [
+     -4.02,
+     -0.28,
+     3.065
+    ],
+    [
+     -4.02,
+     2.64,
+     3.065
+    ],
+    [
+     5.31,
+     -0.32,
+     3.065
+    ],
+    [
+     5.31,
+     2.52,
+     3.065
+    ],
+    [
+     7.73,
+     -0.32,
+     3.065
+    ],
+    [
+     7.73,
+     2.52,
+     3.065
+    ],
+    [
+     11.43,
+     -0.32,
+     3.065
+    ],
+    [
+     11.43,
+     2.52,
+     3.065
+    ],
+    [
+     -3.601,
+     5.0,
+     3.065
+    ],
+    [
+     -0.924,
+     5.0,
+     3.065
+    ],
+    [
+     1.753,
+     5.0,
+     3.065
+    ],
+    [
+     4.43,
+     5.0,
+     3.065
+    ],
+    [
+     7.107,
+     5.0,
+     3.065
+    ],
+    [
+     9.784,
+     5.0,
+     3.065
+    ],
+    [
+     12.461,
+     5.0,
+     3.065
+    ],
+    [
+     -12.343,
+     5.495,
+     3.065
+    ],
+    [
+     -12.343,
+     8.365,
+     3.065
+    ],
+    [
+     -9.43,
+     5.495,
+     3.065
+    ],
+    [
+     -9.43,
+     8.365,
+     3.065
+    ],
+    [
+     -6.517,
+     5.495,
+     3.065
+    ],
+    [
+     -6.517,
+     8.365,
+     3.065
+    ],
+    [
+     -3.72,
+     7.93,
+     3.065
+    ],
+    [
+     -1.28,
+     7.93,
+     3.065
+    ],
+    [
+     5.28,
+     7.93,
+     3.065
+    ],
+    [
+     7.72,
+     7.93,
+     3.065
+    ],
+    [
+     11.43,
+     7.93,
+     3.065
+    ],
+    [
+     1.0,
+     7.93,
+     3.065
+    ],
+    [
+     3.0,
+     7.93,
+     3.065
+    ],
+    [
+     18.4,
+     -5.0,
+     3.515
+    ],
+    [
+     22.4,
+     -5.0,
+     3.515
+    ],
+    [
+     18.4,
+     -1.0,
+     3.515
+    ],
+    [
+     22.4,
+     -1.0,
+     3.515
+    ]
+   ],
+   "medidas_m": {
+    "x": 44.2,
+    "y": 28.499,
+    "z": 10.2,
+    "min": [
+     -17.1,
+     -14.849,
+     0.0
+    ],
+    "max": [
+     27.1,
+     13.65,
+     10.2
+    ],
+    "escombro_min": null,
+    "escombro_max": null,
+    "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
+   },
+   "medidas_estructura_m": {
+    "x": 44.2,
+    "y": 28.15,
+    "z": 4.3,
+    "min": [
+     -17.1,
+     -14.5,
+     0.0
+    ],
+    "max": [
+     27.1,
+     13.65,
+     4.3
+    ]
+   },
+   "comprobaciones": {
+    "Estructura_presente": true,
+    "Estructura_ranuras": true,
+    "Estructura_un_uv": true,
+    "Estructura_color0": true,
+    "Detalle_presente": true,
+    "Detalle_ranuras": true,
+    "Detalle_un_uv": true,
+    "Detalle_color0": true,
+    "Vidrio_presente": true,
+    "Vidrio_ranuras": true,
+    "Vidrio_un_uv": true,
+    "Vidrio_color0": true,
+    "Colision_presente": true,
+    "Colision_ranuras": true,
+    "Colision_un_uv": true,
+    "Colision_color0": true,
+    "base_en_suelo": true
+   },
+   "ok": true,
+   "mib_total": 68.1,
+   "fachada_principal": {
+    "eje_blender": "-y",
+    "rasgo": "pórtico de 4 columnas con COMMUNITY HOSPITAL en el pretil; la cochera de ambulancias queda al oriente (+x)"
+   },
+   "materiales_atlas": {
+    "HOS_1_pueblo_walls_main": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_HOS_1_pueblo_walls_main_BC",
+      "N": "T_HOS_1_pueblo_walls_main_N",
+      "ORM": "T_HOS_1_pueblo_walls_main_ORM"
+     },
+     "AOFuerza": 1.0
+    },
+    "HOS_1_pueblo_walls_rest": {
+     "maestro": "M_BLK_Atlas",
+     "texturas": {
+      "BC": "T_HOS_1_pueblo_walls_rest_BC",
+      "N": "T_HOS_1_pueblo_walls_rest_N",
+      "ORM": "T_HOS_1_pueblo_walls_rest_ORM"
      },
      "AOFuerza": 1.0
     }
