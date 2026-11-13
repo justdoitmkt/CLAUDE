@@ -231,13 +231,21 @@ TILE_TEX = {   # material -> (textura repetible, tamaño m, rugosidad, metal, ti
     "paint_navy": ("T8_pintura_lisa.png", 2.0, 0.6, 0.0, (0.10, 0.15, 0.34)),
     # sitio de telecom (COM_1): acero galvanizado (torre, malla, postes, charolas) y grava triturada de la plataforma
     "galvanized": ("T13_galvanizado.png", 1.0, 0.45, 1.0, (1, 1, 1)), "gravel": ("T14_grava.png", 1.2, 0.95, 0.0, (1, 1, 1)),
+    # base militar (MIL_1 / MIL_2)
+    "canvas": ("T15_lona.png", 1.0, 0.92, 0.0, (1, 1, 1)), "sandbag": ("T16_costal_pp.png", 0.6, 0.88, 0.0, (1, 1, 1)),
+    "geotextile": ("T17_geotextil.png", 1.0, 0.95, 0.0, (1, 1, 1)), "wood_od": ("T18_madera_od.png", 1.2, 0.72, 0.0, (1, 1, 1)),
+    "net": ("T19_camuflaje.png", 2.0, 0.9, 0.0, (1, 1, 1)), "plywood": ("T20_triplay.png", 1.22, 0.8, 0.0, (1, 1, 1)),
+    "paint_od": ("T8_pintura_lisa.png", 2.0, 0.55, 0.1, (0.20, 0.22, 0.13)),
+    "paint_tan": ("T8_pintura_lisa.png", 2.0, 0.55, 0.1, (0.56, 0.46, 0.30)),
+    "rack_orange": ("T8_pintura_lisa.png", 2.0, 0.45, 0.1, (0.70, 0.19, 0.03)),
+    "rack_blue": ("T8_pintura_lisa.png", 2.0, 0.45, 0.1, (0.03, 0.10, 0.38)),
 }
 # materiales del kit que se pintan con un repetible ajeno: el escombro (montones, trozos) con concreto; antes iba como color liso
 # y en Three.js se leía como montones blancos de plástico (revisión de aceptación de B, verificada)
-TILE_ALIAS = {"rubble": "concrete", "cladding": "metal_paint", "container": "metal_paint"}   # lámina: cara interior repetible
+TILE_ALIAS = {"rubble": "concrete", "cladding": "metal_paint", "container": "metal_paint", "cladding_tan": "paint_tan"}   # lámina: cara interior repetible
 # doble cara: láminas (lámina ondulada, tela, hierba) y la teja (piezas sueltas sin cara inferior: desde el ático se veía el cielo
 # y el sol pasaba, porque Three.js no dibuja la cara trasera ni la usa para la sombra)
-DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile", "linen", "wool_blue", "hay")
+DOUBLE_SIDED = ("vegetation", "fabric", "roof_metal", "roof_metal_light", "tile", "linen", "wool_blue", "hay", "canvas", "net")
 
 
 def vertex_ao(obj, samples, dist=0.5, inset=0.03, lift=0.001):

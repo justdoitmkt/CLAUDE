@@ -23,6 +23,14 @@ def build(bid, **kw):
         import com_builder
         kw.pop("dress_all", None)
         return com_builder.build_com(bid, **kw)
+    if bid.startswith("MIL_1"):
+        import mil_builder
+        kw.pop("dress_all", None)
+        return mil_builder.build_mil1(bid, **kw)
+    if bid.startswith("MIL_2"):
+        import mil_builder
+        kw.pop("dress_all", None)
+        return mil_builder.build_mil2(bid, **kw)
     if bid.startswith("CAB_"):
         import cabin_builder
         kw.pop("dress_all", None)

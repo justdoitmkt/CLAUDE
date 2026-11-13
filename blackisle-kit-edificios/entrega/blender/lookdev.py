@@ -240,6 +240,14 @@ BASE_COLORS = {   # color de material simple (los no-concreto) + rugosidad + met
     # sitio de telecom (COM_1): galvanizado por inmersión, cobre de tierras, grava triturada y radomo de fibra de vidrio
     "galvanized": ((0.56, 0.58, 0.59), 0.45, 1.0), "copper": ((0.72, 0.40, 0.25), 0.38, 1.0),
     "gravel": ((0.45, 0.45, 0.45), 0.95, 0.0), "radome": ((0.74, 0.75, 0.74), 0.55, 0.0),
+    # base militar (MIL_1 / MIL_2): lona, costal, geotextil, red, madera y pinturas militares, armas
+    "canvas": ((0.25, 0.27, 0.16), 0.92, 0.0), "sandbag": ((0.55, 0.48, 0.33), 0.9, 0.0),
+    "geotextile": ((0.52, 0.44, 0.31), 0.95, 0.0), "net": ((0.45, 0.39, 0.27), 0.9, 0.0),
+    "wood_od": ((0.20, 0.22, 0.13), 0.75, 0.0), "plywood": ((0.60, 0.48, 0.33), 0.8, 0.0),
+    "paint_od": ((0.20, 0.22, 0.13), 0.55, 0.1), "paint_tan": ((0.56, 0.46, 0.30), 0.55, 0.1),
+    "rack_orange": ((0.70, 0.19, 0.03), 0.45, 0.1), "rack_blue": ((0.03, 0.10, 0.38), 0.45, 0.1),
+    "brass": ((0.62, 0.45, 0.16), 0.3, 1.0), "gunmetal": ((0.07, 0.075, 0.08), 0.45, 0.85),
+    "polymer": ((0.10, 0.10, 0.095), 0.6, 0.0),
 }
 TEX_FOR = {  # material -> (textura, tamaño m)
     "concrete": ("T1_concrete.png", 3.0), "plaster": ("T2_old_plaster_paint.png", 2.4), "brick": ("S1_brick_red_worn.png", 2.0),
@@ -251,6 +259,7 @@ TEX_FOR = {  # material -> (textura, tamaño m)
     # sitio de telecom (COM_1)
     "galvanized": ("T13_galvanizado.png", 1.0), "gravel": ("T14_grava.png", 1.2),
 }
+CLAD_WEAR_K = 0.55   # con wear < 1 la lámina pintada pierde menos pintura: umbral 0,56 + (1 - wear) * K
 
 
 def _graffiti_layer(nb, coord_obj, gmap, band_top):
@@ -295,6 +304,7 @@ def _graffiti_layer(nb, coord_obj, gmap, band_top):
 CLAD_PAINT = {   # lámina pintada sobre óxido (muelle): color de la pintura vieja
     "cladding": (0.60, 0.62, 0.60),     # nave: gris verdoso deslavado
     "container": (0.24, 0.36, 0.40),    # contenedores: azul petróleo deslavado
+    "cladding_tan": (0.56, 0.45, 0.29), # almacén militar (MIL_1): lámina R color arena, en uso
 }
 
 
@@ -362,7 +372,7 @@ def lookdev_material(name, seed=0, gmap=None, band_top=4.25, paint_tint=(0.88, 0
         pv = nb.math("ADD", pv, nb.math("MULTIPLY", lowp, 0.22))
         aop = nb.n("ShaderNodeAmbientOcclusion", samples=8, only_local=True, in_Distance=0.4)
         pv = nb.math("ADD", pv, nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, aop.outputs["AO"], clamp=True), 0.35))
-        color = nb.mix(nb.math("GREATER_THAN", pv, 0.56), paint, rust.outputs[0])
+        color = nb.mix(nb.math("GREATER_THAN", pv, 0.56 + (1.0 - wear) * CLAD_WEAR_K), paint, rust.outputs[0])
     if name == "plaster":
         # L1: pintura vieja (crema/ocre apagado) que se descascara mostrando el concreto (L0); dos escalas de K1 contra repetición
         # under: lo que asoma bajo la pintura ('concrete' = losa/columna colada; 'brick' = relleno de tabique, APT_B/APT_C)
