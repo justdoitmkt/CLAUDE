@@ -26,6 +26,7 @@ from mathutils import Matrix, Vector
 from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rng, rr_profile
 from kit.clinic_equipo import arc_solid, loft_rings, revolve, sweep_frame
+from kit.clinic_equipo import text as _ce_text
 from kit.clinic_servicios import _edge_levels, cup, hexnut, label, lathe, pslab, rpoly_pts, rr_pts, screw, skin, slab
 
 IN = 0.0254
@@ -54,19 +55,68 @@ def _ccw(P, R):
     return P, R
 
 
+def rpoly_n(P, R, delta=0.0, n=3):
+    """Como clinic_servicios.rpoly_pts pero con segmentos por esquina según el radio: R < 0,8 mm -> esquina viva (1 punto),
+    R < 2,5 mm -> chaflán (2 puntos), si no n + 1 puntos. Lazos compatibles entre desplazamientos (mismo número de puntos)."""
+    m = len(P)
+    P = [Vector((float(p[0]), float(p[1]))) for p in P]
+    N = []
+    for i in range(m):
+        d = (P[(i + 1) % m] - P[i]).normalized()
+        N.append(Vector((-d.y, d.x)))
+    Q = [P[i] + (N[i - 1] + N[i]) * (delta / (1 + N[i - 1].dot(N[i]))) for i in range(m)]
+    out = []
+    for i in range(m):
+        ni = 0 if R[i] < 0.0008 else (1 if R[i] < 0.0025 else n)
+        q, a, b = Q[i], Q[i - 1], Q[(i + 1) % m]
+        if ni == 0:
+            out.append((q.x, q.y))
+            continue
+        e0, e1 = q - a, b - q
+        convex = (e0.x * e1.y - e0.y * e1.x) > 0
+        rho = max((R[i] - delta) if convex else (R[i] + delta), 2e-4)
+        d0, d1 = (a - q).normalized(), (b - q).normalized()
+        ang = math.acos(max(-1.0, min(1.0, d0.dot(d1))))
+        if ang > PI - 1e-3:                     # esquina colineal: un solo punto (consistente entre desplazamientos)
+            out.append((q.x, q.y))
+            continue
+        t = min(rho / math.tan(ang / 2), (a - q).length * 0.49, (b - q).length * 0.49)
+        rho = t * math.tan(ang / 2)
+        C = q + (d0 + d1).normalized() * (rho / math.sin(ang / 2))
+        v0, v1 = q + d0 * t - C, q + d1 * t - C
+        a0 = math.atan2(v0.y, v0.x)
+        da = math.atan2(v1.y, v1.x) - a0
+        while da > PI:
+            da -= 2 * PI
+        while da < -PI:
+            da += 2 * PI
+        for k in range(ni + 1):
+            aa = a0 + da * k / ni
+            out.append((C.x + rho * math.cos(aa), C.y + rho * math.sin(aa)))
+    return out
+
+
+def pslab_n(mb, M, P, R, L, re=0.004, mat="steel", n=3, ne=2, re0=None):
+    """Prisma de contorno poligonal con filetes por esquina (rpoly_n) extruido de z = 0 a L con cantos re / re0."""
+    re0 = re if re0 is None else re0
+    lv = _edge_levels(L, min(re, L * 0.49), min(re0, L * 0.49), ne) if re > 0 else [(0.0, 0.0), (0.0, L)]
+    loops = [[(x, y, z) for (x, y) in rpoly_n(P, R, dl, n)] for (dl, z) in lv]
+    return skin(mb, loops, mat, M)
+
+
 def side(mb, P, R, wid, mat, y0=0.0, re=0.0015, n=3, ne=2, M=None):
     """Silueta lateral [(x, z)] (vista desde -Y) con filete R por esquina, extruida a lo ancho (Y) `wid` centrada en y0,
     cantos redondeados re. Cuerpos de culatas, armazones, empuñaduras planas, palancas."""
     P, R = _ccw(P, R)
     Mx = (M if M is not None else Matrix()) @ _T(0, y0 + wid / 2, 0) @ _Rx(90)
-    return pslab(mb, Mx, P, R, wid, re=min(re, wid * 0.45), mat=mat, n=n, ne=ne)
+    return pslab_n(mb, Mx, P, R, wid, re=min(re, wid * 0.45), mat=mat, n=n, ne=ne)
 
 
 def plan(mb, P, R, t, mat, z0=0.0, re=0.0015, n=3, ne=2, M=None):
     """Contorno en planta [(x, y)] extruido en +Z de z0 a z0 + t (placas, chapas, herrajes)."""
     P, R = _ccw(P, R)
     Mx = (M if M is not None else Matrix()) @ _T(0, 0, z0)
-    return pslab(mb, Mx, P, R, t, re=min(re, t * 0.45), mat=mat, n=n, ne=ne)
+    return pslab_n(mb, Mx, P, R, t, re=min(re, t * 0.45), mat=mat, n=n, ne=ne)
 
 
 def xloft(mb, st, mat, n=4, M=None, caps=(True, True)):
@@ -84,7 +134,7 @@ def board(mb, mn, mx, mat="wood_od", ch=0.0025, M=None):
 
 def stencil(mb, s, size, M, mat="paint_yellow", depth=0.0004):
     """Estarcido de pintura (relieve de 0,4 mm, hundido 0,3 mm en la superficie): M = plano de la superficie, +Z hacia afuera."""
-    label(mb, s, size, mat, M, depth=depth, res=2 if size < 0.02 else 3)
+    _ce_text(mb, s, size, depth + 0.0003, mat, M @ _T(0, 0, -0.0003), res=2 if size >= 0.02 else 1, back=False)
 
 
 def strap(mb, path, w, t, mat="canvas", up=(0, 0, 1), r=None, caps=True):
@@ -103,15 +153,53 @@ def wire(mb, pts, r, mat="steel", bend=0.01, nseg=4, seg=SEG_T, caps=True):
     mb.tube(out, r, seg=seg, mat=mat, caps=caps)
 
 
-def rr_torus(mb, M, w, d, rc, rb, mat, nc=4, nb=6, z=0.0):
+def rr_torus(mb, M, w, d, rc, rb, mat, nc=4, nb=6, z=0.0, phase=0.3):
     """Cordón cerrado de sección redonda rb que sigue un rectángulo redondeado w × d (radio rc) en el plano z: bordes
     rolados de latas, empaques, vivos."""
     loops = []
     for k in range(nb):
-        a = 2 * PI * k / nb
+        a = 2 * PI * k / nb + phase
         o = rb * math.cos(a)
         loops.append([(x, y, z + rb * math.sin(a)) for (x, y) in rr_pts(w + 2 * o, d + 2 * o, rc + o, nc)])
     return skin(mb, loops, mat, M, closed=True)
+
+
+def _levels(h, re_t, ne_t, re_b, ne_b):
+    lv = []
+    if re_b > 0 and ne_b > 0:
+        for j in range(ne_b + 1):
+            p = PI / 2 * j / ne_b
+            lv.append((re_b * (1 - math.sin(p)), re_b * (1 - math.cos(p))))
+    else:
+        lv.append((0.0, 0.0))
+    if re_t > 0 and ne_t > 0:
+        for j in range(ne_t + 1):
+            p = PI / 2 * j / ne_t
+            lv.append((re_t * (1 - math.cos(p)), h - re_t + re_t * math.sin(p)))
+    else:
+        lv.append((0.0, h))
+    return lv
+
+
+def slab2(mb, M, w, d, h, rc, mat, re_t=0.0, ne_t=0, re_b=0.0, ne_b=0, nc=4):
+    """Caja de planta redondeada (radio rc, nc segmentos por esquina) de z = 0 a h, con canto superior e inferior
+    independientes (radio y número de segmentos): los cantos ocultos no gastan triángulos."""
+    rcs = rc if isinstance(rc, (tuple, list)) else (rc,) * 4
+    loops = [[(x, y, z) for (x, y) in rr_pts(w - 2 * dl, d - 2 * dl, tuple(max(q - dl, 3e-4) for q in rcs), nc)]
+             for (dl, z) in _levels(h, min(re_t, h * 0.49), ne_t, min(re_b, h * 0.49), ne_b)]
+    return skin(mb, loops, mat, M)
+
+
+def shell(mb, M, w, d, h, t, rc, mat, re=0.0, ne=0, nc=4, mat_in=None):
+    """Caja hueca de lámina (tapa, cuerpo de lata): boca en z = 0, fondo en z = h, pared t; canto exterior del fondo re."""
+    def lp(dl, z, rr):
+        return [(x, y, z) for (x, y) in rr_pts(w - 2 * dl, d - 2 * dl, max(rr - dl, 3e-4), nc)]
+    inner = [lp(t, h - t, rc), lp(t, 0.0, rc)]
+    outer = [lp(dl, z, rc) for (dl, z) in _levels(h, min(re, h * 0.49), ne, 0.0, 0)]
+    mats = None
+    if mat_in:
+        mats = [mat_in, mat] + [mat] * (len(outer) - 1)
+    return skin(mb, inner + outer, mat, M, mats=mats)
 
 
 def rivet(mb, M, d=0.006, mat="steel", seg=10):
@@ -120,7 +208,8 @@ def rivet(mb, M, d=0.006, mat="steel", seg=10):
             M=M)
 
 
-def cartridge(mb, M, cal=0.0057, case_len=0.045, bullet=0.012, seg=12, mat_case="brass", mat_bullet="brass", neck=True):
+def cartridge(mb, M, cal=0.0057, case_len=0.045, bullet=0.012, seg=12, mat_case="brass", mat_bullet="brass", neck=True,
+              lite=False):
     """Cartucho metálico a lo largo de Z local (culote en z = 0): culote con ranura de extractor, vaina con hombro y
     cuello, proyectil ojival. cal = diámetro del proyectil."""
     rb = cal * 0.86 if neck else cal / 2 * 1.06
@@ -133,11 +222,16 @@ def cartridge(mb, M, cal=0.0057, case_len=0.045, bullet=0.012, seg=12, mat_case=
         rbody = cal / 2 * 1.06
         prof = [(0.0, 0.0), (rbody * 1.02, 0.0), (rbody * 1.02, 0.0012), (rbody * 0.86, 0.0016), (rbody * 0.86, 0.0024),
                 (rbody, 0.003), (rbody, case_len)]
+    if lite:
+        prof = [(0.0, 0.0), (rh, 0.0), (rh, 0.0012), (prof[-3][0], case_len * 0.76), (cal * 0.56, case_len * 0.86),
+                (cal * 0.56, case_len)] if neck else [(0.0, 0.0), (rbody * 1.02, 0.0), (rbody, 0.003), (rbody, case_len)]
     revolve(mb, prof, mat_case, seg=seg, M=M, caps=False)
     rr = cal / 2
     z0 = case_len - 0.0006
     bp = [(rr * 0.98, z0), (rr, z0 + 0.0012), (rr, z0 + bullet * 0.35), (rr * 0.8, z0 + bullet * 0.7), (rr * 0.42, z0 + bullet * 0.93),
           (0.0, z0 + bullet)]
+    if lite:
+        bp = [(rr, z0), (rr, z0 + bullet * 0.35), (rr * 0.72, z0 + bullet * 0.75), (0.0, z0 + bullet)]
     revolve(mb, bp, mat_bullet, seg=seg, M=M, caps=True)
 
 
@@ -148,7 +242,7 @@ def _mag_body(mb, M, n_ring=4, lite=False):
     H = 0.172
     D, W, R = 0.0635, 0.0235, 0.0045
     Rc = 0.62
-    ns = 4 if lite else 6
+    ns = 4 if lite else 5
     sta = []
     for i in range(ns + 1):
         s = H * i / ns
@@ -157,8 +251,8 @@ def _mag_body(mb, M, n_ring=4, lite=False):
         cz = -(min(s, 0.03) + Rc * math.sin(th))
         sta.append((cx, cz, math.cos(th), math.sin(th)))       # centro y normal "hacia adelante"
     loops = [[(cx + nx * u, v, cz + nz * u) for (u, v) in rr_pts(D, W, R, n_ring)] for (cx, cz, nx, nz) in sta]
-    skin(mb, loops, "polymer", M, cap0=True, cap1=False)
-    if not lite:                                   # dos nervaduras longitudinales por costado
+    skin(mb, loops, "polymer", M, cap0=True, cap1=True)
+    if False:                                      # nervaduras: fuera de presupuesto (<= 600 triángulos)
         prof = [(-0.003, -0.0004), (0.003, -0.0004), (0.0022, 0.0009), (-0.0022, 0.0009)]
         for sy in (-1, 1):
             for u0 in (-0.012, 0.008):
@@ -169,16 +263,16 @@ def _mag_body(mb, M, n_ring=4, lite=False):
     th_end = (H - 0.03) / Rc
     cx, cz = sta[-1][0], sta[-1][1]
     Mb = M @ _T(cx, 0, cz) @ _Ry(-math.degrees(th_end))
-    slab(mb, Mb @ _T(0.002, 0, -0.0075), 0.0715, 0.0275, 0.0088, rc=0.006, re=0.0018, re0=0.0025, mat="polymer", nc=4, ne=1)
+    slab2(mb, Mb @ _T(0.002, 0, -0.0075), 0.0715, 0.0275, 0.0088, 0.006, "polymer", re_t=0.0, ne_t=0, re_b=0.0025, ne_b=1, nc=3)
 
 
 def _mag(mb, M, lite=False):
     """Cargador completo en el marco M (ver _mag_body): cuerpo, base, labios de alimentación y cartucho superior."""
     _mag_body(mb, M, lite=lite)
     for sy in (-1, 1):
-        side(mb, [(-0.026, -0.001), (0.012, -0.001), (0.012, 0.004), (-0.022, 0.006)], [0.001, 0.001, 0.002, 0.002], 0.0018,
-             "polymer", y0=sy * 0.0105, re=0.0006, n=2, ne=1, M=M)
-    cartridge(mb, M @ _T(-0.026, 0, 0.0035) @ _Ry(90), cal=0.0057, case_len=0.0445, bullet=0.0125, seg=12)
+        side(mb, [(-0.026, -0.001), (0.012, -0.001), (0.012, 0.004), (-0.022, 0.006)], [0.0, 0.0, 0.0015, 0.0015], 0.0018,
+             "polymer", y0=sy * 0.0105, re=0.0, M=M)
+    cartridge(mb, M @ _T(-0.026, 0, 0.0035) @ _Ry(90), cal=0.0057, case_len=0.0445, bullet=0.0125, seg=12, lite=True)
 
 
 def _drop(mb):
@@ -190,7 +284,7 @@ def _drop(mb):
 
 def magazine(seed=0, lite=False):
     """Cargador curvo de polímero de 30 tiros, genérico (sección ~ 64 × 23,5 mm, ~ 19 cm de alto, curva hacia adelante como
-    los cargadores de 5,56 mm): cuerpo curvo con dos nervaduras por costado, base con labios, labios de alimentación y
+    los cargadores de 5,56 mm): cuerpo curvo de sección redondeada, base con labio inferior, labios de alimentación y
     cartucho superior a la vista. Origen: x = 0 cara trasera de la boca, z = 0 apoyo (de pie sobre la base), y = 0 centro;
     el frente mira a +X. Fuentes: en.wikipedia.org/wiki/STANAG_magazine ; magpul.com/firearm-accessories/
     pmag30ar-m4genm3window-5-56x45.html (forma y largo de referencia)."""
@@ -206,25 +300,26 @@ def _can_dims(size):
 
 
 def _can_handle(mb, M, span, mat="paint_od"):
-    """Asa plegable de fleje de acero estampado (abatida sobre la tapa, M: plano de apoyo, +Z arriba) con sus dos
-    orejas-pivote y pasadores a lo largo de X."""
+    """Asa plegable de fleje de acero estampado abatida sobre la tapa (M: plano de apoyo, +Z arriba) con sus dos orejas
+    remachadas (el eje de giro va a lo largo de X)."""
     hx = span / 2
-    path = fillet([(-hx, 0.0, 0.0), (-hx, 0.030, 0.0), (hx, 0.030, 0.0), (hx, 0.0, 0.0)], 0.012, 4)
-    strap(mb, [M @ Vector(p) for p in path], 0.010, 0.0028, mat=mat, up=M.to_3x3() @ Vector((0, 0, 1)))
+    path = fillet([(-hx, 0.0, 0.0), (-hx, 0.030, 0.0), (hx, 0.030, 0.0), (hx, 0.0, 0.0)], 0.012, 3)
+    strap(mb, [M @ Vector(p) for p in path], 0.010, 0.0028, mat=mat, up=M.to_3x3() @ Vector((0, 0, 1)), r=0.0011)
     for sx in (-1, 1):
         x = sx * (hx + 0.0042)
-        side(mb, [(-0.009, -0.0028), (0.009, -0.0028), (0.006, 0.0062), (-0.006, 0.0062)], [0.0005, 0.0005, 0.004, 0.004], 0.003,
-             mat, y0=0.0, re=0.0008, n=3, ne=1, M=M @ _T(x, 0.0, 0.0) @ _Rz(90))
-        revolve(mb, [(0.0018, -0.0085), (0.0018, 0.0085)], "steel", seg=SEG_T, M=M @ _T(sx * hx, 0.0, 0.0011) @ _Ry(90))
+        side(mb, [(-0.009, -0.0028), (0.009, -0.0028), (0.006, 0.0062), (-0.006, 0.0062)], [0.0, 0.0, 0.004, 0.004], 0.003,
+             mat, y0=0.0, re=0.0, n=3, M=M @ _T(x, 0.0, 0.0) @ _Rz(90))
+        revolve(mb, [(0.0024, -0.0002), (0.002, 0.0008), (0.0, 0.0013)], "steel", seg=12,
+                M=M @ _T(x + sx * 0.0015, 0.0, 0.0012) @ _Ry(90 * sx))
 
 
 def ammo_can(size="large", seed=0, open=False):
     """Lata metálica de munición genérica con tapa abisagrada de cierre por palanca (clase .50 «large» 298 × 152 × 191 mm;
-    clase 7,62 «small» 277 × 99 × 178 mm). Cuerpo de lámina con esquinas redondeadas, nervaduras estampadas y costura rolada
-    inferior; tapa con panel estampado, empaque de hule (visible abierta), bisagra de pasador en un extremo, palanca de leva
-    con su gancho en el otro, asa de fleje plegable y estarcido «AMMO» + lote. open=True: tapa girada 105° sobre la bisagra,
-    cuerpo hueco con borde rolado. Origen: centro de la base (z = 0 apoyo); largo en X (bisagra en -X, palanca en +X),
-    costado con estarcido hacia -Y.
+    clase 7,62 «small» 277 × 99 × 178 mm). Cuerpo de lámina con esquinas redondeadas y costura rolada inferior; tapa con
+    panel estampado y canto redondeado, empaque de hule (visible abierta), bisagra de pasador en un extremo (nudillos de
+    lámina enrollada), palanca de leva con su gancho en el otro, asa de fleje plegable remachada y estarcido «AMMO» + lote.
+    open=True: tapa girada 105° sobre la bisagra, cuerpo y tapa huecos. Origen: centro de la base (z = 0 apoyo); largo en
+    X (bisagra en -X, palanca en +X), costado con estarcido hacia -Y.
     Fuentes: bulkammo.com/m19a1-30-cal-m2a1-50-cal-ammo-cans-green-brand-new-2 ; alloutdoor.com/?p=475777 (medidas M2A1 /
     M19A1 exteriores e interiores)."""
     r = rng(seed)
@@ -232,69 +327,61 @@ def ammo_can(size="large", seed=0, open=False):
     L, W, H = _can_dims(size)
     big = size == "large"
     lid_h = 0.042 if big else 0.038
-    t = 0.0012
     Lb, Wb = L - 0.010, W - 0.006          # cuerpo (la tapa lo abraza por fuera)
     zl0 = H - lid_h                        # borde inferior de la tapa
     zb = zl0 + 0.022                       # tope del cuerpo (entra 22 mm en la tapa)
     rc = 0.009
-    # ---- cuerpo
+    # ---- cuerpo y costura rolada inferior
     if open:
-        cup(mb, _T(0, 0, zb) @ _Rx(180), Lb, Wb, zb - 0.004, t * 2.5, rc=rc, re=0.004, mat="paint_od", nc=4, ne=2)
-        rr_torus(mb, _T(0, 0, zb - 0.0012), Lb - 0.0016, Wb - 0.0016, rc - 0.0008, 0.0014, "paint_od", nc=4, nb=6)
+        shell(mb, _T(0, 0, zb) @ _Rx(180), Lb, Wb, zb - 0.004, 0.0012, rc, "paint_od")
     else:
-        slab(mb, _T(0, 0, 0.004), Lb, Wb, zb - 0.004, rc=rc, re=0.0015, re0=0.004, mat="paint_od", nc=4, ne=2)
-    slab(mb, Matrix(), Lb + 0.003, Wb + 0.003, 0.0065, rc=rc + 0.0015, re=0.0025, re0=0.0015, mat="paint_od", nc=4, ne=2)
-    for sy in (-1, 1):                     # nervaduras estampadas horizontales en los costados largos
-        for zr in (0.030, zl0 - 0.016):
-            xloft(mb, [(-Lb / 2 + 0.035, 0.0004, 0.006, zr, 0.0002), (-Lb / 2 + 0.040, 0.0026, 0.009, zr, 0.0012),
-                       (Lb / 2 - 0.040, 0.0026, 0.009, zr, 0.0012), (Lb / 2 - 0.035, 0.0004, 0.006, zr, 0.0002)], "paint_od",
-                  n=2, M=_T(0, sy * (Wb / 2 - 0.0002), 0))
+        slab2(mb, _T(0, 0, 0.004), Lb, Wb, zb - 0.004, rc, "paint_od")
+    slab2(mb, Matrix(), Lb + 0.003, Wb + 0.003, 0.0065, rc + 0.0015, "paint_od", re_t=0.0025, ne_t=1, re_b=0.0015, ne_b=1)
     # ---- tapa
     hx = -L / 2 - 0.0042                   # eje de la bisagra
     hz = zl0 + 0.004
     lid = MB()
     if open:
-        cup(lid, _T(0, 0, zl0), L, W, lid_h - 0.003, 0.0016, rc=rc + 0.003, re=0.005, mat="paint_od", nc=4, ne=2)
-        rr_torus(lid, _T(0, 0, H - 0.0075), L - 0.0095, W - 0.0095, rc - 0.001, 0.0038, "rubber", nc=4, nb=6)
+        shell(lid, _T(0, 0, zl0), L, W, lid_h - 0.003, 0.0012, rc + 0.003, "paint_od", re=0.005, ne=4)
+        rr_torus(lid, _T(0, 0, H - 0.0072), L - 0.0095, W - 0.0095, rc - 0.001, 0.0038, "rubber", nc=4, nb=4, phase=PI / 4)
     else:
-        slab(lid, _T(0, 0, zl0), L, W, lid_h - 0.003, rc=rc + 0.003, re=0.005, re0=0.0012, mat="paint_od", nc=4, ne=2)
-    slab(lid, _T(0, 0, H - 0.0045), L - 0.050, W - 0.040, 0.0045, rc=0.012, re=0.0025, re0=0.0, mat="paint_od", nc=4, ne=2)
+        slab2(lid, _T(0, 0, zl0), L, W, lid_h - 0.003, rc + 0.003, "paint_od", re_t=0.005, ne_t=4)
+    slab2(lid, _T(0, 0, H - 0.0045), L - 0.050, W - 0.040, 0.0045, 0.012, "paint_od", re_t=0.0025, ne_t=2)
     _can_handle(lid, _T(0, -0.015 if big else -0.012, H - 0.0003), 0.15 if big else 0.14)
-    yk = (0.030, 0.018) if big else (0.022, 0.018)
-    for sy in (-1, 1):                     # nudillos de la tapa
-        side(lid, [(-L / 2 + 0.001, zl0 + 0.026), (hx - 0.002, zl0 + 0.026), (hx - 0.0042, hz + 0.004), (hx, hz - 0.0042),
-                   (-L / 2 + 0.001, hz - 0.0042)], [0.001, 0.003, 0.001, 0.001, 0.0005], yk[1], "paint_od", y0=sy * yk[0], re=0.0008,
-             n=3, ne=1)
-        revolve(lid, [(0.0042, -yk[1] / 2), (0.0042, yk[1] / 2)], "paint_od", seg=SEG_T, M=_T(hx, sy * yk[0], hz) @ _Rx(90))
-    # palanca de leva (extremo +X): placa con pivote enrollado arriba
+    yk, wkl = (0.030, 0.018) if big else (0.022, 0.018)
+    for sy in (-1, 1):                     # nudillos de la tapa (lámina enrollada sobre el pasador)
+        side(lid, [(-L / 2 + 0.001, zl0 + 0.024), (hx + 0.0005, hz + 0.0035), (hx + 0.0005, hz - 0.0035),
+                   (-L / 2 + 0.001, hz - 0.0035)], 0.0, wkl - 0.0006, "paint_od", y0=sy * yk, re=0.0)
+        revolve(lid, [(0.0042, -wkl / 2), (0.0042, wkl / 2)], "paint_od", seg=SEG_T, M=_T(hx, sy * yk, hz) @ _Rx(90))
+    # palanca de leva (extremo +X): placa con pivote enrollado arriba, oreja del pivote en la tapa
     xl = L / 2 + 0.0004
     lev = MB()
     plan(lev, [(0.006, -0.017), (0.083, -0.014), (0.090, -0.010), (0.090, 0.010), (0.083, 0.014), (0.006, 0.017)],
-         [0.002, 0.004, 0.003, 0.003, 0.004, 0.002], 0.0026, "paint_od", re=0.0009, n=3, ne=1)
+         [0.0, 0.004, 0.003, 0.003, 0.004, 0.0], 0.0026, "paint_od", re=0.0, n=2)
     revolve(lev, [(0.0045, -0.019), (0.0045, 0.019)], "paint_od", seg=SEG_T, M=_T(0.0015, 0, 0.0045) @ _Rx(90))
     lid.join(lev, _T(xl, 0, H - 0.012) @ _Ry(90 - (2.0 if not open else 75.0)))
-    # oreja del pivote de la palanca en la tapa
-    side(lid, [(L / 2 - 0.002, H - 0.020), (xl + 0.004, H - 0.020), (xl + 0.006, H - 0.010), (L / 2 - 0.002, H - 0.004)],
-         [0.0005, 0.002, 0.002, 0.0005], 0.044, "paint_od", re=0.0008, n=3, ne=1)
-    # ---- cuerpo: gancho de la palanca, nudillo central y pasador
+    side(lid, [(L / 2 - 0.002, H - 0.019), (xl + 0.0035, H - 0.017), (xl + 0.0055, H - 0.009), (L / 2 - 0.002, H - 0.005)],
+         0.0, 0.044, "paint_od", re=0.0)
+    # ---- cuerpo: gancho de la palanca, nudillo central y pasador con cabeza
     xc0 = Lb / 2 - 0.001
-    side(mb, [(xc0, zl0 - 0.052), (xl + 0.0035, zl0 - 0.050), (xl + 0.0045, zl0 - 0.036), (xc0, zl0 - 0.030)],
-         [0.0005, 0.0015, 0.002, 0.0005], 0.024, "paint_od", re=0.0008, n=3, ne=1)
+    side(mb, [(xc0, zl0 - 0.052), (xl + 0.0035, zl0 - 0.050), (xl + 0.0045, zl0 - 0.036), (xc0, zl0 - 0.030)], 0.0, 0.024,
+         "paint_od", re=0.0)
     wk = 0.034 if big else 0.024
-    side(mb, [(-Lb / 2 + 0.001, zl0 - 0.022), (hx + 0.002, zl0 - 0.022), (hx + 0.0042, hz - 0.002), (hx, hz + 0.0042),
-              (-Lb / 2 + 0.001, hz + 0.0042)], [0.0005, 0.003, 0.001, 0.001, 0.0005], wk, "paint_od", re=0.0008, n=3, ne=1)
+    side(mb, [(-Lb / 2 + 0.001, zl0 - 0.022), (hx + 0.0005, hz - 0.0035), (hx + 0.0005, hz + 0.0035),
+              (-Lb / 2 + 0.001, hz + 0.0035)], 0.0, wk - 0.0006, "paint_od", re=0.0)
     revolve(mb, [(0.0042, -wk / 2), (0.0042, wk / 2)], "paint_od", seg=SEG_T, M=_T(hx, 0, hz) @ _Rx(90))
-    hl = yk[0] + yk[1] / 2 + 0.003
-    revolve(mb, [(0.0018, -hl), (0.0024, -hl + 0.0005), (0.0024, -hl + 0.002), (0.0018, -hl + 0.0025), (0.0018, hl)], "steel",
-            seg=SEG_T, M=_T(hx, 0, hz) @ _Rx(90))
+    hl = yk + wkl / 2 + 0.0025
+    revolve(mb, [(0.0027, -hl), (0.0027, -hl + 0.0016), (0.0018, -hl + 0.0016), (0.0018, hl)], "steel", seg=SEG_T,
+            M=_T(hx, 0, hz) @ _Rx(90))
     if open:
         lid.transform(_T(hx, 0, hz) @ _Ry(-105) @ _T(-hx, 0, -hz))
     mb.join(lid)
     # ---- estarcidos (costado -Y)
     yf = -Wb / 2
     stencil(mb, "AMMO", 0.034 if big else 0.028, _T(0, yf, zl0 * 0.55) @ _Rx(90), "paint_yellow")
-    lot = ("LOT 27-05", "LOT 22-09", "LOT 31-02")[int(r.integers(0, 3))]
-    stencil(mb, lot, 0.011, _T(0, yf, zl0 * 0.55 - 0.020) @ _Rx(90), "paint_yellow")
+    if not open:
+        lot = ("LOT 27-05", "LOT 22-09", "LOT 31-02")[int(r.integers(0, 3))]
+        stencil(mb, lot, 0.011, _T(0, yf, zl0 * 0.55 - 0.020) @ _Rx(90), "paint_yellow")
     return mb
 
 
@@ -317,8 +404,8 @@ def cardboard_ammo_box(seed=0):
               (L * s / 2 - 0.022, W / 2 - 0.003)], [0.0, 0.0006, 0.0006, 0.0], 0.0009, "cardboard", z0=H - 0.0004, re=0.0003, n=1,
          ne=1)
     # etiqueta en la tapa
-    plan(mb, [(-0.045, -0.026), (0.03, -0.026), (0.03, 0.026), (-0.045, 0.026)], 0.003, 0.0004, "sign_white", z0=H - 0.0002,
-         re=0.0001, n=2, ne=1)
-    stencil(mb, "20 CTG", 0.011, _T(-0.0075, 0.004, H + 0.0002), "cable", depth=0.0003)
-    stencil(mb, "RIFLE", 0.008, _T(-0.0075, -0.012, H + 0.0002), "cable", depth=0.0003)
+    plan(mb, [(-0.045, -0.026), (0.03, -0.026), (0.03, 0.026), (-0.045, 0.026)], 0.003, 0.0007, "sign_white", z0=H - 0.0003,
+         re=0.0)
+    stencil(mb, "20 CTG", 0.011, _T(-0.0075, 0.004, H + 0.0004), "cable", depth=0.0003)
+    stencil(mb, "RIFLE", 0.008, _T(-0.0075, -0.012, H + 0.0004), "cable", depth=0.0003)
     return mb

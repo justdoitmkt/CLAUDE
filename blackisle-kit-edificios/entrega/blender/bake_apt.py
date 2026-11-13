@@ -51,6 +51,8 @@ def log(*a):
 
 def join(objs, name):
     objs = [o for o in objs if o is not None and len(o.data.polygons)]
+    if not objs:                                          # p. ej. la tienda de campaña (MIL_2) no tiene carcasa ni techo
+        return None
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
@@ -529,34 +531,39 @@ def main():
     cfg = res["cfg"]
     prefix = bid
     g = lambda k: res.get(k, [])  # noqa: E731
-    shell = g("Shell")[0]
+    shell = g("Shell")[0] if g("Shell") else None          # piezas sueltas sin carcasa (MIL_2): sin atlas de muros
     dmg = {o.name.split("_Damage_")[-1]: o for o in g("Damage")}
-    roof = g("Roof")[0]
+    roof = g("Roof")[0] if g("Roof") else None
     det = join(g("Details") + [dmg.get("Details"), dmg.get("Shell")], f"{prefix}_Details")
     inter = join(g("Interior") + [dmg.get("Interior")], f"{prefix}_Interior")
     furn = join(g("Furniture"), f"{prefix}_Furniture") if g("Furniture") else None   # mobiliario en malla propia (hospital)
     skirt = g("Skirt")[0] if g("Skirt") else None        # sin terreno (--ue) las cabañas no tienen nada en la base
     log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt, furn) if o]))
     # caras apoyadas en el terreno (cara inferior de la losa de desplante, pies de columna): nunca se ven y ocupaban medio atlas
-    bm = bmesh.new()
-    bm.from_mesh(shell.data)
-    kill = [f for f in bm.faces if f.normal.z < -0.9 and f.calc_center_median().z < 0.02]
-    bmesh.ops.delete(bm, geom=kill, context="FACES")
-    bm.to_mesh(shell.data)
-    bm.free()
-    log("caras de apoyo retiradas:", len(kill))
+    if shell is not None:
+        bm = bmesh.new()
+        bm.from_mesh(shell.data)
+        kill = [f for f in bm.faces if f.normal.z < -0.9 and f.calc_center_median().z < 0.02]
+        bmesh.ops.delete(bm, geom=kill, context="FACES")
+        bm.to_mesh(shell.data)
+        bm.free()
+        log("caras de apoyo retiradas:", len(kill))
     import coplanar                                   # z-fighting: borra caras cubiertas por otra coplanar, hunde 3 mm las parciales
     log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof, furn) if o is not None], log=log))
     # oclusores: techo e interior (tabiques, puertas, escaleras). Sin el interior, la cara interior de un muro exterior veía el cielo
     # cruzando el cuarto y las ventanas de enfrente, iba al atlas exterior y salía con AO ~0 (cuartos negros en Three.js) o con la
     # textura de fachada. Los detalles no tapan: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
-    ext, intr = ld.split_exterior(shell, others=[roof, inter], footprint=cfg.get("exterior_footprint"))
-    bpy.data.objects.remove(shell)
+    if shell is not None:
+        ext, intr = ld.split_exterior(shell, others=[o for o in (roof, inter) if o is not None], footprint=cfg.get("exterior_footprint"))
+        bpy.data.objects.remove(shell)
+    else:
+        ext, intr = None, None
     short = "_".join(bid.split("_")[:2])
     gfile = os.path.join(ld.TEX, "graffiti", f"G_{short}_mapa.json")
     has_g = os.path.exists(gfile)                         # las cabañas no llevan panel de grafiti
     band_top = cfg.get("band_top", cfg["h"][0] + ab.GROUND + 0.7) if has_g else -1.0
-    main_o, rest_o = split_by(ext, lambda c, n: n.y < -0.5 or c.z < band_top, f"{prefix}_WallsMain", f"{prefix}_WallsRest")
+    main_o, rest_o = split_by(ext, lambda c, n: n.y < -0.5 or c.z < band_top, f"{prefix}_WallsMain", f"{prefix}_WallsRest") \
+        if ext is not None else (None, None)
     inter = join([inter, intr], f"{prefix}_Interior")
     if ue:                                               # sin terreno: lo que queda en la base es escombro exterior suelto
         sand_o, loose_o = None, skirt
@@ -576,6 +583,7 @@ def main():
         bm.free()
         log("arena: caras volteadas hacia arriba", len(down))
     atlas_objs = [(main_o, "walls_main"), (rest_o, "walls_rest")] + ([] if ue else [(sand_o, "skirt")])
+    atlas_objs = [(o, a) for (o, a) in atlas_objs if o is not None]
     log("split ok", round(time.time() - t0), "s")
     gb = cfg.get("graffiti_bounds") or (cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
                                         cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2)
@@ -586,7 +594,7 @@ def main():
         t = time.time()
         ld.unwrap(o)
         log("unwrap", o.name, round(time.time() - t), "s", len(o.data.polygons), "caras")
-    nb = scale_band_islands(main_o, band_top, BAND_SCALE) if has_g else 0
+    nb = scale_band_islands(main_o, band_top, BAND_SCALE) if (has_g and main_o is not None) else 0
     log("islas de banda ampliadas:", nb)
     mem = 0.0
     sizes = SIZES_CAB if bid.startswith("CAB") else (SIZES_MUE if bid.startswith("MUE") else SIZES)   # GRA: 4K (con 8K y 1,1 M de tris se quedaba sin memoria)
@@ -600,11 +608,12 @@ def main():
         nfix = fix_vertex_ao(o)
         log("AO por vértice", o.name, round(time.time() - t), "s; esquinas incrustadas corregidas:", nfix)
     # el interior se reproyecta a 2 m por unidad para compartir materiales con los detalles (techo de 14 materiales)
-    bm = bmesh.new()
-    bm.from_mesh(inter.data)
-    box_uv_bm(bm, 2.0)
-    bm.to_mesh(inter.data)
-    bm.free()
+    if inter is not None:
+        bm = bmesh.new()
+        bm.from_mesh(inter.data)
+        box_uv_bm(bm, 2.0)
+        bm.to_mesh(inter.data)
+        bm.free()
     mats = ue_materials(loose) if ue else tileable_materials(loose, prefix, 2.0)
     mats_i = []
     tex_used = {TILE_TEX[k][0] for k in TILE_TEX}

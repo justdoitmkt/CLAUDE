@@ -148,6 +148,8 @@ def export_textures(bid, src_dir, dst_dir):
     out = {}
     for aid in ("walls_main", "walls_rest"):
         base = os.path.join(src_dir, f"{bid}_{aid}")
+        if not os.path.exists(base + "_albedo.png"):          # pieza suelta sin carcasa (MIL_2): no hay atlas de muros
+            continue
         bc = os.path.join(dst_dir, f"T_{bid}_{aid}_BC.jpg")
         Image.open(base + "_albedo.png").convert("RGB").save(bc, quality=95, subsampling=0)
         n = np.asarray(Image.open(base + "_normal.png").convert("RGB")).copy()

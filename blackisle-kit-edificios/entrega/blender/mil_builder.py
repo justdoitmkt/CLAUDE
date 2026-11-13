@@ -555,6 +555,46 @@ def _sag_wall(mb, M, L, za, zb, side, n=40, m=3):
                 mb.face([V[i, j], V[i, j + 1], V[i + 1, j + 1], V[i + 1, j]], "plastic")
 
 
+def sprinklers(inter):
+    """Rociadores (almacén de explosivos): troncal de 4" bajo el caballete con coples ranurados, ramales de 1 1/4" cada 3 m
+    hacia los aleros con colgantes de varilla y rociadores colgantes cada 3 m, montante con válvula y manómetro junto a la
+    puerta de personal."""
+    ym = (WY0 + WY1) / 2
+    zt = roof_z(ym) - 0.75
+    x0, x1 = WX0 + 0.6, WX1 - 0.6
+    inter.cyl((x0, ym, zt), (x1, ym, zt), 0.057, seg=24, mat="sign_red")
+    for x in np.arange(x0 + 1.5, x1, 6.0):                  # coples ranurados
+        inter.cyl((x - 0.03, ym, zt), (x + 0.03, ym, zt), 0.066, seg=24, mat="sign_red")
+    for x in np.arange(x0 + 0.9, x1, 3.0):
+        for s in (-1, 1):
+            y_end = ym + s * 7.6
+            zb = lambda y: roof_z(y) - 0.62                  # el ramal sigue la pendiente del techo
+            P = [(x, ym + s * 0.06, zt), (x, ym + s * 0.25, zb(ym + s * 0.25)), (x, y_end, zb(y_end))]
+            inter.tube(P, 0.021, seg=14, mat="sign_red")
+            inter.cyl((x, ym + s * 0.0, zt - 0.075), (x, ym + s * 0.0, zt + 0.075), 0.03, seg=16, mat="sign_red") if s < 0 else None
+            for k in range(1, 3):
+                y = ym + s * (k * 3.0 - 0.5)
+                z = zb(y)
+                inter.cyl((x, y, z), (x, y, z - 0.07), 0.012, seg=14, mat="sign_red")
+                ce.lathe(inter, [(0.0, 0.0), (0.011, 0.0), (0.013, -0.01), (0.008, -0.025), (0.004, -0.035), (0.025, -0.040),
+                                 (0.026, -0.044), (0.0, -0.045)], seg=24, mat="brass", M=_T(x, y, z - 0.07))
+            for y in (ym + s * 2.0, ym + s * 6.0):          # colgantes de varilla a los largueros
+                z = zb(y)
+                inter.cyl((x, y, z + 0.025), (x, y, roof_z(y) - 0.2), 0.0048, seg=12, mat="steel")
+                ce.lathe(inter, [(0.018, -0.006), (0.026, -0.006), (0.026, 0.006), (0.018, 0.006)], seg=16, mat="steel",
+                         M=_T(x, y, z + 0.025))
+    # montante con válvula de compuerta y manómetro
+    xr, yr = PDOOR_X + 1.6, WY0 + 0.45
+    inter.cyl((xr, yr, FFL), (xr, yr, zt), 0.057, seg=24, mat="sign_red")
+    inter.tube(cl.fillet([(xr, yr, zt), (xr, yr, zt + 0.15), (xr, ym - 0.2, zt + 0.15), (xr, ym, zt)], 0.15, 6), 0.057, seg=24,
+               mat="sign_red")
+    ce.lathe(inter, [(0.0, 0.0), (0.09, 0.0), (0.09, 0.18), (0.07, 0.20), (0.07, 0.30), (0.0, 0.30)], seg=32, mat="sign_red",
+             M=_T(xr, yr, FFL + 1.0))
+    inter.cyl((xr, yr, FFL + 1.30), (xr, yr, FFL + 1.75), 0.012, seg=14, mat="steel")
+    ce.lathe(inter, [(0.0, 0.0), (0.12, 0.0), (0.12, 0.01), (0.0, 0.02)], seg=32, mat="steel", M=_T(xr, yr, FFL + 1.75))
+    ce.lathe(inter, [(0.0, 0.0), (0.05, 0.0), (0.05, 0.03), (0.0, 0.035)], seg=32, mat="glass", M=_T(xr, yr - 0.07, FFL + 1.15) @ _Rx(90))
+
+
 def floor_slab(inter):
     """Losa del almacén a nivel de andén con juntas de control aserradas cada 7,5 × 6 m y líneas amarillas de pasillo."""
     x0, x1, y0, y1 = WX0 + WT - 0.04, WX1 - WT + 0.04, WY0 + WT - 0.04, WY1 - WT + 0.04
@@ -985,6 +1025,7 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     steel_frame(inter)
     liner(inter)
     floor_slab(inter)
+    sprinklers(inter)
     dock(det)
     for k, (cx, w) in enumerate(DOORS):
         rollup_door(det, cx, w, seed=k + 3, damaged=(k == 1))
