@@ -658,7 +658,8 @@ def rollup_door(det, cx, w, seed=0, damaged=False):
         dent = 0.0
         if damaged and i < 4:
             dent = (0.05 - 0.012 * i)
-        prof = [(0.0, za), (-0.012, za + 0.010), (-0.020, (za + zb) / 2), (-0.012, zb - 0.010), (0.0, zb)]
+        prof = [(-0.020 * math.sin(math.pi * t) ** 0.8 - 0.003 * math.sin(2 * math.pi * t), za + (zb - za) * t)
+                for t in np.linspace(0.0, 1.0, 11)]                 # duela curva con costilla central, sin facetas
         nx = 24
         V = []
         for k in range(nx + 1):
@@ -763,10 +764,11 @@ def personnel_door(det, ang=68.0):
     for k in range(9):
         xk = -0.78 + k * 0.195
         can.box((xk - 0.006, -1.04, 0.0), (xk + 0.006, -0.01, 0.022), "paint_tan", bevel=0.002)
-    for sx in (-0.65, 0.65):
-        can.poly([(sx, -0.02, -0.08), (sx, -0.90, -0.08), (sx, -0.02, -0.65)], "steel")
-        can.poly([(sx + 0.006, -0.02, -0.65), (sx + 0.006, -0.90, -0.08), (sx + 0.006, -0.02, -0.08)], "steel")
-        can.poly([(sx, -0.90, -0.08), (sx, -0.02, -0.65), (sx + 0.006, -0.02, -0.65), (sx + 0.006, -0.90, -0.08)], "steel")
+    for sx in (-0.68, 0.68):                                 # tornapuntas de PTR 40 × 40 con placas atornilladas al muro
+        cl.rtube(can, (sx, -0.03, -0.52), (sx, -0.86, -0.085), 0.04, 0.04, "paint_tan", up=(1, 0, 0), r=0.004)
+        cl.rbox(can, (sx - 0.05, -0.012, -0.60), (sx + 0.05, 0.0, -0.44), "paint_tan", r=0.003)
+        for zz in (-0.58, -0.46):
+            ce.hexnut(can, _T(sx, -0.012, zz) @ _Rx(90), d=0.012, mat="steel")
     can.transform(_Rx(-3.0))
     det.join(can, _T(PDOOR_X, y0, cz))
     return M
@@ -857,6 +859,116 @@ def exterior_services(det, r):
         det.join(dmg, _T(x, y0 - 0.0012 - (0.0 if z > KNEE else 0.0), z))
 
 
+# ------------------------------------------------------------------------------------------------------------ recinto
+Z_GRAVEL = 0.06
+CURB_W, CURB_TOP = 0.30, 0.18
+
+
+def _rect_in(x, y, rects, pad=0.0):
+    return any(a + pad <= x <= b - pad and c + pad <= y <= d - pad for (a, b, c, d) in rects)
+
+
+def site_ground(det, r):
+    """Patio: guarnición bajo la malla del frente (en tramos con junta), losa de maniobras de concreto frente al andén y del
+    portón, descanso al pie de la rampa, cama de grava compactada ondulada (rejilla de 25 cm) con piedras sueltas junto a
+    losas y muros."""
+    h = CURB_W / 2
+    x0, x1 = CX0, CX1
+
+    def curb_run(a, b):
+        n = max(1, int(round(abs(b - a) / 3.0)))
+        for k in range(n):
+            u0, u1 = a + (b - a) * k / n + 0.004, a + (b - a) * (k + 1) / n - 0.004
+            cl.rbox(det, (u0, CY0 - h, -0.05), (u1, CY0 + h, CURB_TOP), "concrete", r=0.012)
+    curb_run(x0 - h, GATE[0] + h)
+    curb_run(GATE[1] - h, x1 + h)
+    slabs = []
+
+    def slab(a, b, c, d, top, panel=4.0):
+        nx = max(1, int(round((b - a) / panel)))
+        ny = max(1, int(round((d - c) / panel)))
+        for i in range(nx):
+            for j in range(ny):
+                xa, xb = a + (b - a) * i / nx, a + (b - a) * (i + 1) / nx
+                ya, yb = c + (d - c) * j / ny, c + (d - c) * (j + 1) / ny
+                cl.rbox(det, (xa + 0.004, ya + 0.004, Z_GRAVEL - 0.15), (xb - 0.004, yb - 0.004, top), "concrete", r=0.012)
+        slabs.append((a, b, c, d))
+    ax0, ax1, ay0, ay1 = APRON
+    slab(ax0, ax1, ay0, ay1, Z_GRAVEL + 0.04)
+    slab(GATE[0] + h, GATE[1] - h, CY0 - 0.8, ay0, Z_GRAVEL + 0.04)
+    slab(RAMP[1], RAMP[1] + 1.6, -2.6, 0.0, Z_GRAVEL + 0.04, panel=2.0)
+    slabs.append((WX0 - 0.1, WX1 + 0.1, WY0 - 0.1, WY1 + 0.1))
+    slabs.append((DOCK[0], RAMP[1], min(DOCK[2], RAMP[2]), 0.0))
+    # grava
+    g0x, g1x, g0y, g1y = CX0 + 0.02, CX1 - 0.02, CY0 + h - 0.01, CY1 - 0.02
+    step = 0.25
+    nx, ny = int(round((g1x - g0x) / step)), int(round((g1y - g0y) / step))
+    xs, ys = np.linspace(g0x, g1x, nx + 1), np.linspace(g0y, g1y, ny + 1)
+    from PIL import Image
+    g = r.random((ny // 8 + 3, nx // 8 + 3))
+    nz = np.asarray(Image.fromarray((g * 255).astype(np.uint8)).resize((nx + 1, ny + 1), Image.BICUBIC), np.float64) / 255.0
+    bm = det.bm
+    mi = det.mi("gravel")
+    V = {}
+
+    def vert(i, j):
+        if (i, j) not in V:
+            x, y = xs[i], ys[j]
+            d = 9.0
+            for (a, b, c, e) in slabs:
+                d = min(d, math.hypot(max(a - x, 0, x - b), max(c - y, 0, y - e)))
+            z = Z_GRAVEL + (nz[j, i] - 0.5) * 0.03 + 0.015 * max(0.0, 1 - d / 0.4)
+            V[i, j] = bm.verts.new((x, y, z))
+        return V[i, j]
+    for i in range(nx):
+        for j in range(ny):
+            cs = [(xs[i], ys[j]), (xs[i + 1], ys[j]), (xs[i], ys[j + 1]), (xs[i + 1], ys[j + 1])]
+            if all(_rect_in(x, y, slabs, pad=0.03) for (x, y) in cs):
+                continue
+            f = bm.faces.new([vert(i, j), vert(i + 1, j), vert(i + 1, j + 1), vert(i, j + 1)])
+            f.material_index = mi
+    stone = cl.MB()
+    ce.lathe(stone, [(0.0, 0.0), (0.5, 0.05), (0.62, 0.35), (0.45, 0.75), (0.0, 0.85)], seg=7, mat="gravel")
+    placed = tries = 0
+    while placed < 1200 and tries < 30000:
+        tries += 1
+        x, y = r.uniform(g0x, g1x), r.uniform(g0y, g1y)
+        if _rect_in(x, y, slabs, pad=-0.01):
+            continue
+        d = min(math.hypot(max(a - x, 0, x - b), max(c - y, 0, y - e)) for (a, b, c, e) in slabs)
+        if d > 0.5 and r.random() > 0.12:
+            continue
+        sc = r.uniform(0.014, 0.032)
+        M = _T(x, y, Z_GRAVEL - sc * 0.2) @ _Rz(r.uniform(0, 360)) @ _Rx(r.uniform(-25, 25)) @ \
+            Matrix.Diagonal((sc * r.uniform(0.8, 1.3), sc * r.uniform(0.7, 1.1), sc * r.uniform(0.6, 0.9), 1.0))
+        det.join(stone, M)
+        placed += 1
+
+
+def _mod(name):
+    try:
+        return __import__(f"kit.{name}", fromlist=[name])
+    except ImportError:
+        return None
+
+
+def front_fence(furn, r):
+    """Malla ciclónica del frente (modo ligero de kit/telecom.py) sobre la guarnición, con portón vehicular doble de 6 m."""
+    tel = _mod("telecom")
+    if tel is None:
+        return
+    zg = Z_GRAVEL + 0.05
+    gx = (GATE[0] + GATE[1]) / 2
+    w = GATE[1] - GATE[0] - 2 * 0.0508
+    furn.join(tel.fence_gate(w=w, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite", base="curb",
+                             fence_lift=CURB_TOP - zg), _T(gx, CY0, zg))
+    for (o, L, ends) in (((CX0, CY0), GATE[0] - CX0, (True, None)), ((GATE[1], CY0), CX1 - GATE[1], (None, True))):
+        furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite", base="curb"),
+                  _T(o[0], o[1], CURB_TOP))
+    _proxy_box((CX0 - 0.1, CY0 - 0.35, 0.0), (GATE[0] + 0.1, CY0 + 0.3, 2.9))
+    _proxy_box((GATE[1] - 0.1, CY0 - 0.35, 0.0), (CX1 + 0.1, CY0 + 0.3, 2.9))
+
+
 def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     cfg = cfg_mil1(bid)
     cid = cfg["id"]
@@ -879,6 +991,9 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     personnel_door(det)
     exterior_services(det, r)
     lightning(det)
+    site_ground(det, r)
+    if dress_on and kw.get("dress", True):
+        front_fence(furn, r)
     for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", rf), ("Furniture", furn)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
