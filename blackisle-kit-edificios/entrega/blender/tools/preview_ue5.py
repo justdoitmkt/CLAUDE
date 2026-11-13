@@ -14,7 +14,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 import bpy  # noqa: E402
-from mathutils import Vector  # noqa: E402
+from mathutils import Matrix, Vector  # noqa: E402
 
 ENT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "CAB_1_tablones": "CAB_1",
@@ -22,6 +22,9 @@ PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "C
           "HOS_1_pueblo": "HOS_1", "GRA_1_tienda": "GRA_1", "COM_1_antena": "COM_1"}
 
 
+COMPANIONS = {   # modelo -> [(pieza suelta, posición en el pivote del modelo, giro en z)] que se renderiza junto a él
+    "MIL_1_almacen": [("MIL_2_avanzada", (16.0, 6.5, 0.0), 0.0)],
+}
 EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
     "MUE_1_carga": [("playa", (-12.0, -38.0, 2.6), (3.0, 8.0, 4.0), 26), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
                     ("atraque", (30.0, 64.0, 1.2), (20.0, 51.0, 1.8), 28)],
@@ -192,6 +195,17 @@ def main():
         bpy.ops.import_scene.gltf(filepath=os.path.join(kit, info["archivo"]))
     specs = dict(man["materiales"])
     specs.update(d["materiales_atlas"])
+    for (cid, (cx, cy, cz), rot) in COMPANIONS.get(bid, ()):     # piezas sueltas que van junto al modelo (p. ej. MIL_2 junto a MIL_1)
+        if cid not in man["modelos"]:
+            continue
+        before = set(bpy.data.objects)
+        for parte, info in man["modelos"][cid]["mallas"].items():
+            if parte != "Colision":
+                bpy.ops.import_scene.gltf(filepath=os.path.join(kit, info["archivo"]))
+        for o in set(bpy.data.objects) - before:
+            if o.parent is None:
+                o.matrix_world = Matrix.Translation((cx, cy, cz)) @ Matrix.Rotation(math.radians(rot), 4, "Z") @ o.matrix_world
+        specs.update(man["modelos"][cid].get("materiales_atlas", {}))
     tdir_c = os.path.join(kit, "comun", "texturas")
     tdir_m = os.path.join(kit, "modelos", bid, "texturas")
     built = {}
