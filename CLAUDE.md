@@ -41,8 +41,11 @@ incluyas, no los vas a incluir."
 ## Otras reglas vigentes (resumen; detalle en blackisle-kit-edificios/entrega/ESTADO.md)
 - R4: contenido seguro. Lettering con palabras inocuas; prohibidos nombres, números, siglas o símbolos de pandillas reales,
   símbolos de odio, personas reales y marcas comerciales. Crews ficticios.
-- Cada modelo nuevo trae su propia biblioteca de grafiti (crews, estilos y piezas exclusivas); no se reutilizan firmas de otros
-  edificios.
+- Biblioteca de grafiti (orden del usuario, 2026-11-13): "con las que ya tienes es suficiente; si te pido más texturas te lo
+  pediré". Ya NO se genera una biblioteca nueva por modelo: si un lugar lleva grafiti se usan las placas y firmas existentes
+  (cabañas, granero, sitio de antena) y solo se hacen nuevas cuando el usuario lo pida.
+- MIL_1 / MIL_2 (almacén militar y puesto de avanzada): SIN grafiti ni placas, por pedido. Limpios, poco desgaste, con huellas
+  de intentos de saqueo (palanca, abolladuras, impactos), pero no deteriorados.
 - Textos de modelos nuevos (letreros, señalética): en inglés.
 - Sin terreno propio en el kit UE5 (ni arena ni pasto); el escombro exterior va como pieza suelta.
 - R12: rechazo automático por fachada plana, repetición a 15 m, aristas perfectas, < 30 elementos secundarios, sin escala humana,

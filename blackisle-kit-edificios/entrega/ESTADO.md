@@ -585,3 +585,29 @@ ojos; en `refs_higgsfield/COM_1_antena/`:
   el equipo de los racks se repite entre racks y los rieles de 19" no tienen perforación; generador y gabinetes solo con
   puertas cerradas; las arrugas del radomo de tela son procedurales; los letreros tienen texto apenas poligonal a < 0,4 m;
   el muro de la caseta es liso (así son las casetas prefabricadas) y su lectura depende del atlas y de lo que lleva colgado.
+
+## Nuevo: MIL_1_almacen (almacén militar de armamento pesado) + MIL_2_avanzada (puesto de avanzada) · referencias (2026-11-13)
+Pedido: un almacén tipo base militar para armamento pesado y, al lado, un puesto de avanzada que sirva también como pieza
+suelta: una tienda de campaña donde se compran munición y armas. **Sin grafiti ni placas** (orden del usuario); limpio, poco
+desgaste, con huellas de intentos de saqueo (palanca, abolladuras, impactos), no deteriorado. Nueva regla en CLAUDE.md: ya no se
+genera biblioteca de grafiti por modelo; se usan las existentes hasta que el usuario pida más.
+Generado con `nano_banana_2_1` a 1k (thinking medium): 8 imágenes, 0 rechazos, **12 créditos** (jobs a1d32468, a28a8096,
+b4b4ee1c, 22fdd350, 69a1fda1, 2235e7c1, f420198d, d7c6dd1b). Revisadas con mis ojos; en `refs_higgsfield/MIL_1_almacen/`:
+| Vista | Qué fija |
+|---|---|
+| hero | nave de acero preingeniería color arena sobre muro de concreto de 1,2 m, techo de lámina a dos aguas con ventiladores de turbina, 2 cortinas, andén y puerta con marquesina; HESCO, muros T, alambre de navaja, torre de vigilancia; la tienda de campaña verde olivo con red de camuflaje al lado |
+| frente | andén de 1,2 m con defensas de hule, rampa con barandal amarillo, cortinas con caja y guías (una abollada con marcas de palanca), puerta con teclado, letreros esténcil AUTHORIZED PERSONNEL ONLY / NO SMOKING / EXPLOSIVES, gabinete de extintor, bolardos, cámaras |
+| interior | marcos rígidos, largueros, techo aislado, piso sellado con líneas amarillas, racks de tarimas con cajas de munición y cajas largas, jaula de malla con fusiles, montacargas, banco (la nave de la referencia es más grande que la nuestra) |
+| tienda | tienda de marco verde olivo con un costado enrollado, mostrador de cajas de munición con cubierta de triplay, racks con fusiles, latas de munición, letrero de madera SUPPLY, red de camuflaje en postes, HESCO, costales, generador, bidones, reflector en tripié |
+| tienda_int | arcos de aluminio, lona con caída entre arcos, piso de triplay, mostrador, caja de dinero y portapapeles, racks de fusiles, anaqueles de latas y cajas, tablero perforado con chalecos, focos colgantes |
+| perímetro | HESCO de malla soldada con geotextil, muros T con orejas de izaje, malla con brazos y espirales de navaja, torre de vigilancia con costales, torre de luz, pluma de acceso y chicana de barreras tipo Jersey |
+| aérea | distribución: nave al fondo con andén al patio, muros T y HESCO al frente y costado, la tienda dentro de su anillo de HESCO junto a la nave, torre en la esquina, acceso con chicana |
+| materiales | lámina arena con rayón de palanca, concreto de muro T, geotextil tras malla, lona OD con ojillo, costal de polipropileno, caja OD con asa y esténcil |
+- **Proporciones de fuentes reales (R-AAA punto 7):** HESCO MIL1 1,37 × 1,06 m (10 m por tramo), MIL7 2,21 × 2,13 m, MIL8
+  1,37 × 1,22 m ([ficha HESCO 2018](https://admincontent.bimobject.com/v1/public/brand/4cab39e7-c4b3-40e6-894d-64ae87b72ac4/pdf/d81693ab-fc9d-40c4-b2a0-92ac2e91854b/document),
+  [MoD Sales](https://www.mod-sales.com/manufacturers/hesco)); tienda TEMPER 20 × 32 ft: cumbrera 10'6" (3,2 m), alero 6'9"
+  (2,06 m), secciones de 8 ft, marco de aluminio ([especificación DLA](https://www.dla.mil/Portals/104/Documents/TroopSupport/CloTex/shelters/MilSpec/tempermain2.pdf),
+  [Coleman's](https://colemans.com/tent-temper-20-ft-x-32-ft-used)); nave preingeniería: crujías de 20–30 ft, largueros y
+  largueros de muro a ~1,5 m ([steelcalculator](https://steelcalculator.pages.dev/reference/steel-industrial-building/),
+  [Nucor](https://www.nucorbuildingsystems.com/wp-content/uploads/2019/01/03_00.pdf)). Las de cada pieza se anotan en el modelado.
+- **Textos en el modelo:** esténciles genéricos en inglés; sin banderas, insignias, unidades reales ni marcas.
