@@ -380,120 +380,322 @@ def _hesco_cell_liner(mb, i, c, W, H, us, vs, zf, quilt, r, ends=(False, False))
 
 
 # ========================================================================================================== sacos
-# Saco terrero de polipropileno tejido: vacío 14" × 26" (36 × 66 cm) según catálogos (webstaurantstore 14x26, sandbaggy.com:
-# lleno ~ 12" × 18" × 3,5-4"); FM 5-103 / práctica de campo: lleno a 2/3-3/4, extremo amarrado doblado debajo, juntas
-# cuatrapeadas, hiladas de soga y tizón alternadas en muros dobles. Lleno: ~ 0,48 × 0,30 × 0,11 m.
-BAG_N = 14            # puntos por anillo (sección superelíptica)
+# Saco terrero de polipropileno tejido 14" × 26" (vacío 0,356 × 0,660 m; tubo tejido de ~0,71 m de contorno, fondo con
+# dobladillo cosido, boca con cordón de amarre). Catálogos: webstaurantstore 14x26 (850-1450 denier, "hemmed top and
+# double-stitched bottom", cordón pre-atado), sandbaggy.com (lleno: ~12" × 18" × 3,5-4"), NDSU AE-626 (colocado: ~4" de
+# alto), práctica militar (FM 5-103 / Manitoba 1081: llenar 2/3-3/4, la boca se dobla debajo, hiladas cuatrapeadas de soga y
+# tizón). Lleno a ~3/4 y asentado: ~0,48 × 0,30 × 0,11 m + dobladillo + cuello amarrado con la cola doblada debajo.
+# La sección conserva el contorno de la tela (0,71 m): donde el saco se aplana hacia la costura se ensancha solo (las
+# "orejas" de las esquinas del fondo), y hacia la boca el sobrante de tela se vuelve frunces que convergen al cuello.
+BAG_P0 = 0.71         # contorno del tubo tejido (2 × 0,356 m)
+BAG_NT = 38           # puntos por anillo (re-muestreados por longitud de arco; la base apoyada lleva menos)
+BAG_NS = 36           # estaciones del cuerpo (más densas en los extremos)
+
+
+def _sfield(r, n, kmin, kmax):
+    """Campo suave pseudoaleatorio en 3D (suma de n senos de dirección y frecuencia al azar); f(P[..., 3]) ~ [-1, 1]."""
+    K = r.normal(size=(n, 3))
+    K /= np.linalg.norm(K, axis=1, keepdims=True)
+    K *= r.uniform(kmin, kmax, (n, 1))
+    ph = r.uniform(0.0, 2 * PI, n)
+    a = 1.0 / math.sqrt(n * 0.5)
+    return lambda P: np.sin(P @ K.T + ph).sum(-1) * a
+
+
+def _sstep(e0, e1, x):
+    t = np.clip((np.asarray(x, float) - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def _bag_sections(b, c, zc, e_t, e_b, nt=BAG_NT, nd=192, wb=1.0):
+    """Anillos de sección (estaciones × nt × (y, z)) re-muestreados por longitud de arco, empezando abajo al centro y
+    girando hacia +y. Sección: superelipse por cuadrante (exponente e_t arriba, e_b abajo). wb < 1: la base (oculta,
+    apoyada) recibe menos puntos que la tapa y los costados. Devuelve (anillos, contorno, ángulo de cada punto)."""
+    t = np.linspace(-PI / 2, 1.5 * PI, nd, endpoint=False)
+    ct, st = np.cos(t), np.sin(t)
+    E = np.where(st[None, :] > 0, e_t[:, None], e_b[:, None])
+    y = b[:, None] * np.sign(ct) * np.abs(ct) ** (2.0 / E)
+    z = zc[:, None] + c[:, None] * np.sign(st) * np.abs(st) ** (2.0 / E)
+    yy = np.concatenate([y, y[:, :1]], 1)
+    zz = np.concatenate([z, z[:, :1]], 1)
+    tt = np.concatenate([t, t[:1] + 2 * PI])
+    sl = np.hypot(np.diff(yy, axis=1), np.diff(zz, axis=1))
+    per = sl.sum(1)
+    tm = (t + PI / nd)
+    wgt = wb + (1 - wb) * np.clip((np.sin(tm) + 0.75) / 0.4, 0, 1)
+    acc = np.concatenate([np.zeros((len(b), 1)), np.cumsum(sl * wgt[None, :], 1)], 1)
+    out = np.zeros((len(b), nt, 2))
+    ang = np.zeros((len(b), nt))
+    for i in range(len(b)):
+        q = acc[i, -1] * np.arange(nt) / nt
+        out[i, :, 0] = np.interp(q, acc[i], yy[i])
+        out[i, :, 1] = np.interp(q, acc[i], zz[i])
+        ang[i] = np.interp(q, acc[i], tt)
+    return out, per, ang
+
+
+def _ring_normals(R):
+    """Normales 2D (hacia afuera) de anillos cerrados R[..., nt, 2] (y, z) recorridos en sentido antihorario."""
+    d = np.roll(R, -1, axis=-2) - np.roll(R, 1, axis=-2)
+    n = np.stack([d[..., 1], -d[..., 0]], -1)
+    return n / np.maximum(np.linalg.norm(n, axis=-1, keepdims=True), 1e-9)
 
 
 def _bag_rings(r, ls=1.0, ws=1.0, hs=1.0, blunt=0.0, lod=0):
-    """Anillos (lista de [Vector] locales) de un saco lleno: largo en X (costura cosida en -X, boca amarrada y doblada en +X),
-    ancho en Y, base en z = 0. Devuelve (anillos, fracción de altura por vértice)."""
-    a = 0.24 * ls * float(r.uniform(0.96, 1.04))
-    b0 = 0.152 * ws * float(r.uniform(0.95, 1.05))
-    c0 = 0.054 * hs * float(r.uniform(0.92, 1.06))
-    e = float(r.uniform(2.2, 2.6))                         # costados redondos
-    et = float(r.uniform(2.5, 2.9))                        # tapa algo aplanada por la carga
-    eb = 3.2                                               # base aplanada sobre el apoyo
-    bend = float(r.uniform(-0.012, 0.012))                 # saco ligeramente curvo en planta
-    tilt = float(r.uniform(-0.15, 0.15))                   # el relleno se carga hacia un costado
-    ph = float(r.uniform(0, 50))
-    stations = []                                          # (x, b, c, gathers)
-
-    def g(t):
-        t = min(max(t, 0.0), 1.0)
-        return math.sqrt(max(0.0, 1 - (1 - t) ** 2))
-    stations.append((-a - 0.017, 0.86 * b0, 0.0022, 0.0))  # orilla de la costura (dobladillo cosido)
-    stations.append((-a - 0.005, 0.93 * b0, 0.0034, 0.0))
-    NR = BAG_N if lod == 0 else 10
-    for s in ((0.0, 0.05, 0.14, 0.3, 0.5, 0.7, 0.86, 0.965) if lod == 0 else (0.0, 0.08, 0.25, 0.5, 0.75, 0.94)):
-        x = -a + 2 * a * s
-        te = 0.2 - 0.08 * blunt                            # en un muro los extremos se aprietan unos contra otros
-        cs = c0 * max(g(s / te), 0.1) * g((1.0 - s) / (0.3 - 0.1 * blunt) + 0.18 + 0.2 * blunt)
-        cs *= 1 + 0.05 * noise.noise(Vector((s * 4, ph, 0.0)))
-        bs = b0 * (0.94 + 0.06 * math.sin(PI * s) ** 0.5) * (1 - 0.18 * max(0.0, (s - 0.8) / 0.2) ** 1.5)
-        if s == 0.0:
-            cs = 0.006
-        stations.append((x, bs, cs, max(0.0, (s - 0.62) / 0.38)))
-    rings, fr = [], []
-    for (x, bs, cs, gth) in stations:
-        ring = []
-        zc = cs
-        for k in range(NR):
-            phi = 2 * PI * (k + 0.5) / NR
-            cp, sp = math.cos(phi), math.sin(phi)
-            y = bs * math.copysign(abs(cp) ** (2 / e), cp)
-            z = cs * math.copysign(abs(sp) ** (2 / (et if sp > 0 else eb)), sp)
-            if z > 0:                                      # carga: la tapa se aplana y se ladea
-                z *= 1 + tilt * y / max(bs, 1e-4) * 0.5
-            lump = 0.0035 * noise.noise(Vector((k * 0.55, x * 7.0, ph + 2.0))) * min(1.0, cs / max(c0, 1e-4)) \
-                * min(1.0, max(0.0, (sp + 0.45) / 0.45))      # la base apoyada no se despega del suelo
-            y += cp * lump                                 # terrones de arena y pliegues blandos de la tela
-            z += sp * lump
-            if gth > 0:                                    # frunces que convergen hacia la boca amarrada
-                kk = 0.0045 * gth * (1 if k % 2 else -1) * (0.6 + 0.4 * noise.noise(Vector((k * 0.7, ph, x * 9))))
-                nrm = Vector((0, cp, sp)).normalized()
-                y += nrm.y * kk
-                z += nrm.z * kk * 0.6
-            xx = x + bend * (1 - (x / a) ** 2) * 0 + 0.002 * noise.noise(Vector((k * 0.9, x * 11, ph)))
-            yy = y + bend * (1 - min(1.0, (x / a) ** 2))
-            ring.append(Vector((xx, yy, zc + z)))
-        rings.append(ring)
-        fr.append([min(1.0, max(0.0, (p.z) / max(2 * cs, 1e-4))) for p in ring])
-    # boca amarrada: el sobrante se junta y se dobla hacia abajo contra la cabeza del saco (pestaña de 2 capas)
-    cl = stations[-1][2]
-    path = [(a + 0.004, 0.0, 1.55 * cl + 0.006), (a + 0.026, 0.0, 1.05 * cl), (a + 0.034, 0.0, 0.45 * cl), (a + 0.03, 0.0, 0.012)]
-    tans = [Vector((1, 0, -0.3)), Vector((0.55, 0, -1)), Vector((0.05, 0, -1)), Vector((-0.25, 0, -1))]
-    widths = [0.5 * b0, 0.56 * b0, 0.5 * b0, 0.36 * b0]
-    if lod:
-        path, tans, widths = [path[0], path[2], path[3]], [tans[0], tans[2], tans[3]], [widths[0], widths[2], widths[3]]
-    for (p, tg, wb) in zip(path, tans, widths):
-        tg = tg.normalized()
-        U = Vector((0, 1, 0))
-        Vn = tg.cross(U).normalized()
-        ring = []
-        for k in range(NR):
-            phi = 2 * PI * (k + 0.5) / NR
-            cp, sp = math.cos(phi), math.sin(phi)
-            y = wb * math.copysign(abs(cp) ** 0.8, cp)
-            t = 0.0032 * math.copysign(abs(sp) ** 0.8, sp)
-            ring.append(Vector(p) + U * (y + bend * 0.0) + Vn * t + Vector((0, 0, 0.0015 * (1 if k % 2 else -1))))
-        rings.append(ring)
-        fr.append([0.5] * NR)
-    return rings, fr
+    """Geometría local de un saco lleno (largo en X: costura en -X, boca amarrada en +X; ancho en Y; base en z = 0).
+    Devuelve dict: R (anillos × nt × 3, un solo tubo continuo: punta del dobladillo -> costura -> cuerpo -> cuello -> cola),
+    nf (anillos del dobladillo), cord (eje del cordón de amarre), c0 (media altura), nt."""
+    nt = BAG_NT if lod == 0 else 30
+    ns = BAG_NS if lod == 0 else 28
+    a = 0.236 * ls * float(r.uniform(0.975, 1.025))
+    c0 = 0.055 * hs * float(r.uniform(0.94, 1.05))
+    P0 = BAG_P0 * ws * float(r.uniform(0.985, 1.015))
+    cs, rn = 0.0024, 0.0145 * float(r.uniform(0.9, 1.1))   # media altura en la costura; radio del cuello amarrado
+    te = 0.15 - 0.05 * blunt                               # largo (fracción) del remate redondo de la costura
+    sg = 0.68 + 0.1 * blunt + float(r.uniform(-0.03, 0.03))  # inicio del cuello (fracción)
+    z_seam = 0.02 + 0.006 * blunt + float(r.uniform(-0.003, 0.003))
+    z_neck = 0.036 + float(r.uniform(-0.004, 0.006))
+    e_body_t = float(r.uniform(2.2, 2.5))                  # tapa abombada, algo aplanada por la carga
+    e_body_b = 3.6                                         # base aplanada sobre el apoyo
+    bend = float(r.uniform(-0.012, 0.012))                 # saco apenas curvo en planta
+    tilt = float(r.uniform(-0.12, 0.12))                   # el relleno cargado hacia un costado
+    # ---- estaciones del cuerpo (coseno + lineal: densas en los dos remates)
+    u = np.linspace(0.0, 1.0, ns)
+    s = 0.62 * (0.5 - 0.5 * np.cos(PI * u)) + 0.38 * u
+    x = -a + 2 * a * s
+    g0 = np.sqrt(np.clip(1 - (1 - np.clip(s / te, 0, 1)) ** 2, 0, 1))
+    q = np.clip((s - sg) / (1 - sg), 0.0, 1.0)
+    shoulder = (1 - q ** 2) ** 0.75
+    c = np.maximum(cs, c0 * g0 * shoulder + rn * (1 - shoulder) * (s > sg))
+    c[0] = cs
+    ph1, ph2 = float(r.uniform(0, 6)), float(r.uniform(0, 6))
+    c *= 1 + (0.045 * np.sin(PI * s * 2.0 + ph1) + 0.025 * np.sin(PI * s * 5.0 + ph2)) * g0
+    # contorno: constante (tela tensa) hasta el cuello; ahí la tela sobrante se vuelve frunces
+    Ps = np.where(s > sg, 2 * PI * rn + (P0 - 2 * PI * rn) * np.clip((c - rn) / (c0 - rn), 0, 1) ** 0.85, P0)
+    Ps = Ps * (1 + 0.012 * np.sin(PI * s * 3.0 + ph2) * g0)
+    e_t = 1.12 + (e_body_t - 1.12) * g0 ** 1.4
+    e_b = 1.12 + (e_body_b - 1.12) * g0 ** 1.4
+    e_t = e_t + (2.0 - e_t) * q ** 0.8
+    e_b = e_b + (2.0 - e_b) * q ** 0.8
+    zc = c + (z_seam - cs) * (1 - g0) ** 2 + (z_neck - rn) * q ** 1.6
+    # ancho que conserva el contorno: dos medidas y una corrección
+    b1 = np.full(ns, 0.10)
+    b2 = np.full(ns, 0.20)
+    _, p1, _ = _bag_sections(b1, c, zc, e_t, e_b, 4, 96)
+    _, p2, _ = _bag_sections(b2, c, zc, e_t, e_b, 4, 96)
+    b = b1 + (b2 - b1) * (Ps - p1) / (p2 - p1)
+    _, p3, _ = _bag_sections(b, c, zc, e_t, e_b, 4, 96)
+    b = np.maximum(b * Ps / p3, rn * 0.9)
+    S2, _, TH = _bag_sections(b, c, zc, e_t, e_b, nt, 192, 0.42)
+    Y, Z = S2[..., 0].copy(), S2[..., 1].copy()
+    w = np.arange(nt) / nt                                 # parámetro del contorno (0 = abajo al centro)
+    arc = (TH[-1] + PI / 2) / (2 * PI)                     # fracción angular de cada punto (cuello y cola)
+    # carga: la tapa se ladea un poco hacia un costado
+    top = np.clip((Z - zc[:, None]) / np.maximum(c[:, None], 1e-4), 0, 1)
+    Z = Z + tilt * top * c[:, None] * Y / np.maximum(b[:, None], 1e-4) * 0.5
+    Nn = _ring_normals(np.stack([Y, Z], -1))
+    X = np.repeat(x[:, None], nt, 1)
+    P = np.stack([X, Y, Z], -1)
+    disp = np.zeros((ns, nt))
+    # coordenada sobre la tela: (x, u) con u = longitud de arco del contorno (m), para arrugas que siguen la superficie
+    Uc = np.concatenate([np.zeros((ns, 1)), np.cumsum(np.hypot(np.diff(Y, axis=1), np.diff(Z, axis=1)), 1)], 1)
+    Uc = Uc - Uc[:, [nt // 2]]
+    vis = np.clip((Nn[..., 1] + 0.6) / 0.45, 0, 1)         # tapa y costados (la base apoyada queda lisa)
+    body = vis * np.clip(g0, 0.15, 1)[:, None]
+    # terrones de arena: ondulación ancha (relleno desparejo) + bultos medianos
+    lump1 = _sfield(r, 6, 9.0, 16.0)
+    lump2 = _sfield(r, 9, 32.0, 60.0)
+    disp += (0.0032 * lump1(P) + 0.0013 * lump2(P)) * body
+    # pliegues de tela floja: crestas angostas en el plano de la tela, más hacia los remates y las esquinas
+    ncr = int(r.integers(5, 9))
+    for kc in range(ncr):
+        x0 = float(r.uniform(-0.95, 0.85)) * a
+        if r.uniform() < 0.5:                              # remates: arrugas cortas casi a lo largo, hacia la costura o el cuello
+            x0 = float(r.choice([-1.0, 1.0])) * float(r.uniform(0.55, 0.92)) * a
+        u0 = float(r.uniform(-0.3, 0.3))
+        ang = math.radians(float(r.uniform(-50, 50)) + (90 if r.uniform() < 0.25 else 0))
+        L_ = float(r.uniform(0.05, 0.16))
+        wd = float(r.uniform(0.009, 0.016))
+        A_ = float(r.uniform(0.0014, 0.003)) * (1 if r.uniform() < 0.7 else -1)
+        dx, du = math.cos(ang), math.sin(ang)
+        rx, ru = X - x0, Uc - u0
+        tt = np.clip(rx * dx + ru * du, -L_ / 2, L_ / 2)
+        d = np.hypot(rx - tt * dx, ru - tt * du)
+        prof = np.clip(1 - d / wd, 0, 1) ** 1.6 * np.clip(np.cos(PI * tt / L_), 0, 1) ** 0.6
+        disp += A_ * prof * vis
+    # orejas de la costura: arrugas que salen de cada esquina del fondo hacia el lomo (tela que se tensa al llenarse)
+    for sgn_u in (-1.0, 1.0):
+        ue = sgn_u * P0 / 4 * 0.98
+        for kc in range(int(r.integers(2, 4))):
+            ang = math.radians(float(r.uniform(15, 55))) * -sgn_u
+            L_ = float(r.uniform(0.04, 0.09))
+            wd = float(r.uniform(0.008, 0.013))
+            A_ = float(r.uniform(0.0015, 0.0028))
+            dx, du = math.cos(ang), math.sin(ang)
+            rx, ru = X - (-a + 0.004), Uc - ue
+            tt = np.clip(rx * dx + ru * du, 0.0, L_)
+            d = np.hypot(rx - tt * dx, ru - tt * du)
+            disp += A_ * np.clip(1 - d / wd, 0, 1) ** 1.6 * (1 - tt / L_) ** 0.8 * (s > 0)[:, None]
+    # frunces del cuello: crestas agudas (cúspide afuera) que convergen al amarre; la tela sobrante (P0 - contorno) se
+    # reparte en n pliegues; sus colas siguen como arrugas sobre el lomo del saco
+    npl = int(r.integers(8, 11))
+    phj = float(r.uniform(0, 2 * PI))
+    jit = 0.035 * np.sin(2 * PI * 2 * w + phj) + 0.02 * np.sin(2 * PI * 3 * w + 1.7 * phj)
+    pleat = 1 - 2 * np.abs(np.sin(PI * npl * (w + jit))) ** 0.7
+    pa = (0.7 + 0.6 * np.abs(np.sin(PI * npl * 0.5 * (w + jit) + phj)))  # pliegues desiguales
+    excess = np.clip(P0 - Ps, 0, None) / (2 * npl)
+    hp = np.minimum(np.minimum(0.45 * excess + 0.0022 * _sstep(sg - 0.26, sg, s), 0.42 * c), 0.0085)
+    hp *= 1 - _sstep(0.975, 1.0, s)
+    disp += hp[:, None] * (pleat * pa)[None, :] * (0.7 + 0.3 * vis)
+    # frunce de la costura: ondas cortas perpendiculares al dobladillo
+    pk = np.sin(2 * PI * 13 * w + float(r.uniform(0, 6)) + 0.8 * np.sin(2 * PI * 3 * w))
+    disp += 0.0018 * pk[None, :] * np.clip(1 - s / 0.085, 0, 1)[:, None] * (s > 0)[:, None]
+    P[..., 1] += Nn[..., 0] * disp
+    P[..., 2] += Nn[..., 1] * disp
+    P[..., 2] = np.maximum(P[..., 2], 0.0)                 # la base apoyada no se hunde
+    # dobladillo cosido (2 capas + doblez): sale 15 mm de la costura, cae hacia el piso; ranura de las puntadas a 6 mm
+    R0 = P[0].copy()
+    flap = []
+    wav = float(r.uniform(0, 6))
+    for (dd, k_) in ((0.0035, 1.0), (0.0058, 0.62), (0.0078, 1.0), (0.0122, 0.95), (0.0148, 0.55)):
+        F = R0.copy()
+        F[:, 0] -= dd * (1 + 0.12 * np.sin(F[:, 1] * 31 + wav)) + 0.0012 * np.sin(F[:, 1] * 57 + 2 * wav)
+        F[:, 1] *= 1.0 - 0.012 * dd / 0.015
+        F[:, 2] = z_seam + (R0[:, 2] - z_seam) * (0.0016 / cs) * k_ - dd * (0.45 + 0.35 * blunt) \
+            - 0.0025 * dd / 0.015 * np.sin(F[:, 1] * 23 + wav)
+        F[:, 2] = np.maximum(F[:, 2], 0.0009)
+        flap.append(F)
+    flap = flap[::-1]
+    # cuello amarrado: tubo corto de tela fruncida (radio rn) y la cola que se dobla hacia abajo y hacia atrás
+    xn = x[-1]
+    th = -PI / 2 + 2 * PI * arc
+    neck = []
+    for dx_ in (0.004, 0.009):
+        rr = rn * (1 + 0.1 * pleat)
+        neck.append(np.stack([np.full(nt, xn + dx_), rr * np.cos(th), z_neck + rr * np.sin(th)], -1))
+    tl = float(r.uniform(0.85, 1.15)) * (0.75 if blunt > 0.5 else 1.0)
+    fr = 0.7 if blunt > 0.5 else 1.0                       # en un muro la cola va más pegada a la cabeza
+    path = np.array([(xn + 0.012, 0.0, z_neck), (xn + 0.022 * fr + 0.002, 0.0, z_neck - 0.004),
+                     (xn + 0.03 * fr, 0.0, z_neck - 0.017), (xn + 0.027 * fr, 0.0, z_neck - 0.031),
+                     (xn + 0.012 * fr, 0.0, 0.0082), (xn - 0.016 * tl, 0.0, 0.0058), (xn - 0.058 * tl, 0.0, 0.005)])
+    wid = np.array([1.05, 1.35, 1.8, 2.3, 2.8, 3.05, 3.05]) * rn
+    thk = np.array([0.95, 0.75, 0.5, 0.36, 0.3, 0.26, 0.22]) * rn
+    tail = []
+    Tg = np.gradient(path, axis=0)
+    Tg /= np.linalg.norm(Tg, axis=1, keepdims=True)
+    for i in range(len(path)):
+        Ny = np.array([0.0, 1.0, 0.0])
+        Bz = np.cross(Tg[i], Ny)
+        Bz /= np.linalg.norm(Bz)
+        pl = 1 + 0.22 * pleat * (1 - i / len(path) * 0.5)
+        sec = (np.outer(np.cos(th) * wid[i] * pl, Ny) + np.outer(np.sin(th) * thk[i] * (1 + 0.5 * (pleat + 1) * 0.5), Bz))
+        tail.append(path[i] + sec)
+    R = np.concatenate([np.array(flap), P, np.array(neck), np.array(tail)], 0)
+    R[..., 1] += bend * (1 - np.clip(R[..., 0] / a, -1, 1) ** 2)   # planta un poco curva
+    nf = len(flap)
+    # cordón de amarre (PP de 3 mm): 1,3 vueltas en hélice sobre el cuello y dos puntas cortas que cuelgan
+    rc = rn * 1.1 + 0.0017
+    ang = np.linspace(0.0, 2 * PI * 1.3, 19) + float(r.uniform(0, 2 * PI))
+    cx_ = xn + 0.0035 + 0.0045 * np.linspace(0, 1, 19)
+    cord = [np.stack([cx_, rc * np.cos(ang), z_neck + rc * np.sin(ang)], -1)]
+    for k_, sgn in ((0, -1), (-1, 1)):
+        p0 = cord[0][k_]
+        d0 = np.array([0.0, math.cos(ang[k_]) * 0.5, -1.0])
+        d0 /= np.linalg.norm(d0)
+        e = [p0 + np.array([sgn * 0.002 * j, 0.0, 0.0]) + d0 * 0.009 * j + np.array([0, 0, 0.0004 * j * j]) for j in range(1, 4)]
+        cord.append(np.array([p0] + e) if k_ == -1 else np.array(e[::-1] + [p0]))
+    cord = np.concatenate([cord[1][:-1], cord[0], cord[2][1:]], 0)
+    cord[..., 1] += bend * (1 - np.clip(cord[..., 0] / a, -1, 1) ** 2)
+    cord[:, 2] = np.maximum(cord[:, 2], 0.0016)
+    return dict(R=R, nf=nf, cord=cord, c0=c0, nt=nt)
 
 
 def _bag_build(mb, rings, M=None, zfun=None, fr=None):
-    """Malla del saco a partir de sus anillos; M coloca el saco, zfun(x, y, f) -> desplazamiento z por vértice (asiento)."""
-    out = []
-    for i, ring in enumerate(rings):
-        row = []
-        for k, p in enumerate(ring):
-            q = (M @ p) if M is not None else p.copy()
-            if zfun is not None:
-                q.z += zfun(q.x, q.y, fr[i][k])
-            row.append(q)
-        out.append(row)
-    V = [[mb.bm.verts.new(q) for q in row] for row in out]
-    nr = len(V[0])
-    for i in range(len(V) - 1):
-        A, B = V[i], V[i + 1]
-        for k in range(nr):
-            kk = (k + 1) % nr
-            mb.face([A[k], A[kk], B[kk], B[k]], "sandbag").smooth = True
-    ngon(mb, list(reversed(V[0])), "sandbag")
-    ngon(mb, V[-1], "sandbag")
-    return out
+    """Malla del saco: un solo tubo de anillos (tapas en abanico en la punta del dobladillo y en la orilla de la cola) +
+    cordón de amarre (12 lados, sombreado continuo). M coloca el saco; zfun(X, Y, f) -> desplazamiento z vectorizado
+    (asiento sobre la hilada de abajo; f = fracción de altura del vértice). Devuelve los vértices puestos (N × 3)."""
+    R = rings["R"]
+    nr, nt = R.shape[0], R.shape[1]
+    caps = np.array([R[0].mean(0), R[-1].mean(0)])
+    cord = rings["cord"]
+    # cordón como tubo de 12 lados (transporte paralelo)
+    seg = 12
+    T = np.gradient(cord, axis=0)
+    T /= np.linalg.norm(T, axis=1, keepdims=True)
+    Nv = np.cross(T[0], [0.0, 0.0, 1.0] if abs(T[0][2]) < 0.9 else [1.0, 0.0, 0.0])
+    Nv /= np.linalg.norm(Nv)
+    ring_c = []
+    an = 2 * PI * np.arange(seg) / seg
+    for i in range(len(cord)):
+        Nv = Nv - T[i] * Nv.dot(T[i])
+        Nv /= np.linalg.norm(Nv)
+        Bv = np.cross(T[i], Nv)
+        ring_c.append(cord[i] + 0.0015 * (np.outer(np.cos(an), Nv) + np.outer(np.sin(an), Bv)))
+    C = np.array(ring_c)
+    allp = np.concatenate([R.reshape(-1, 3), caps, C.reshape(-1, 3), cord[[0, -1]]], 0)
+    loc_z = allp[:, 2].copy()
+    if M is not None:
+        Mn = np.array(M)
+        allp = allp @ Mn[:3, :3].T + Mn[:3, 3]
+    if zfun is not None:
+        f = np.clip(loc_z / (2 * rings["c0"]), 0.0, 1.0)
+        allp[:, 2] += zfun(allp[:, 0], allp[:, 1], f)
+    bm = mb.bm
+    V = [bm.verts.new(p) for p in allp.tolist()]
+    mi = mb.mi("sandbag")
+    sl = mb._soft_layer()
+    nf = rings["nf"]
+
+    def q(i, k):
+        return V[i * nt + k]
+    for i in range(nr - 1):
+        hard = i < nf                                      # dobladillo y costura: aristas reales
+        for k in range(nt):
+            kk = (k + 1) % nt
+            f_ = bm.faces.new((q(i, k), q(i, kk), q(i + 1, kk), q(i + 1, k)))
+            f_.material_index = mi
+            f_.smooth = True
+            if not hard:
+                f_[sl] = 1
+    c0v, c1v = V[nr * nt], V[nr * nt + 1]
+    for k in range(nt):
+        kk = (k + 1) % nt
+        for (cv, i, sft) in ((c0v, 0, 0), (c1v, nr - 1, 1)):
+            f_ = bm.faces.new((cv, q(i, kk), q(i, k)) if i == 0 else (cv, q(i, k), q(i, kk)))
+            f_.material_index = mi
+            f_.smooth = True
+            f_[sl] = sft
+    o = nr * nt + 2
+    ncs = len(cord)
+    for i in range(ncs - 1):
+        for k in range(seg):
+            kk = (k + 1) % seg
+            f_ = bm.faces.new((V[o + i * seg + k], V[o + i * seg + kk], V[o + (i + 1) * seg + kk], V[o + (i + 1) * seg + k]))
+            f_.material_index = mi
+            f_.smooth = True
+            f_[sl] = 1
+    e0, e1 = V[o + ncs * seg], V[o + ncs * seg + 1]
+    for k in range(seg):
+        kk = (k + 1) % seg
+        for (cv, i, rev) in ((e0, 0, True), (e1, ncs - 1, False)):
+            tri = (cv, V[o + i * seg + kk], V[o + i * seg + k])
+            f_ = bm.faces.new(tri if rev else tri[::-1])
+            f_.material_index = mi
+            f_.smooth = True
+            f_[sl] = 1
+    return allp
 
 
 def sandbag(seed=0):
-    """Saco terrero lleno suelto (~0,48 × 0,30 × 0,11 m + costura y pestaña): polipropileno tejido relleno a 3/4, sección
-    superelíptica aplastada por la carga (tapa plana, costados redondos), extremos de almohada, dobladillo cosido de 1,7 cm en
-    -X, boca amarrada con frunces que convergen y pestaña doblada hacia abajo en +X. Origen: centro de la base, largo en X."""
+    """Saco terrero suelto, lleno a ~3/4 (~0,48 × 0,30 × 0,11 m + dobladillo y cola): polipropileno tejido como un solo
+    tubo de tela de contorno constante (0,71 m), tapa aplastada por la carga y costados redondos, remate de almohada hacia
+    la costura con las orejas de las esquinas, dobladillo cosido de 15 mm con la ranura de las puntadas y el frunce de la
+    costura, terrones y pliegues de tela floja, boca con frunces agudos que convergen al cuello, cordón de amarre de 3 mm
+    con sus puntas y la cola doblada hacia abajo y metida bajo la cabeza. Origen: centro de la base, largo en X (costura en
+    -X). ~3,5 k tris."""
     r = rng(seed)
     mb = MB()
-    rings, fr = _bag_rings(r)
-    _bag_build(mb, rings)
+    _bag_build(mb, _bag_rings(r))
     return mb
 
 
@@ -506,41 +708,22 @@ class _HField:
         self.ny = int(math.ceil((y1 - y0) / h)) + 1
         self.H = np.zeros((self.ny, self.nx))
 
-    def raster(self, tris):
-        """tris: lista de (p0, p1, p2) Vector; levanta H con la tapa de cada triángulo que mira hacia arriba."""
-        H, h = self.H, self.h
-        for (a, b, c) in tris:
-            n = (b - a).cross(c - a)
-            if n.z <= 1e-12:
-                continue
-            xs = (a.x, b.x, c.x)
-            ys = (a.y, b.y, c.y)
-            i0 = max(0, int((min(xs) - self.x0) / h))
-            i1 = min(self.nx - 1, int((max(xs) - self.x0) / h) + 1)
-            j0 = max(0, int((min(ys) - self.y0) / h))
-            j1 = min(self.ny - 1, int((max(ys) - self.y0) / h) + 1)
-            if i1 < i0 or j1 < j0:
-                continue
-            X, Y = np.meshgrid(self.x0 + h * np.arange(i0, i1 + 1), self.y0 + h * np.arange(j0, j1 + 1))
-            det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
-            if abs(det) < 1e-14:
-                continue
-            l1 = ((b.y - c.y) * (X - c.x) + (c.x - b.x) * (Y - c.y)) / det
-            l2 = ((c.y - a.y) * (X - c.x) + (a.x - c.x) * (Y - c.y)) / det
-            l3 = 1 - l1 - l2
-            m = (l1 >= -0.02) & (l2 >= -0.02) & (l3 >= -0.02)
-            Z = l1 * a.z + l2 * b.z + l3 * c.z
-            sub = H[j0:j1 + 1, i0:i1 + 1]
-            H[j0:j1 + 1, i0:i1 + 1] = np.where(m, np.maximum(sub, Z), sub)
+    def splat(self, P):
+        """Levanta H con los vértices P (N × 3) de los sacos de la hilada (malla densa: paso <= 2 cm)."""
+        ix = np.clip(np.floor((P[:, 0] - self.x0) / self.h + 0.5).astype(int), 0, self.nx - 1)
+        iy = np.clip(np.floor((P[:, 1] - self.y0) / self.h + 0.5).astype(int), 0, self.ny - 1)
+        np.maximum.at(self.H, (iy, ix), P[:, 2])
 
-    def filtered(self, rmax=4, sigma=6):
-        """(S1, S2): máximo local (radio rmax celdas) + holgura, y su versión desenfocada (gaussiana sigma celdas)."""
+    def filtered(self, rmax=3, sigma=6):
+        """(S1, S2): máximo local (radio rmax celdas, cubre los huecos entre vértices) desenfocado y nunca debajo de H; y su
+        versión muy desenfocada (gaussiana sigma celdas) para la tapa."""
         H = self.H
         S1 = H.copy()
         for dj in range(-rmax, rmax + 1):
             for di in range(-rmax, rmax + 1):
                 if di * di + dj * dj <= rmax * rmax:
                     S1 = np.maximum(S1, np.roll(np.roll(H, dj, 0), di, 1))
+
         def blur(A, sg):
             k = np.exp(-0.5 * (np.arange(-3 * sg, 3 * sg + 1) / sg) ** 2)
             k /= k.sum()
@@ -550,48 +733,70 @@ class _HField:
         return S1, blur(S1, sigma)
 
     def sample(self, A, x, y):
-        fx = min(max((x - self.x0) / self.h, 0.0), self.nx - 1.001)
-        fy = min(max((y - self.y0) / self.h, 0.0), self.ny - 1.001)
-        i, j = int(fx), int(fy)
+        fx = np.clip((np.asarray(x) - self.x0) / self.h, 0.0, self.nx - 1.001)
+        fy = np.clip((np.asarray(y) - self.y0) / self.h, 0.0, self.ny - 1.001)
+        i, j = fx.astype(int), fy.astype(int)
         tx, ty = fx - i, fy - j
         return (A[j, i] * (1 - tx) * (1 - ty) + A[j, i + 1] * tx * (1 - ty) + A[j + 1, i] * (1 - tx) * ty
                 + A[j + 1, i + 1] * tx * ty)
 
 
+def _bend_ring_xy(R, Rb):
+    """Curva un saco en planta para seguir un muro circular de radio Rb (eje del muro en y = 0, centro hacia +y): la cara
+    interior queda más corta que la exterior, como cuando el saco se asienta en el anillo."""
+    x, y = R[..., 0], R[..., 1]
+    rho = Rb - y
+    phi = x / Rb
+    R = R.copy()
+    R[..., 0] = rho * np.sin(phi)
+    R[..., 1] = Rb - rho * np.cos(phi)
+    return R
+
+
 def _bag_stack(courses, seed, bounds, hs_course=None, lod=0):
-    """Apila hiladas de sacos: courses = [[(x, y, ángulo°, escala_largo, escala_ancho), ...], ...] de abajo hacia arriba.
-    Cada saco se asienta sobre los de la hilada anterior (campo de alturas: la base sigue los lomos y se hunde en las
-    juntas, la tapa sigue un promedio suave) sin interpenetrarse; cada saco es distinto (semilla propia)."""
+    """Apila hiladas de sacos: courses = [[(x, y, ángulo°, escala_largo, escala_ancho[, radio_de_curva]), ...], ...] de abajo
+    hacia arriba. Cada saco se asienta sobre los de la hilada anterior (campo de alturas: la base sigue los lomos y se hunde
+    en las juntas, la tapa sigue un promedio suave) sin interpenetrarse; cada saco es distinto (semilla propia)."""
     r = rng(seed)
     mb = MB()
     hf = _HField(*bounds)
+    nc = len(courses)
     for ci, course in enumerate(courses):
         S1, S2 = hf.filtered()
-        S1 = S1 + (0.003 if ci else 0.0)
-        S2 = S2 + (0.003 if ci else 0.0)
-        new_tris = []
-        nc = len(courses)
-        for (x, y, ang, ls, ws) in course:
+        if ci:
+            S1 = S1 + 0.0025
+            S2 = S2 + 0.0025
+        placed = []
+        for item in course:
+            x, y, ang, ls, ws = item[:5]
             rb = rng(int(r.integers(1 << 30)))
-            hs = 1.0 - 0.06 * (nc - 1 - ci) / max(nc - 1, 1)     # las hiladas de abajo cargan más: más aplastadas
-            rings, fr = _bag_rings(rb, ls, ws, hs, blunt=1.0, lod=lod)
-            M = _T(x, y, 0.0) @ _Rz(ang + float(rb.uniform(-2.5, 2.5)))
+            hs = 1.0 - 0.07 * (nc - 1 - ci) / max(nc - 1, 1)     # las hiladas de abajo cargan más: más aplastadas
+            rings = _bag_rings(rb, ls, ws, hs, blunt=1.0, lod=lod)
+            if len(item) > 5 and item[5]:
+                rings["R"] = _bend_ring_xy(rings["R"], item[5])
+                rings["cord"] = _bend_ring_xy(rings["cord"], item[5])
+            M = _T(x, y, 0.0) @ _Rz(ang + float(rb.uniform(-2.0, 2.0)))
 
             def zf(px, py, f, S1=S1, S2=S2):
+                # el saco puentea las juntas (la arena no fluye hasta el fondo del canal entre dos lomos): la base sigue
+                # el apoyo pero no se hunde más de 3 cm bajo el plano medio; la tapa sigue sobre todo ese plano
                 s1 = hf.sample(S1, px, py)
                 s2 = hf.sample(S2, px, py)
+                lo = f < 0.25
+                if lo.sum() > 8:
+                    A_ = np.stack([px[lo], py[lo], np.ones(lo.sum())], 1)
+                    cf = np.linalg.lstsq(A_, np.maximum(s1[lo], np.percentile(s1[lo], 35)), rcond=None)[0]
+                    pl = cf[0] * px + cf[1] * py + cf[2]
+                    pl = np.maximum(pl, np.percentile(s1[lo], 60) - 0.012)
+                else:
+                    pl = s2
+                bot = np.maximum(s1, pl - 0.03)
+                top = np.maximum(pl + 0.3 * (s2 - pl), bot - 0.016)
                 w_ = f ** 0.7
-                top = s2 + 0.3 * (s1 - s2)
-                return s1 * (1 - w_) + max(top, s1 - 0.018) * w_
-            pts = _bag_build(mb, rings, M, zf, fr)
-            n_r = len(pts)
-            nk = len(pts[0])
-            for i in range(n_r - 1):
-                for k in range(nk):
-                    kk = (k + 1) % nk
-                    new_tris.append((pts[i][k], pts[i][kk], pts[i + 1][kk]))
-                    new_tris.append((pts[i][k], pts[i + 1][kk], pts[i + 1][k]))
-        hf.raster(new_tris)
+                return bot * (1 - w_) + top * w_
+            placed.append(_bag_build(mb, rings, M, zf))
+        for P in placed:
+            hf.splat(P)
     return mb
 
 
@@ -608,7 +813,7 @@ def sandbag_wall(L=3.0, rows=4, seed=0, thickness="single"):
             n = max(1, int(round(L / 0.315)))
             p = L / n
             for i in range(n):
-                row.append((p * (i + 0.5), 0.0, 90.0 + (180.0 if (i + k) % 2 else 0.0), 1.2, 0.97 * p / 0.315))
+                row.append((p * (i + 0.5), 0.0, 90.0 + (180.0 if (i + k) % 2 else 0.0), 1.15, 0.97 * p / 0.315))
         else:
             ys = (-0.14, 0.14) if thickness == "double" else (0.0,)
             off = (k // (2 if thickness == "double" else 1)) % 2
@@ -621,14 +826,16 @@ def sandbag_wall(L=3.0, rows=4, seed=0, thickness="single"):
                 for (u0, u1) in segs:
                     ls = (u1 - u0) / pitch
                     flip = 180.0 if r.uniform() < 0.5 else 0.0
-                    row.append(((u0 + u1) / 2, y, flip, ls, 0.9 if thickness == "double" else 1.0))
+                    row.append(((u0 + u1) / 2, y + float(r.uniform(-0.012, 0.012)), flip, ls * 0.985,
+                                0.9 if thickness == "double" else 1.0))
         courses.append(row)
     return _bag_stack(courses, seed, (-0.4, L + 0.4, -0.5, 0.5))
 
 
 def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
     """Anillo de sacos (puesto de tirador / protección de un equipo): sacos a soga tangentes a un círculo de `radius` m
-    (eje del muro), hiladas cuatrapeadas, con una entrada de `opening_deg` grados hacia -Y. Origen: centro, en el piso."""
+    (eje del muro), curvados en planta para seguirlo (la cara interior más corta), hiladas cuatrapeadas, con una entrada de
+    `opening_deg` grados hacia -Y. Origen: centro, en el piso."""
     courses = []
     pitch = 0.515
     for k in range(rows):
@@ -636,16 +843,17 @@ def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
         arc = 2 * PI - math.radians(opening_deg)
         n = max(3, int(round(arc * radius / pitch)))
         da = arc / n
+        ls = da * radius / pitch * 0.985
         row = []
         off = 0.5 * (k % 2)
         idx = [i + off for i in range(n)] if not off else [i + off for i in range(n - 1)]
         for t in idx:
             a = arc0 + da * (t + 0.5)
-            row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, 1.0, 1.0))
+            row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, ls, 1.0, radius))
         if off:                                            # medios sacos en las cabezas de la entrada
             for t in (0.25, n - 0.25):
                 a = arc0 + da * t
-                row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, 0.5, 1.0))
+                row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, 0.5 * ls, 1.0, radius))
         courses.append(row)
     R = radius + 0.5
     return _bag_stack(courses, seed, (-R, R, -R, R))

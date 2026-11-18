@@ -45,7 +45,7 @@ kit_ue5/
   comun/geometria/        SM_BLK_Ejes.glb (marcador para medir la conversión de ejes)
   modelos/<ID>/           SM_<ID>_Estructura / _Detalle / _Escombro / _Vidrio / _Colision .glb
                           (+ SM_<ID>_Mobiliario.glb en el hospital, el granero, el sitio de antena y la base militar;
-                          SM_MIL_1_almacen_Perimetro y _Carga en el almacén militar)
+                          SM_MIL_1_almacen_Perimetro, _Malla y _Carga en el almacén militar)
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
@@ -55,7 +55,7 @@ adentro ya empiezan por `kit_ue5/` y arman el árbol de arriba.
 
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
-## 3. Las piezas de cada modelo (5; algunos traen Mobiliario y el almacén militar además Perímetro y Carga)
+## 3. Las piezas de cada modelo (5; algunos traen Mobiliario y el almacén militar además Perímetro, Malla y Carga)
 Todas comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
 punto y con el mismo giro.
 
@@ -65,7 +65,8 @@ punto y con el mismo giro.
 | Detalle | ventanas, barandales, servicios (A/C, medidores, cables, tinacos), ropa, daño | sí | ninguna | los barandales no bloquean (§7) |
 | Escombro | escombro exterior suelto (montones, trozos, varillas) | no | compleja como simple | opcional: se puede mover o borrar |
 | Mobiliario | hospital, granero y sitio de antena: mobiliario, equipo, utilería, malla y luminarias | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
-| Perímetro | almacén militar: malla con navaja, portón, muros T, HESCO, pluma y barreras Jersey | sí | ninguna | malla propia por tamaño; su colisión son cajas dentro de Colision |
+| Perímetro | almacén militar: muros T, HESCO, torre de vigilancia, torres de luz, pluma y barreras Jersey | sí | ninguna | malla propia por tamaño; su colisión son cajas dentro de Colision |
+| Malla | almacén militar: malla ciclónica del frente (alambre redondo tejido), portón doble y rollo de concertina | sí | ninguna | malla propia por tamaño; su colisión son cajas dentro de Colision |
 | Carga | almacén militar: tarimas de cajas de munición y de proyectiles de los racks | sí | ninguna | malla propia por tamaño; se puede ocultar para vaciar los racks |
 | Vidrio | todo el vidrio (ventanas, puertas, esquirlas) | **no** (translúcido) | ninguna | sin proyectar sombra |
 | Colision | carcasa + interior con caras coplanares fundidas (misma forma, pocos triángulos) | no | compleja como simple | **invisible**; da la colisión de muros, pisos y escaleras |

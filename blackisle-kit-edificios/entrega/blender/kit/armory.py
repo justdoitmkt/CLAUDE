@@ -272,38 +272,236 @@ def cartridge(mb, M, cal=0.0057, case_len=0.045, bullet=0.012, seg=12, mat_case=
 
 
 # ======================================================================================================== cargador
-def _mag_body(mb, M, n_ring=4, lite=False):
-    """Cuerpo del cargador curvo de 30 tiros en el marco M: z = 0 boca superior (centro de la sección), crece hacia -Z, el
-    frente mira a +X. Tramo recto de 30 mm (dentro del brocal) y curva de radio 0,62 m hacia adelante."""
-    H = 0.172
-    D, W, R = 0.0635, 0.0235, 0.0045
-    Rc = 0.62
-    ns = 4 if lite else 5
-    sta = []
-    for i in range(ns + 1):
-        s = H * i / ns
-        th = max(s - 0.03, 0.0) / Rc
-        cx = Rc * (1 - math.cos(th))
-        cz = -(min(s, 0.03) + Rc * math.sin(th))
-        sta.append((cx, cz, math.cos(th), math.sin(th)))       # centro y normal "hacia adelante"
-    loops = [[(cx + nx * u, v, cz + nz * u) for (u, v) in rr_pts(D, W, R, n_ring)] for (cx, cz, nx, nz) in sta]
-    skin(mb, loops, "polymer", M, cap0=True, cap1=True)
-    th_end = (H - 0.03) / Rc
-    cx, cz = sta[-1][0], sta[-1][1]
-    Mb = M @ _T(cx, 0, cz) @ _Ry(-math.degrees(th_end))
-    slab2(mb, Mb @ _T(0.002, 0, -0.0075), 0.0715, 0.0275, 0.0088, 0.006, "polymer", re_t=0.0, ne_t=0, re_b=0.0025, ne_b=1, nc=3)
+def gridskin(mb, P, mat, M=None, closed=True, cap0=False, cap1=False, matf=None):
+    """Malla de cuadriláteros sobre la rejilla P[i][j] (i = estaciones, j = puntos de la sección, lazo cerrado si closed).
+    matf(i, j) -> material de la cara entre las estaciones i, i + 1 y los puntos j, j + 1 (ventanas, insertos)."""
+    V = [[mb.bm.verts.new((M @ Vector(p)) if M is not None else Vector(p)) for p in row] for row in P]
+    nj = len(P[0])
+    jr = nj if closed else nj - 1
+    for i in range(len(V) - 1):
+        A, B = V[i], V[i + 1]
+        for j in range(jr):
+            jj = (j + 1) % nj
+            mb.face([A[j], A[jj], B[jj], B[j]], matf(i, j) if matf else mat)
+    if cap0:
+        mb.face(list(reversed(V[0])), mat)
+    if cap1:
+        mb.face(V[-1], mat)
+    return V
 
 
-def _mag(mb, M, lite=False):
-    """Cargador completo en el marco M (ver _mag_body): cuerpo, base, labios de alimentación y cartucho superior
-    (lite: insertado en el arma, sin labios ni cartucho, que quedan dentro del brocal)."""
-    _mag_body(mb, M, lite=lite)
+def rr_sec(D, W, r, n=4, a_side=(), b_end=()):
+    """Sección de rectángulo redondeado D (eje a, frente +a) × W (eje b), antihoraria, con muestras extra sobre los costados
+    (a_side: valores de a en las caras ±b) y sobre frente / trasera (b_end: valores de b en las caras ±a). Devuelve
+    [(a, b, na, nb, cara)] con la normal exterior y la cara: 'F' frente, 'B' trasera, 'R' (+b), 'L' (-b), 'C' esquina."""
+    ha, hb = D / 2 - r, W / 2 - r
+    bs = sorted({-hb, hb} | {b for b in b_end if -hb < b < hb})
+    as_ = sorted({-ha, ha} | {a for a in a_side if -ha < a < ha})
+    out = [(D / 2, b, 1.0, 0.0, "F") for b in bs]
+
+    def corner(ca, cb, a0):
+        for k in range(1, n):
+            t = a0 + PI / 2 * k / n
+            out.append((ca + r * math.cos(t), cb + r * math.sin(t), math.cos(t), math.sin(t), "C"))
+    corner(ha, hb, 0.0)
+    out += [(a, W / 2, 0.0, 1.0, "R") for a in reversed(as_)]
+    corner(-ha, hb, PI / 2)
+    out += [(-D / 2, b, -1.0, 0.0, "B") for b in reversed(bs)]
+    corner(-ha, -hb, PI)
+    out += [(a, -W / 2, 0.0, -1.0, "L") for a in as_]
+    corner(ha, -hb, 1.5 * PI)
+    return out
+
+
+def _bx(x, x0, x1, e):
+    """Trapecio 0..1 entre x0 y x1 con rampas de ancho e (relieves y rebajes con chaflán)."""
+    if x <= x0 or x >= x1:
+        return 0.0
+    return max(0.0, min(1.0, (x - x0) / e, (x1 - x) / e))
+
+
+def _feat_rows(spans, e):
+    """Estaciones de un rasgo con chaflán: [(x0, x1)] -> x0, x0 + e, x1 - e, x1."""
+    out = []
+    for (x0, x1) in spans:
+        out += [x0, x0 + e, x1 - e, x1]
+    return out
+
+
+def _uniq(vals, tol=2e-5):
+    out = []
+    for v in sorted(vals):
+        if not out or v - out[-1] > tol:
+            out.append(v)
+    return out
+
+
+def round_556(mb, M, seg=24, lite=False, mat_case="brass", mat_bullet="copper"):
+    """Cartucho clase 5,56 × 45 a lo largo de Z local (culote en z = 0): culote con pistón y bisel, ranura de extractor,
+    vaina cónica (Ø 9,58 → 9,00 mm), hombro de 23°, cuello Ø 6,43 mm, proyectil Ø 5,70 mm con ojiva tangente (largo total
+    57,4 mm). Fuente: SAAMI / C.I.P. 5,56 × 45 mm (en.wikipedia.org/wiki/5.56%C3%9745mm_NATO)."""
     if lite:
-        return
-    for sy in (-1, 1):
-        side(mb, [(-0.026, -0.001), (0.012, -0.001), (0.012, 0.004), (-0.022, 0.006)], [0.0, 0.0, 0.0015, 0.0015], 0.0018,
-             "polymer", y0=sy * 0.0105, re=0.0, M=M)
-    cartridge(mb, M @ _T(-0.026, 0, 0.0035) @ _Ry(90), cal=0.0057, case_len=0.0445, bullet=0.0125, seg=12, lite=True)
+        case = [(0.0, 0.0002), (0.0046, 0.0), (0.0048, 0.0003), (0.0048, 0.0008), (0.0042, 0.0012), (0.0042, 0.0017),
+                (0.00478, 0.0023), (0.0045, 0.0396), (0.00322, 0.0412), (0.00322, 0.0447), (0.0029, 0.0447)]
+    else:
+        case = [(0.0, 0.0003), (0.0019, 0.0003), (0.0021, 0.0001), (0.0024, 0.0), (0.0046, 0.0), (0.0048, 0.0002),
+                (0.0048, 0.0008), (0.0043, 0.0011), (0.0042, 0.0013), (0.0042, 0.0016), (0.00478, 0.0022),
+                (0.00473, 0.012), (0.00462, 0.026), (0.0045, 0.0396), (0.00322, 0.0412), (0.00322, 0.0447), (0.0029, 0.0447)]
+    revolve(mb, case, mat_case, seg=seg, M=M, caps=False)
+    zt = 0.0574
+    bl = [(0.00285, 0.0441), (0.00285, 0.0486)]
+    nk = 5 if lite else 8
+    for k in range(1, nk + 1):                            # ojiva tangente (radio 7 calibres)
+        u = k / nk
+        z = 0.0486 + (zt - 0.0003 - 0.0486) * u
+        bl.append((max(0.00285 * (1 - u ** 1.85) ** 0.62, 0.0004), z))
+    bl.append((0.0, zt))
+    revolve(mb, bl, mat_bullet, seg=seg, M=M, caps=False)
+
+
+def _mag(mb, M, lite=False, inserted=False, cal="556", seed=0):
+    """Cargador de polímero de doble hilera, genérico, en el marco M: z = 0 borde superior de las paredes (centro de la
+    sección), crece hacia -Z, el frente mira a +X. 5,56: sección 63,5 × 23,5 mm, lomo de 172 mm con tramo recto de 30 mm y
+    curva de radio 0,62 m hacia adelante; 7,62 («762»): 74,5 × 26,5 mm, 150 mm, casi recto.
+    Cuerpo en una sola rejilla (gridskin) con: hombro de tope de inserción, ranura del retén en el costado izquierdo, ventana
+    testigo vertical en ambos costados (inserto «glass»), panel de marcaje rebajado, 5 costillas de agarre que rodean la parte
+    baja, ensanche de la pestaña de la base y paredes huecas arriba (labios de alimentación curvados, seguidor / cartucho
+    superior y el siguiente en hilera alterna). Base (lengüeta delantera, talón, botón de retención, estrías) aparte.
+    lite: menos estaciones (cargadores de mesa); inserted: dentro del brocal (sin la parte alta oculta ni cartuchos).
+    Devuelve (centro de la base, eje 'arriba' de la base) en el marco M."""
+    if cal == "762":
+        H, D, W, r, Rc, s_st = 0.150, 0.0745, 0.0265, 0.0045, 1.60, 0.03
+    else:
+        H, D, W, r, Rc, s_st = 0.172, 0.0635, 0.0235, 0.0042, 0.62, 0.03
+    e = 0.0005
+    t_wall = 0.0013
+    s_sh = 0.058 if cal != "762" else 0.054
+    win_a = (-D / 2 + 0.0075, -D / 2 + 0.0145)
+    win_s = (0.068, H - 0.026)
+    pan_a = (-D / 2 + 0.021, D / 2 - 0.0085)
+    pan_s = (0.080, min(0.128, H - 0.040))
+    nt_a = (D / 2 - 0.024, D / 2 - 0.014)
+    nt_s = (0.036, 0.046)
+    ribs = [(H - 0.031 + k * 0.0048, H - 0.031 + k * 0.0048 + 0.0021) for k in range(5)]
+    marg = D / 2 - r - 0.004
+    # ---- muestras de la sección
+    a_side = _feat_rows([win_a, pan_a, nt_a], e) + [-marg, marg, -marg - e, marg + e]
+    if not lite:
+        a_side += [(-D / 2 + r) * f for f in (0.25, -0.25)]
+    b_end = [0.0] + ([] if lite else [-(W / 2 - r) * 0.5, (W / 2 - r) * 0.5])
+    sec = rr_sec(D, W, r, 4 if not lite else 3, a_side, b_end)
+    # ---- estaciones a lo largo del lomo
+    s0 = 0.014 if inserted else 0.0
+    st = [s0, s_sh, s_sh + 0.0015, H - 0.010, H - 0.004, H]
+    st += _feat_rows([win_s, pan_s] + ribs, e) + ([] if inserted else _feat_rows([nt_s], e))
+    step = 0.012 if lite else 0.007
+    st += [s0 + step * k for k in range(int((H - s0) / step) + 1)]
+    st = [s for s in _uniq(st) if s0 - 1e-9 <= s <= H + 1e-9]
+
+    def spine(s):
+        th = max(s - s_st, 0.0) / Rc
+        c = Vector((Rc * (1 - math.cos(th)), 0.0, -(min(s, s_st) + Rc * math.sin(th))))
+        return c, Vector((math.cos(th), 0.0, math.sin(th)))
+
+    def off(a, b, fc, s):
+        o = 0.0005 * max(0.0, min(1.0, (s - s_sh) / 0.0015))
+        o += 0.0007 * max(0.0, min(1.0, (s - (H - 0.010)) / 0.006))
+        if fc in ("R", "L"):
+            o -= 0.0009 * _bx(a, *win_a, e) * _bx(s, *win_s, e)
+            o -= 0.00045 * _bx(a, *pan_a, e) * _bx(s, *pan_s, e)
+            if fc == "L":
+                o -= 0.0018 * _bx(a, *nt_a, e) * _bx(s, *nt_s, e)
+            wr = 1.0 if abs(a) >= marg + e - 1e-7 else (0.0 if abs(a) <= marg + 1e-7 else 0.5)
+        else:
+            wr = 1.0
+        if wr > 0:
+            o += 0.0007 * wr * max(_bx(s, a0, a1, 0.0006) for (a0, a1) in ribs)
+        return o
+
+    P = []
+    for s in st:
+        c, nv = spine(s)
+        row = []
+        for (a, b, na, nb, fc) in sec:
+            o = off(a, b, fc, s)
+            q = c + nv * (a + na * o) + Vector((0, 1, 0)) * (b + nb * o)
+            row.append(tuple(q))
+        P.append(row)
+    win_j = {j for j, (a, b, na, nb, fc) in enumerate(sec) if fc in ("R", "L") and win_a[0] + e - 1e-7 <= a <= win_a[1] - e - 1e-7}
+    win_i = {i for i, s in enumerate(st) if win_s[0] + e - 1e-7 <= s <= win_s[1] - e - 1e-7}
+    matf = (lambda i, j: "glass" if (i in win_i and j in win_j and i + 1 < len(st) and st[i + 1] <= win_s[1] - e + 1e-7)
+            else "polymer")
+    if inserted:
+        gridskin(mb, P, "polymer", M, cap0=True, cap1=True, matf=matf)
+    else:
+        # paredes huecas arriba: lazo interior a la profundidad del seguidor, borde interior, y el cuerpo
+        zf = 0.0072
+        inner = [(a - na * t_wall, b - nb * t_wall) for (a, b, na, nb, fc) in sec]
+        rows = [[(a, b, -zf) for (a, b) in inner], [(a, b, 0.0) for (a, b) in inner]]   # s = 0: tramo recto (a = x, b = y)
+        gridskin(mb, rows + P, "polymer", M, cap0=True, cap1=True,
+                 matf=lambda i, j: "polymer" if i < 2 else matf(i - 2, j))
+    # ---- base (perpendicular al final del lomo)
+    c, nv = spine(H)
+    up = nv.cross(Vector((0, 1, 0)))
+    Mb = Matrix(((nv.x, 0.0, up.x, c.x), (nv.y, 1.0, up.y, c.y), (nv.z, 0.0, up.z, c.z), (0, 0, 0, 1)))
+    Mb = M @ Mb
+    o_b = 0.0012                                       # la base abraza la pestaña del cuerpo
+    lv = [(0.0016, 0.0024), (0.0006, 0.0022), (0.0, 0.0014), (-0.0004, -0.0040), (-0.0006, -0.0066), (0.0002, -0.0078),
+          (0.0016, -0.0082)]
+    Db, Wb = D + 2 * o_b, W + 2 * o_b
+
+    def bl(dl, z):
+        q = rr_pts(Db - 2 * dl + 0.0035, Wb - 2 * dl, (r + o_b - dl + 0.001, r + o_b - dl, r + o_b - dl, r + o_b - dl + 0.001),
+                   4 if not lite else 3)
+        return [(x + 0.0012, y, z) for (x, y) in q]
+    skin(mb, [bl(dl, z) for (dl, z) in lv], "polymer", Mb)
+    zb = -0.0082
+    # lengüeta delantera (talón para sacar el cargador de la bolsa) y talón trasero
+    side(mb, [(D / 2 + o_b + 0.001, zb + 0.0006), (D / 2 + o_b + 0.0058, zb + 0.0004), (D / 2 + o_b + 0.0064, zb + 0.0052),
+              (D / 2 + o_b + 0.0016, zb + 0.0076)], [0.0, 0.0012, 0.0015, 0.0], W - 0.004, "polymer", re=0.0009, n=2, ne=1,
+         M=Mb @ _Rx(0))
+    if not lite:
+        for k in range(3):                             # estrías de la lengüeta
+            xk = D / 2 + o_b + 0.0042 - k * 0.0014
+            plank(mb, (xk - 0.0004, -W / 2 + 0.004, zb - 0.0002), (xk + 0.0004, W / 2 - 0.004, zb + 0.0002), "polymer", ch=0.0002)
+        # botón de retención de la base y nervio central
+        revolve(mb, [(0.0, -0.0005), (0.0034, -0.0005), (0.0034, 0.0004), (0.0029, 0.0009), (0.0, 0.0009)], "polymer", seg=24,
+                M=Mb @ _T(-D / 2 + 0.014, 0.0, zb) @ _Rx(180))
+        plan(mb, [(-D / 2 + 0.022, -0.0015), (D / 2 - 0.006, -0.0015), (D / 2 - 0.006, 0.0015), (-D / 2 + 0.022, 0.0015)],
+             [0.0, 0.001, 0.001, 0.0], 0.0007, "polymer", z0=-0.0004, re=0.0002, n=2, ne=1, M=Mb @ _T(0, 0, zb) @ _Rx(180))
+    if inserted:
+        return Mb
+    # ---- labios de alimentación (mitad trasera) y cartuchos
+    for sb in (-1, 1):
+        cl = [(W / 2 - 0.0006, -0.0012), (W / 2 - 0.0008, 0.0016), (W / 2 - 0.0022, 0.0031), (W / 2 - 0.0048, 0.0034),
+              (W / 2 - 0.0071, 0.0024)]
+        o_ = 0.00062
+        Pp = []
+        for k, (b, z) in enumerate(cl):
+            a0 = cl[max(k - 1, 0)]
+            a1 = cl[min(k + 1, len(cl) - 1)]
+            tb, tz = a1[0] - a0[0], a1[1] - a0[1]
+            ln = math.hypot(tb, tz)
+            nb_, nz_ = -tz / ln, tb / ln
+            Pp.append((b + nb_ * o_, z + nz_ * o_))
+        for k, (b, z) in reversed(list(enumerate(cl))):
+            a0 = cl[max(k - 1, 0)]
+            a1 = cl[min(k + 1, len(cl) - 1)]
+            tb, tz = a1[0] - a0[0], a1[1] - a0[1]
+            ln = math.hypot(tb, tz)
+            nb_, nz_ = -tz / ln, tb / ln
+            Pp.append((b - nb_ * o_, z - nz_ * o_))
+        Pp = [(sb * b, z) for (b, z) in Pp]
+        Rr = [0.0] * len(Pp)
+        Pp, Rr = _ccw(Pp, Rr)
+        La = 0.029
+        Ml = M @ Matrix(((0, 0, 1, -D / 2 + 0.0016), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
+        pslab_n(mb, Ml, Pp, Rr, La, re=0.0006, mat="polymer", n=2, ne=1)
+    sd = 1 if seed % 2 == 0 else -1
+    round_556(mb, M @ _T(-D / 2 + 0.0022, sd * 0.0024, -0.0014) @ _Ry(90), seg=24, lite=lite)
+    if not lite:
+        round_556(mb, M @ _T(-D / 2 + 0.0022, -sd * 0.0026, -0.0056) @ _Ry(90), seg=24, lite=True)
+    return Mb
 
 
 def _drop(mb):
@@ -314,15 +512,19 @@ def _drop(mb):
 
 
 def magazine(seed=0, lite=False):
-    """Cargador curvo de polímero de 30 tiros, genérico (sección ~ 64 × 23,5 mm, ~ 19 cm de alto, curva hacia adelante como
-    los cargadores de 5,56 mm): cuerpo curvo de sección redondeada, base con labio inferior, labios de alimentación y
-    cartucho superior a la vista. Origen: x = 0 cara trasera de la boca, z = 0 apoyo (de pie sobre la base), y = 0 centro;
-    el frente mira a +X. Fuentes: en.wikipedia.org/wiki/STANAG_magazine ; magpul.com/firearm-accessories/
-    pmag30ar-m4genm3window-5-56x45.html (forma y largo de referencia)."""
+    """Cargador curvo de polímero de 30 tiros, genérico (ver _mag; sección 63,5 × 23,5 mm, ~ 19 cm de alto), de pie sobre su
+    base (inclinado hacia atrás lo que pide su curva, como queda parado en una mesa), con el cartucho superior a la vista
+    entre los labios. lite = cargadores de exhibición en serie (menos estaciones, ~ 4-5 k triángulos; el completo ~ 9 k).
+    Origen: centro de la base en el apoyo (z = 0), y = 0 plano medio; el frente del cargador mira a +X; la boca queda a
+    ~ 4 cm hacia -X del centro de la base (huella de la base 68 × 26 mm).
+    Fuentes: en.wikipedia.org/wiki/STANAG_magazine ; magpul.com (PMAG 30 AR/M4 GEN M3: largo 7,5-7,6 in, ventana testigo,
+    base con lengüeta); bigtexordnance.com/product/pmag-30-ar-m4-gen-m3-5-56x45mm-nato (proporciones)."""
     mb = MB()
-    _mag(mb, _T(0.03175, 0, 0), lite=lite)
+    Mb = _mag(mb, Matrix(), lite=lite, seed=seed)
+    inv = Mb.inverted()
+    mb.transform(inv)                                   # base en el plano XY local, 'arriba' = +Z
+    mb.transform(_T(-0.0012, 0, 0))
     return _drop(mb)
-
 
 # ======================================================================================================== lata de munición
 def _can_dims(size):

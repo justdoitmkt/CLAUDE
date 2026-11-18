@@ -460,7 +460,7 @@ def verificar():
 
 # ----------------------------------------------------------------------------------------------------------- colocación
 def colocar(bid, ubicacion=None, yaw=0.0, con_escombro=True, etiqueta=None):
-    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario, Perimetro, Carga (si los trae), Vidrio,
+    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario, Perimetro, Malla, Carga (si los trae), Vidrio,
     Escombro y Colision enganchados a él. Sin Estructura (MIL_2_avanzada) la raíz es el Detalle. Para poner el puesto de
     avanzada junto al almacén: colocar("MIL_2_avanzada", ubicacion_del_almacen + (1600, -650, 0) cm en ejes de Unreal
     (Y de Unreal = -Y de Blender), mismo yaw que el almacén."""

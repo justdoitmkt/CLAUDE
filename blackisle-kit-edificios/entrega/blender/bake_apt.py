@@ -539,8 +539,9 @@ def main():
     furn = join(g("Furniture"), f"{prefix}_Furniture") if g("Furniture") else None   # mobiliario en malla propia (hospital)
     fence = join(g("Fence"), f"{prefix}_Fence")          # perímetro en malla propia (MIL_1: malla, navaja, muros T)
     cargo = join(g("Cargo"), f"{prefix}_Cargo")          # carga de racks en malla propia (MIL_1)
+    wire = join(g("Wire"), f"{prefix}_Wire")             # malla ciclónica y concertina en malla propia (MIL_1)
     skirt = g("Skirt")[0] if g("Skirt") else None        # sin terreno (--ue) las cabañas no tienen nada en la base
-    log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt, furn, fence, cargo) if o]))
+    log("construido", round(time.time() - t0), "s; tris", tri_count([o for o in (shell, det, inter, roof, skirt, furn, fence, cargo, wire) if o]))
     # caras apoyadas en el terreno (cara inferior de la losa de desplante, pies de columna): nunca se ven y ocupaban medio atlas
     if shell is not None:
         bm = bmesh.new()
@@ -551,7 +552,7 @@ def main():
         bm.free()
         log("caras de apoyo retiradas:", len(kill))
     import coplanar                                   # z-fighting: borra caras cubiertas por otra coplanar, hunde 3 mm las parciales
-    log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof, furn, fence, cargo) if o is not None], log=log))
+    log("coplanares (borradas, m2, hundidas):", coplanar.dedupe([o for o in (shell, det, inter, roof, furn, fence, cargo, wire) if o is not None], log=log))
     # oclusores: techo e interior (tabiques, puertas, escaleras). Sin el interior, la cara interior de un muro exterior veía el cielo
     # cruzando el cuarto y las ventanas de enfrente, iba al atlas exterior y salía con AO ~0 (cuartos negros en Three.js) o con la
     # textura de fachada. Los detalles no tapan: barandales, letreros y cables delante de un canto de losa no lo vuelven "interior"
@@ -603,7 +604,7 @@ def main():
     for o, aid in atlas_objs:
         mem += bake_atlas(o, aid, prefix, out_tex, sizes[aid], quick, reuse=reuse)
     # oclusión por vértice + materiales repetibles
-    loose = [o for o in (det, roof, inter, loose_o, furn, fence, cargo) if o is not None and len(o.data.polygons)]
+    loose = [o for o in (det, roof, inter, loose_o, furn, fence, cargo, wire) if o is not None and len(o.data.polygons)]
     for o in loose:
         t = time.time()
         vertex_ao(o, 8 if quick else 64)
@@ -625,7 +626,7 @@ def main():
     log("materiales repetibles:", mats, mats_i)
     log(f"memoria de texturas decodificada ≈ {mem:.0f} MB")
     blend = os.path.join(ENT, "blender", f"{bid}{'_ue' if ue else ''}{'_quick' if quick else ''}.blend")
-    bpy.ops.wm.save_as_mainfile(filepath=blend)
+    bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)   # zstd: el .blend de MIL_1 pasaría de 100 MB
     log("guardado", blend, "total", round(time.time() - t0), "s")
     if ue:                                               # focos colgando del vestido interior: posiciones para luces del motor
         bulbs = res.get("stats", {}).get("interior_dress", {}).get("bulb_pos", [])

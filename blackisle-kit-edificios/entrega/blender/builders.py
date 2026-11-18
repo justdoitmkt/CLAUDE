@@ -38,7 +38,7 @@ def build(bid, **kw):
     raise KeyError(f"sin constructor para {bid}")
 
 
-KEYS = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture", "Fence", "Cargo")
+KEYS = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture", "Fence", "Cargo", "Wire")
 
 
 def _build_apt(bid, **kw):

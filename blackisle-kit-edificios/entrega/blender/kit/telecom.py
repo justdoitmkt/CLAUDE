@@ -63,10 +63,12 @@ class TelMB(MB):
         self.smooth_default = 30.0
         self.lite = False                              # modo "lite": todo se vuelve geometría propia, versión ligera
         self.lite_sides = 3
+        self.lite_hq = False                           # lite_hq: una sola malla pero con herrajes completos y alambre de 12 lados
 
     def add_inst(self, kind, build, M):
         if self.lite:                                  # versión ligera del herraje, unida directo a la malla
-            MB.join(self, _inst_mb(kind + "~lite", lambda: build(lite=True)), M)
+            hq = self.lite_hq
+            MB.join(self, _inst_mb(kind + ("~hq" if hq else "~lite"), lambda: build(lite=not hq)), M)
             return
         self.instances.setdefault(kind, [build, []])[1].append(M.copy())
 
@@ -408,7 +410,9 @@ def barbed_module(nb=8):
 def _add_barbed(mb, p0, p1):
     """Cordón de púas recto de p0 a p1 con módulos de 8 púas (+ 4) escalados < 13 % para ajustar el largo."""
     if getattr(mb, "lite", False):
-        return _barbed_lite(mb, [p0, p1], seed=int(abs(p0[0] * 1000 + p0[2] * 777)) % 997, step=0.115)
+        hq = getattr(mb, "lite_hq", False)
+        return _barbed_lite(mb, [p0, p1], seed=int(abs(p0[0] * 1000 + p0[2] * 777)) % 997, step=0.06 if hq else 0.115,
+                            sides=12 if hq else 4, barb_seg=8 if hq else 3)
     p0, p1 = Vector(p0), Vector(p1)
     Ls = (p1 - p0).length
     half = 4 * BARB_P
@@ -462,7 +466,7 @@ def _fabric_lite(mb, x0, x1, z0, n, M, sides=3, twist=True):
             mb.tube(pts, CL_R, seg=sides, mat="galvanized", radii=radii)
 
 
-def _barbed_lite(mb, arm_pts, seed=0, sides=4, step=0.0847, sag=(0.005, 0.010)):
+def _barbed_lite(mb, arm_pts, seed=0, sides=4, step=0.0847, sag=(0.005, 0.010), barb_seg=3):
     """Hilo de púas ligero realizado por los puntos de los brazos `arm_pts` (en orden): en cada claro entre brazos cuelga con
     una flecha de 5–10 mm (parábola). Dos alambres 12-1/2 ga de `sides` lados torcidos entre sí (un vértice cada 85 mm, giro
     de 90° por vértice) y púas de 4 puntas cada 127 mm: 2 alambres de 3 lados cruzados en X a través del cordón, con corte en bisel."""
@@ -510,7 +514,7 @@ def _barbed_lite(mb, arm_pts, seed=0, sides=4, step=0.0847, sag=(0.005, 0.010)):
             a = al + j * PI / 2
             u = n1 * math.cos(a) + n2 * math.sin(a)
             o = tg * (0.0025 * j)
-            mb.tube([tuple(c + o - u * 0.0105 - tg * 0.0014), tuple(c + o + u * 0.0105 + tg * 0.0016)], 0.001, seg=3, mat="galvanized")
+            mb.tube([tuple(c + o - u * 0.0105 - tg * 0.0014), tuple(c + o + u * 0.0105 + tg * 0.0016)], 0.001, seg=barb_seg, mat="galvanized")
         sv += BARB_P
         kk += 1
 
@@ -764,7 +768,7 @@ def fence_levels(h=2.4):
     return z_b, n, z_top, zr, zr - R_RAIL - 0.012, zr + 0.05
 
 
-def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance", base="footing", lite_sides=3):
+def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance", base="footing", lite_sides=3, lite_hq=False):
     """Tramo de malla ciclónica de seguridad a lo largo de +X de x = 0 a x = L (origen: piso, eje de los postes en y = 0).
     Lado público / exterior = -Y: la tela va por la cara -Y de los postes y los brazos de púas se inclinan 45° hacia -Y; el
     recinto queda en +Y (armar el perímetro en sentido antihorario visto desde arriba).
@@ -782,12 +786,17 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance", base="fo
     fabric: "instance" (por omisión; tela, púas, amarres y abrazaderas como instancias TEL_*), "join" (todo en la malla),
     "lite" (MB normal de UNA malla sin instancias, para el pipeline que solo une mallas: tela tejida con un vértice por medio
     rombo y alambre de `lite_sides` lados, hilos de púas de 4 lados con flecha de 5–10 mm entre brazos, púas de 3 lados,
-    herrajes ligeros; ~13 500 tris por metro) o "none" (solo postes y largueros)."""
+    herrajes ligeros; ~13 500 tris por metro) o "none" (solo postes y largueros).
+    lite_hq=True (con fabric="lite"): una sola malla pero AAA a < 1 m: alambre de la tela y de las púas de 12 lados con
+    sombreado continuo (MB.soft), herrajes completos (amarres, abrazaderas, anillos) y hilos con un vértice cada 6 cm."""
     r = rng(seed)
     lite = fabric == "lite"
     mb = TelMB()
     mb.lite = lite
-    mb.lite_sides = lite_sides
+    mb.lite_hq = lite and lite_hq
+    mb.lite_sides = 12 if mb.lite_hq else lite_sides
+    lite_fab = lite
+    lite = lite and not lite_hq                       # herrajes ligeros solo en lite normal
     mb.smooth_default = 30.0 if lite else 65.0         # amarres y colas de alambre de 6 lados: suavizado completo
     nb = max(1, int(math.ceil(L / 3.05 - 1e-6)))
     xs = [L * i / nb for i in range(nb + 1)]
@@ -862,13 +871,15 @@ def fence_run(L=3.05, h=2.4, seed=0, end_posts=True, fabric="instance", base="fo
             mb.add_inst("hog", hog_ring, _T(x + 0.15, Y_TW, z_tw))
             x += 0.6
         for k in range(3):
-            if lite:
-                _barbed_lite(mb, strand_pts[k], seed=seed * 7 + k)
+            if lite_fab:
+                hq = mb.lite_hq
+                _barbed_lite(mb, strand_pts[k], seed=seed * 7 + k, sides=12 if hq else 4, barb_seg=8 if hq else 3,
+                             step=0.06 if hq else 0.0847)
             else:
                 _add_barbed(mb, strand_pts[k][0], strand_pts[k][-1])
     if fabric == "join":
         mb.realize()
-    if lite:                                          # MB normal, una sola malla, sin instancias
+    if lite_fab:                                      # MB normal, una sola malla, sin instancias
         out = MB()
         out.join(mb)
         return out
@@ -1038,7 +1049,7 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
         lathe(lf, [(R, z_lb - R - 0.006), (R * 0.6, z_lb - R - 0.008), (0.0, z_lb - R - 0.0085)], seg=SEG, mat="galvanized",
               M=_T(x, 0, 0), caps=False)
         cap = [(R + 0.0012, z_ext - 0.025), (R + 0.0015, z_ext + 0.003), (R * 0.78, z_ext + 0.013), (0.0, z_ext + 0.0165)]
-        if getattr(lf, "lite", False):
+        if (getattr(lf, "lite", False) and not getattr(lf, "lite_hq", False)):
             cap = [(R + 0.0013, z_ext - 0.02), (R + 0.0013, z_ext + 0.006), (0.0, z_ext + 0.016)]
         lathe(lf, cap, seg=SEG, mat="galvanized", M=_T(x, 0, 0), caps=False)
     zm = (z_lb + z_lt) / 2
@@ -1056,16 +1067,16 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
     zf1 = zf0 + n_fab * CL_D
     for x, sd, xu in ((xa, dirx, xh), (xb, -dirx, xf)):
         rbox(lf, (x - 0.0095, yfl - 0.0024, zf0 - 0.012), (x + 0.0095, yfl + 0.0024, zf1 - 0.004), "galvanized", r=0.0012)
-        nbd = 3 if getattr(lf, "lite", False) else 5
+        nbd = 3 if (getattr(lf, "lite", False) and not getattr(lf, "lite_hq", False)) else 5
         for k in range(nbd):
             zb_ = zf0 + 0.15 + (zf1 - zf0 - 0.3) * k / (nbd - 1)
             lf.add_inst(f"tbandg{'r' if sd > 0 else 'l'}", lambda sd=sd, lite=False: tension_band(R_GFRAME, sd, yfab=yfl, lite=lite),
                         _T(xu, 0, zb_))
     _add_fabric(lf, min(xa, xb), max(xa, xb), zf0, n_fab, M=_T(0, yfl, 0))
     x = min(xa, xb) + 0.25
-    step_t = 0.75 if getattr(lf, "lite", False) else 0.5
+    step_t = 0.75 if (getattr(lf, "lite", False) and not getattr(lf, "lite_hq", False)) else 0.5
     while x < max(xa, xb) - 0.15:
-        for z in ((z_lb, z_lt) if getattr(lf, "lite", False) else (z_lb, zm, z_lt)):
+        for z in ((z_lb, z_lt) if (getattr(lf, "lite", False) and not getattr(lf, "lite_hq", False)) else (z_lb, zm, z_lt)):
             lf.add_inst("rtieg", lambda lite=False: rail_tie(R_GFRAME, yf=yfl, lite=lite), _T(x, 0, z))
         x += step_t
     # púas: 3 hilos de montante a montante, en grapas de fleje atornilladas a las extensiones
@@ -1102,7 +1113,7 @@ def _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch="rod", rod_up=False):
 
 
 def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), fabric="instance", base="footing", lite_sides=3,
-               fence_lift=0.0):
+               fence_lift=0.0, lite_hq=False):
     """Puerta doble abatible de malla ciclónica (origen: piso al centro del claro; claro libre `w` entre caras de los postes
     a lo largo de X; lado público -Y, abre hacia el recinto +Y). open_deg = (hoja izquierda, hoja derecha) en grados (0 =
     cerrada, + = abre hacia +Y; hasta 90).
@@ -1118,11 +1129,14 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
     guarnición y el portón sobre el arroyo): sube la copa del larguero, la barra de tensión y el brazo de púas de los postes
     para que casen con fence_run(..., end_posts=(..., None)) colocado a +fence_lift; las hojas quedan al piso del portón."""
     r = rng(seed)
-    lite = fabric == "lite"
+    lite_fab = fabric == "lite"
+    hq = lite_fab and lite_hq                         # lite_hq: una malla, alambre de 12 lados soft y herrajes completos
+    lite = lite_fab and not hq
     mb = TelMB()
-    mb.lite = lite
-    mb.lite_sides = lite_sides
-    mb.smooth_default = 30.0 if lite else 65.0
+    mb.lite = lite_fab
+    mb.lite_hq = hq
+    mb.lite_sides = 12 if hq else lite_sides
+    mb.smooth_default = 30.0 if lite_fab else 65.0
     z_b, n, z_top, zr, zp, zt = fence_levels(h)
     Xl, Xr = -(w / 2 + R_GATEPOST), w / 2 + R_GATEPOST
     for X, sd, fs in ((Xl, -1, fence_sides[0]), (Xr, 1, fence_sides[1])):
@@ -1137,8 +1151,9 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
         xpin = X + dirx * (R_GATEPOST + 0.032)
         Mleaf = _T(xpin, 0, 0) @ _Rz(dirx * float(ang))
         lf = TelMB()
-        lf.lite = lite
-        lf.lite_sides = lite_sides
+        lf.lite = lite_fab
+        lf.lite_hq = hq
+        lf.lite_sides = 12 if hq else lite_sides
         lf.lite_twist = False
         _leaf(lf, dirx, L, z_lb, z_lt, n_fab, latch=latch, rod_up=abs(float(ang)) > 1e-3)
         for z in zh:                                  # bisagras: mitad de la hoja (gira con ella) y mitad del poste
@@ -1176,7 +1191,7 @@ def fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=0, fence_sides=(True, True), 
         padlock(mb, Mr @ _T(cx - 0.035, -Rc - 0.035, zc - 0.33), lite=lite)
     if fabric == "join":
         mb.realize()
-    if lite:
+    if lite_fab:
         out = MB()
         out.join(mb)
         return out

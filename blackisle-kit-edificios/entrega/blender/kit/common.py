@@ -56,9 +56,40 @@ class MB:
 
     def __init__(self):
         self.bm = bmesh.new()
-        self.mats = []
+        self.bm.faces.layers.int.new("soft")           # marca de sombreado continuo (ver soft()); se crea antes que las
+        self.mats = []                                 # caras: agregar la capa después invalida referencias a BMFace
 
     # ---------------- utilidades ----------------
+    def _soft_layer(self):
+        return self.bm.faces.layers.int.get("soft") or self.bm.faces.layers.int.new("soft")
+
+    def soft(self):
+        """Contexto: las caras creadas dentro llevan sombreado continuo aunque tengan pocos lados (alambres y cables delgados
+        de <= 6 mm de diámetro, donde la silueta de 12 lados ya es exacta a < 0,1 mm pero el suavizado por ángulo de 30° los
+        dejaría facetados). finish() les quita las aristas duras. MB.tube() con r <= 3 mm lo hace solo.
+            with mb.soft():
+                mb.tube(pts, 0.002, seg=12, mat="galvanized")"""
+        mb = self
+
+        class _Ctx:
+            def __enter__(self_):
+                mb._soft_layer()
+                self_.n0 = len(mb.bm.faces)
+                self_.c0 = getattr(mb, "_soft_count", 0)
+                mb._soft_depth = getattr(mb, "_soft_depth", 0) + 1
+                return mb
+
+            def __exit__(self_, *a):
+                mb._soft_depth -= 1
+                new = len(mb.bm.faces) - self_.n0
+                if new > getattr(mb, "_soft_count", 0) - self_.c0:          # caras creadas sin face() (bmesh directo): se marcan por índice
+                    sl = mb._soft_layer()
+                    mb.bm.faces.ensure_lookup_table()
+                    for i in range(self_.n0, len(mb.bm.faces)):
+                        mb.bm.faces[i][sl] = 1
+                return False
+        return _Ctx()
+
     def mi(self, name):
         if name not in self.mats:
             self.mats.append(name)
@@ -68,8 +99,12 @@ class MB:
         return [self.bm.verts.new((m @ _v(p)) if m is not None else _v(p)) for p in pts]
 
     def face(self, verts, mat):
+        sl = self._soft_layer() if getattr(self, "_soft_depth", 0) else None
         f = self.bm.faces.new(verts)
         f.material_index = self.mi(mat)
+        if sl is not None:
+            f[sl] = 1
+            self._soft_count = getattr(self, "_soft_count", 0) + 1
         return f
 
     def poly(self, pts, mat, m=None):
@@ -115,7 +150,15 @@ class MB:
         return ring0, ring1
 
     def tube(self, pts, r, seg=8, mat="cable", caps=True, radii=None):
-        """Barre un círculo a lo largo de una polilínea (transporte paralelo; sin giros bruscos). Cables, varillas, tubos."""
+        """Barre un círculo a lo largo de una polilínea (transporte paralelo; sin giros bruscos). Cables, varillas, tubos.
+        Con r <= 3 mm (alambre) las caras quedan 'soft': sombreado continuo sin importar el número de lados."""
+        if max([r] + list(radii or [])) <= 0.003 and not getattr(self, "_in_tube_soft", False):
+            self._in_tube_soft = True
+            try:
+                with self.soft():
+                    return self.tube(pts, r, seg=seg, mat=mat, caps=caps, radii=radii)
+            finally:
+                self._in_tube_soft = False
         P = [_v(p) for p in pts]
         n = len(P)
         if n < 2:
@@ -191,12 +234,16 @@ class MB:
     def join(self, other, m=None):
         """Copia la geometría de otro MB (con su material por cara) aplicando la matriz `m`."""
         vmap = {}
+        ol = other.bm.faces.layers.int.get("soft")
+        sl = self._soft_layer() if ol is not None else None
         for v in other.bm.verts:
             vmap[v] = self.bm.verts.new((m @ v.co) if m is not None else v.co)
         for f in other.bm.faces:
             nf = self.bm.faces.new([vmap[v] for v in f.verts])
             nf.material_index = self.mi(other.mats[f.material_index])
             nf.smooth = f.smooth
+            if sl is not None:                         # caras 'suaves' (alambres delgados): se conserva la marca
+                nf[sl] = f[ol]
 
     def transform(self, m):
         bmesh.ops.transform(self.bm, matrix=m, verts=self.bm.verts)
@@ -218,9 +265,36 @@ class MB:
         for p in me.polygons:
             p.use_smooth = True
         me.set_sharp_from_angle(angle=math.radians(smooth_angle))
+        _clear_soft_sharp(me)
         ob = bpy.data.objects.new(name, me)
         (collection or bpy.context.scene.collection).objects.link(ob)
         return ob
+
+
+
+def _clear_soft_sharp(me):
+    """Quita la marca de arista dura en aristas cuyas caras son todas 'soft' (ver MB.soft) y borra el atributo."""
+    at = me.attributes.get("soft")
+    if at is None:
+        return
+    import numpy as np
+    npoly, nedge = len(me.polygons), len(me.edges)
+    soft = np.zeros(npoly, dtype=np.int32)
+    at.data.foreach_get("value", soft)
+    sh = me.attributes.get("sharp_edge")
+    if sh is not None and soft.any():
+        tot = np.zeros(npoly, dtype=np.int32)
+        me.polygons.foreach_get("loop_total", tot)
+        le = np.zeros(len(me.loops), dtype=np.int32)
+        me.loops.foreach_get("edge_index", le)
+        lp = np.repeat(np.arange(npoly), tot)
+        hard = np.zeros(nedge, dtype=bool)
+        np.logical_or.at(hard, le, soft[lp] == 0)
+        sharp = np.zeros(nedge, dtype=bool)
+        sh.data.foreach_get("value", sharp)
+        sharp &= hard
+        sh.data.foreach_set("value", sharp)
+    me.attributes.remove(me.attributes["soft"])
 
 
 # ---------------- muros con vanos (sin booleanos) ----------------

@@ -141,6 +141,8 @@ def manifest(kit, tiles):
             Perimetro=dict(nanite=True, colision="ninguna",
                            nota="perímetro (MIL_1): malla con navaja, portón, muros T, HESCO y barreras; su colisión son cajas "
                                 "dentro de la malla Colision"),
+            Malla=dict(nanite=True, colision="ninguna",
+                       nota="malla ciclónica del frente, portón y rollo de concertina (MIL_1); colisión en cajas dentro de Colision"),
             Carga=dict(nanite=True, colision="ninguna",
                        nota="carga de los racks (MIL_1): tarimas de cajas y proyectiles; colisión en cajas dentro de Colision"),
             Escombro=dict(nanite=False, colision="compleja como simple",
