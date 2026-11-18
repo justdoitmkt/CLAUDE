@@ -2511,7 +2511,7 @@ def _bilerp(xs, ys, Z, x, y):
     return (Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty) + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty)
 
 
-def camo_net(w=8.0, l=10.0, seed=0, poles=True):
+def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True):
     """Toldo de red de camuflaje de w (X) × l (Y) m centrado en el origen, como el sistema LCSS / ULCANS:
     - red de soporte de cordel de poliéster de 3 mm en rombos de 12 cm, con un nudo en cada cruce (12 lados, sombreado
       continuo), que sigue la caída de la red;
@@ -2522,7 +2522,8 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
     - postes seccionales de aluminio Ø 38 mm con separador (sombrilla de 0,48 m con nervios) en los interiores de ~3,4 m y
       postes de orilla de 2,3 m; la red forma picos en los separadores y cae por gravedad entre apoyos (membrana con peso);
       vientos de cuerda con estacas de varilla.
-    poles=False: solo la red, la guarnición y la relinga (la misma forma, para colgarla sobre otra pieza)."""
+    poles=False: solo la red, la guarnición y la relinga (la misma forma, para colgarla sobre otra pieza).
+    back_ties=False: sin vientos ni amarres hacia +Y (la orilla de atrás queda junto a una tienda o un muro: solo postes)."""
     r = rng(seed)
     mb = MB()
     ph = float(r.uniform(0, 100))
@@ -2808,12 +2809,16 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
         out = Vector((math.copysign(1, x) if abs(x) > 1e-3 else 0.0, math.copysign(1, y) if abs(y) > 1e-3 else 0.0, 0.0))
         dirs = [out.normalized()] if (out.x == 0 or out.y == 0) else [Vector((out.x, 0.0, 0)), Vector((0.0, out.y, 0))]
         for d in dirs:
+            if not back_ties and d.y > 0.5:
+                continue
             g = Vector((x, y, 0)) + d * 1.6 + Vector((d.y, -d.x, 0)) * float(r.uniform(-0.2, 0.2))
             stakes.append(g)
             tube_path(mb, catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=16), 0.005, seg=16, mat="canvas", caps=True)
     # amarres intermedios de la orilla a estacas
     for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (-w / 2, l / 2, w / 2, l / 2), (-w / 2, -l / 2, -w / 2, l / 2),
                              (w / 2, -l / 2, w / 2, l / 2)):
+        if not back_ties and abs(y0 - y1) < 1e-6 and y0 > 0:
+            continue
         for t in (0.25, 0.75):
             x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
             zz = float(zat(np.array([x]), np.array([y]))[0])

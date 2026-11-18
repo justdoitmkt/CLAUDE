@@ -1306,8 +1306,8 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     if ft is None:
         return
     # HESCO en las esquinas del frente y costales al fondo y en los testeros
-    for x0 in (-TENT_L / 2 - 1.3, TENT_L / 2 + 1.3 - 2 * 1.06):    # fuera de la red de camuflaje (x ±4) y de las estacas
-        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 2.2, 0.0), mb=per)
+    for x0 in (-TENT_L / 2 - 1.3, TENT_L / 2 + 1.3 - 2 * 1.06):    # flanquean el acceso, delante de la red y de sus vientos
+        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 7.35, 0.0), mb=per)
     put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0), mb=per)
     for xs, sg in ((-TENT_L / 2 - 0.55, -1), (TENT_L / 2 + 0.55, 1)):
         put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90), mb=per)
@@ -1315,12 +1315,14 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(2.4, TENT_W / 2 + 1.65, 0.0) @ _Rz(180))
     for k in range(3):
         put(_fn("jerry_can", ft)(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
-    put(_fn("floodlight_tripod", ft)(seed=7), _T(-4.9, -7.2, 0.0))
-    LIGHTS.append([-4.9, -7.2, 1.98])
+    put(_fn("floodlight_tripod", ft)(seed=7), _T(5.2, -8.0, 0.0) @ _Rz(-134))     # apunta al mostrador
+    LIGHTS.append([5.2, -8.0, 1.98])
     for k in range(4):
         put(_fn("jerry_can", ft)(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
     if hasattr(ft, "camo_net"):
-        put(ft.camo_net(w=8.0, l=4.5, seed=8, poles=True), _T(0.0, -TENT_W / 2 - 2.4, 0.0), mb=det, solid=False)
+        # red: orilla de atrás a 0,45 m del alero, sin vientos hacia la tienda; corrida a -X para que ningún poste quede
+        # frente al mostrador (postes en x -7, -3 y +1)
+        put(ft.camo_net(w=8.0, l=4.5, seed=8, poles=True, back_ties=False), _T(-3.0, -TENT_W / 2 - 2.7, 0.0), mb=det, solid=False)
 
 
 def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
@@ -1449,7 +1451,7 @@ def warehouse_interior(furn, r, cargo=None):
         if hasattr(ar, "hard_case"):
             put(ar.hard_case(seed=250, L=1.2), _T(cxg - 0.2, cyg + 0.2, zf) @ _Rz(90))
         if hasattr(ar, "launcher_tube"):                     # caja larga abierta con dos lanzadores desechables
-            Mc = _T(cxg + 1.9, cyg - 1.55, zf)
+            Mc = _T(cxg + 1.65, cyg - 1.55, zf)                # 0,2 m libre del panel oriente de la jaula
             put(_fn("ammo_crate", ar)("long", seed=260, open=True), Mc)
             for k in range(2):
                 put(ar.launcher_tube(seed=261 + k), Mc @ _T(0.0, (k - 0.5) * 0.17, 0.07), solid=False)

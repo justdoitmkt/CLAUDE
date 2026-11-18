@@ -184,9 +184,31 @@ def build_material(name, spec, tdir_c, tdir_m):
     return mat
 
 
+AUDIT_VIEWS = {   # --audit: recorrido a la altura de los ojos por cada zona (revisión de coherencia, render_qa/ue5/auditoria)
+    "MIL_1_almacen": [
+        ("a_porton_afuera", (-11.0, -30.0, 1.7), (-11.0, -15.0, 1.5), 24), ("a_porton_adentro", (-11.0, -18.5, 1.7), (-12.0, -2.0, 2.0), 22),
+        ("a_torre_base", (-17.5, -11.5, 1.7), (-21.6, -16.0, 2.5), 22), ("a_puesto_tirador", (-4.5, -13.5, 1.7), (-6.0, -17.6, 0.6), 24),
+        ("a_tienda_llegada", (-3.0, -12.0, 1.7), (7.0, -11.0, 1.6), 22), ("a_tienda_mostrador", (4.6, -10.6, 1.65), (7.4, -10.9, 1.1), 20),
+        ("a_tienda_norte", (5.0, -2.8, 1.7), (9.5, -6.5, 1.5), 22), ("a_tienda_trasera", (16.5, -8.0, 1.7), (12.5, -11.4, 1.2), 22),
+        ("a_patio_oriente", (12.5, -1.5, 1.7), (18.5, 8.0, 3.0), 22), ("a_rampa_puerta", (3.5, -3.8, 1.7), (-4.2, 0.0, 2.2), 22),
+        ("a_anden", (-12.0, -9.0, 1.7), (-12.0, 0.0, 2.5), 22), ("a_poniente", (-22.0, -4.0, 1.7), (-22.0, 10.0, 2.0), 22),
+        ("a_fondo", (-18.0, 19.5, 1.7), (8.0, 19.5, 2.0), 22), ("a_pasillo_racks", (-18.5, 14.2, 2.9), (-3.0, 14.2, 2.4), 18),
+        ("a_recibo", (-2.5, 1.4, 2.9), (-14.0, 4.0, 1.6), 18), ("a_jaula", (6.5, 11.0, 2.9), (6.5, 15.0, 1.8), 20),
+        ("a_banco", (5.6, 3.2, 2.9), (5.6, 0.4, 1.8), 20), ("a_cortina_dentro", (-16.25, 5.0, 2.9), (-16.25, 0.0, 3.0), 20)],
+    "MIL_2_avanzada": [
+        ("a_frente", (-1.0, -14.0, 1.7), (-1.0, -3.0, 1.4), 24), ("a_mostrador_cliente", (-0.6, -4.7, 1.65), (-0.6, -2.0, 1.0), 20),
+        ("a_dentro_entrada", (-4.3, 0.0, 1.75), (3.0, 0.0, 1.2), 18), ("a_dentro_fondo", (3.5, -1.5, 1.75), (-3.5, 1.8, 1.2), 18),
+        ("a_trasera", (2.0, 9.5, 1.7), (2.0, 3.0, 1.2), 22), ("a_hesco_red", (-9.0, -12.0, 1.7), (-3.0, -6.0, 1.5), 22),
+        ("a_testero_este", (9.5, -2.0, 1.7), (4.9, 0.0, 1.5), 22)],
+}
+
+
 def main():
     argv = sys.argv
     bid = argv[argv.index("--id") + 1]
+    if "--audit" in argv:                                     # solo el recorrido de auditoría, en su propia carpeta
+        EXTRA_VIEWS[bid] = AUDIT_VIEWS.get(bid, [])
+        argv = argv + ["--out", os.path.join(ENT, "render_qa", "ue5", "auditoria"), "--solo", ",".join(v[0] for v in EXTRA_VIEWS[bid])]
     kit = os.path.abspath(argv[argv.index("--kit") + 1] if "--kit" in argv else os.path.join(ENT, "..", "kit_ue5"))
     out = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(ENT, "render_qa", "ue5")
     samples = int(argv[argv.index("--samples") + 1]) if "--samples" in argv else 64
