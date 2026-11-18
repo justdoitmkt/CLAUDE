@@ -30,7 +30,7 @@ from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rng, rr_profile
 from kit.clinic_equipo import arc_solid, loft_rings, revolve, sweep_frame
 from kit.clinic_equipo import text as _ce_text
-from kit.clinic_servicios import _edge_levels, hexnut, rr_pts, skin, slab
+from kit.clinic_servicios import _edge_levels, hexnut, holed, rr_pts, skin, slab
 
 IN = 0.0254
 SEG = 24          # lados de todo cilindro visible
@@ -40,7 +40,7 @@ SEG_T = 14        # tubos delgados, alambres, cuerdas
 # ---------------------------------------------------------------------------------------- datos para armeros (otro agente)
 # rifle(kind): x = 0 cantonera, z = 0 talón inferior de la culata; ánima a lo largo de +X a la altura BORE_Z.
 RIFLE_BORE_Z = 0.102
-RIFLE_LEN = {"carbine": 0.846, "assault": 0.898, "dmr": 1.000}
+RIFLE_LEN = {"carbine": 0.844, "assault": 0.896, "dmr": 1.015}
 
 
 # ======================================================================================================== utilidades
@@ -349,7 +349,7 @@ def round_556(mb, M, seg=24, lite=False, mat_case="brass", mat_bullet="copper"):
                 (0.00473, 0.012), (0.00462, 0.026), (0.0045, 0.0396), (0.00322, 0.0412), (0.00322, 0.0447), (0.0029, 0.0447)]
     revolve(mb, case, mat_case, seg=seg, M=M, caps=False)
     zt = 0.0574
-    bl = [(0.00285, 0.0441), (0.00285, 0.0486)]
+    bl = [(0.0029, 0.0447), (0.00285, 0.0452), (0.00285, 0.0486)]
     nk = 5 if lite else 8
     for k in range(1, nk + 1):                            # ojiva tangente (radio 7 calibres)
         u = k / nk
@@ -473,7 +473,7 @@ def _mag(mb, M, lite=False, inserted=False, cal="556", seed=0):
         return Mb
     # ---- labios de alimentación (mitad trasera) y cartuchos
     for sb in (-1, 1):
-        cl = [(W / 2 - 0.0006, -0.0012), (W / 2 - 0.0008, 0.0016), (W / 2 - 0.0022, 0.0031), (W / 2 - 0.0048, 0.0034),
+        cl = [(W / 2 - 0.0009, -0.0012), (W / 2 - 0.0010, 0.0016), (W / 2 - 0.0022, 0.0031), (W / 2 - 0.0048, 0.0034),
               (W / 2 - 0.0071, 0.0024)]
         o_ = 0.00062
         Pp = []
@@ -515,8 +515,8 @@ def magazine(seed=0, lite=False):
     """Cargador curvo de polímero de 30 tiros, genérico (ver _mag; sección 63,5 × 23,5 mm, ~ 19 cm de alto), de pie sobre su
     base (inclinado hacia atrás lo que pide su curva, como queda parado en una mesa), con el cartucho superior a la vista
     entre los labios. lite = cargadores de exhibición en serie (menos estaciones, ~ 4-5 k triángulos; el completo ~ 9 k).
-    Origen: centro de la base en el apoyo (z = 0), y = 0 plano medio; el frente del cargador mira a +X; la boca queda a
-    ~ 4 cm hacia -X del centro de la base (huella de la base 68 × 26 mm).
+    Origen: x = 0 cara trasera de la boca (punto más atrasado), z = 0 apoyo de la base, y = 0 plano medio; el frente mira a
+    +X; el centro de la base queda en x ~ 0,047 (huella total 88 × 27 mm, base 68 × 26 mm).
     Fuentes: en.wikipedia.org/wiki/STANAG_magazine ; magpul.com (PMAG 30 AR/M4 GEN M3: largo 7,5-7,6 in, ventana testigo,
     base con lengüeta); bigtexordnance.com/product/pmag-30-ar-m4-gen-m3-5-56x45mm-nato (proporciones)."""
     mb = MB()
@@ -524,6 +524,8 @@ def magazine(seed=0, lite=False):
     inv = Mb.inverted()
     mb.transform(inv)                                   # base en el plano XY local, 'arriba' = +Z
     mb.transform(_T(-0.0012, 0, 0))
+    x0 = min(v.co.x for v in mb.bm.verts)
+    mb.transform(_T(-x0, 0, 0))                         # x = 0 cara trasera de la boca (como antes)
     return _drop(mb)
 
 # ======================================================================================================== lata de munición
@@ -1040,436 +1042,1158 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
 
 
 # ======================================================================================================== armas: piezas
-def rail(mb, x0, x1, z, mat="gunmetal", M=None, y=0.0):
-    """Riel tipo MIL-STD-1913 a lo largo de X sobre el plano z (base embebida 1 mm): cabeza de 21,2 mm con flancos a 45°,
-    cuello de 15,6 mm y ranuras transversales de 5,23 mm a paso de 10,01 mm (3 mm de profundidad)."""
-    base = [(-0.0078, -0.001), (0.0078, -0.001), (0.0078, 0.0025), (0.0106, 0.0053), (0.0106, 0.0065), (-0.0106, 0.0065),
-            (-0.0106, 0.0053), (-0.0078, 0.0025)]
-    Mx = (M if M is not None else Matrix()) @ _T(0, y, z)
-    loft_rings(mb, [[Vector((x, py, pz)) for (py, pz) in base] for x in (x0, x1)], mat, M=Mx)
-    tooth = [(-0.0104, 0.0063), (0.0104, 0.0063), (0.0084, 0.0095), (-0.0084, 0.0095)]
+_YZX = Matrix(((0, 0, 1, 0), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)))     # perfil en (Y, Z) extruido a lo largo de +X
+
+
+def prism_x(mb, M, P, R, L, re=0.0004, mat="gunmetal", n=2, ne=1):
+    """Prisma de perfil P [(y, z)] (filetes R) extruido a lo largo de X de 0 a L, cantos de los extremos re."""
+    P, R = _ccw(P, R)
+    return pslab_n(mb, M @ _YZX, P, R, L, re=re, mat=mat, n=n, ne=ne)
+
+
+def pic_rail(mb, x0, x1, M=None, mat="gunmetal"):
+    """Riel MIL-STD-1913 a lo largo de X local sobre el plano z = 0 (base embebida 1 mm): alma con flancos a 45° y cantos
+    chaflanados, dientes de 4,78 mm a paso de 10,01 mm (ranuras de 5,23 mm, 3 mm de hondo) con chaflán en todas sus aristas;
+    ancho 21,2 mm, alto 9,5 mm. Fuente: en.wikipedia.org/wiki/Picatinny_rail."""
+    M = M if M is not None else Matrix()
+    sp = [(-0.0078, -0.001), (0.0078, -0.001), (0.0078, 0.0028), (0.0106, 0.0056), (0.0106, 0.0062), (-0.0106, 0.0062),
+          (-0.0106, 0.0056), (-0.0078, 0.0028)]
+    prism_x(mb, M @ _T(x0, 0, 0), sp, [0.0, 0.0, 0.0009, 0.0009, 0.0, 0.0, 0.0009, 0.0009], x1 - x0, re=0.0008, mat=mat)
+    th = [(-0.0104, 0.0059), (0.0104, 0.0059), (0.0106, 0.0068), (0.0091, 0.0083), (0.0091, 0.0095), (-0.0091, 0.0095),
+          (-0.0091, 0.0083), (-0.0106, 0.0068)]
     pitch, tl = 0.01001, 0.00478
-    n = int((x1 - x0 - 0.002) // pitch)
+    n = max(1, int((x1 - x0 - tl - 0.001) / pitch) + 1)
     off = x0 + (x1 - x0 - (n - 1) * pitch - tl) / 2
     for k in range(n):
-        xa = off + k * pitch
-        loft_rings(mb, [[Vector((x, py, pz)) for (py, pz) in tooth] for x in (xa, xa + tl)], mat, M=Mx)
+        prism_x(mb, M @ _T(off + k * pitch, 0, 0), th, [0.0, 0.0, 0.001, 0.001, 0.0009, 0.0009, 0.001, 0.001], tl, re=0.00035,
+                mat=mat)
 
 
-def _hg_ring(w, h, r, n, band):
-    """Contorno (y, z) antihorario del guardamanos: rectángulo redondeado con cortes en los costados y abajo (ranuras)."""
-    cut = band > 0
-    pts = [(-w / 2 + r, -h / 2)] + ([(-band, -h / 2), (band, -h / 2)] if cut else [])
-    arc = lambda cy, cz, a0: [(cy + r * math.cos(a0 + PI / 2 * k / n), cz + r * math.sin(a0 + PI / 2 * k / n)) for k in range(n + 1)]  # noqa
-    pts += arc(w / 2 - r, -h / 2 + r, -PI / 2)
-    pts += [(w / 2, -band), (w / 2, band)] if cut else []
-    pts += arc(w / 2 - r, h / 2 - r, 0.0)
-    pts += arc(-w / 2 + r, h / 2 - r, PI / 2)
-    pts += [(-w / 2, band), (-w / 2, -band)] if cut else []
-    pts += arc(-w / 2 + r, -h / 2 + r, PI)[:-1]
-    m = len(pts)
-    tags = []
-    for j in range(m):
-        a, b = pts[j], pts[(j + 1) % m]
-        my, mz = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
-        tags.append(cut and ((abs(mz + h / 2) < 1e-7 and abs(my) < band) or (abs(abs(my) - w / 2) < 1e-7 and abs(mz) < band)))
-    return pts, tags
+def rail(mb, x0, x1, z, mat="gunmetal", M=None, y=0.0):
+    """Compatibilidad: riel 1913 a lo largo de X sobre el plano z (ver pic_rail)."""
+    pic_rail(mb, x0, x1, (M if M is not None else Matrix()) @ _T(0, y, z), mat)
 
 
-def slotted_tube(mb, x0, x1, w, h, r, t, zc, slots, band=0.0035, n=4, mat="gunmetal"):
-    """Guardamanos flotante de aluminio: tubo de sección rectangular redondeada (pared t) a lo largo de X con ranuras
-    pasantes de 2·band de alto en ambos costados y abajo, en los tramos `slots` [(xa, xb)]. Sólido cerrado y soldado
-    (las paredes de cada ranura se ven por dentro)."""
-    po, tags = _hg_ring(w, h, r, n, band)
-    pi, _ = _hg_ring(w - 2 * t, h - 2 * t, r - t, n, band)
-    xs = [x0]
-    sl = []
-    for (a, b) in slots:
-        xs += [a, b]
-    xs.append(x1)
-    for i in range(len(xs) - 1):
-        sl.append(any(abs(xs[i] - a) < 1e-9 and abs(xs[i + 1] - b) < 1e-9 for (a, b) in slots))
-    O = [[mb.bm.verts.new((x, y, zc + z)) for (y, z) in po] for x in xs]
-    I = [[mb.bm.verts.new((x, y, zc + z)) for (y, z) in pi] for x in xs]
-    m = len(po)
+def mlok_tube(mb, x0, x1, a, t, rc, slot_fn, M=None, mat="gunmetal", nc=3, ch=0.0008, Lc=0.040, Ls=0.032, ws=0.007,
+              rs=0.0024, e0=0.010):
+    """Guardamanos flotante octagonal de aluminio a lo largo de X (eje en y = z = 0 local): 8 caras planas de apotema a con
+    esquinas de radio rc, pared t, chaflán ch en las bocas y ranuras M-LOK pasantes (32 × 7 mm, esquinas de 2,4 mm, paso de
+    40 mm) donde slot_fn(cara, celda) es verdadero; cara 0 = +Y (derecha), 2 = +Z (arriba), 4 = -Y, 6 = -Z. Malla soldada:
+    cada ranura lleva un marco de caras hasta el borde de su celda, paredes interiores y las mismas columnas que las bandas
+    de esquina. Fuente: en.wikipedia.org/wiki/M-LOK (ranura ~ 32 × 7 mm, separación 8 mm)."""
+    V = {}
+
+    def vert(p):
+        key = (round(p[0], 7), round(p[1], 7), round(p[2], 7))
+        v = V.get(key)
+        if v is None:
+            v = V[key] = mb.bm.verts.new((M @ Vector(p)) if M is not None else Vector(p))
+        return v
+    tq = math.tan(PI / 8)
+    hw = (a - rc) * tq
+    rci = max(rc - t, 0.0006)
+    hwi = (a - t - rci) * tq
+    ncell = max(0, int((x1 - x0 - 2 * e0) / Lc))
+    xs0 = x0 + (x1 - x0 - ncell * Lc) / 2
+    sl = rr_pts(Ls, ws, rs, 3)
+    sl = list(reversed(sl)) if sum(sl[i][0] * sl[i - 1][1] - sl[i - 1][0] * sl[i][1] for i in range(len(sl))) > 0 else sl
+    sl = list(reversed(sl))                                   # antihorario en (dx, v)
+    # marco de la ranura: puntos del borde de la celda (normalizados) y esquinas insertadas
+    ring = []
+    for (dx, v) in sl:
+        u, w = dx / (Ls / 2), v / (ws / 2)
+        m = max(abs(u), abs(w))
+        ring.append((u / m, w / m))
+    frame = []                                                # por punto de la ranura: lista de puntos del borde (1 o 2)
+    for i in range(len(ring)):
+        u0, w0 = ring[i]
+        u1, w1 = ring[(i + 1) % len(ring)]
+        e0_ = "u" if abs(abs(u0) - 1) < 1e-9 else "w"
+        e1_ = "u" if abs(abs(u1) - 1) < 1e-9 else "w"
+        extra = []
+        if e0_ != e1_:
+            extra = [(math.copysign(1.0, u0 if e0_ == "u" else u1), math.copysign(1.0, w0 if e0_ == "w" else w1))]
+        frame.append(extra)
+    dxs = sorted({round(u * Lc / 2, 7) for (u, w) in ring if abs(abs(w) - 1) < 1e-9} | {-Lc / 2, Lc / 2})
+    X = [x0, x0 + ch]
+    for c in range(ncell):
+        xc = xs0 + (c + 0.5) * Lc
+        X += [xc + d for d in dxs]
+    X += [x1 - ch, x1]
+    X = _uniq(X, 1e-6)
+    cells = [(xs0 + c * Lc, xs0 + (c + 1) * Lc) for c in range(ncell)]
+
+    def cell_of(xa, xb):
+        for c, (ca, cb) in enumerate(cells):
+            if xa >= ca - 1e-7 and xb <= cb + 1e-7:
+                return c
+        return None
+
+    def fpt(k, apo, x, v):
+        th = k * PI / 4
+        return (x, math.cos(th) * apo - math.sin(th) * v, math.sin(th) * apo + math.cos(th) * v)
+
+    def arcpts(k, apo, rcc, x):
+        thc = k * PI / 4 + PI / 8
+        R0 = (apo - rcc) / math.cos(PI / 8)
+        cy, cz = math.cos(thc) * R0, math.sin(thc) * R0
+        return [(x, cy + rcc * math.cos(k * PI / 4 + PI / 4 * j / nc), cz + rcc * math.sin(k * PI / 4 + PI / 4 * j / nc))
+                for j in range(1, nc)]
     F = mb.face
-    for i in range(len(xs) - 1):
-        for j in range(m):
-            jj = (j + 1) % m
-            if sl[i] and tags[j]:
-                F([O[i][j], O[i + 1][j], I[i + 1][j], I[i][j]], mat)
-                F([O[i][jj], I[i][jj], I[i + 1][jj], O[i + 1][jj]], mat)
-                F([O[i][j], I[i][j], I[i][jj], O[i][jj]], mat)
-                F([O[i + 1][j], O[i + 1][jj], I[i + 1][jj], I[i + 1][j]], mat)
+    for surf in ("o", "i"):
+        hwx = hw if surf == "o" else hwi
+
+        def apo_at(x):
+            if surf == "i":
+                return a - t
+            return a - ch if (abs(x - x0) < 1e-9 or abs(x - x1) < 1e-9) else a
+
+        def rc_at(x):
+            if surf == "i":
+                return rci
+            return rc - ch if (abs(x - x0) < 1e-9 or abs(x - x1) < 1e-9) else rc
+        for k in range(8):
+            for i in range(len(X) - 1):
+                xa, xb = X[i], X[i + 1]
+                c = cell_of(xa, xb)
+                if c is None or not slot_fn(k, c):
+                    F([vert(fpt(k, apo_at(xa), xa, -hwx)), vert(fpt(k, apo_at(xb), xb, -hwx)), vert(fpt(k, apo_at(xb), xb, hwx)),
+                       vert(fpt(k, apo_at(xa), xa, hwx))], mat)
+                # banda de esquina hacia la cara k + 1
+                ka = (k + 1) % 8
+                ca = [vert(fpt(k, apo_at(xa), xa, hwx))] + [vert(p) for p in arcpts(k, apo_at(xa), rc_at(xa), xa)] + \
+                    [vert(fpt(ka, apo_at(xa), xa, -hwx))]
+                cb = [vert(fpt(k, apo_at(xb), xb, hwx))] + [vert(p) for p in arcpts(k, apo_at(xb), rc_at(xb), xb)] + \
+                    [vert(fpt(ka, apo_at(xb), xb, -hwx))]
+                for j in range(len(ca) - 1):
+                    F([ca[j], cb[j], cb[j + 1], ca[j + 1]], mat)
+            for c, (ca_, cb_) in enumerate(cells):
+                if not slot_fn(k, c):
+                    continue
+                xc = (ca_ + cb_) / 2
+                apo = a if surf == "o" else a - t
+                inner = [vert(fpt(k, apo, xc + dx, v)) for (dx, v) in sl]
+                outer = [vert(fpt(k, apo, xc + u * Lc / 2, w * hwx)) for (u, w) in ring]
+                for i in range(len(sl)):
+                    ii = (i + 1) % len(sl)
+                    F([inner[i], inner[ii], outer[ii]] + [vert(fpt(k, apo, xc + u * Lc / 2, w * hwx)) for (u, w) in frame[i]] +
+                      [outer[i]], mat)
+    # paredes de las ranuras
+    for k in range(8):
+        for c, (ca_, cb_) in enumerate(cells):
+            if not slot_fn(k, c):
+                continue
+            xc = (ca_ + cb_) / 2
+            po = [vert(fpt(k, a, xc + dx, v)) for (dx, v) in sl]
+            pi = [vert(fpt(k, a - t, xc + dx, v)) for (dx, v) in sl]
+            for i in range(len(sl)):
+                ii = (i + 1) % len(sl)
+                F([po[i], pi[i], pi[ii], po[ii]], mat)
+    # bocas
+    for x in (x0, x1):
+        lo, li = [], []
+        for k in range(8):
+            ka = (k + 1) % 8
+            lo += [vert(fpt(k, a - ch, x, -hw)), vert(fpt(k, a - ch, x, hw))] + [vert(p) for p in arcpts(k, a - ch, rc - ch, x)]
+            li += [vert(fpt(k, a - t, x, -hwi)), vert(fpt(k, a - t, x, hwi))] + [vert(p) for p in arcpts(k, a - t, rci, x)]
+        for j in range(len(lo)):
+            jj = (j + 1) % len(lo)
+            F([lo[j], lo[jj], li[jj], li[j]], mat)
+
+
+def revk(mb, prof, mat, seg=48, M=None, knurl=None, caps=True):
+    """Torneado alrededor de Z local con moleteado recto: knurl = (n_dientes, hondo, {índices de anillo}); los anillos
+    indicados llevan n estrías en V (seg = 2n). Perillas, tambores de torreta, tuercas de ajuste."""
+    rings = []
+    if knurl:
+        nt, dp, idx = knurl
+        seg = 2 * nt
+    for i, (rr, z) in enumerate(prof):
+        if rr < 1e-7:
+            p = Vector((0.0, 0.0, z))
+            rings.append([mb.bm.verts.new(M @ p if M is not None else p)])
+            continue
+        ring = []
+        for k in range(seg):
+            ang = 2 * PI * k / seg
+            r_ = rr - (dp if (knurl and i in idx and k % 2) else 0.0)
+            p = Vector((r_ * math.cos(ang), r_ * math.sin(ang), z))
+            ring.append(mb.bm.verts.new(M @ p if M is not None else p))
+        rings.append(ring)
+    for i in range(len(rings) - 1):
+        A, B = rings[i], rings[i + 1]
+        if len(A) == 1 and len(B) == 1:
+            continue
+        for k in range(seg):
+            kk = (k + 1) % seg
+            if len(A) == 1:
+                mb.face([A[0], B[kk], B[k]], mat)
+            elif len(B) == 1:
+                mb.face([A[k], A[kk], B[0]], mat)
             else:
-                F([O[i][j], O[i][jj], O[i + 1][jj], O[i + 1][j]], mat)
-                F([I[i][j], I[i + 1][j], I[i + 1][jj], I[i][jj]], mat)
-    for i in (0, len(xs) - 1):
-        for j in range(m):
-            jj = (j + 1) % m
-            F([O[i][j], I[i][j], I[i][jj], O[i][jj]], mat)
+                mb.face([A[k], A[kk], B[kk], B[k]], mat)
+    if caps:
+        if len(rings[0]) > 1:
+            mb.face(list(reversed(rings[0])), mat)
+        if len(rings[-1]) > 1:
+            mb.face(rings[-1], mat)
+
+
+def _knob_k(mb, M, r, h, mat="gunmetal", nt=24, dp=0.0005, cap=True, mark=None):
+    """Perilla moleteada sobre z = 0 local (eje +Z): faldón liso, tambor moleteado, canto chaflanado, tapa con marca."""
+    revk(mb, [(r * 0.86, -0.0003), (r * 0.94, 0.0), (r, h * 0.12), (r, h * 0.85), (r * 0.9, h), (0.0, h)] if cap else
+         [(r * 0.86, -0.0003), (r * 0.94, 0.0), (r, h * 0.12), (r, h * 0.85), (r * 0.9, h)], mat, M=M, knurl=(nt, dp, {2, 3}),
+         caps=False)
+    if mark:
+        plan(mb, [(0.0, -0.0004), (r * 0.7, -0.0004), (r * 0.7, 0.0004), (0.0, 0.0004)], 0.0, 0.0003, mark, z0=h - 0.0001,
+             re=0.0, M=M)
+
+
+def _screw_h(mb, M, d=0.004, mat="gunmetal", hexs=True, h=None):
+    """Tornillo Allen de cabeza cilíndrica sobre z = 0 local: cabeza con chaflán y hexágono hundido (oscuro)."""
+    h = h if h is not None else d * 0.55
+    revolve(mb, [(d / 2 * 0.96, -0.0003), (d / 2, 0.0002), (d / 2, h * 0.8), (d / 2 * 0.88, h), (d * 0.3, h)], mat, seg=24, M=M,
+            caps=False)
+    if hexs:
+        revolve(mb, [(d * 0.3, h), (d * 0.3, h - d * 0.25), (0.0, h - d * 0.3)], "cable", seg=6, M=M, caps=False)
+    else:
+        revolve(mb, [(d * 0.3, h), (0.0, h)], mat, seg=24, M=M, caps=False)
 
 
 def _qd_swivel(mb, M, ang=0.0, mat="gunmetal"):
-    """Argolla de correa desmontable (QD): copa con botón y asa de alambre en D. M: z local hacia fuera del montaje."""
-    revolve(mb, [(0.0075, -0.0003), (0.0075, 0.006), (0.0058, 0.0088), (0.0, 0.0094)], mat, seg=20, M=M, caps=False)
+    """Argolla de correa desmontable (QD): copa del receptáculo, cuerpo con botón pulsador y asa de alambre en D.
+    M: z local hacia fuera del montaje."""
+    revolve(mb, [(0.0082, -0.0004), (0.0082, 0.0012), (0.0074, 0.0020), (0.0050, 0.0020), (0.0050, 0.0010), (0.0, 0.0010)],
+            mat, seg=24, M=M, caps=False)
+    revolve(mb, [(0.0058, 0.0010), (0.0062, 0.0030), (0.0062, 0.0085), (0.0055, 0.0095), (0.0032, 0.0098)], mat, seg=24, M=M,
+            caps=False)
+    revolve(mb, [(0.0032, 0.0092), (0.0030, 0.0118), (0.0026, 0.0123), (0.0, 0.0124)], "steel", seg=20, M=M, caps=False)
     Ml = M @ _T(0, 0, 0.0055) @ _Rz(ang)
     pts = []
-    for k in range(7):                      # asa en D en el plano XZ local: pasa por la copa y se abre hacia +Z
-        a = PI * k / 6
-        pts.append(Ml @ Vector((0.016 * math.cos(a), 0.0, 0.004 + 0.016 * math.sin(a) * 0.9)))
-    pts += [Ml @ Vector((-0.008, 0.0, 0.0)), Ml @ Vector((0.008, 0.0, 0.0))]
+    for k in range(13):                     # asa en D en el plano XZ local: pasa por el cuerpo y se abre hacia +Z
+        a = PI * k / 12
+        pts.append(Ml @ Vector((0.0145 * math.cos(a), 0.0, 0.006 + 0.0135 * math.sin(a) * 0.9)))
+    pts += [Ml @ Vector((-0.0145 + 0.003, 0.0, 0.0)), Ml @ Vector((0.0145 - 0.003, 0.0, 0.0))]
     from kit.clinic_equipo import loop_tube
-    loop_tube(mb, pts, 0.0021, seg=SEG_T, mat=mat, normal=Ml.to_3x3() @ Vector((0, 1, 0)))
+    with mb.soft():
+        loop_tube(mb, pts, 0.0019, seg=12, mat="steel", normal=Ml.to_3x3() @ Vector((0, 1, 0)))
 
 
-def _flash_hider(mb, x, z, r=0.0105, mat="gunmetal"):
-    """Apagallamas de 6 púas (ranuras abiertas al frente) con collarín, sobre el eje (x, 0, z) hacia +X."""
-    M = _ax(x, 0, z)
-    revolve(mb, [(0.0098, -0.004), (r, -0.002), (r, 0.013)], mat, seg=SEG, M=M)
-    for k in range(6):
-        a0 = 2 * PI * k / 6 + 0.21
-        arc_solid(mb, 0.0068, r - 0.0002, 0.0125, 0.052, a0, a0 + 2 * PI / 6 - 0.42, 3, mat, M=M)
+def _birdcage(mb, x, z, mat="gunmetal"):
+    """Apagallamas de jaula (tipo A2: Ø 22 mm, 57 mm) sobre el eje (x, 0, z) hacia +X: collarín trasero con planos de
+    llave, 5 ventanas arriba y a los costados, fondo cerrado (compensa el salto), anillo delantero con ánima y corona."""
+    M = _ax(x, 0, z)                              # ángulo local: 0 = -Z (abajo)
+    R = 0.011
+    revolve(mb, [(0.0082, -0.0015), (0.0098, -0.0012), (R - 0.0004, 0.0), (R, 0.0006), (R, 0.0125), (0.0080, 0.0125)], mat,
+            seg=32, M=M, caps=False)
+    revolve(mb, [(0.0080, 0.0395), (R, 0.0395), (R, 0.0448), (R - 0.0009, 0.0458), (0.0058, 0.0458), (0.0045, 0.0450),
+                 (0.0045, 0.040)], [mat] * 4 + ["cable"] * 2, seg=32, M=M, caps=False)
+    revolve(mb, [(0.0045, 0.040), (0.0080, 0.0395)], "cable", seg=32, M=M, caps=False)
+    w = 2 * PI / 6
+    for k in range(6):                            # 5 barras entre ventanas + fondo cerrado ancho
+        ac = k * w
+        half = (w / 2 + 0.22) if k == 0 else 0.30
+        arc_solid(mb, 0.0080, R - 0.0002, 0.0120, 0.0398, ac - half, ac + half, 6 if k == 0 else 3, mat, M=M)
+    revolve(mb, [(0.0045, 0.0120), (0.0045, 0.0400)], "cable", seg=24, M=M, caps=False)
 
 
-def _brake(mb, x, z, r=0.0118, mat="gunmetal"):
-    """Freno de boca de 3 ventanas por lado: collarín roscado, lomos superior e inferior corridos y deflectores laterales
-    (las ventanas atraviesan hasta el ánima); eje (x, 0, z) hacia +X."""
+def _brake(mb, x, z, r=0.0122, mat="gunmetal"):
+    """Freno de boca de 3 ventanas por costado (Ø 24 mm, 62 mm): collarín roscado, lomos superior e inferior corridos,
+    deflectores laterales con canto chaflanado y cara frontal con corona; eje (x, 0, z) hacia +X."""
     M = _ax(x, 0, z)                              # ángulo local: 0 = -Z (abajo), π/2 = +Y, π = +Z, 3π/2 = -Y
-    revolve(mb, [(0.0105, -0.004), (r, -0.001), (r, 0.012)], mat, seg=SEG, M=M)
+    revolve(mb, [(0.0100, -0.002), (0.0112, -0.0015), (r - 0.0005, 0.0), (r, 0.0008), (r, 0.0115), (0.0072, 0.0115)], mat,
+            seg=32, M=M, caps=False)
     for ac in (0.0, PI):                          # lomos
-        arc_solid(mb, 0.0068, r - 0.0002, 0.0115, 0.066, ac - 0.62, ac + 0.62, 6, mat, M=M)
-    for (z0, z1) in ((0.0115, 0.0165), (0.0265, 0.0315), (0.0415, 0.0465), (0.0565, 0.066)):
+        arc_solid(mb, 0.0070, r - 0.0002, 0.0112, 0.0570, ac - 0.62, ac + 0.62, 6, mat, M=M)
+    for (z0, z1) in ((0.0112, 0.0170), (0.0262, 0.0320), (0.0412, 0.0470)):
         for ac in (PI / 2, 1.5 * PI):             # deflectores laterales
-            arc_solid(mb, 0.0070, r - 0.0005, z0, z1, ac - (PI / 2 - 0.57), ac + (PI / 2 - 0.57), 4, mat, M=M)
+            arc_solid(mb, 0.0070, r - 0.0004, z0, z1, ac - (PI / 2 - 0.58), ac + (PI / 2 - 0.58), 4, mat, M=M)
+    revolve(mb, [(0.0070, 0.0565), (r, 0.0565), (r, 0.0605), (r - 0.0012, 0.062), (0.0052, 0.062), (0.0048, 0.0605),
+                 (0.0048, 0.0565)], [mat] * 4 + ["cable"] * 2, seg=32, M=M, caps=False)
+    revolve(mb, [(0.0048, 0.0565), (0.0070, 0.0565)], mat, seg=32, M=M, caps=False)
+    revolve(mb, [(0.0040, 0.0115), (0.0040, 0.0565)], "cable", seg=24, M=M, caps=False)
 
 
-def _red_dot(mb, x, z, mat="gunmetal"):
-    """Mira de punto rojo de tubo Ø 30 mm sobre montaje alto: abrazadera al riel con perilla, tubo con lentes rehundidas,
-    torretas de elevación y deriva con tapas, tapa de batería. x = frente del montaje, z = cara superior del riel."""
-    zo = z + 0.0375                          # eje óptico (cowitness absoluto ~ 66 mm sobre el ánima)
-    plan(mb, [(x - 0.040, -0.0125), (x, -0.0125), (x, 0.0125), (x - 0.040, 0.0125)], [0.002] * 4, 0.007, mat, z0=z - 0.0035,
-         re=0.0015, ne=1)
-    side(mb, [(x - 0.036, z + 0.003), (x - 0.004, z + 0.003), (x - 0.008, zo - 0.010), (x - 0.032, zo - 0.010)],
-         [0.0, 0.0, 0.004, 0.004], 0.016, mat, re=0.002, ne=1, n=2)
-    revolve(mb, [(0.0, -0.0025), (0.0075, -0.0025), (0.0075, 0.007), (0.0060, 0.0085), (0.0, 0.0085)], mat, seg=SEG,
-            M=_T(x - 0.020, 0.0125, z - 0.001) @ _Rx(-90))
-    M = _ax(x - 0.060, 0, zo)
-    prof = [(0.0, 0.004), (0.0118, 0.004), (0.0118, 0.0018), (0.0148, 0.0), (0.0155, 0.003), (0.0155, 0.060), (0.0148, 0.064),
-            (0.0118, 0.064), (0.0118, 0.0615), (0.0, 0.0615)]
-    mats = ["cable", "gunmetal", mat, mat, mat, mat, mat, "gunmetal", "cable"]
-    revolve(mb, prof, mats, seg=SEG, M=M)
-    for (yy, zz, rot) in ((0.0, 0.0155, None), (0.0155, 0.0, "y"), (-0.0155, 0.0, "-y")):
-        Mt = _T(x - 0.030, yy, zo + zz) @ (Matrix() if rot is None else (_Rx(-90) if rot == "y" else _Rx(90)))
-        revolve(mb, [(0.0, -0.004), (0.0095, -0.004), (0.0095, 0.008), (0.0085, 0.0095), (0.0, 0.0095)], mat, seg=SEG, M=Mt)
+def _buis(mb, x, zr, front=False, mat="gunmetal"):
+    """Mira de respaldo abatible, plegada, sobre el riel (x = frente de la base, zr = cara superior del riel): base con
+    abrazadera de cola de milano, tornillo moleteado al costado izquierdo, orejas protectoras, hoja plegada (trasera: con
+    su abertura redonda; delantera: poste con su capuchón) sobre el pivote con resorte."""
+    L = 0.036 if not front else 0.030
+    xb = x - L
+    # base y abrazadera (abraza el riel por los flancos)
+    side(mb, [(xb, zr - 0.0055), (x, zr - 0.0055), (x, zr + 0.0045), (x - 0.004, zr + 0.0075), (xb + 0.003, zr + 0.0075),
+              (xb, zr + 0.0045)], [0.001, 0.001, 0.0015, 0.0012, 0.0012, 0.0015], 0.0248, mat, re=0.0007, n=2, ne=1)
+    for sy in (-1, 1):                            # labios de la cola de milano bajo los flancos del riel
+        side(mb, [(xb + 0.001, zr - 0.0072), (x - 0.001, zr - 0.0072), (x - 0.001, zr - 0.0052), (xb + 0.001, zr - 0.0052)],
+             [0.0008] * 4, 0.0030, mat, y0=sy * 0.0109, re=0.0004, n=2, ne=1)
+    _knob_k(mb, _T(x - L / 2, -0.0124, zr - 0.0010) @ _Rx(90), 0.0052, 0.0045, mat, nt=20, dp=0.0004)
+    revolve(mb, [(0.0028, 0.0), (0.0028, 0.0008)], mat, seg=16, M=_T(x - L / 2, 0.0124, zr - 0.0010) @ _Rx(-90))
+    # orejas protectoras
+    for sy in (-1, 1):
+        side(mb, [(xb + 0.004, zr + 0.007), (x - 0.006, zr + 0.007), (x - 0.009, zr + 0.0135), (xb + 0.010, zr + 0.0135)],
+             [0.0, 0.0, 0.0018, 0.0018], 0.0028, mat, y0=sy * 0.0105, re=0.0006, n=2, ne=1)
+    # pivote y hoja plegada hacia atrás
+    xp = x - 0.007
+    revolve(mb, [(0.0022, -0.0092), (0.0022, 0.0092)], "steel", seg=16, M=_T(xp, 0, zr + 0.0098) @ _Rx(90))
+    if not front:
+        lf = MB()
+        holed(lf, _T(0, 0, -0.0013), (0.0095, 0.0, 0.0135, 0.0080, 0.0022), (0.0175, 0.0, 0.0012, 0.0012, 0.0012), 0.0026,
+              re_o=0.0006, re_i=0.0004, n=32, mat=mat, ne=1)
+        revolve(lf, [(0.0034, 0.0012), (0.0034, 0.0022), (0.0026, 0.0026), (0.0013, 0.0026), (0.0012, 0.0012)], mat, seg=24,
+                M=_T(0.0175, 0, 0), caps=False)
+        mb.join(lf, _T(xp, 0, zr + 0.0098) @ _Rz(180))
+    else:
+        side(mb, [(xp - 0.022, zr + 0.0085), (xp + 0.002, zr + 0.0085), (xp + 0.002, zr + 0.0112), (xp - 0.020, zr + 0.0112)],
+             [0.0015, 0.0015, 0.0015, 0.0015], 0.012, mat, re=0.0004, n=2, ne=1)
+        for sy in (-1, 1):                        # alas del capuchón del poste (plegadas)
+            side(mb, [(xp - 0.020, zr + 0.0095), (xp - 0.010, zr + 0.0095), (xp - 0.011, zr + 0.0140), (xp - 0.019, zr + 0.0140)],
+                 [0.0, 0.0, 0.0012, 0.0012], 0.0018, mat, y0=sy * 0.0045, re=0.0004, n=2, ne=1)
 
 
-def _scope(mb, x, z, mat="gunmetal"):
-    """Mira telescópica de aumento variable (1-6×, tubo de 30 mm, ~ 26 cm): objetivo, tubo, silla de torretas con
-    elevación (arriba), deriva (derecha) e iluminación (izquierda), anillo de aumentos con palanca, ocular; montaje de una
-    pieza con 2 anillos partidos. x = frente del montaje sobre el riel, z = cara superior del riel. Objetivo hacia +X."""
-    zo = z + 0.040
-    plan(mb, [(x - 0.100, -0.0125), (x, -0.0125), (x, 0.0125), (x - 0.100, 0.0125)], [0.002] * 4, 0.007, mat, z0=z - 0.0035,
-         re=0.0015, ne=1)
-    xa = x + 0.050                                  # cara del objetivo
-    for pz in (0.060, 0.135):                       # anillos: pie + abrazadera
-        xr = xa - pz
-        side(mb, [(xr - 0.011, z + 0.003), (xr + 0.011, z + 0.003), (xr + 0.011, zo - 0.012), (xr - 0.011, zo - 0.012)],
-             [0.0, 0.0, 0.003, 0.003], 0.018, mat, re=0.002, ne=1, n=2)
-        revolve(mb, [(0.0149, -0.0115), (0.0190, -0.0115), (0.0190, 0.0115), (0.0149, 0.0115)], mat, seg=SEG,
-                M=_T(xr, 0, zo) @ _Ry(90), closed=True)
-    prof = [(0.0, 0.003), (0.0176, 0.003), (0.0186, 0.0), (0.0186, 0.026), (0.0152, 0.044), (0.0152, 0.080), (0.0172, 0.082),
-            (0.0172, 0.110), (0.0152, 0.112), (0.0152, 0.158), (0.0182, 0.160), (0.0182, 0.184), (0.0212, 0.226),
-            (0.0212, 0.262), (0.0, 0.262)]
-    mats = ["cable"] + [mat] * (len(prof) - 3) + ["cable"]
-    revolve(mb, prof, mats, seg=SEG, M=_T(xa, 0, zo) @ _Ry(-90))
-    xt = xa - 0.096
-    for (yy, zz, Mr) in ((0.0, 0.0172, Matrix()), (0.0172, 0.0, _Rx(-90))):
-        revolve(mb, [(0.0112, -0.006), (0.0112, 0.006), (0.0126, 0.0075), (0.0126, 0.0165), (0.0, 0.0175)], mat, seg=SEG,
-                M=_T(xt, yy, zo + zz) @ Mr, caps=False)
-    revolve(mb, [(0.0098, -0.006), (0.0098, 0.009), (0.0, 0.010)], mat, seg=SEG, M=_T(xt, -0.0172, zo) @ _Rx(90), caps=False)
-    xl = xa - 0.171                                 # palanca del anillo de aumentos
-    side(mb, [(xl - 0.004, zo + 0.016), (xl + 0.004, zo + 0.016), (xl + 0.003, zo + 0.031), (xl - 0.003, zo + 0.031)],
-         [0.0, 0.0, 0.003, 0.003], 0.007, mat, re=0.0)
+def _lens(mb, M, r, depth, mat="glass", rim="gunmetal"):
+    """Lente rehundida: anillo de retención oscuro y disco de vidrio ligeramente abombado a `depth` del borde (z = 0)."""
+    revolve(mb, [(r, 0.0), (r * 0.94, -0.0006), (r * 0.94, -depth + 0.0004)], rim, seg=32, M=M, caps=False)
+    revolve(mb, [(r * 0.94, -depth + 0.0004), (r * 0.6, -depth + 0.0002), (0.0, -depth + 0.0)], mat, seg=32, M=M, caps=False)
 
 
-def _buis(mb, x, z, front=False, mat="gunmetal"):
-    """Mira de respaldo abatible (plegada) sobre riel: base con abrazadera y tornillo, hoja plegada hacia atrás."""
-    plan(mb, [(x - 0.026, -0.0118), (x, -0.0118), (x, 0.0118), (x - 0.026, 0.0118)], [0.002] * 4, 0.009, mat, z0=z - 0.0025,
-         re=0.0015, ne=1)
-    lp = [(x - 0.024, z + 0.0065), (x - 0.002, z + 0.0065), (x - 0.006, z + 0.0125), (x - 0.024, z + 0.0115)]
-    side(mb, lp, [0.0, 0.002, 0.002, 0.0], 0.019 if not front else 0.012, mat, re=0.0)
-    revolve(mb, [(0.0, -0.001), (0.0042, -0.001), (0.0042, 0.003), (0.0, 0.003)], mat, seg=16,
-            M=_T(x - 0.013, 0.0118, z + 0.002) @ _Rx(-90))
+def _flip_cap(mb, M, r, ang=100.0, mat="polymer"):
+    """Tapa de lente abatible (abierta `ang`°): aro elástico sobre el tubo (z local = eje óptico, hacia afuera), bisagra
+    arriba y tapa con su lengüeta. M en la boca del tubo (se gira sobre su eje para que la bisagra quede arriba)."""
+    up = M.to_3x3().inverted() @ Vector((0.0, 0.0, 1.0))
+    M = M @ _Rz(math.degrees(math.atan2(up.y, up.x)) - 90.0)
+    revolve(mb, [(r + 0.0002, -0.008), (r + 0.0016, -0.0075), (r + 0.0016, 0.0015), (r + 0.0002, 0.002)], mat, seg=32, M=M,
+            closed=False, caps=False)
+    zh = r + 0.0035
+    revolve(mb, [(0.0024, -0.006), (0.0024, 0.006)], mat, seg=16, M=M @ _T(0, zh, 0.0012) @ _Ry(90))
+    lid = MB()
+    slab2(lid, Matrix(), 2 * r + 0.004, 2 * r + 0.004, 0.0028, r + 0.002, mat, re_t=0.001, ne_t=2, re_b=0.0006, ne_b=1, nc=6)
+    side(lid, [(-0.006, -0.0005), (0.006, -0.0005), (0.0045, 0.0018), (-0.0045, 0.0018)], 0.0, 0.0050, mat, re=0.0, M=_Rx(0)
+         @ _T(0, -(r + 0.006), 0) @ _Rz(0))
+    lid.transform(_T(0, -zh, 0))
+    mb.join(lid, M @ _T(0, zh, 0.0012) @ _Rx(-ang))
 
 
+def _mount_base(mb, x0, x1, zr, ztop, w=0.024, mat="gunmetal", lever=False, bolts=(), nuts=True):
+    """Base de montaje sobre riel 1913 (x0..x1, zr = cara superior del riel) hasta ztop: cuerpo con cantos redondeados,
+    mordazas de cola de milano, tornillos transversales con tuerca (izq.) y cabeza (der.) o palanca de apriete rápido."""
+    side(mb, [(x0, zr - 0.0052), (x1, zr - 0.0052), (x1, ztop - 0.002), (x1 - 0.003, ztop), (x0 + 0.003, ztop), (x0, ztop - 0.002)],
+         [0.0012, 0.0012, 0.002, 0.002, 0.002, 0.002], w, mat, re=0.0012, n=2, ne=2)
+    for sy in (-1, 1):
+        side(mb, [(x0 + 0.0008, zr - 0.0074), (x1 - 0.0008, zr - 0.0074), (x1 - 0.0008, zr - 0.005), (x0 + 0.0008, zr - 0.005)],
+             [0.0008] * 4, 0.0034, mat, y0=sy * (0.0108 + 0.0006), re=0.0004, n=2, ne=1)
+    for xb in bolts:
+        if nuts:
+            hexnut(mb, _T(xb, -w / 2 + 0.0002, zr - 0.0025) @ _Rx(90), s=0.0095, h=0.004, mat=mat)
+        _screw_h(mb, _T(xb, w / 2 - 0.0002, zr - 0.0025) @ _Rx(-90), d=0.0075, mat=mat)
+    if lever:
+        xl = (x0 + x1) / 2
+        revolve(mb, [(0.0045, 0.0), (0.0045, 0.0025), (0.0038, 0.0032)], mat, seg=24, M=_T(xl, -w / 2 + 0.0002, zr - 0.0025) @
+                _Rx(90))
+        side(mb, [(xl - 0.004, zr - 0.006), (xl + 0.0035, zr - 0.006), (xl + 0.030, zr - 0.0035), (xl + 0.031, zr + 0.0005),
+                  (xl + 0.003, zr + 0.001), (xl - 0.004, zr + 0.001)], [0.002, 0.002, 0.002, 0.002, 0.002, 0.002], 0.0028, mat,
+             y0=-w / 2 - 0.0028, re=0.0008, n=2, ne=1)
 
-def _holo(mb, x, z, mat="gunmetal"):
-    """Mira holográfica / de punto de caja: base con compartimiento de pila y botones, capuchón rectangular abierto con su
-    ventana, abrazadera con perilla. x = frente de la base, z = cara superior del riel."""
-    xloft(mb, [(x - 0.088, 0.030, 0.016, z + 0.009, 0.004), (x - 0.084, 0.034, 0.020, z + 0.010, 0.005),
-               (x - 0.004, 0.034, 0.020, z + 0.010, 0.005), (x, 0.030, 0.016, z + 0.009, 0.004)], mat, n=4)
-    zc = z + 0.0355
-    slotted_tube(mb, x - 0.062, x - 0.004, 0.040, 0.034, 0.007, 0.0028, zc, [], band=0.0, mat=mat)
-    side(mb, [(x - 0.060, z + 0.015), (x - 0.010, z + 0.015), (x - 0.010, zc - 0.012), (x - 0.060, zc - 0.012)], 0.0, 0.026, mat,
-         re=0.0)
-    mb.box((x - 0.0215, -0.0168, zc - 0.0138), (x - 0.0195, 0.0168, zc + 0.0138), "cable", bevel=0.0)
-    for k, yy in enumerate((-0.007, 0.007)):        # botones traseros
-        revolve(mb, [(0.0, -0.002), (0.004, -0.002), (0.004, 0.002), (0.0032, 0.003), (0.0, 0.003)], "rubber", seg=16,
-                M=_T(x - 0.088, yy, z + 0.010) @ _Ry(-90))
-    revolve(mb, [(0.0, -0.002), (0.008, -0.002), (0.008, 0.007), (0.0068, 0.0085), (0.0, 0.0085)], mat, seg=SEG,
-            M=_T(x - 0.040, 0.017, z + 0.006) @ _Rx(-90))
+
+def _ring(mb, x, zr, zo, ro, w=0.020, mat="gunmetal"):
+    """Anillo de mira partido: cuerpo con 4 tornillos de tapa (2 por lado) sobre orejas, alrededor de un tubo de radio ro
+    con eje a la altura zo; asentado en el riel (zr)."""
+    rt = ro + 0.0032
+    revolve(mb, [(ro + 0.0001, -w / 2), (rt - 0.0008, -w / 2), (rt, -w / 2 + 0.0008), (rt, w / 2 - 0.0008), (rt - 0.0008, w / 2),
+                 (ro + 0.0001, w / 2)], mat, seg=40, M=_ax(x, 0, zo), closed=True)
+    side(mb, [(x - w / 2, zr - 0.0052), (x + w / 2, zr - 0.0052), (x + w / 2, zo - ro * 0.6), (x - w / 2, zo - ro * 0.6)],
+         [0.0012, 0.0012, 0.0, 0.0], 0.022, mat, re=0.0012, n=2, ne=2)
+    for sy in (-1, 1):
+        side(mb, [(x - w / 2 + 0.001, zo - 0.0035), (x + w / 2 - 0.001, zo - 0.0035), (x + w / 2 - 0.001, zo + 0.0030),
+                  (x - w / 2 + 0.001, zo + 0.0030)], [0.0015] * 4, 0.0072, mat, y0=sy * (rt + 0.0012), re=0.0007, n=2, ne=1)
+        for dx in (-w / 4, w / 4):
+            _screw_h(mb, _T(x + dx, sy * (rt + 0.0012), zo + 0.0030), d=0.0042, mat=mat)
+    hexnut(mb, _T(x, -0.011, zr - 0.0025) @ _Rx(90), s=0.0095, h=0.004, mat=mat)
+    _screw_h(mb, _T(x, 0.011, zr - 0.0025) @ _Rx(-90), d=0.0075, mat=mat)
+
+
+def _red_dot(mb, x, zr, mat="gunmetal"):
+    """Mira de punto rojo de tubo (clase 30 mm, ~ 12 cm): cuerpo con capuchones de objetivo y ocular, lentes rehundidas,
+    torretas de elevación (arriba) y deriva (derecha) con tapas moleteadas, perilla de intensidad / batería a la izquierda,
+    tapas abatibles abiertas, anillo sobre base de palanca rápida. x = frente de la base, zr = cara superior del riel."""
+    zo = zr + 0.039
+    xb0 = x - 0.042
+    _mount_base(mb, xb0, x, zr, zo - 0.0185, w=0.024, mat=mat, lever=True)
+    _ring(mb, x - 0.021, zr, zo, 0.0160, w=0.026, mat=mat)
+    x1, x0 = x + 0.040, x - 0.082                     # boca del objetivo / ocular
+    prof = [(0.0172, 0.0), (0.0196, 0.0006), (0.0198, 0.0025), (0.0198, 0.0175), (0.0180, 0.0205), (0.0160, 0.0225),
+            (0.0160, 0.1000), (0.0180, 0.1020), (0.0194, 0.1045), (0.0194, x1 - x0 - 0.0006), (0.0172, x1 - x0)]
+    revolve(mb, prof, mat, seg=48, M=_ax(x0, 0, zo), caps=False)
+    _lens(mb, _ax(x1, 0, zo), 0.0172, 0.007)
+    _lens(mb, _ax(x0, 0, zo) @ _Rx(180), 0.0172, 0.007)
+    xt = x - 0.030
+    for (yy, zz, Mr) in ((0.0, 0.0160, Matrix()), (0.0160, 0.0, _Rx(-90))):
+        revolve(mb, [(0.0118, -0.006), (0.0118, 0.0035), (0.0108, 0.0045)], mat, seg=40, M=_T(xt, yy, zo + zz) @ Mr, caps=False)
+        _knob_k(mb, _T(xt, yy, zo + zz) @ Mr @ _T(0, 0, 0.0043), 0.0100, 0.0070, mat, nt=30, dp=0.0005, mark="sign_white")
+    revolve(mb, [(0.0118, -0.006), (0.0118, 0.0035), (0.0108, 0.0045)], mat, seg=40, M=_T(xt, -0.0160, zo) @ _Rx(90), caps=False)
+    _knob_k(mb, _T(xt, -0.0160, zo) @ _Rx(90) @ _T(0, 0, 0.0043), 0.0112, 0.0095, mat, nt=32, dp=0.0005, mark="sign_white")
+    _flip_cap(mb, _ax(x1 - 0.002, 0, zo), 0.0196, ang=150.0)
+    _flip_cap(mb, _ax(x0 + 0.002, 0, zo) @ _Rx(180), 0.0194, ang=150.0)
+
+
+def _holo(mb, x, zr, mat="gunmetal"):
+    """Mira holográfica de caja (~ 96 × 53 × 65 mm): base con abrazadera de tuerca moleteada, compartimiento de pila
+    transversal con tapa moleteada, botones de hule traseros, capuchón de lámina en arco sobre la ventana (vidrio inclinado
+    con su marco) y ventana trasera. x = frente de la base, zr = cara superior del riel."""
+    xb0 = x - 0.096
+    zt = zr + 0.0115                                  # cara superior de la base
+    side(mb, [(xb0, zr - 0.0052), (x, zr - 0.0052), (x, zt - 0.003), (x - 0.004, zt), (xb0 + 0.004, zt), (xb0, zt - 0.004)],
+         [0.0015, 0.0015, 0.004, 0.003, 0.003, 0.004], 0.034, mat, re=0.002, n=3, ne=2)
+    for sy in (-1, 1):
+        side(mb, [(xb0 + 0.010, zr - 0.0074), (xb0 + 0.050, zr - 0.0074), (xb0 + 0.050, zr - 0.005), (xb0 + 0.010, zr - 0.005)],
+             [0.0008] * 4, 0.0034, mat, y0=sy * 0.0114, re=0.0004, n=2, ne=1)
+    _knob_k(mb, _T(xb0 + 0.030, -0.0170, zr - 0.001) @ _Rx(90), 0.0085, 0.0085, mat, nt=28, dp=0.0006)
+    _screw_h(mb, _T(xb0 + 0.030, 0.0170, zr - 0.001) @ _Rx(-90), d=0.007, mat=mat)
+    # compartimiento de pila (transversal) al frente
+    revolve(mb, [(0.0096, -0.0172), (0.0100, -0.0168), (0.0100, 0.0168), (0.0096, 0.0172)], mat, seg=40,
+            M=_T(x - 0.012, 0, zt + 0.0042) @ _Rx(90))
+    _knob_k(mb, _T(x - 0.012, 0.0172, zt + 0.0042) @ _Rx(-90), 0.0092, 0.0055, mat, nt=30, dp=0.0005)
+    # botones traseros
+    side(mb, [(xb0 - 0.0015, zt - 0.009), (xb0 + 0.002, zt - 0.009), (xb0 + 0.002, zt - 0.001), (xb0 - 0.0015, zt - 0.001)],
+         [0.001] * 4, 0.026, mat, re=0.0006, n=2, ne=1)
+    for yy in (-0.0065, 0.0065):
+        revolve(mb, [(0.0, 0.0), (0.0034, 0.0), (0.0034, 0.0016), (0.0028, 0.0024), (0.0, 0.0026)], "rubber", seg=24,
+                M=_T(xb0 - 0.0013, yy, zt - 0.005) @ _Ry(-90), caps=False)
+    # capuchón: aro de lámina en arco (sección hueca) sobre la ventana
+    xh0, xh1 = xb0 + 0.010, x - 0.026
+    hood = MB()
+    holed(hood, Matrix(), (0.0, 0.0, 0.0215, 0.0215, (0.0065, 0.0065, 0.002, 0.002)),
+          (0.0, -0.0004, 0.0185, 0.0183, (0.004, 0.004, 0.0005, 0.0005)), xh1 - xh0, re_o=0.0012, re_i=0.0008, n=64, mat=mat, ne=2)
+    mb.join(hood, _T(xh0, 0, zt + 0.0195) @ _Ry(90) @ _Rz(90))
+    # ventana: vidrio inclinado con marco
+    xw = xh0 + 0.032
+    Mw = _T(xw, 0, zt + 0.019) @ _Ry(-8)
+    side(mb, [(-0.0008, -0.0185), (0.0008, -0.0185), (0.0008, 0.0175), (-0.0008, 0.0175)], 0.0, 0.0374, "glass", re=0.0, M=Mw)
+    for sy in (-1, 1):
+        side(mb, [(-0.0022, -0.0185), (0.0022, -0.0185), (0.0022, 0.0175), (-0.0022, 0.0175)], [0.0008] * 4, 0.0024, mat,
+             y0=sy * 0.0176, re=0.0004, n=2, ne=1, M=Mw)
+
+
+def _scope(mb, x, zr, mat="gunmetal"):
+    """Mira telescópica de aumento variable (clase 1-6 × 24, tubo de 30 mm, ~ 26 cm): objetivo con su lente, tubo, silla
+    de torretas con elevación (arriba), deriva (derecha) e iluminación (izquierda) moleteadas con tapas, anillo de
+    aumentos moleteado con palanca de giro, ocular con anillo de enfoque estriado y lente; tapas abatibles abiertas;
+    montaje voladizo de una pieza con 2 anillos partidos (8 tornillos) y 2 tornillos transversales.
+    x = frente del montaje sobre el riel, zr = cara superior del riel. Objetivo hacia +X."""
+    zo = zr + 0.0385
+    ro = 0.015
+    xm0 = x - 0.110
+    _mount_base(mb, xm0, x, zr, zo - 0.012, w=0.022, mat=mat, bolts=(xm0 + 0.025, x - 0.025))
+    xa = x + 0.060                                    # cara del objetivo
+    for pz in (0.068, 0.170):
+        _ring(mb, xa - pz, zr, zo, ro, w=0.021, mat=mat)
+    L = 0.262
+    prof = [(0.0170, 0.0), (0.0178, 0.0008), (0.0178, 0.030), (0.0168, 0.034), (0.0152, 0.046), (0.0152, 0.085),
+            (0.0168, 0.087), (0.0175, 0.090), (0.0175, 0.118), (0.0168, 0.121), (0.0152, 0.123), (0.0152, 0.168),
+            (0.0168, 0.171), (0.0182, 0.174), (0.0182, 0.200), (0.0190, 0.214), (0.0218, 0.224), (0.0222, 0.228),
+            (0.0222, L - 0.0008), (0.0212, L)]
+    revolve(mb, prof, mat, seg=48, M=_T(xa, 0, zo) @ _Ry(-90), caps=False)
+    revk(mb, [(0.0185, 0.176), (0.0185, 0.198)], mat, M=_T(xa, 0, zo) @ _Ry(-90), knurl=(40, 0.0006, {0, 1}), caps=False)
+    revk(mb, [(0.0226, 0.232), (0.0226, 0.250)], mat, M=_T(xa, 0, zo) @ _Ry(-90), knurl=(44, 0.0007, {0, 1}), caps=False)
+    _lens(mb, _ax(xa, 0, zo), 0.0170, 0.009)
+    _lens(mb, _ax(xa - L, 0, zo) @ _Rx(180), 0.0212, 0.008)
+    xt = xa - 0.104                                   # silla de torretas
+    revolve(mb, [(0.0168, -0.016), (0.0175, -0.015), (0.0175, 0.015), (0.0168, 0.016)], mat, seg=48, M=_ax(xt - 0.0, 0, zo))
+    xloft(mb, [(xt - 0.014, 0.034, 0.034, zo, 0.009), (xt + 0.014, 0.034, 0.034, zo, 0.009)], mat, n=4)
+    for (yy, zz, Mr, rk, hk) in ((0.0, 0.017, Matrix(), 0.0125, 0.013), (0.017, 0.0, _Rx(-90), 0.0125, 0.011),
+                                  (-0.017, 0.0, _Rx(90), 0.0110, 0.012)):
+        Mt = _T(xt, yy, zo + zz) @ Mr
+        revolve(mb, [(0.0105, -0.002), (0.0105, 0.004), (0.0118, 0.0045)], mat, seg=40, M=Mt, caps=False)
+        _knob_k(mb, Mt @ _T(0, 0, 0.0042), rk, hk, mat, nt=36, dp=0.0006, mark="sign_white")
+    xl = xa - 0.186                                   # palanca del anillo de aumentos
+    side(mb, [(xl - 0.0045, zo + 0.017), (xl + 0.0045, zo + 0.017), (xl + 0.0035, zo + 0.032), (xl - 0.0035, zo + 0.032)],
+         [0.0, 0.0, 0.0025, 0.0025], 0.0075, mat, re=0.0012, n=2, ne=1)
+    _flip_cap(mb, _ax(xa - 0.002, 0, zo), 0.0178, ang=150.0)
+    _flip_cap(mb, _ax(xa - L + 0.002, 0, zo) @ _Rx(180), 0.0222, ang=150.0)
 
 
 # ======================================================================================================== fusil
+# Plantilla de un fusil de sistema AR (calibre 5,56) en coordenadas del arma: x = 0 cantonera, z = 0 talón de la culata,
+# ánima a z = RIFLE_BORE_Z. El DMR (calibre 7,62, receptores clase AR-10) usa el mismo grupo de receptores escalado 1,09
+# alrededor de (0,262, 0, ánima).
+_ZPL = -0.0115                      # línea de partición superior / inferior (relativa al ánima)
+_ZB = -0.040                        # fondo del cajón inferior en la zona del disparador
+_ZMW = -0.077                       # boca inferior del brocal
+_XU0, _XU1 = 0.268, 0.452           # cajón superior
+_RT = 0.031                         # cara superior del riel sobre el ánima (~ 1,215 in)
+
+
+def _upper_sec(x, W=0.0300, zb=_ZPL + 0.0004, zt=0.0215, port=None):
+    """Sección del cajón superior (y, z relativo al ánima), antihoraria vista desde +X; port = rebaje de la ventana de
+    expulsión en el costado derecho (+Y) en esta estación (0..1)."""
+    rt, rb = 0.0055, 0.0012
+    pts = []
+    zs = [zb + rb, -0.0085, -0.0080, 0.0080, 0.0085, zt - rt]
+    for z in zs:                                            # costado derecho, de abajo hacia arriba
+        dy = -0.0016 * port if (port and -0.0080 - 1e-9 <= z <= 0.0080 + 1e-9) else 0.0
+        pts.append((W / 2 + dy, z))
+    for k in range(1, 5):
+        a = PI / 2 * k / 5
+        pts.append((W / 2 - rt + rt * math.cos(a), zt - rt + rt * math.sin(a)))
+    pts += [(W / 2 - rt, zt), (0.0, zt), (-W / 2 + rt, zt)]
+    for k in range(1, 5):
+        a = PI / 2 + PI / 2 * k / 5
+        pts.append((-W / 2 + rt + rt * math.cos(a), zt - rt + rt * math.sin(a)))
+    for z in reversed(zs):
+        pts.append((-W / 2, z))
+    for k in range(1, 3):
+        a = PI + PI / 2 * k / 3
+        pts.append((-W / 2 + rb + rb * math.cos(a), zb + rb + rb * math.sin(a)))
+    pts += [(-W / 2 + rb, zb), (W / 2 - rb, zb)]
+    for k in range(1, 3):
+        a = 1.5 * PI + PI / 2 * k / 3
+        pts.append((W / 2 - rb + rb * math.cos(a), zb + rb + rb * math.sin(a)))
+    return pts
+
+
+def _upper(mb, BZ, GM):
+    """Cajón superior forjado: cuerpo con chaflanes en las bocas, ventana de expulsión rebajada con su tapa (nervio,
+    bisagra y orejas), deflector de vainas, asistente de cierre inclinado con botón moleteado, riel corrido y palanca de
+    carga en T con su seguro."""
+    x0, x1 = _XU0, _XU1
+    p0, p1 = 0.3830, 0.4370
+    xs = [x0, x0 + 0.0009, x0 + 0.004, p0 - 0.0006, p0, p1, p1 + 0.0006, x1 - 0.004, x1 - 0.0009, x1]
+    xs += [x0 + 0.02 * k for k in range(1, 10)]
+    xs = [x for x in _uniq(xs) if x0 <= x <= x1]
+    P = []
+    for x in xs:
+        pf = 1.0 if p0 <= x <= p1 else 0.0
+        ins = 0.0009 if x in (x0, x1) else 0.0
+        sec = _upper_sec(x, W=0.0300 - 2 * ins, zb=_ZPL + 0.0004 + ins, zt=0.0215 - ins, port=pf)
+        P.append([(x, y, BZ + z) for (y, z) in sec])
+    gridskin(mb, P, GM, cap0=True, cap1=True)
+    pic_rail(mb, x0 + 0.002, x1 - 0.0015, M=_T(0, 0, BZ + 0.0215))
+    # tapa de la ventana de expulsión (cerrada), nervio, bisagra y orejas
+    yW = 0.0150
+    side(mb, [(p0 + 0.0008, BZ - 0.0076), (p1 - 0.0008, BZ - 0.0076), (p1 - 0.0008, BZ + 0.0076), (p0 + 0.0008, BZ + 0.0076)],
+         [0.0012] * 4, 0.0011, GM, y0=yW - 0.0007, re=0.0004, n=2, ne=1)
+    side(mb, [(p0 + 0.006, BZ + 0.0030), (p1 - 0.006, BZ + 0.0030), (p1 - 0.006, BZ + 0.0052), (p0 + 0.006, BZ + 0.0052)],
+         [0.0010] * 4, 0.0010, GM, y0=yW - 0.0001, re=0.0004, n=2, ne=1)
+    side(mb, [(p0 + 0.003, BZ - 0.0062), (p0 + 0.008, BZ - 0.0062), (p0 + 0.008, BZ - 0.0030), (p0 + 0.003, BZ - 0.0030)],
+         [0.0006] * 4, 0.0009, GM, y0=yW - 0.0002, re=0.0003, n=2, ne=1)        # pestaña del pestillo
+    revolve(mb, [(0.0013, p0 - 0.004), (0.0013, p1 + 0.004)], "steel", seg=16, M=_T(0, yW - 0.0001, BZ - 0.0094) @ _Ry(90))
+    for (xa, xb) in ((p0 - 0.0055, p0 - 0.0006), (p1 + 0.0006, p1 + 0.0055)):
+        side(mb, [(xa, BZ - 0.0112), (xb, BZ - 0.0112), (xb, BZ - 0.0076), (xa, BZ - 0.0076)], [0.0008] * 4, 0.0028, GM,
+             y0=yW + 0.0002, re=0.0005, n=2, ne=1)
+    # deflector de vainas
+    side(mb, [(0.3655, BZ + 0.0172), (0.3700, BZ + 0.0172), (0.3826, BZ + 0.0045), (0.3826, BZ - 0.0020), (0.3785, BZ - 0.0020)],
+         [0.0015, 0.003, 0.002, 0.0012, 0.004], 0.0068, GM, y0=yW + 0.0022, re=0.0012, n=2, ne=2)
+    # asistente de cierre: alojamiento inclinado, raíz con filete y botón moleteado
+    pa, pb = Vector((0.360, 0.0095, BZ + 0.0035)), Vector((0.322, 0.0235, BZ + 0.0062))
+    Mf, Lf = port.frame_on(pa, pb, up=(0, 0, 1))
+    Mf = Mf @ _Ry(90)
+    revolve(mb, [(0.0118, -0.004), (0.0104, 0.004), (0.0096, 0.010), (0.0096, Lf - 0.010), (0.0090, Lf - 0.009),
+                 (0.0072, Lf - 0.009)], GM, seg=40, M=Mf, caps=False)
+    revk(mb, [(0.0072, Lf - 0.0095), (0.0078, Lf - 0.0085), (0.0078, Lf + 0.0010), (0.0072, Lf + 0.0020), (0.0060, Lf + 0.0024),
+              (0.0, Lf + 0.0021)], GM, M=Mf, knurl=(20, 0.0007, {1, 2}), caps=False)
+    # palanca de carga en T (atrás, sobre el tubo del amortiguador) con seguro a la izquierda y estrías
+    plan(mb, [(0.2575, -0.0212), (0.2640, -0.0212), (0.2690, -0.0080), (0.2690, 0.0080), (0.2640, 0.0212), (0.2575, 0.0212)],
+         [0.0032, 0.0025, 0.002, 0.002, 0.0025, 0.0032], 0.0078, GM, z0=BZ + 0.0150, re=0.0016, n=3, ne=2)
+    plan(mb, [(0.2688, -0.0055), (0.2780, -0.0055), (0.2780, 0.0055), (0.2688, 0.0055)], [0.0, 0.0012, 0.0012, 0.0], 0.0060,
+         GM, z0=BZ + 0.0160, re=0.0008, n=2, ne=1)
+    plan(mb, [(0.2585, -0.0275), (0.2635, -0.0275), (0.2648, -0.0205), (0.2585, -0.0190)], [0.0015, 0.0015, 0.001, 0.001],
+         0.0050, GM, z0=BZ + 0.0165, re=0.0008, n=2, ne=1)                                   # seguro
+    for k in range(4):
+        y = -0.0185 + k * 0.0030
+        for s in (-1, 1):
+            prism_x(mb, _T(0.2569, s * y, BZ + 0.0168), [(-0.0005, 0.0), (0.0005, 0.0), (0.0005, 0.0046), (-0.0005, 0.0046)],
+                    [0.0, 0.0, 0.0004, 0.0004], 0.0012, re=0.0002)
+
+
+def _lower(mb, BZ, GM, mw0=0.382, seed=0):
+    """Cajón inferior forjado: aro del tubo del amortiguador, cuerpo, brocal con su reborde y ensanche hueco, guardamonte
+    integral, disparador curvo, pasadores de desarme / pivote y del mecanismo, selector, retén del cerrojo con su paleta
+    estriada y su saliente, retén del cargador con guarda."""
+    ZPL, ZB, ZMW = BZ + _ZPL, BZ + _ZB, BZ + _ZMW
+    mw1 = 0.4535
+    revolve(mb, [(0.0147, 0.2620), (0.0186, 0.2620), (0.0196, 0.2630), (0.0196, 0.2738), (0.0188, 0.2748), (0.0147, 0.2748)], GM,
+            seg=48, M=_T(0, 0, BZ) @ _Ry(90), closed=True)
+    side(mb, [(0.2722, ZPL), (0.2722, BZ - 0.018), (0.2785, BZ - 0.031), (0.2900, ZB), (0.3836, ZB), (0.3836, ZPL - 0.010),
+              (0.4548, ZPL - 0.010), (0.4548, ZPL)], [0.0012, 0.006, 0.006, 0.003, 0.0, 0.0, 0.0015, 0.0015], 0.0248, GM,
+         re=0.0012, n=3, ne=2)
+    side(mb, [(mw0, ZMW + 0.0095), (mw1, ZMW + 0.0095), (mw1, ZPL - 0.0018), (mw0 + 0.004, ZPL - 0.0018), (mw0, ZPL - 0.006)],
+         [0.0, 0.0, 0.003, 0.002, 0.003], 0.0305, GM, re=0.0012, n=3, ne=2)
+    side(mb, [(mw0 + 0.010, ZPL - 0.0062), (mw1 - 0.001, ZPL - 0.0062), (mw1 - 0.001, ZPL - 0.0026), (mw0 + 0.010, ZPL - 0.0026)],
+         [0.0008] * 4, 0.0320, GM, re=0.0006, n=2, ne=1)                                   # reborde superior del brocal
+    cx = (mw0 + mw1) / 2
+    holed(mb, _T(cx, 0, ZMW + 0.0098) @ _Rx(180), (0.0, 0.0, (mw1 - mw0) / 2 + 0.0016, 0.0170, 0.0045),
+          (0.0, 0.0, (mw1 - mw0) / 2 - 0.0016, 0.0128, 0.0040), 0.0098, re_o=0.0018, re_i=0.0012, n=72, mat=GM, ne=2)
+    # guardamonte integral
+    strap(mb, fillet([(mw0 + 0.0015, 0.0, ZB + 0.002), (mw0 - 0.002, 0.0, ZB - 0.013), (mw0 - 0.010, 0.0, ZB - 0.0205),
+                      (0.312, 0.0, ZB - 0.0210), (0.3045, 0.0, ZB - 0.012), (0.3010, 0.0, ZB + 0.0015)], 0.007, 4),
+          0.0050, 0.0122, GM, up=(0, 1, 0), r=0.0019, n=2)
+    # disparador
+    side(mb, [(0.3330, ZB + 0.0035), (0.3405, ZB + 0.0035), (0.3420, ZB - 0.0055), (0.3400, ZB - 0.0120), (0.3372, ZB - 0.0158),
+              (0.3352, ZB - 0.0150), (0.3366, ZB - 0.0108), (0.3370, ZB - 0.0060), (0.3352, ZB - 0.0005)],
+         [0.0, 0.0, 0.004, 0.004, 0.0012, 0.0012, 0.004, 0.003, 0.0], 0.0058, GM, re=0.0008, n=3, ne=1)
+    # pasadores: desarme / pivote (cabeza a la izq.), disparador / martillo
+    for (xx, zz, r_h) in ((0.2828, ZPL - 0.0042, 0.0042), (0.4468, ZPL - 0.0048, 0.0042)):
+        revolve(mb, [(0.0, -0.0128), (r_h - 0.0004, -0.0128), (r_h, -0.0131), (r_h, -0.0139), (r_h - 0.0008, -0.0145),
+                     (0.0012, -0.0147), (0.0, -0.0145)], "steel", seg=24, M=_T(xx, 0, zz) @ _Rx(-90) @ _Rx(180), caps=False)
+        revolve(mb, [(0.0, 0.0122), (0.0031, 0.0122), (0.0031, 0.0127), (0.0026, 0.0130), (0.0, 0.0130)], "steel", seg=20,
+                M=_T(xx, 0, zz) @ _Rx(-90) @ _Rx(180), caps=False)
+    for (xx, zz) in ((0.3375, BZ - 0.0300), (0.3220, BZ - 0.0228)):
+        for s in (-1, 1):
+            revolve(mb, [(0.0, 0.0), (0.0024, 0.0), (0.0024, 0.0003), (0.0019, 0.0006), (0.0, 0.0006)], "steel", seg=16,
+                    M=_T(xx, s * 0.0121, zz) @ _Rx(-90 * s), caps=False)
+    # selector (izq.) en SAFE, con su eje del lado derecho
+    revolve(mb, [(0.0, 0.0), (0.0062, 0.0), (0.0062, 0.0012), (0.0055, 0.0018), (0.0, 0.0018)], GM, seg=32,
+            M=_T(0.3075, -0.0122, BZ - 0.0215) @ _Rx(90), caps=False)
+    side(mb, [(0.3060, BZ - 0.0242), (0.3250, BZ - 0.0233), (0.3268, BZ - 0.0215), (0.3250, BZ - 0.0197), (0.3060, BZ - 0.0188)],
+         [0.002, 0.0015, 0.0018, 0.0015, 0.002], 0.0024, GM, y0=-0.0122 - 0.0028, re=0.0007, n=2, ne=1)
+    for k in range(3):
+        xr = 0.3195 + k * 0.0022
+        side(mb, [(xr, BZ - 0.0235), (xr + 0.0009, BZ - 0.0235), (xr + 0.0009, BZ - 0.0195), (xr, BZ - 0.0195)], [0.0004] * 4,
+             0.0010, GM, y0=-0.0122 - 0.0043, re=0.0002, n=2, ne=1)
+    revolve(mb, [(0.0, 0.0), (0.0040, 0.0), (0.0040, 0.0006), (0.0034, 0.0010), (0.0, 0.0010)], GM, seg=24,
+            M=_T(0.3075, 0.0122, BZ - 0.0215) @ _Rx(-90), caps=False)
+    # retén del cerrojo (izq.): saliente, palanca con paleta estriada y su pasador
+    revolve(mb, [(0.0036, ZPL - 0.0010), (0.0036, ZPL - 0.0135), (0.0030, ZPL - 0.0145)], GM, seg=24, M=_T(mw0 - 0.0062, -0.0124, 0))
+    side(mb, [(mw0 - 0.0108, ZPL - 0.0055), (mw0 - 0.0016, ZPL - 0.0055), (mw0 - 0.0016, ZB - 0.0030), (mw0 - 0.0050, ZB - 0.0052),
+              (mw0 - 0.0110, ZB - 0.0050), (mw0 - 0.0112, ZB + 0.0060)], [0.001, 0.0012, 0.0015, 0.002, 0.0015, 0.003], 0.0022, GM,
+         y0=-0.0124 - 0.0010, re=0.0006, n=2, ne=1)
+    for k in range(3):
+        zr_ = ZB - 0.0042 + k * 0.0026
+        side(mb, [(mw0 - 0.0108, zr_), (mw0 - 0.0022, zr_), (mw0 - 0.0022, zr_ + 0.0010), (mw0 - 0.0108, zr_ + 0.0010)],
+             [0.0004] * 4, 0.0009, GM, y0=-0.0124 - 0.0024, re=0.0002, n=2, ne=1)
+    # retén del cargador (der.) con guarda en U
+    xm_, zm_ = mw0 - 0.0045, BZ - 0.0335
+    revolve(mb, [(0.0, 0.0), (0.0050, 0.0), (0.0052, 0.0006), (0.0052, 0.0020), (0.0046, 0.0026), (0.0, 0.0026)], GM, seg=32,
+            M=_T(xm_, 0.0124, zm_) @ _Rx(-90), caps=False)
+    for k in range(4):
+        dz = -0.003 + k * 0.002
+        hw_ = math.sqrt(max(0.0046 ** 2 - dz ** 2, 0.0)) * 0.9
+        prism_x(mb, _T(xm_ - hw_, 0.0124 + 0.0024, zm_ + dz), [(-0.0002, -0.0004), (0.0004, -0.0004), (0.0004, 0.0004),
+                                                                (-0.0002, 0.0004)], [0.0] * 4, 2 * hw_, re=0.0002)
+    arc = [(xm_ + 0.0082 * math.cos(a), 0.0, zm_ + 0.0082 * math.sin(a)) for a in [PI * (1.08 + 0.84 * k / 10) for k in range(11)]]
+    strap(mb, [(p[0], p[1] + 0.0124 + 0.0010, p[2]) for p in arc], 0.0020, 0.0030, GM, up=(0, 1, 0), r=0.0008)
+
+
+def _grip(mb, BZ, F, seed=0):
+    """Empuñadura de polímero (clase AR, 18-22°): lofts superelípticos con lomo, base de palma y ceja; costados con
+    textura piramidal (rejilla 1,5 mm), frente con estrías horizontales y bulto del dedo medio, tapa inferior con su
+    muesca y tornillo de sujeción oculto."""
+    ZB = BZ + _ZB
+    a = math.radians(21.0)
+    p0 = Vector((0.2995, 0.0, ZB + 0.004))
+    L = 0.112
+    p1 = p0 + Vector((-math.sin(a), 0.0, -math.cos(a))) * L
+    Mg, _ = port.frame_on(p0, p1, up=(1, 0, 0))             # x local: hacia abajo; z local: hacia el frente del arma
+    st = [(0.000, 0.0250, 0.044, 0.0005), (0.006, 0.0272, 0.047, 0.0005), (0.016, 0.0292, 0.050, 0.0008),
+          (0.030, 0.0304, 0.0515, 0.0016), (0.040, 0.0306, 0.0505, 0.0010), (0.052, 0.0310, 0.0505, 0.0004),
+          (0.070, 0.0314, 0.0510, 0.0000), (0.090, 0.0312, 0.0505, -0.0006), (0.102, 0.0304, 0.0490, -0.0008),
+          (0.109, 0.0296, 0.0475, -0.0008), (0.112, 0.0280, 0.0455, -0.0008)]
+
+    def interp(x):
+        for i in range(len(st) - 1):
+            if st[i][0] <= x <= st[i + 1][0]:
+                f = (x - st[i][0]) / (st[i + 1][0] - st[i][0])
+                return [st[i][j] + (st[i + 1][j] - st[i][j]) * f for j in range(4)]
+        return list(st[-1])
+    g = 0.0015
+    tx0, tx1 = 0.020, 0.100
+    xs = [0.0, 0.003, 0.006, 0.010, 0.014] + [tx0 + g * k for k in range(int((tx1 - tx0) / g) + 1)] + [0.104, 0.108, 0.111, 0.112]
+    xs = _uniq(xs)
+    nseg = 72
+    ex = 2.7
+    P = []
+    for i, x in enumerate(xs):
+        _, w, h, zc = interp(x)
+        row = []
+        for k in range(nseg):
+            t = 2 * PI * k / nseg
+            c, s = math.cos(t), math.sin(t)
+            yy = w / 2 * math.copysign(abs(c) ** (2 / ex), c)
+            zz = zc + h / 2 * math.copysign(abs(s) ** (2 / ex), s)
+            o = 0.0
+            if tx0 <= x <= tx1:
+                fx = min(1.0, (x - tx0) / 0.004, (tx1 - x) / 0.004)
+                if abs(c) > 0.82 and abs(s) < 0.52:                   # costados: pirámides
+                    o += 0.00038 * fx * (1.0 if (i + k) % 2 == 0 else 0.0)
+                elif s > 0.86 and 0.028 <= x <= 0.096:                 # frente: estrías horizontales
+                    o += 0.00045 * (1.0 if (i // 2) % 2 == 0 else 0.0)
+            if 0.036 <= x <= 0.046 and s > 0.6:                        # bulto del dedo medio
+                o += 0.0016 * math.sin(PI * (x - 0.036) / 0.010) * (s - 0.6) / 0.4
+            ln = math.hypot(yy, zz - zc) or 1.0
+            row.append((x, yy + yy / ln * o, zz + (zz - zc) / ln * o))
+        P.append(row)
+    gridskin(mb, P, F, M=Mg, cap0=False, cap1=True)
+    # tapa inferior con muesca y ceja de la palma (beavertail) hacia el cajón
+    slab2(mb, Mg @ _T(0.1118, 0, -0.0008) @ _Ry(90), 0.044, 0.026, 0.0022, 0.009, F, re_t=0.0008, ne_t=1, re_b=0.0, ne_b=0, nc=4)
+    xloft(mb, [(0.2735, 0.0200, 0.010, ZB + 0.008, 0.0045), (0.280, 0.0240, 0.014, ZB + 0.004, 0.006),
+               (0.296, 0.0250, 0.016, ZB + 0.002, 0.006), (0.302, 0.0220, 0.012, ZB + 0.004, 0.005)], F, n=4)
+
+
+def _stock_ctr(mb, BZ, F):
+    """Culata retráctil de polímero (genérica): cuerpo que envuelve el tubo, talón con almenas laterales, puntal inferior,
+    palanca de ajuste con su pasador, copas QD a ambos costados y cantonera de hule con estrías. Ocupa x = 0..0,192."""
+    xloft(mb, [(0.036, 0.0380, 0.044, BZ - 0.0015, 0.010), (0.046, 0.0425, 0.050, BZ - 0.0020, 0.0135),
+               (0.168, 0.0425, 0.048, BZ - 0.0020, 0.0135), (0.184, 0.0405, 0.045, BZ - 0.0015, 0.012),
+               (0.192, 0.0365, 0.040, BZ - 0.0010, 0.010)], F, n=5)
+    xloft(mb, [(0.0125, 0.0440, 0.1262, 0.0655, 0.0095), (0.020, 0.0446, 0.1270, 0.0660, 0.0105),
+               (0.034, 0.0440, 0.1230, 0.0670, 0.0105), (0.048, 0.0385, 0.0880, 0.0840, 0.0100),
+               (0.058, 0.0360, 0.0560, 0.0985, 0.0100)], F, n=5)
+    p0, p1 = Vector((0.026, 0.0, 0.020)), Vector((0.172, 0.0, BZ - 0.024))
+    Ml, _ = port.frame_on(p0, p1, up=(0, 0, 1))
+    port.loft(mb, [(0.0, 0.034, 0.030, 0.0), (0.018, 0.032, 0.024, 0.0), (0.060, 0.030, 0.0215, 0.0), (0.120, 0.030, 0.0215, 0.0),
+                   (0.150, 0.032, 0.026, 0.002), (0.160, 0.030, 0.022, 0.003)], seg=32, mat=F, M=Ml, ex=2.8)
+    # palanca de ajuste con pasador y estrías
+    side(mb, [(0.128, BZ - 0.0300), (0.172, BZ - 0.0262), (0.176, BZ - 0.0225), (0.168, BZ - 0.0200), (0.128, BZ - 0.0222)],
+         [0.003, 0.002, 0.002, 0.002, 0.003], 0.0120, F, re=0.0015, n=2, ne=2)
+    revolve(mb, [(0.0, -0.0075), (0.0026, -0.0075), (0.0026, 0.0075), (0.0, 0.0075)], "steel", seg=16,
+            M=_T(0.170, 0, BZ - 0.0222) @ _Rx(90))
+    for k in range(4):
+        xr = 0.134 + k * 0.0055
+        side(mb, [(xr, BZ - 0.0306 + (xr - 0.128) * 0.085), (xr + 0.0018, BZ - 0.0306 + (xr - 0.126) * 0.085),
+                  (xr + 0.0018, BZ - 0.0285), (xr, BZ - 0.0285)], [0.0006] * 4, 0.0100, F, re=0.0005, n=2, ne=1)
+    # copas QD
+    for s in (-1, 1):
+        revolve(mb, [(0.0072, 0.0), (0.0072, 0.0012), (0.0062, 0.0018), (0.0046, 0.0018), (0.0046, 0.0004), (0.0, 0.0004)],
+                ["steel", "steel", "steel", "steel", "cable"], seg=32, M=_T(0.064, s * 0.0210, BZ - 0.004) @ _Rx(-90 * s), caps=False)
+    # cantonera de hule con estrías
+    xloft(mb, [(0.0, 0.0418, 0.1300, 0.0660, 0.0110), (0.0022, 0.0460, 0.1340, 0.0660, 0.0130),
+               (0.0130, 0.0460, 0.1340, 0.0660, 0.0130)], "rubber", n=5)
+    for k in range(10):
+        zr_ = 0.012 + k * 0.0115
+        prism_x(mb, _T(-0.0007, 0, zr_), [(-0.0165, -0.0014), (0.0165, -0.0014), (0.0165, 0.0014), (-0.0165, 0.0014)],
+                [0.0013] * 4, 0.0012, re=0.0003, mat="rubber")
+
+
+def _stock_fixed(mb, BZ, F):
+    """Culata fija de precisión (genérica): cuerpo de polímero de cantos redondeados con gancho inferior para la mano de
+    apoyo, carrillera ajustable sobre 2 postes con perilla moleteada, 2 espaciadores de largo de tiro, cantonera de hule
+    estriada, copas QD y riel inferior corto para monópode. Ocupa x = 0..0,262."""
+    P = [(0.0185, 0.0040), (0.068, 0.0030), (0.080, 0.016), (0.090, 0.034), (0.118, BZ - 0.052), (0.170, BZ - 0.034),
+         (0.2625, BZ - 0.0195), (0.2625, BZ + 0.0145), (0.0185, BZ + 0.0145)]
+    side(mb, P, [0.003, 0.010, 0.014, 0.016, 0.025, 0.020, 0.004, 0.004, 0.003], 0.0400, F, re=0.0055, n=4, ne=3)
+    xloft(mb, [(0.050, 0.0300, 0.016, BZ + 0.0245, (0.007, 0.007, 0.002, 0.002)),
+               (0.058, 0.0360, 0.020, BZ + 0.0265, (0.009, 0.009, 0.002, 0.002)),
+               (0.168, 0.0360, 0.020, BZ + 0.0265, (0.009, 0.009, 0.002, 0.002)),
+               (0.178, 0.0300, 0.016, BZ + 0.0245, (0.007, 0.007, 0.002, 0.002))], F, n=4)
+    for xp in (0.078, 0.150):
+        revolve(mb, [(0.0042, BZ + 0.0130), (0.0042, BZ + 0.0180)], "steel", seg=24, M=_T(xp, 0, 0))
+    _knob_k(mb, _T(0.114, -0.0200, BZ + 0.002) @ _Rx(90), 0.0095, 0.0085, F, nt=24, dp=0.0007)
+    for k, (x0_, x1_) in enumerate(((0.0130, 0.0157), (0.0157, 0.0187))):
+        xloft(mb, [(x0_, 0.0430 - k * 0.0006, 0.1290, 0.0670, 0.010), (x1_, 0.0430 - k * 0.0006, 0.1290, 0.0670, 0.010)], F, n=4)
+    xloft(mb, [(0.0, 0.0418, 0.1300, 0.0670, 0.0110), (0.0022, 0.0460, 0.1340, 0.0670, 0.0130),
+               (0.0132, 0.0460, 0.1340, 0.0670, 0.0130)], "rubber", n=5)
+    for k in range(10):
+        zr_ = 0.013 + k * 0.0115
+        prism_x(mb, _T(-0.0007, 0, zr_), [(-0.0165, -0.0014), (0.0165, -0.0014), (0.0165, 0.0014), (-0.0165, 0.0014)],
+                [0.0013] * 4, 0.0012, re=0.0003, mat="rubber")
+    for (xq, zq) in ((0.050, 0.024), (0.205, BZ - 0.012)):
+        for s in (-1, 1):
+            revolve(mb, [(0.0072, 0.0), (0.0072, 0.0012), (0.0062, 0.0018), (0.0046, 0.0018), (0.0046, 0.0004), (0.0, 0.0004)],
+                    ["steel", "steel", "steel", "steel", "cable"], seg=32, M=_T(xq, s * 0.0198, zq) @ _Rx(-90 * s), caps=False)
+    pic_rail(mb, 0.026, 0.062, M=_T(0, 0, 0.0040) @ _Rx(180))
+
+
+def _buffer_tube(mb, BZ, GM, x_end=0.036):
+    """Tubo del amortiguador (Ø 1,148 in) con tapa trasera, nervio inferior con 6 barrenos de posición, tuerca castillo
+    con 3 muescas y placa portafusil con receptáculo QD y argolla."""
+    revolve(mb, [(0.0, x_end), (0.0120, x_end), (0.0140, x_end + 0.0012), (0.01458, x_end + 0.004), (0.01458, 0.2508)], GM, seg=48,
+            M=_T(0, 0, BZ) @ _Ry(90), caps=False)
+    prism_x(mb, _T(x_end + 0.006, 0, BZ - 0.0132), [(-0.0040, -0.0040), (0.0040, -0.0040), (0.0040, 0.0020), (-0.0040, 0.0020)],
+            [0.0012, 0.0012, 0.0, 0.0], 0.2490 - x_end - 0.006, re=0.0012, mat=GM)
+    for k in range(6):
+        xh = 0.112 + k * 0.0163
+        revolve(mb, [(0.0, 0.0), (0.0021, 0.0), (0.0021, 0.0007), (0.0026, 0.0010)], ["cable", GM, GM], seg=20,
+                M=_T(xh, 0, BZ - 0.0172) @ _Rx(180) @ _T(0, 0, -0.0011), caps=False)
+    nt = 3
+
+    def notch(a):
+        for j in range(nt):
+            c = 2 * PI * j / nt + PI / 2
+            d = (a - c + PI) % (2 * PI) - PI
+            if abs(d) < 0.16:
+                return 0.90
+        return 1.0
+    revolve(mb, [(0.0147, 0.2505), (0.0170, 0.2505), (0.0178, 0.2512), (0.0178, 0.2583), (0.0170, 0.2590), (0.0147, 0.2590)],
+            GM, seg=96, M=_T(0, 0, BZ) @ _Ry(90), rmod=notch, closed=True)
+    revolve(mb, [(0.0147, 0.2590), (0.0168, 0.2590), (0.0168, 0.2620), (0.0147, 0.2620)], GM, seg=48, M=_T(0, 0, BZ) @ _Ry(90),
+            closed=True)
+    side(mb, [(0.2590, BZ - 0.0228), (0.2620, BZ - 0.0228), (0.2620, BZ - 0.0120), (0.2590, BZ - 0.0120)], [0.0008] * 4, 0.0180,
+         GM, re=0.0004, n=2, ne=1)
+    revolve(mb, [(0.0058, 0.0), (0.0058, 0.0035)], GM, seg=32, M=_T(0.2605, -0.0160, BZ - 0.0060) @ _Rx(90), caps=True)
+    _qd_swivel(mb, _T(0.2605, -0.0195, BZ - 0.0060) @ _Rx(90), ang=90.0)
+
+
+def _bipod_folded(mb, x, zb, mat="gunmetal"):
+    """Bípode plegado bajo el guardamanos (x = abrazadera, zb = cara inferior del guardamanos): abrazadera M-LOK con 2
+    tornillos, cuerpo con eje de giro, 2 patas telescópicas plegadas hacia adelante con resortes, zapatas de hule."""
+    side(mb, [(x - 0.022, zb - 0.0105), (x + 0.022, zb - 0.0105), (x + 0.022, zb + 0.0012), (x - 0.022, zb + 0.0012)],
+         [0.003, 0.003, 0.0, 0.0], 0.0300, mat, re=0.0015, n=2, ne=2)
+    for dx in (-0.012, 0.012):
+        _screw_h(mb, _T(x + dx, 0, zb - 0.0105) @ _Rx(180), d=0.0055, mat=mat)
+    revolve(mb, [(0.0050, -0.024), (0.0050, 0.024)], "steel", seg=24, M=_T(x + 0.010, 0, zb - 0.0170) @ _Rx(90))
+    for s in (-1, 1):
+        y = s * 0.0185
+        side(mb, [(x + 0.002, zb - 0.0230), (x + 0.018, zb - 0.0230), (x + 0.018, zb - 0.0110), (x + 0.002, zb - 0.0110)],
+             [0.003] * 4, 0.0070, mat, y0=y, re=0.0012, n=2, ne=1)
+        xs, xe = x + 0.012, x + 0.185
+        revolve(mb, [(0.0068, 0.0), (0.0068, 0.110), (0.0060, 0.112)], mat, seg=32, M=_T(xs, y, zb - 0.0165) @ _Ry(90), caps=True)
+        revolve(mb, [(0.0050, 0.108), (0.0050, xe - xs - 0.016)], "steel", seg=32, M=_T(xs, y, zb - 0.0165) @ _Ry(90), caps=False)
+        revolve(mb, [(0.0, -0.0005), (0.0062, 0.0), (0.0075, 0.006), (0.0075, 0.016), (0.0060, 0.020), (0.0, 0.021)], "rubber",
+                seg=32, M=_T(xe - 0.016, y, zb - 0.0165) @ _Ry(90), caps=False)
+        pts = []
+        for k in range(14 * 6 + 1):                                  # resorte de retorno (alambre de 1,2 mm)
+            t = k / (14 * 6)
+            a_ = 2 * PI * 14 * t
+            pts.append((x + 0.004 + 0.034 * t, y + 0.0035 * math.cos(a_) * s, zb - 0.0060 + 0.0035 * math.sin(a_)))
+        mb.tube(pts, 0.0006, seg=8, mat="steel", caps=False)
+
+
 def rifle(seed=0, kind="assault", sling=False, mag=True):
-    """Fusil de asalto genérico de cerrojo rotativo y sistema de gas (aspecto militar actual, no réplica). kind:
-    «carbine» (cañón 368 mm, ~ 0,86 m, punto rojo de tubo), «assault» (cañón 420 mm, ~ 0,91 m, mira holográfica de caja),
-    «dmr» (cañón 508 mm, ~ 1,01 m, mira 1-6× en montaje de una pieza, culata fija con carrillera, freno de boca y bípode
-    plegado). Construcción: culata de polímero (lofts de sección redondeada) con cantonera de hule sobre tubo de amortiguador
-    con tuerca castillo y placa portafusil; cajón inferior de aluminio con brocal, guardamonte, disparador, selector, retén
-    del cargador, retén del cerrojo y pasadores; empuñadura ergonómica; cajón superior con riel ranurado, tapa de expulsión
-    con bisagra, asistente de cierre, deflector y palanca de carga en T; guardamanos flotante con ranuras pasantes a ambos
-    costados y abajo y riel superior corrido; cañón con bloque de gas (visible por las ranuras) y apagallamas de 6 púas o
-    freno; miras de respaldo plegadas; argollas QD (placa trasera y guardamanos); cargador curvo (mag=False lo quita);
-    correa de cinta opcional (sling=True). Muebles en polímero negro (semilla par) o arena (impar).
-    ORIGEN: x = 0 cara de la cantonera, z = 0 talón inferior de la cantonera, y = 0 plano de simetría; cañón hacia +X, arriba
-    +Z. Eje del ánima a z = RIFLE_BORE_Z = 0,102 m; largo total RIFLE_LEN[kind]; el cargador y la empuñadura bajan de z = 0
-    (hasta ~ -0,10 m con cargador). Para un armero: la cantonera apoya en x = 0 y el cañón se sujeta a ~ 0,6-0,8 m.
-    Fuentes: en.wikipedia.org/wiki/M4_carbine y americanspecialops.com (largo 838 / 1003 mm, cañones 368 / 508 mm);
-    en.wikipedia.org/wiki/Picatinny_rail (ranura 5,23 mm a paso 10,01 mm, 3 mm de profundidad)."""
+    """Fusil de asalto genérico de cerrojo rotativo y toma de gases (sistema AR, aspecto militar actual, no réplica).
+    kind: «carbine» (cañón 368 mm, guardamanos de 305 mm, punto rojo de tubo), «assault» (cañón 420 mm, guardamanos de 381
+    mm, mira holográfica de caja), «dmr» (cañón 508 mm, receptores clase 7,62 escalados 1,09, culata fija de precisión,
+    mira 1-6× en montaje voladizo, freno de boca, bípode plegado, cargador recto de 20). Construcción (ver cada función):
+    cajón superior (_upper) con ventana de expulsión, tapa, deflector, asistente de cierre y palanca de carga; cajón inferior
+    (_lower) con brocal y su ensanche hueco, guardamonte, disparador, pasadores, selector, retenes; empuñadura texturizada
+    (_grip); culata retráctil (_stock_ctr) sobre tubo del amortiguador con tuerca castillo y placa portafusil, o fija
+    (_stock_fixed); guardamanos octagonal M-LOK (mlok_tube) con riel 1913 corrido; cañón con bloque y tubo de gases;
+    apagallamas de jaula (_birdcage) o freno (_brake); miras de respaldo plegadas (_buis); óptica; argollas QD; cargador
+    (_mag, insertado). Metal «gunmetal»; muebles en polímero negro (semilla par) o arena (impar).
+    ORIGEN: x = 0 cara de la cantonera, z = 0 talón inferior de la culata, y = 0 plano de simetría; cañón hacia +X, arriba
+    +Z. Eje del ánima a z = RIFLE_BORE_Z = 0,102 m; largo total RIFLE_LEN[kind]; empuñadura y cargador bajan de z = 0 (hasta
+    ~ -0,09 m). Para un armero: la cantonera apoya en x = 0 y el guardamanos se sujeta a ~ 0,6-0,8 m.
+    Fuentes: en.wikipedia.org/wiki/M4_carbine (838 mm, cañón 368 mm); en.wikipedia.org/wiki/M16_rifle (M16A4 cañón 508 mm);
+    en.wikipedia.org/wiki/M110_semi-automatic_sniper_system (1029 mm, cañón 508 mm); en.wikipedia.org/wiki/Picatinny_rail;
+    en.wikipedia.org/wiki/M-LOK (ranuras 32 × 7 mm a paso de 40 mm); forum.308ar.com/topic/23364 (riel ~ 1,215 in sobre el
+    ánima en AR-15); tubo del amortiguador Ø 1,148 in (especificación militar); apagallamas A2 Ø 0,865 × 2,25 in."""
     mb = MB()
     kind = kind if kind in RIFLE_LEN else "assault"
     BZ = RIFLE_BORE_Z
-    ZPL = BZ - 0.011                    # línea de partición superior / inferior
-    ZB = BZ - 0.040                     # fondo del cajón inferior (zona del disparador)
     GM = "gunmetal"
     F = "polymer" if seed % 2 == 0 else "paint_tan"
-    Lb, Lh = {"carbine": (0.368, 0.26), "assault": (0.42, 0.30), "dmr": (0.508, 0.34)}[kind]
-    xm = 0.43 + Lb                      # boca del cañón (cara del cerrojo en x = 0,43)
-    xh0, xh1 = 0.513, 0.513 + Lh
-    # ---------------- culata y cantonera
-    if kind == "dmr":
-        st = [(0.011, 0.044, 0.130, 0.068, 0.012), (0.04, 0.044, 0.128, 0.069, 0.012), (0.10, 0.042, 0.126, 0.070, 0.012),
-              (0.13, 0.040, 0.085, 0.091, 0.012), (0.17, 0.040, 0.056, 0.100, 0.012), (0.212, 0.036, 0.046, 0.100, 0.010)]
-        xloft(mb, st, F, n=4)
-        xloft(mb, [(0.032, 0.030, 0.020, 0.141, 0.006), (0.040, 0.034, 0.024, 0.143, 0.009), (0.150, 0.034, 0.024, 0.143, 0.009),
-                   (0.160, 0.028, 0.018, 0.140, 0.006)], F, n=4)
-        revolve(mb, [(0.009, -0.002), (0.009, 0.008), (0.0, 0.0095)], GM, seg=SEG, M=_T(0.09, -0.020, 0.105) @ _Rx(90),
-                caps=False)                                                             # perilla de la carrillera
+    dmr = kind == "dmr"
+    S = 1.09 if dmr else 1.0
+    Lb, Lh, xgb = {"carbine": (0.368, 0.305, 0.608), "assault": (0.420, 0.381, 0.659), "dmr": (0.508, 0.381, 0.745)}[kind]
+    # ---------------- grupo de receptores (coordenadas AR-15; el DMR se escala alrededor de (0,262, 0, ánima))
+    rx = MB()
+    mw0 = 0.3805 if dmr else 0.382
+    _upper(rx, BZ, GM)
+    _lower(rx, BZ, GM, mw0=mw0, seed=seed)
+    _grip(rx, BZ, F, seed=seed)
+    Ms = _T(0.262, 0, BZ) @ Matrix.Diagonal((S, S, S, 1.0)) @ _T(-0.262, 0, -BZ)
+    mb.join(rx, Ms)
+    xf = 0.262 + (_XU1 - 0.262) * S                 # cara delantera del cajón superior
+    xbf = 0.262 + (0.430 - 0.262) * S               # cara del cerrojo
+    zr = BZ + _RT * S                               # cara superior del riel
+    # ---------------- culata
+    if dmr:
+        _stock_fixed(mb, BZ, F)
     else:
-        # culata retráctil: cuerpo deslizante sobre el tubo, talón alto y pata inferior en diagonal (ventana pasante)
-        xloft(mb, [(0.034, 0.040, 0.046, BZ - 0.001, 0.013), (0.050, 0.044, 0.052, BZ - 0.002, 0.015),
-                   (0.172, 0.044, 0.050, BZ - 0.003, 0.015), (0.196, 0.038, 0.042, BZ - 0.002, 0.012)], F, n=4)
-        xloft(mb, [(0.010, 0.044, 0.128, 0.067, 0.012), (0.034, 0.044, 0.126, 0.068, 0.012), (0.056, 0.040, 0.104, 0.080, 0.012),
-                   (0.066, 0.034, 0.060, 0.102, 0.012)], F, n=4)
-        p0, p1 = Vector((0.020, 0.0, 0.018)), Vector((0.168, 0.0, BZ - 0.024))
-        Ml, _ = port.frame_on(p0, p1, up=(0, 0, 1))
-        port.loft(mb, [(0.0, 0.034, 0.030, 0.0), (0.03, 0.030, 0.022, 0.0), (0.12, 0.028, 0.020, 0.0), (0.155, 0.030, 0.024, 0.002)],
-                  seg=16, mat=F, M=Ml, ex=2.8)
-        side(mb, [(0.135, BZ - 0.033), (0.172, BZ - 0.030), (0.172, BZ - 0.024), (0.135, BZ - 0.024)], [0.004, 0.002, 0.0, 0.0],
-             0.012, F, re=0.0015, ne=1, n=2)                                           # palanca de ajuste
-    xloft(mb, [(0.0, 0.040, 0.126, 0.067, 0.011), (0.003, 0.046, 0.134, 0.067, 0.014), (0.0125, 0.046, 0.134, 0.067, 0.014)],
-          "rubber", n=4)
-    for zz in ((0.035, 0.065, 0.095) if kind != "dmr" else ()):                       # estrías de la cantonera
-        plank(mb, (-0.0008, -0.019, zz - 0.0018), (0.0006, 0.019, zz + 0.0018), "rubber", ch=0.0006)
-    revolve(mb, [(0.0153, 0.03), (0.0153, 0.247), (0.0185, 0.2482), (0.0185, 0.2555), (0.0153, 0.2565)], GM, seg=SEG,
-            M=_T(0, 0, BZ) @ _Ry(90), caps=False)                                                  # tubo del amortiguador + tuerca castillo
-    xloft(mb, [(0.2555, 0.040, 0.048, BZ - 0.002, 0.012), (0.2580, 0.040, 0.048, BZ - 0.002, 0.012)], GM, n=4)
-    _qd_swivel(mb, _T(0.2568, -0.020, BZ - 0.004) @ _Rx(90), ang=90.0)
-    # ---------------- cajón inferior
-    P = [(0.256, BZ + 0.016), (0.256, BZ - 0.018), (0.264, BZ - 0.030), (0.272, ZB), (0.395, ZB), (0.395, BZ - 0.086),
-         (0.398, BZ - 0.095), (0.481, BZ - 0.095), (0.484, BZ - 0.086), (0.481, ZB + 0.004), (0.493, BZ - 0.033),
-         (0.493, ZPL + 0.0005), (0.276, ZPL + 0.0005), (0.268, BZ + 0.016)]
-    R = [0.006, 0.006, 0.01, 0.003, 0.004, 0.003, 0.004, 0.004, 0.003, 0.008, 0.006, 0.0, 0.006, 0.006]
-    side(mb, P, R, 0.0296, GM, re=0.0012, n=3, ne=1)
-    slab2(mb, _T(0.4395, 0, BZ - 0.0965), 0.093, 0.034, 0.012, 0.005, GM, re_t=0.0, ne_t=0, re_b=0.002, ne_b=1)  # boca del brocal
-    strap(mb, fillet([(0.288, 0.0, ZB + 0.003), (0.296, 0.0, ZB - 0.013), (0.388, 0.0, ZB - 0.013), (0.394, 0.0, ZB + 0.002)],
-                     0.006, 2), 0.004, 0.013, GM, up=(0, 1, 0), r=0.0012)              # guardamonte
-    side(mb, [(0.333, ZB + 0.001), (0.339, ZB + 0.001), (0.341, ZB - 0.006), (0.338, ZB - 0.0115), (0.334, ZB - 0.010),
-              (0.3355, ZB - 0.005)], [0.0, 0.0, 0.003, 0.002, 0.0, 0.003], 0.006, GM, re=0.0)                     # disparador
-    for (xx, zz) in ((0.266, BZ - 0.012), (0.487, BZ - 0.024)):                         # pasadores de desarme / pivote
-        revolve(mb, [(0.0034, -0.0156), (0.0034, 0.0156)], GM, seg=16, M=_T(xx, 0, zz) @ _Rx(90))
-    revolve(mb, [(0.0, -0.0003), (0.0062, -0.0003), (0.0062, 0.0025), (0.0, 0.0025)], GM, seg=SEG,
-            M=_T(0.300, -0.0148, BZ - 0.022) @ _Rx(90))                                 # selector (izq.)
-    side(mb, [(0.297, BZ - 0.0255), (0.319, BZ - 0.0235), (0.321, BZ - 0.0195), (0.297, BZ - 0.0185)], [0.002, 0.002, 0.002, 0.002],
-         0.0022, GM, y0=-0.0148 - 0.0035, re=0.0, n=2)
-    revolve(mb, [(0.0048, -0.0003), (0.0048, 0.002), (0.0, 0.0028)], GM, seg=20, M=_T(0.405, 0.0148, BZ - 0.030) @ _Rx(-90),
-            caps=False)                                 # retén del cargador (der.)
-    side(mb, [(0.398, BZ - 0.028), (0.418, BZ - 0.026), (0.418, BZ - 0.016), (0.400, BZ - 0.014)], [0.001, 0.003, 0.003, 0.001],
-         0.0024, GM, y0=-0.0148 - 0.001, re=0.0, n=2)                                   # retén del cerrojo (izq.)
-    # ---------------- empuñadura
-    a = math.radians(18.0)
-    p0 = Vector((0.285, 0.0, ZB + 0.008))
-    p1 = p0 + Vector((-math.sin(a), 0.0, -math.cos(a))) * 0.115
-    Mg, _ = port.frame_on(p0, p1, up=(1, 0, 0))
-    port.loft(mb, [(0.0, 0.026, 0.045, 0.001), (0.014, 0.029, 0.050, 0.0), (0.04, 0.0305, 0.053, -0.001), (0.065, 0.031, 0.051, 0.001),
-                   (0.09, 0.031, 0.051, -0.002), (0.108, 0.029, 0.047, -0.003), (0.115, 0.020, 0.034, -0.003)], seg=SEG, mat=F, M=Mg,
-              ex=2.5)
-    # ---------------- cajón superior
-    xloft(mb, [(0.262, 0.030, 0.030, ZPL + 0.015, 0.004), (0.512, 0.030, 0.030, ZPL + 0.015, 0.004)], GM, n=4)
-    rail(mb, 0.266, 0.508, BZ + 0.019, GM)
-    side(mb, [(0.335, BZ - 0.0075), (0.395, BZ - 0.0075), (0.395, BZ + 0.0085), (0.335, BZ + 0.0085)], [0.0015] * 4, 0.0014, GM,
-         y0=0.0153, re=0.0)                                                             # tapa de expulsión
-    revolve(mb, [(0.0016, 0.333), (0.0016, 0.397)], GM, seg=SEG_T, M=_T(0, 0.0162, BZ - 0.0085) @ _Ry(90))
-    side(mb, [(0.316, BZ + 0.001), (0.332, BZ + 0.001), (0.332, BZ + 0.013), (0.322, BZ + 0.013)], [0.0, 0.0, 0.003, 0.004], 0.006,
-         GM, y0=0.016, re=0.0012, ne=1, n=2)                                            # deflector de vainas
-    pa, pb = Vector((0.318, 0.011, BZ + 0.004)), Vector((0.282, 0.024, BZ + 0.004))
-    Mf, _ = port.frame_on(pa, pb)
-    revolve(mb, [(0.0085, 0.0), (0.0085, 0.020), (0.0068, 0.0225), (0.0068, 0.032), (0.0, 0.0335)], GM, seg=SEG,
-            M=Mf @ _Ry(90), caps=False)                                                 # asistente de cierre
-    plan(mb, [(0.244, -0.022), (0.253, -0.022), (0.259, -0.008), (0.263, -0.008), (0.263, 0.008), (0.259, 0.008), (0.253, 0.022),
-              (0.244, 0.022)], [0.003, 0.002, 0.002, 0.0, 0.0, 0.002, 0.002, 0.003], 0.0075, GM, z0=BZ + 0.0156, re=0.0015, ne=1,
-         n=2)                                                                            # palanca de carga
-    revolve(mb, [(0.017, 0.5112), (0.017, 0.5138)], GM, seg=SEG, M=_T(0, 0, BZ) @ _Ry(90))   # tuerca del cañón
-    # ---------------- guardamanos, cañón, bloque de gas, boca
-    n_sl = int((Lh - 0.06) / 0.058) if kind != "dmr" else 3
-    pit = 0.058 if kind != "dmr" else 0.088
-    slots = [(xh0 + 0.034 + k * pit, xh0 + 0.066 + k * pit) for k in range(n_sl)]
-    slotted_tube(mb, xh0, xh1, 0.046, 0.048, 0.011, 0.003, BZ - 0.005, slots)
-    rail(mb, xh0 + 0.002 + (0.12 if kind == "dmr" else 0.0), xh1 - 0.002, BZ + 0.019, GM)
-    xg = xh1 - 0.075
-    revolve(mb, [(0.0105, 0.43), (0.0105, xg - 0.03), (0.0095, xg - 0.028), (0.0095, xm)], GM, seg=SEG,
-            M=_T(0, 0, BZ) @ _Ry(90), caps=False)
-    revolve(mb, [(0.0135, -0.012), (0.0135, 0.012)], GM, seg=SEG, M=_ax(xg, 0, BZ))
-    if kind == "dmr":
-        _brake(mb, xm - 0.004, BZ)
+        _buffer_tube(mb, BZ, GM)
+        _stock_ctr(mb, BZ, F)
+    # ---------------- guardamanos, cañón, gases, boca
+    a_hg = zr - 0.0095 - BZ
+    xh0, xh1 = xf + 0.0006, xf + 0.0006 + Lh
+
+    def slot_fn(k, c):
+        if k in (0, 4, 6):
+            return True
+        if k in (5, 7):
+            return c % 2 == 1
+        return False
+    mlok_tube(mb, xh0, xh1, a_hg, 0.0024, 0.0042, slot_fn, M=_T(0, 0, BZ), mat=GM)
+    pic_rail(mb, xh0 + 0.0025, xh1 - 0.0025, M=_T(0, 0, BZ + a_hg))
+    xm = xbf + Lb
+    revolve(mb, [(0.0095, xf - 0.010), (0.0095, xgb + 0.020), (0.0093, xgb + 0.040), (0.0090, xm - 0.020), (0.0089, xm - 0.0008),
+                 (0.0070, xm)], GM, seg=40, M=_T(0, 0, BZ) @ _Ry(90), caps=False)
+    revolve(mb, [(0.0095, -0.0125), (0.0120, -0.0125), (0.0128, -0.0115), (0.0128, 0.0115), (0.0120, 0.0125), (0.0095, 0.0125)],
+            GM, seg=40, M=_ax(xgb, 0, BZ), closed=True)
+    for dx in (-0.006, 0.006):
+        revolve(mb, [(0.0, 0.0), (0.0022, 0.0), (0.0022, 0.0004), (0.0, 0.0004)], "cable", seg=12,
+                M=_T(xgb + dx, 0, BZ - 0.0127) @ _Rx(180), caps=False)
+    with mb.soft():
+        mb.tube([(xgb - 0.010, 0, BZ + 0.0123), (xf - 0.004, 0, BZ + 0.0123)], 0.0024, seg=12, mat="steel", caps=True)
+    if dmr:
+        _brake(mb, xm, BZ)
     else:
-        _flash_hider(mb, xm - 0.004, BZ)
-    # ---------------- miras
-    zr = BZ + 0.0285                                                                    # cara superior de los rieles
-    if kind != "dmr":                                                                  # el DMR usa solo la mira telescópica
-        _buis(mb, 0.300, zr)
+        _birdcage(mb, xm, BZ)
+    # ---------------- miras y óptica
+    if not dmr:
+        _buis(mb, 0.306, zr)
         _buis(mb, xh1 - 0.004, zr, front=True)
     if kind == "carbine":
-        _red_dot(mb, 0.420, zr)
+        _red_dot(mb, 0.410, zr)
     elif kind == "assault":
-        _holo(mb, 0.430, zr)
+        _holo(mb, 0.448, zr)
     else:
-        _scope(mb, 0.470, zr)
-    # ---------------- argolla delantera, bípode, cargador, correa
-    xs = xh1 - 0.045
-    _qd_swivel(mb, _T(xs, -0.0228, BZ - 0.005) @ _Rx(90), ang=90.0)
+        _scope(mb, 0.462, zr)
+        _bipod_folded(mb, xh1 - 0.050, BZ - a_hg)
+    # ---------------- argolla delantera (montaje M-LOK QD a la izquierda), cargador, correa
+    xs = xh1 - 0.060
+    plan(mb, [(-0.010, -0.0060), (0.010, -0.0060), (0.010, 0.0060), (-0.010, 0.0060)], [0.002] * 4, 0.0060, GM, z0=-0.0004,
+         re=0.0012, n=2, ne=1, M=_T(xs, -a_hg, BZ) @ _Rx(90))
+    _qd_swivel(mb, _T(xs, -a_hg - 0.0055, BZ) @ _Rx(90), ang=90.0)
     if mag:
-        _mag(mb, _T(0.4385, 0, BZ - 0.024), lite=True)
+        xmag = 0.262 + ((mw0 + 0.4535) / 2 - 0.262) * S
+        _mag(mb, _T(xmag, 0, BZ - 0.018 * S), lite=True, inserted=True, cal="762" if dmr else "556", seed=seed)
     if sling:
         pts = [(xs, -0.031, BZ - 0.010), (xs - 0.03, -0.033, BZ - 0.060), (xs - 0.12, -0.034, BZ - 0.135), (0.45, -0.035, BZ - 0.165),
                (0.33, -0.035, BZ - 0.150), (0.28, -0.034, BZ - 0.090), (0.262, -0.031, BZ - 0.012)]
-        path = spline(pts, 2)
-        strap(mb, path, 0.025, 0.0022, "canvas", up=(0, 1, 0), r=0.0009)
-        i = len(path) // 3                                                              # hebilla de ajuste
-        Mh, _ = port.frame_on(Vector(path[i]), Vector(path[i + 1]), up=(0, 1, 0))
-        plan(mb, [(-0.012, -0.016), (0.012, -0.016), (0.012, 0.016), (-0.012, 0.016)], [0.004] * 4, 0.004, "plastic",
-             z0=-0.002, re=0.001, ne=1, n=2, M=Mh @ _Rx(90) @ _Rx(-90))
+        path = spline(pts, 3)
+        with mb.soft():
+            strap(mb, path, 0.025, 0.0022, "canvas", up=(0, 1, 0), r=0.0009)
     return mb
 
 
 # ======================================================================================================== pistola y funda
 PISTOL_BORE_Z = 0.1135
+_PS_ZB, _PS_ZT, _PS_W, _PS_L = 0.0985, 0.1270, 0.0255, 0.186     # corredera: fondo, lomo, ancho, largo
+
+
+def tex_loft(mb, M, st, mat, nseg=64, ex=2.7, g=0.0015, tx=(0.0, 0.0), dp=0.00035, ends=(), cap0=False, cap1=True):
+    """Empuñadura por secciones superelípticas a lo largo de X local [(x, ancho_y, fondo_z, z_centro)] con textura
+    piramidal (vértices alternos levantados dp en una rejilla de paso g) entre tx[0] y tx[1]; ends = estaciones extra."""
+    def interp(x):
+        for i in range(len(st) - 1):
+            if st[i][0] <= x <= st[i + 1][0]:
+                f = (x - st[i][0]) / (st[i + 1][0] - st[i][0])
+                return [st[i][j] + (st[i + 1][j] - st[i][j]) * f for j in range(4)]
+        return list(st[-1] if x > st[-1][0] else st[0])
+    xs = [s[0] for s in st] + list(ends) + [tx[0] + g * k for k in range(int((tx[1] - tx[0]) / g) + 1)]
+    xs = _uniq(xs)
+    P = []
+    for i, x in enumerate(xs):
+        _, w, h, zc = interp(x)
+        row = []
+        for k in range(nseg):
+            t = 2 * PI * k / nseg
+            c, s = math.cos(t), math.sin(t)
+            yy = w / 2 * math.copysign(abs(c) ** (2 / ex), c)
+            zz = zc + h / 2 * math.copysign(abs(s) ** (2 / ex), s)
+            o = 0.0
+            if tx[0] < x < tx[1]:
+                fx = min(1.0, (x - tx[0]) / 0.003, (tx[1] - x) / 0.003)
+                o = dp * fx * (1.0 if (i + k) % 2 == 0 else 0.0)
+            ln = math.hypot(yy, zz - zc) or 1.0
+            row.append((x, yy + yy / ln * o, zz + (zz - zc) / ln * o))
+        P.append(row)
+    return gridskin(mb, P, mat, M=M, cap0=cap0, cap1=cap1)
+
+
+def _slide_sec(W, zb, zt, port=0.0, ser=(0.0, 0.0)):
+    """Sección de la corredera (y, z), antihoraria vista desde +X, con muestras para estrías y la ventana de expulsión.
+    port: rebaje (m) del cuarto superior derecho; ser = (hondo de estría, desplazamiento x por curvatura) -> se aplica fuera."""
+    pts = []
+    zs_side = [zb + 0.0008, zb + 0.0030, zb + 0.0080, zt - 0.0110, zt - 0.0104, zt - 0.0062, zt - 0.0045]
+    for z in zs_side:
+        pts.append((W / 2, z, "R"))
+    pts += [(W / 2 - 0.0005, zt - 0.0036, "C"), (W / 2 - 0.0028, zt - 0.0011, "C"), (W / 2 - 0.0042, zt - 0.0001, "C"),
+            (W / 2 - 0.0050, zt, "T"), (0.0040, zt, "T"), (-0.0018, zt, "T"), (-0.0024, zt, "T"), (-0.0060, zt, "T"),
+            (-W / 2 + 0.0050, zt, "T"), (-W / 2 + 0.0042, zt - 0.0001, "C"), (-W / 2 + 0.0028, zt - 0.0011, "C"),
+            (-W / 2 + 0.0005, zt - 0.0036, "C")]
+    for z in reversed(zs_side):
+        pts.append((-W / 2, z, "L"))
+    pts += [(-W / 2 + 0.0007, zb, "B"), (W / 2 - 0.0007, zb, "B")]
+    return pts
 
 
 def _pistol(mb, lite=False, F="polymer"):
-    """Pistola de armazón de polímero y percutor lanzado, genérica (~ 190 × 135 × 31 mm): corredera de acero con aristas
-    redondeadas y estrías traseras y delanteras, alza de cola de milano y guion, capuchón del cañón visible en la ventana
-    de expulsión, boca con corona y guía del resorte; armazón con riel de accesorios de 3 ranuras, guardamonte cuadrado,
-    disparador con seguro de lámina, palanca de desarme, retén de corredera, retén del cargador y empuñadura con lomo y
-    base del cargador. lite = sin lo que tapa la funda (estrías delanteras, guion, riel, boca)."""
+    """Pistola de armazón de polímero y percutor lanzado, genérica (~ 190 × 133 × 31 mm, corredera 186 × 25,5 mm).
+    Corredera en una rejilla (gridskin): chaflanes superiores, nariz redondeada, estrías curvas traseras y delanteras,
+    ventana de expulsión rebajada con el capuchón del cañón y la cara de la recámara, extractor con su pasador, placa
+    trasera, alza de cola de milano con muesca en U y 2 puntos blancos, guion con punto, boca con corona del cañón y guía
+    del resorte. Armazón: guardapolvo con riel 1913 corto, guardamonte cuadrado con gancho, disparador con seguro de lámina,
+    retén de corredera, palanca de desarme, retén del cargador estriado, pasadores, empuñadura texturizada (pirámides) con
+    cola de castor y boca del cargador abocinada, base del cargador con lengüeta. lite = sin lo que tapa la funda."""
     BZ = PISTOL_BORE_Z
     GM = "gunmetal"
-    zs0, zs1 = 0.097, 0.130                              # corredera
-    xloft(mb, [(0.0, 0.022, 0.030, 0.1135, (0.005, 0.005, 0.0015, 0.0015)), (0.004, 0.0250, 0.033, 0.1135, (0.006, 0.006, 0.0015, 0.0015)),
-               (0.176, 0.0250, 0.033, 0.1135, (0.006, 0.006, 0.0015, 0.0015)), (0.190, 0.0225, 0.029, 0.1130, (0.006, 0.006, 0.002, 0.002))],
-          GM, n=4)
-    for k in range(6):                                   # estrías traseras (y delanteras)
-        for x0 in ([0.012 + k * 0.0042] + ([0.150 + k * 0.0042] if not lite else [])):
-            for sy in (-1, 1):
-                side(mb, [(x0, zs0 + 0.004), (x0 + 0.0019, zs0 + 0.004), (x0 + 0.0024, zs1 - 0.007), (x0 + 0.0005, zs1 - 0.007)], 0.0,
-                     0.0012, GM, y0=sy * 0.01245, re=0.0)
-    side(mb, [(0.006, zs1 - 0.001), (0.020, zs1 - 0.001), (0.019, zs1 + 0.0055), (0.0145, zs1 + 0.0055), (0.0145, zs1 + 0.0035),
-              (0.0115, zs1 + 0.0035), (0.0115, zs1 + 0.0055), (0.0075, zs1 + 0.0055)], [0.0, 0.0, 0.001, 0.0, 0.0006, 0.0006, 0.0, 0.001],
-         0.021, GM, re=0.0)                              # alza (vista de lado: escalón con muesca transversal)
-    plan(mb, [(0.075, 0.0005), (0.122, 0.0005), (0.122, 0.0105), (0.075, 0.0105)], [0.0, 0.0015, 0.0015, 0.0], 0.0008, GM,
-         z0=zs1 - 0.0012, re=0.0)                        # capuchón del cañón (ventana de expulsión)
-    side(mb, [(0.074, zs1 - 0.0015), (0.123, zs1 - 0.0015), (0.123, zs1 - 0.0095), (0.074, zs1 - 0.0095)], 0.0, 0.0010, GM,
-         y0=0.01255, re=0.0)                             # borde de la ventana (lado derecho)
+    W, zb, zt, L = _PS_W, _PS_ZB, _PS_ZT, _PS_L
+    # ---------------- corredera
+    e = 0.0004
+    gr = [0.0110 + k * 0.0034 for k in range(8)]                     # estrías traseras
+    gf = [] if lite else [0.1460 + k * 0.0034 for k in range(7)]       # delanteras
+    xs = [0.0, 0.0006, 0.0018, 0.004, 0.083, 0.0836, 0.1338, 0.1344, 0.178, 0.1815, 0.1840, 0.1854, L]
+    for g0 in gr + gf:
+        xs += [g0, g0 + e, g0 + 0.0016 - e, g0 + 0.0016]
+    xs += [0.02 * k for k in range(1, 9)]
+    xs = _uniq(xs)
+    zm, hz = (zb + zt - 0.006) / 2, (zt - 0.006 - zb) / 2
+    P = []
+    for x in xs:
+        ins = {0.0: 0.0011, 0.0006: 0.0004, L: 0.0026, 0.1854: 0.0013, 0.1840: 0.0006, 0.1815: 0.0002}.get(round(x, 4), 0.0)
+        pf = 1.0 if 0.0836 - 1e-9 <= x <= 0.1338 + 1e-9 else 0.0
+        groove = any(g0 + e - 1e-9 <= x <= g0 + 0.0016 - e + 1e-9 for g0 in gr + gf)
+        in_ser = (0.0105 <= x <= 0.0398) or (bool(gf) and 0.1455 <= x <= 0.1700)
+        row = []
+        for (y, z, fc) in _slide_sec(W, zb, zt):
+            yy, zz, xx = y, z, x
+            if ins:                                              # chaflán / nariz: contracción hacia el eje
+                yy -= math.copysign(ins, y) if fc in ("R", "L", "C") else 0.0
+                zz -= ins if fc in ("T", "C") else 0.0
+                zz += ins * 0.6 if fc == "B" else 0.0
+            if pf and ((fc == "T" and y > -0.0020) or (fc == "C" and y > 0) or (fc == "R" and z > zt - 0.0105)):
+                yy -= 0.0024 if fc in ("R", "C") else 0.0
+                zz -= 0.0024 if fc in ("T", "C") else 0.0
+            if in_ser and fc in ("R", "L") and zb + 0.0029 <= z <= zt - 0.0061:
+                xx = x + 0.0018 * ((z - zm) / hz) ** 2               # estrías curvas
+                if groove:
+                    yy -= math.copysign(0.0006, y)
+            row.append((xx, yy, zz))
+        P.append(row)
+    gridskin(mb, P, GM, cap0=True, cap1=True)
+    # capuchón del cañón en la ventana, cara de la recámara y extractor
+    side(mb, [(0.0842, zt - 0.0120), (0.1332, zt - 0.0120), (0.1332, zt - 0.0007), (0.0842, zt - 0.0007)],
+         [0.0, 0.0, 0.0008, 0.0008], 0.0138, GM, y0=0.0029, re=0.0006, n=2, ne=1)
+    revolve(mb, [(0.0, 0.0), (0.0048, 0.0), (0.0048, 0.0004)], "cable", seg=24, M=_T(0.0842, 0, BZ) @ _Ry(-90), caps=False)
+    side(mb, [(0.0700, zt - 0.0095), (0.0815, zt - 0.0095), (0.0822, zt - 0.0060), (0.0700, zt - 0.0060)],
+         [0.0008, 0.0006, 0.0006, 0.0008], 0.0012, GM, y0=W / 2 + 0.0002, re=0.0004, n=2, ne=1)
+    revolve(mb, [(0.0, 0.0), (0.0011, 0.0), (0.0011, 0.0004), (0.0, 0.0004)], "steel", seg=12,
+            M=_T(0.0715, W / 2 + 0.0008, zt - 0.0078) @ _Rx(-90), caps=False)
+    # placa trasera
+    side(mb, [(-0.0008, zb + 0.0030), (0.0004, zb + 0.0030), (0.0004, zt - 0.0060), (-0.0008, zt - 0.0060)], [0.0006] * 4,
+         0.0170, GM, re=0.0004, n=2, ne=1)
+    # alza (cola de milano) con muesca en U y 2 puntos; guion con punto
+    ya = 0.0105
+    side(mb, [(0.0040, zt - 0.0012), (0.0150, zt - 0.0012), (0.0150, zt + 0.0018), (0.0128, zt + 0.0056), (0.0040, zt + 0.0056)],
+         [0.0, 0.0, 0.0012, 0.0012, 0.0008], 0.0050, GM, y0=ya - 0.0025 - 0.0005, re=0.0005, n=2, ne=1)
+    side(mb, [(0.0040, zt - 0.0012), (0.0150, zt - 0.0012), (0.0150, zt + 0.0018), (0.0128, zt + 0.0056), (0.0040, zt + 0.0056)],
+         [0.0, 0.0, 0.0012, 0.0012, 0.0008], 0.0050, GM, y0=-ya + 0.0025 + 0.0005, re=0.0005, n=2, ne=1)
+    side(mb, [(0.0040, zt - 0.0012), (0.0150, zt - 0.0012), (0.0150, zt + 0.0018), (0.0040, zt + 0.0018)],
+         [0.0, 0.0, 0.0008, 0.0008], 0.0110, GM, re=0.0004, n=2, ne=1)
+    for s in (-1, 1):
+        revolve(mb, [(0.0, 0.0), (0.0011, 0.0), (0.0011, 0.0003), (0.0, 0.0004)], "sign_white", seg=16,
+                M=_T(0.0040, s * 0.0058, zt + 0.0036) @ _Ry(-90), caps=False)
     if not lite:
-        side(mb, [(0.181, zs1 - 0.001), (0.187, zs1 - 0.001), (0.186, zs1 + 0.0045), (0.182, zs1 + 0.0045)], [0.0, 0.0, 0.001, 0.001],
-             0.0035, GM, re=0.0)                         # guion
-        revolve(mb, [(0.0, 0.1885), (0.0045, 0.1885), (0.0058, 0.1902), (0.0064, 0.1905)], ["cable", GM, GM], seg=SEG,
-                M=_T(0, 0, BZ) @ _Ry(90), caps=False)    # boca: ánima oscura y corona
-        revolve(mb, [(0.0, 0.1875), (0.0028, 0.1875), (0.0028, 0.1905)], GM, seg=16, M=_T(0, 0, BZ - 0.0115) @ _Ry(90), caps=False)
-    # armazón: rieles y cubrepolvo, riel de accesorios
-    side(mb, [(0.004, 0.086), (0.060, 0.086), (0.070, 0.080), (0.104, 0.080), (0.110, 0.084), (0.186, 0.084), (0.186, 0.0985),
-              (0.004, 0.0985)], [0.004, 0.003, 0.004, 0.003, 0.003, 0.004, 0.0, 0.0], 0.0236, F, re=0.0015, ne=1, n=2)
+        side(mb, [(0.1735, zt - 0.0010), (0.1795, zt - 0.0010), (0.1785, zt + 0.0048), (0.1748, zt + 0.0048)],
+             [0.0, 0.0, 0.0008, 0.0008], 0.0034, GM, re=0.0005, n=2, ne=1)
+        revolve(mb, [(0.0, 0.0), (0.0011, 0.0), (0.0011, 0.0003), (0.0, 0.0004)], "sign_white", seg=16,
+                M=_T(0.1748, 0, zt + 0.0030) @ _Ry(-90), caps=False)
+        # boca: corona del cañón (ánima oscura) y guía del resorte
+        revolve(mb, [(0.0068, L - 0.003), (0.0068, L + 0.0002), (0.0060, L + 0.0008), (0.0048, L + 0.0008), (0.0045, L + 0.0004),
+                     (0.0045, L - 0.004)], [GM, GM, GM, GM, "cable"], seg=32, M=_T(0, 0, BZ) @ _Ry(90), caps=False)
+        revolve(mb, [(0.0, L - 0.003), (0.0045, L - 0.003)], "cable", seg=32, M=_T(0, 0, BZ) @ _Ry(90), caps=False)
+        revolve(mb, [(0.0042, L - 0.003), (0.0042, L + 0.0004), (0.0030, L + 0.0006), (0.0030, L - 0.0005), (0.0, L - 0.0005)],
+                ["cable", "cable", GM, GM], seg=24, M=_T(0, 0, BZ - 0.0122) @ _Ry(90), caps=False)
+    # ---------------- armazón
+    side(mb, [(-0.0045, 0.0912), (0.0040, 0.0992), (0.1805, 0.0992), (0.1825, 0.0968), (0.1805, 0.0868), (0.1080, 0.0862),
+              (0.0640, 0.0862), (0.0300, 0.0862), (0.0100, 0.0880), (0.0000, 0.0880)],
+         [0.003, 0.002, 0.0015, 0.002, 0.003, 0.0, 0.0, 0.0, 0.004, 0.003], 0.0236, F, re=0.0015, n=3, ne=2)
     if not lite:
-        rail(mb, 0.125, 0.165, 0.0845, F, M=_T(0, 0, 0.1685) @ _Rx(180))
-    # guardamonte cuadrado y disparador
-    strap(mb, fillet([(0.104, 0.0, 0.083), (0.112, 0.0, 0.060), (0.104, 0.0, 0.053), (0.062, 0.0, 0.053), (0.055, 0.0, 0.062)], 0.008, 3),
-          0.0045, 0.0105, F, up=(0, 1, 0), r=0.0015)
-    side(mb, [(0.080, 0.0805), (0.0855, 0.0805), (0.0835, 0.070), (0.0805, 0.0625), (0.0770, 0.0640), (0.0790, 0.071)],
-         [0.0, 0.0, 0.003, 0.0015, 0.0, 0.003], 0.0055, F, re=0.0)
-    # empuñadura con lomo y base del cargador
-    a = math.radians(17.0)
-    p0 = Vector((0.036, 0.0, 0.090))
-    p1 = p0 + Vector((-math.sin(a), 0.0, -math.cos(a))) * 0.086
+        pic_rail(mb, 0.1360, 0.1770, M=_T(0, 0, 0.0868) @ _Rx(180), mat=F)
+    strap(mb, fillet([(0.1080, 0.0, 0.0880), (0.1110, 0.0, 0.0640), (0.1105, 0.0, 0.0600), (0.1050, 0.0, 0.0583),
+                      (0.0680, 0.0, 0.0583), (0.0600, 0.0, 0.0650)], 0.006, 4), 0.0060, 0.0112, F, up=(0, 1, 0), r=0.0018, n=2)
+    side(mb, [(0.1098, 0.0610), (0.1128, 0.0618), (0.1132, 0.0592), (0.1102, 0.0584)], [0.0, 0.001, 0.001, 0.0], 0.0090, F,
+         re=0.0006, n=2, ne=1)                                                          # gancho del guardamonte
+    side(mb, [(0.0800, 0.0880), (0.0870, 0.0880), (0.0862, 0.0790), (0.0838, 0.0715), (0.0812, 0.0668), (0.0790, 0.0676),
+              (0.0812, 0.0730), (0.0826, 0.0800)], [0.0, 0.0, 0.004, 0.003, 0.0012, 0.0012, 0.003, 0.004], 0.0072, F, re=0.0008,
+         n=3, ne=1)                                                                    # disparador
+    side(mb, [(0.0826, 0.0820), (0.0852, 0.0820), (0.0846, 0.0732), (0.0826, 0.0700), (0.0818, 0.0705), (0.0834, 0.0745)],
+         [0.0, 0.0, 0.003, 0.001, 0.0, 0.003], 0.0022, GM, re=0.0003, n=2, ne=1)      # seguro de lámina
+    # empuñadura texturizada
+    a = math.radians(20.0)
+    p0 = Vector((0.0405, 0.0, 0.0900))
+    Lg = 0.0815
+    p1 = p0 + Vector((-math.sin(a), 0.0, -math.cos(a))) * Lg
     Mg, _ = port.frame_on(p0, p1, up=(1, 0, 0))
-    port.loft(mb, [(0.0, 0.024, 0.046, 0.0), (0.010, 0.0285, 0.047, 0.0), (0.030, 0.0300, 0.0475, 0.0008), (0.058, 0.0300, 0.046, -0.0005),
-                   (0.080, 0.0295, 0.045, -0.001), (0.087, 0.0285, 0.044, -0.001)], seg=SEG, mat=F, M=Mg, ex=2.7)
-    slab2(mb, Mg @ _T(0.086, 0.0, -0.001) @ _Ry(90) @ _T(0, 0, -0.0005), 0.047, 0.031, 0.008, 0.006, F, re_t=0.0025, ne_t=2)
-    side(mb, [(-0.004, 0.088), (0.012, 0.088), (0.016, 0.098), (0.006, 0.0985), (-0.004, 0.094)], [0.002, 0.0, 0.0, 0.002, 0.004],
-         0.022, F, re=0.0015, ne=1, n=2)                 # cola de castor
-    # palancas y botones (izquierda)
-    side(mb, [(0.068, 0.0925), (0.080, 0.0925), (0.080, 0.0975), (0.068, 0.0975)], [0.001] * 4, 0.0016, GM, y0=-0.0126, re=0.0)
-    side(mb, [(0.032, 0.0905), (0.060, 0.0905), (0.062, 0.0965), (0.034, 0.0965)], [0.001, 0.002, 0.002, 0.001], 0.0016, GM,
-         y0=-0.0126, re=0.0)
-    side(mb, [(0.056, 0.074), (0.062, 0.074), (0.062, 0.084), (0.056, 0.084)], [0.0015] * 4, 0.0024, F, y0=-0.0148, re=0.0)
+    st = [(0.000, 0.0218, 0.042, 0.0005), (0.006, 0.0258, 0.0470, 0.0005), (0.014, 0.0288, 0.0495, 0.0005),
+          (0.040, 0.0298, 0.0500, 0.0000), (0.068, 0.0300, 0.0495, -0.0005), (0.077, 0.0306, 0.0505, -0.0005),
+          (0.0815, 0.0318, 0.0520, -0.0005)]
+    tex_loft(mb, Mg, st, F, nseg=96, g=0.0013, tx=(0.014, 0.072), dp=0.00045, ends=(0.074, 0.079, 0.0805), cap0=True)
+    # base del cargador con lengüeta delantera
+    Mbp = Mg @ _T(Lg, 0, -0.0005) @ _Ry(90)
+    slab2(mb, Mbp @ _T(0, 0, -0.0005), 0.0525, 0.0300, 0.0085, 0.010, F, re_t=0.0025, ne_t=2, re_b=0.0005, ne_b=1, nc=5)
+    side(mb, [(-0.0012, 0.0012), (0.0040, 0.0012), (0.0040, 0.0078), (-0.0012, 0.0078)], [0.0, 0.0015, 0.0015, 0.0], 0.0200,
+         F, re=0.0008, n=2, ne=1, M=Mbp @ _T(-0.0300, 0, 0))                           # lengüeta delantera de la base
+    # retén del cargador (izq.), retén de corredera, palanca de desarme y pasadores
+    side(mb, [(0.0598, 0.0770), (0.0660, 0.0770), (0.0660, 0.0840), (0.0598, 0.0840)], [0.0012] * 4, 0.0024, F,
+         y0=-0.0136, re=0.0006, n=2, ne=1)
+    for k in range(3):
+        side(mb, [(0.0602, 0.0782 + k * 0.0020), (0.0656, 0.0782 + k * 0.0020), (0.0656, 0.0790 + k * 0.0020),
+                  (0.0602, 0.0790 + k * 0.0020)], [0.0003] * 4, 0.0008, F, y0=-0.0150, re=0.0002, n=2, ne=1)
+    side(mb, [(0.0360, 0.0918), (0.0640, 0.0918), (0.0662, 0.0945), (0.0640, 0.0968), (0.0370, 0.0962)],
+         [0.001, 0.0015, 0.0012, 0.0015, 0.001], 0.0016, GM, y0=-0.0126, re=0.0004, n=2, ne=1)
+    for s in (-1, 1):
+        side(mb, [(0.0860, 0.0902), (0.0935, 0.0902), (0.0935, 0.0930), (0.0860, 0.0930)], [0.0008] * 4, 0.0012, GM,
+             y0=s * 0.0124, re=0.0003, n=2, ne=1)
+        for (xp, zp) in ((0.0738, 0.0915), (0.0995, 0.0938)):
+            revolve(mb, [(0.0, 0.0), (0.0016, 0.0), (0.0016, 0.0003), (0.0, 0.0004)], "steel", seg=16,
+                    M=_T(xp, s * 0.0117, zp) @ _Rx(-90 * s), caps=False)
 
 
 def pistol(seed=0):
-    """Pistola de servicio genérica (polímero + corredera de acero), ~ 190 mm de largo, 135 mm de alto, 31 mm de ancho
-    (proporción de las pistolas de servicio de 9 mm). Ver _pistol. ORIGEN: x = 0 trasera de la corredera, z = 0 base del
-    cargador, y = 0 plano de simetría; cañón hacia +X (eje del ánima a z = PISTOL_BORE_Z = 0,1135).
-    Fuente de proporción: ficha de largo / alto de pistolas de servicio de 9 mm (≈ 186-203 mm × 128-140 mm)."""
+    """Pistola de servicio genérica (polímero + corredera de acero), ~ 190 mm de largo, 133 mm de alto, 31 mm de ancho
+    (proporción de las pistolas de servicio de 9 mm). Ver _pistol (~ 20 k triángulos). ORIGEN: x = 0 trasera de la
+    corredera, z = 0 base del cargador, y = 0 plano de simetría; cañón hacia +X (eje del ánima a z = PISTOL_BORE_Z
+    respecto del armado, antes de bajar al apoyo).
+    Fuentes: us.glock.com/en/Pistols/G17-Gen5-FS-US (202 × 139 × 34 mm, corredera 25,5 mm, cañón 114 mm) y eu.glock.com
+    (G17 Gen5) como clase de proporción; en.wikipedia.org/wiki/Picatinny_rail."""
     mb = MB()
     _pistol(mb, F="polymer" if seed % 2 == 0 else "paint_tan")
     return _drop(mb)
 
 
-
 def holster(seed=0):
-    """Funda rígida de polímero moldeado con la pistola enfundada (pistol, versión sin lo que tapa la funda): concha que
-    copia corredera, cubrepolvo y guardamonte, con boca reforzada y labio, capuchón de retención en U sobre la trasera de la
-    corredera con sus pivotes, botón de liberación, plataforma de montaje MOLLE / cinturón atornillada (4 tornillos) en la
-    espalda y barreno de drenaje. ORIGEN: punta inferior de la funda (z = 0), centrada en X e Y; la pistola va con la boca
-    hacia -Z (de pie, como se porta) y la plataforma de montaje (lado del cuerpo) mira a +Y."""
+    """Funda rígida de polímero moldeado con la pistola enfundada (pistol, versión sin lo que tapa la funda): concha de
+    pared de 3 mm que copia corredera, guardapolvo y guardamonte (rejilla con nervio de moldeo sobre la corredera), boca
+    con labio enrollado, capuchón de retención en U sobre la trasera de la corredera con pivotes y resortes, botón de
+    liberación estriado, plataforma de montaje de cintura / MOLLE atornillada (4 tornillos Allen con arandela) con 2 cintas
+    de 25 mm cosidas y presillas, barreno de drenaje en la punta. ORIGEN: punta inferior de la funda (z = 0), centrada en X e
+    Y; la pistola va con la boca hacia -Z (de pie, como se porta) y la plataforma de montaje mira a +Y.
+    Fuente de proporción: fundas rígidas de retención nivel 2 (safariland.com, modelos de servicio)."""
     mb = MB()
     F = "polymer" if seed % 2 == 0 else "paint_tan"
     _pistol(mb, lite=True, F="polymer")
-    # concha: lazos exterior / interior a lo largo de X (boca abierta en x = 0,045; punta cerrada en x = 0,203)
-    st = [(0.045, 0.034, 0.064, 0.106), (0.060, 0.034, 0.083, 0.097), (0.105, 0.034, 0.090, 0.093), (0.118, 0.034, 0.064, 0.106),
-          (0.192, 0.033, 0.062, 0.106), (0.203, 0.030, 0.056, 0.106)]
-    outer = [[(x, y, zc + z) for (y, z) in rr_pts(w, h, 0.009, 4)] for (x, w, h, zc) in st]
-    inner = [[(x, y, zc + z) for (y, z) in rr_pts(w - 0.006, h - 0.006, 0.006, 4)] for (x, w, h, zc) in st[:-1]]
-    inner.append([(0.198, y, st[-1][3] + z) for (y, z) in rr_pts(st[-1][1] - 0.006, st[-1][2] - 0.006, 0.006, 4)])
-    skin(mb, list(reversed(inner)) + outer, F, cap0=True, cap1=True)
-    # labio de la boca (cordón)
-    rr_torus(mb, _T(0.0455, 0, 0.106) @ _Ry(90), 0.064, 0.034, 0.009, 0.0022, F, nc=4, nb=4, phase=PI / 4)
-    # capuchón de retención: arco en U sobre la corredera, pivotes en la concha
-    arc = [(0.024, 0.0215 * math.cos(t), 0.115 + 0.026 * math.sin(t)) for t in [PI * k / 10 for k in range(11)]]
-    path = [(0.052, 0.0215, 0.106), (0.034, 0.0215, 0.112)] + arc + [(0.034, -0.0215, 0.112), (0.052, -0.0215, 0.106)]
-    strap(mb, spline(path, 1), 0.0035, 0.012, F, up=(1, 0, 0), r=0.0012)
-    for sy in (-1, 1):
-        revolve(mb, [(0.0065, -0.002), (0.0065, 0.0035), (0.0055, 0.0045), (0.0, 0.0047)], F, seg=SEG,
-                M=_T(0.052, sy * 0.017, 0.106) @ _Rx(-90 * sy), caps=False)
-    revolve(mb, [(0.0072, -0.002), (0.0072, 0.003), (0.0062, 0.0042), (0.0, 0.0045)], "rubber", seg=SEG,
-            M=_T(0.070, 0.017, 0.128) @ _Rx(-90), caps=False)                         # botón de liberación
+    # concha: lazos exteriores / interiores a lo largo de X (boca abierta en x = 0,046; punta cerrada en x = 0,203)
+    t = 0.0030
+
+    def sec(x):
+        top = _PS_ZT + 0.0035
+        if x < 0.118:                                           # cubre el guardamonte
+            bot = 0.0545 + 0.006 * max(0.0, min(1.0, (0.070 - x) / 0.022))
+        else:
+            bot = 0.0825 - 0.006 * max(0.0, min(1.0, (0.128 - x) / 0.010))
+        w = 0.0345 if x < 0.190 else 0.0345 - (x - 0.190) * 0.25
+        return w, top - bot, (top + bot) / 2
+    xs = [0.046, 0.0475, 0.050, 0.060, 0.070, 0.080, 0.092, 0.104, 0.112, 0.118, 0.124, 0.128, 0.140, 0.160, 0.180, 0.190,
+          0.196, 0.200, 0.2025, 0.2040]
+    outer, inner = [], []
+    for x in xs:
+        w, h, zc = sec(x)
+        rr = (0.010, 0.006, 0.006, 0.010)
+        outer.append([(x, b, zc + a_) for (a_, b) in [(p[0], p[1]) for p in rr_pts(h, w, rr, 4)]])
+        if x <= 0.199:
+            inner.append([(x, b, zc + a_) for (a_, b) in rr_pts(h - 2 * t, w - 2 * t, (0.007, 0.003, 0.003, 0.007), 4)])
+    inner[-1] = [(0.199, p[1], p[2]) for p in inner[-1]]
+    # boca: labio enrollado (el lazo exterior en x = 0,046 se retrae; el interior también)
+    gridskin(mb, list(reversed(inner)) + outer, F, cap0=True, cap1=True)
+    # nervio de moldeo a lo largo de la corredera (ambos costados)
+    for s in (-1, 1):
+        prism_x(mb, _T(0.060, s * (0.0345 / 2 - 0.0003), _PS_ZT - 0.0080), [(-0.0008, -0.0016), (0.0008, -0.0016),
+                (0.0008, 0.0016), (-0.0008, 0.0016)], [0.0007] * 4, 0.128, re=0.0012, mat=F)
+    # capuchón de retención: arco en U sobre la trasera de la corredera, pivotes con resorte, botón estriado
+    arc = [(0.024, 0.0205 * math.cos(tt), 0.1145 + 0.0215 * math.sin(tt)) for tt in [PI * k / 14 for k in range(15)]]
+    path = [(0.054, 0.0205, 0.1055), (0.040, 0.0205, 0.1095), (0.030, 0.0205, 0.1125)] + arc + \
+        [(0.030, -0.0205, 0.1125), (0.040, -0.0205, 0.1095), (0.054, -0.0205, 0.1055)]
+    strap(mb, spline(path, 2), 0.0035, 0.0125, F, up=(1, 0, 0), r=0.0014, n=2)
+    for s in (-1, 1):
+        revolve(mb, [(0.0068, -0.0020), (0.0068, 0.0032), (0.0058, 0.0042), (0.0, 0.0045)], F, seg=32,
+                M=_T(0.054, s * 0.0185, 0.1055) @ _Rx(-90 * s), caps=False)
+        _screw_h(mb, _T(0.054, s * 0.0229, 0.1055) @ _Rx(-90 * s), d=0.0045, mat="steel")
+    revk(mb, [(0.0074, -0.002), (0.0074, 0.0030), (0.0066, 0.0042), (0.0, 0.0046)], "rubber",
+         M=_T(0.068, 0.0175, 0.1290) @ _Rx(-90) @ _Rx(0), knurl=(16, 0.0005, {0, 1}), caps=False)
     # plataforma de montaje en la espalda (-Y del arma; tras girar queda hacia +Y)
-    side(mb, [(0.060, 0.066), (0.180, 0.066), (0.180, 0.142), (0.060, 0.142)], [0.010] * 4, 0.006, F, y0=-0.0195, re=0.002, ne=1)
-    for (x, z) in ((0.075, 0.078), (0.165, 0.078), (0.075, 0.130), (0.165, 0.130)):
-        rivet(mb, _T(x, -0.0225, z) @ _Rx(90), d=0.008, mat="steel")
-    for z in (0.084, 0.124):                                                            # correas MOLLE de la plataforma
-        plank(mb, (0.055, -0.0245, z - 0.0125), (0.185, -0.0215, z + 0.0125), "canvas", ch=0.0008)
-    revolve(mb, [(0.0035, 0.199), (0.0035, 0.2035)], "cable", seg=16, M=_T(0, 0, 0.106) @ _Ry(90), caps=False)  # drenaje
+    side(mb, [(0.056, 0.064), (0.184, 0.064), (0.184, 0.140), (0.056, 0.140)], [0.012] * 4, 0.0060, F, y0=-0.0198, re=0.0022,
+         n=4, ne=2)
+    for (x, z) in ((0.072, 0.077), (0.168, 0.077), (0.072, 0.127), (0.168, 0.127)):
+        revolve(mb, [(0.0, 0.0), (0.0062, 0.0), (0.0062, 0.0008), (0.0, 0.0008)], "steel", seg=24, M=_T(x, -0.0228, z) @ _Rx(90),
+                caps=False)
+        _screw_h(mb, _T(x, -0.0236, z) @ _Rx(90), d=0.0080, mat="steel")
+    for z in (0.0855, 0.1185):                                                        # cintas de 25 mm con costura
+        prism_x(mb, _T(0.051, -0.0237, z), [(-0.0009, -0.0125), (0.0009, -0.0125), (0.0009, 0.0125), (-0.0009, 0.0125)],
+                [0.0006] * 4, 0.138, re=0.0007, mat="canvas")
+        for xs_ in (0.060, 0.120, 0.180):
+            prism_x(mb, _T(xs_, -0.0248, z), [(-0.0003, -0.0105), (0.0003, -0.0105), (0.0003, 0.0105), (-0.0003, 0.0105)],
+                    [0.0] * 4, 0.006, re=0.0001, mat="fabric")                        # presilla cosida (barra)
+    revolve(mb, [(0.0034, 0.1985), (0.0034, 0.2045)], "cable", seg=16, M=_T(0, 0, 0.106) @ _Ry(90), caps=False)  # drenaje
     mb.transform(_Rz(180) @ _Ry(90))
     bb = [v.co for v in mb.bm.verts]
     cx = (min(c.x for c in bb) + max(c.x for c in bb)) / 2
@@ -1482,11 +2206,12 @@ def holster(seed=0):
 def _belt_round(mb, M, link=True, k=0):
     """Cartucho clase 12,7 mm (vaina de latón ~ 99 mm, proyectil ~ 40 mm) con su eslabón de acero, a lo largo de Z local."""
     revolve(mb, [(0.0, 0.0), (0.0103, 0.0), (0.0103, 0.003), (0.0086, 0.004), (0.0086, 0.006), (0.0104, 0.0075), (0.0100, 0.078),
-                 (0.0075, 0.090), (0.0072, 0.099)], "brass", seg=16, M=M, caps=False)
-    revolve(mb, [(0.0065, 0.098), (0.0065, 0.112), (0.0050, 0.128), (0.0, 0.140)], "brass", seg=16, M=M, caps=False)
+                 (0.0075, 0.090), (0.0072, 0.099)], "brass", seg=24, M=M, caps=False)
+    revolve(mb, [(0.0065, 0.098), (0.0065, 0.112), (0.0058, 0.120), (0.0046, 0.129), (0.0028, 0.136), (0.0, 0.140)], "copper", seg=24,
+            M=M, caps=False)
     if link:                                    # eslabón: dos abrazaderas de fleje y lengüeta
         for zc in ((0.030, 0.064) if k % 2 == 0 else (0.047,)):          # eslabones alternados: 2 asas / 1 asa
-            revolve(mb, [(0.0106, zc - 0.006), (0.0118, zc - 0.006), (0.0118, zc + 0.006), (0.0106, zc + 0.006)], "steel", seg=16,
+            revolve(mb, [(0.0106, zc - 0.006), (0.0118, zc - 0.006), (0.0118, zc + 0.006), (0.0106, zc + 0.006)], "steel", seg=24,
                     M=M, closed=True)
         z0 = 0.026 if k % 2 == 0 else 0.046                       # lengüetas alternadas (no se encimen)
         plan(mb, [(0.0105, -0.006), (0.024, -0.006), (0.024, 0.006), (0.0105, 0.006)], [0.0, 0.003, 0.003, 0.0], 0.018, "steel",
@@ -1511,48 +2236,91 @@ def machine_gun_tripod(seed=0):
     zr0, zr1 = 0.385, 0.545                      # cajón: fondo / tapa
     BZ = 0.475                                   # eje del cañón
     xr0, xr1 = -0.40, 0.16
-    # ---------------- cajón
-    xloft(mb, [(xr0, 0.104, zr1 - zr0, (zr0 + zr1) / 2, 0.006), (xr1, 0.104, zr1 - zr0, (zr0 + zr1) / 2, 0.006)], GM, n=4)
+    # ---------------- cajón: cuerpo de cantos redondeados, bloque del muñón al frente, banda trasera, placas laterales
+    side(mb, [(xr0, zr0), (xr1, zr0), (xr1, zr1), (xr0, zr1)], [0.005] * 4, 0.100, GM, re=0.0030, n=3, ne=2)
+    side(mb, [(xr1 - 0.078, zr0 - 0.004), (xr1 + 0.004, zr0 - 0.004), (xr1 + 0.004, zr1 - 0.006), (xr1 - 0.078, zr1 - 0.006)],
+         [0.004] * 4, 0.1076, GM, re=0.0025, n=3, ne=2)                                # bloque del muñón
+    side(mb, [(xr0 - 0.002, zr0 + 0.004), (xr0 + 0.030, zr0 + 0.004), (xr0 + 0.030, zr1 - 0.004), (xr0 - 0.002, zr1 - 0.004)],
+         [0.004] * 4, 0.1060, GM, re=0.0020, n=3, ne=2)                                # banda de la placa trasera
     for sy in (-1, 1):                           # placas laterales y filas de remaches
-        side(mb, [(xr0 + 0.02, zr0 + 0.012), (xr1 - 0.02, zr0 + 0.012), (xr1 - 0.02, zr1 - 0.04), (xr0 + 0.02, zr1 - 0.04)],
-             [0.004] * 4, 0.003, GM, y0=sy * 0.0525, re=0.0008, ne=1, n=2)
-        for xx in [xr0 + 0.04 + k * 0.055 for k in range(10)]:
-            for zz in (zr0 + 0.022, zr1 - 0.052):
-                rivet(mb, _T(xx, sy * 0.054, zz) @ _Rx(-90 * sy), d=0.009)
-    # tapa de alimentación con bisagra delantera y cerrojo trasero
-    xloft(mb, [(-0.21, 0.098, 0.022, zr1 + 0.008, (0.006, 0.006, 0.0, 0.0)), (-0.20, 0.104, 0.026, zr1 + 0.010, (0.008, 0.008, 0.0, 0.0)),
-               (0.10, 0.104, 0.026, zr1 + 0.010, (0.008, 0.008, 0.0, 0.0)), (0.11, 0.098, 0.022, zr1 + 0.008, (0.006, 0.006, 0.0, 0.0))],
-          GM, n=4)
-    revolve(mb, [(0.008, -0.056), (0.008, 0.056)], GM, seg=SEG, M=_T(0.112, 0, zr1 + 0.006) @ _Rx(90))
-    side(mb, [(-0.235, zr1 + 0.002), (-0.205, zr1 + 0.002), (-0.205, zr1 + 0.026), (-0.228, zr1 + 0.020)], [0.0, 0.0, 0.003, 0.004],
-         0.03, GM, re=0.0015, ne=1, n=2)                        # cerrojo de la tapa
-    for xx in (-0.15, -0.08, -0.01, 0.06):                    # nervaduras de la tapa
-        plank(mb, (xx - 0.004, -0.045, zr1 + 0.022), (xx + 0.004, 0.045, zr1 + 0.0255), GM, ch=0.0015)
-    # alza de hoja plegada (atrás) y guion (manguito)
-    side(mb, [(-0.40, zr1 - 0.001), (-0.33, zr1 - 0.001), (-0.33, zr1 + 0.012), (-0.40, zr1 + 0.012)], [0.0, 0.0, 0.004, 0.004],
-         0.034, GM, re=0.0015, ne=1, n=2)
-    side(mb, [(-0.395, zr1 + 0.011), (-0.30, zr1 + 0.014), (-0.30, zr1 + 0.019), (-0.395, zr1 + 0.017)], [0.002] * 4, 0.022, GM,
-         re=0.0)
-    # placa trasera, empuñaduras de pala y gatillo de mariposa
-    xloft(mb, [(xr0 - 0.035, 0.10, 0.15, (zr0 + zr1) / 2, 0.012), (xr0 + 0.002, 0.11, 0.165, (zr0 + zr1) / 2, 0.012)], GM, n=4)
+        side(mb, [(xr0 + 0.034, zr0 + 0.010), (xr1 - 0.082, zr0 + 0.010), (xr1 - 0.082, zr1 - 0.040), (xr0 + 0.034, zr1 - 0.040)],
+             [0.004] * 4, 0.0030, GM, y0=sy * 0.0512, re=0.0009, ne=1, n=2)
+        for xx in [xr0 + 0.046 + k * 0.0494 for k in range(9)]:
+            for zz in (zr0 + 0.020, zr1 - 0.050):
+                rivet(mb, _T(xx, sy * 0.0526, zz) @ _Rx(-90 * sy), d=0.0085, seg=16)
+        for xx in (xr1 - 0.064, xr1 - 0.040, xr1 - 0.016):
+            for zz in (zr0 + 0.016, (zr0 + zr1) / 2 - 0.010, zr1 - 0.030):
+                rivet(mb, _T(xx, sy * 0.0538, zz) @ _Rx(-90 * sy), d=0.0095, seg=16)
+        prism_x(mb, _T(xr0 + 0.030, sy * 0.0500, zr0 + 0.0045), [(-0.0012, -0.0008), (0.0012, -0.0008), (0.0012, 0.0008),
+                (-0.0012, 0.0008)], [0.0006] * 4, xr1 - xr0 - 0.108, re=0.0006, mat=GM)  # costura de la placa inferior
+    # ventana de alimentación (izq.) y de expulsión de eslabones (der.): marco y fondo oscuro
+    for (sy, x0_, x1_, z0_, z1_) in ((-1, -0.108, 0.022, BZ - 0.016, BZ + 0.034), (1, -0.090, 0.004, BZ - 0.018, BZ + 0.010)):
+        holed(mb, _T((x0_ + x1_) / 2, sy * 0.0500, (z0_ + z1_) / 2) @ _Rx(-90 * sy), (0.0, 0.0, (x1_ - x0_) / 2 + 0.006,
+              (z1_ - z0_) / 2 + 0.006, 0.006), (0.0, 0.0, (x1_ - x0_) / 2, (z1_ - z0_) / 2, 0.003), 0.0035, re_o=0.0012,
+              re_i=0.0008, n=48, mat=GM, ne=1)
+        side(mb, [(x0_ + 0.001, z0_ + 0.001), (x1_ - 0.001, z0_ + 0.001), (x1_ - 0.001, z1_ - 0.001), (x0_ + 0.001, z1_ - 0.001)],
+             [0.0025] * 4, 0.0012, "cable", y0=sy * 0.0498, re=0.0, n=2)
+    # tapa de alimentación con bisagra delantera, cerrojo trasero y nervios redondeados
+    xloft(mb, [(-0.212, 0.096, 0.020, zr1 + 0.007, (0.006, 0.006, 0.0, 0.0)), (-0.205, 0.103, 0.025, zr1 + 0.0095, (0.008, 0.008, 0.0, 0.0)),
+               (0.102, 0.103, 0.025, zr1 + 0.0095, (0.008, 0.008, 0.0, 0.0)), (0.110, 0.096, 0.020, zr1 + 0.007, (0.006, 0.006, 0.0, 0.0))],
+          GM, n=5)
+    revolve(mb, [(0.0080, -0.050), (0.0085, -0.049), (0.0085, 0.049), (0.0080, 0.050)], GM, seg=SEG, M=_T(0.112, 0, zr1 + 0.006) @ _Rx(90))
     for sy in (-1, 1):
-        p0 = Vector((xr0 - 0.02, sy * 0.040, zr0 + 0.030))
-        p1 = Vector((xr0 - 0.145, sy * 0.050, zr0 + 0.010))
-        wire(mb, [tuple(p0), (xr0 - 0.06, sy * 0.044, zr0 + 0.025), tuple(p1)], 0.010, GM, bend=0.02, nseg=4, seg=SEG)
-        Mg, L = port.frame_on(Vector((xr0 - 0.065, sy * 0.045, zr0 + 0.022)), p1)
-        revolve(mb, [(0.0128, 0.0), (0.0145, 0.006), (0.0145, L - 0.012), (0.0125, L - 0.002), (0.0, L + 0.002)], "rubber", seg=SEG,
-                M=Mg @ _Ry(90))
-    side(mb, [(xr0 - 0.050, zr0 + 0.055), (xr0 - 0.035, zr0 + 0.055), (xr0 - 0.035, zr0 + 0.075), (xr0 - 0.054, zr0 + 0.072)],
-         [0.003] * 4, 0.050, GM, re=0.0015, ne=1, n=2)              # gatillo de mariposa
-    # palanca de carga (derecha) con corredera
-    plank(mb, (-0.30, 0.0535, BZ - 0.014), (-0.05, 0.0575, BZ - 0.004), GM, ch=0.0012)
-    side(mb, [(-0.105, BZ - 0.016), (-0.075, BZ - 0.016), (-0.075, BZ + 0.002), (-0.105, BZ + 0.002)], [0.003] * 4, 0.018, GM,
-         y0=0.064, re=0.0015, ne=1, n=2)
-    revolve(mb, [(0.0, 0.0), (0.0125, 0.0), (0.0135, 0.008), (0.0125, 0.030), (0.0, 0.034)], GM, seg=SEG,
-            M=_T(-0.09, 0.073, BZ - 0.007) @ _Rx(-90))
-    # bandeja de alimentación (izquierda) y cartuchos eslabonados que suben de la lata
-    side(mb, [(-0.10, BZ - 0.020), (0.02, BZ - 0.020), (0.02, BZ + 0.035), (-0.10, BZ + 0.035)], [0.003] * 4, 0.040, GM,
-         y0=-0.072, re=0.0015, ne=1, n=2)
+        revolve(mb, [(0.0, 0.0), (0.0058, 0.0), (0.0058, 0.0025), (0.0048, 0.0035), (0.0, 0.0038)], "steel", seg=SEG,
+                M=_T(0.112, sy * 0.050, zr1 + 0.006) @ _Rx(-90 * sy), caps=False)
+    side(mb, [(-0.238, zr1 + 0.002), (-0.205, zr1 + 0.002), (-0.205, zr1 + 0.027), (-0.214, zr1 + 0.030), (-0.231, zr1 + 0.022)],
+         [0.0, 0.0, 0.004, 0.004, 0.005], 0.030, GM, re=0.0018, ne=2, n=3)            # cerrojo de la tapa
+    for k in range(4):
+        side(mb, [(-0.236 + k * 0.006, zr1 + 0.024 - k * 0.002), (-0.234 + k * 0.006, zr1 + 0.024 - k * 0.002),
+                  (-0.234 + k * 0.006, zr1 + 0.027 - k * 0.002), (-0.236 + k * 0.006, zr1 + 0.027 - k * 0.002)],
+             [0.0005] * 4, 0.026, GM, re=0.0004, n=2, ne=1)
+    for xx in (-0.15, -0.08, -0.01, 0.06):                    # nervaduras de la tapa
+        prism_x(mb, _T(xx - 0.005, 0, zr1 + 0.0215), [(-0.044, 0.0), (0.044, 0.0), (0.043, 0.0035), (-0.043, 0.0035)],
+                [0.0, 0.0, 0.0015, 0.0015], 0.010, re=0.0025, mat=GM)
+    # alza de hoja plegada (atrás) con base, tambor de deriva moleteado y hoja con su abertura
+    side(mb, [(-0.398, zr1 - 0.001), (-0.335, zr1 - 0.001), (-0.335, zr1 + 0.010), (-0.343, zr1 + 0.013), (-0.398, zr1 + 0.013)],
+         [0.0, 0.0, 0.003, 0.003, 0.003], 0.040, GM, re=0.0018, ne=2, n=3)
+    for sy in (-1, 1):
+        _knob_k(mb, _T(-0.360, sy * 0.020, zr1 + 0.008) @ _Rx(-90 * sy), 0.0090, 0.0075, GM, nt=24, dp=0.0006)
+    lf = MB()
+    holed(lf, Matrix(), (0.045, 0.0, 0.047, 0.012, 0.004), (0.080, 0.0, 0.0018, 0.0018, 0.0018), 0.0028, re_o=0.0008, re_i=0.0004,
+          n=40, mat=GM, ne=1, ctr=(0.080, 0.0))
+    mb.join(lf, _T(-0.345, 0, zr1 + 0.0135) @ _Rz(180))
+    # placa trasera con canto redondeado, empuñaduras de pala (marcos y hule de dedos), gatillo de mariposa y botón
+    side(mb, [(xr0 - 0.036, zr0 - 0.002), (xr0 + 0.001, zr0 - 0.002), (xr0 + 0.001, zr1 + 0.004), (xr0 - 0.036, zr1 + 0.002)],
+         [0.010, 0.004, 0.004, 0.010], 0.110, GM, re=0.0040, n=3, ne=2)
+    revolve(mb, [(0.0, 0.0), (0.0075, 0.0), (0.0075, 0.004), (0.0065, 0.0055), (0.0, 0.006)], GM, seg=SEG,
+            M=_T(xr0 - 0.020, 0, zr1 + 0.002), caps=False)                         # liberador del cerrojo
+    for sy in (-1, 1):
+        y = sy * 0.042
+        p0 = Vector((xr0 - 0.030, y, zr0 + 0.034))
+        p1 = Vector((xr0 - 0.150, sy * 0.048, zr0 + 0.016))
+        side(mb, [(xr0 - 0.040, zr0 + 0.020), (xr0 - 0.034, zr0 + 0.020), (xr0 - 0.066, zr0 + 0.046), (xr0 - 0.072, zr0 + 0.040)],
+             [0.003] * 4, 0.012, GM, y0=y, re=0.0015, n=2, ne=1)                # marco de la empuñadura
+        wire(mb, [tuple(p0), (xr0 - 0.062, y, zr0 + 0.030), tuple(p1)], 0.0105, GM, bend=0.02, nseg=5, seg=SEG)
+        Mg, L = port.frame_on(Vector((xr0 - 0.068, sy * 0.0445, zr0 + 0.0255)), p1)
+        prof = [(0.0115, -0.002), (0.0140, 0.004)]
+        for k in range(4):
+            z0 = 0.010 + k * (L - 0.024) / 4
+            prof += [(0.0152, z0 + 0.004), (0.0160, z0 + 0.010), (0.0152, z0 + 0.017)]
+        prof += [(0.0145, L - 0.008), (0.0120, L), (0.0060, L + 0.003), (0.0, L + 0.0035)]
+        revolve(mb, prof, "rubber", seg=32, M=Mg @ _Ry(90), caps=False)
+    side(mb, [(xr0 - 0.046, zr0 + 0.044), (xr0 - 0.036, zr0 + 0.046), (xr0 - 0.036, zr0 + 0.070), (xr0 - 0.050, zr0 + 0.074),
+              (xr0 - 0.058, zr0 + 0.062), (xr0 - 0.052, zr0 + 0.056)], [0.002, 0.002, 0.003, 0.006, 0.004, 0.004], 0.056, GM,
+         re=0.0020, ne=2, n=3)                                                      # gatillo de mariposa
+    # palanca de carga (derecha): corredera, palanca y perilla torneada
+    prism_x(mb, _T(-0.305, 0.0555, BZ - 0.009), [(-0.0025, -0.0055), (0.0025, -0.0055), (0.0025, 0.0055), (-0.0025, 0.0055)],
+            [0.0012] * 4, 0.255, re=0.0015, mat=GM)
+    side(mb, [(-0.108, BZ - 0.017), (-0.074, BZ - 0.017), (-0.070, BZ - 0.010), (-0.074, BZ + 0.003), (-0.108, BZ + 0.003)],
+         [0.004, 0.004, 0.004, 0.004, 0.004], 0.016, GM, y0=0.066, re=0.0025, ne=2, n=3)
+    revolve(mb, [(0.0, 0.0), (0.0095, 0.0), (0.0110, 0.004), (0.0135, 0.012), (0.0135, 0.028), (0.0120, 0.033), (0.0, 0.035)], GM,
+            seg=SEG_B, M=_T(-0.091, 0.074, BZ - 0.007) @ _Rx(-90), caps=False)
+    # bandeja de alimentación (izquierda) con guía de la cinta
+    side(mb, [(-0.104, BZ - 0.022), (0.018, BZ - 0.022), (0.018, BZ - 0.016), (-0.104, BZ - 0.016)], [0.002] * 4, 0.040, GM,
+         y0=-0.072, re=0.0012, ne=1, n=2)
+    for xx in (-0.098, 0.012):
+        side(mb, [(xx - 0.004, BZ - 0.020), (xx + 0.004, BZ - 0.020), (xx + 0.004, BZ + 0.030), (xx - 0.004, BZ + 0.030)],
+             [0.002] * 4, 0.040, GM, y0=-0.072, re=0.0012, ne=1, n=2)
     # ---------------- manguito portacañón con ventilas, cañón, asa, apagallamas, guion
     Mb = _ax(xr1 - 0.004, 0, BZ)
     revolve(mb, [(0.030, 0.0), (0.036, 0.004), (0.036, 0.030)], GM, seg=SEG, M=Mb, caps=False)
@@ -1688,6 +2456,34 @@ def _handwheel(mb, M, R=0.045, rr=0.006, spokes=3, mat="paint_od", knob=True):
                 M=M @ _T(R * math.cos(a), R * math.sin(a), rr * 0.6))
 
 
+def _chain_round(mb, pts, link=0.028, wire=0.0032, mat="steel"):
+    """Cadena de eslabones de alambre redondo (12 lados, sombreado continuo) alternados 90°, a paso constante."""
+    from kit.clinic_equipo import loop_tube
+    P = [Vector(p) for p in pts]
+    acc = [0.0]
+    for i in range(1, len(P)):
+        acc.append(acc[-1] + (P[i] - P[i - 1]).length)
+    pitch = link - 2 * wire * 1.1
+    n = max(int(round(acc[-1] / pitch)), 1)
+    step = acc[-1] / n
+
+    def at(sv):
+        i = next((k for k in range(1, len(acc)) if acc[k] >= sv), len(acc) - 1)
+        t = (sv - acc[i - 1]) / max(acc[i] - acc[i - 1], 1e-9)
+        return P[i - 1].lerp(P[i], t)
+    with mb.soft():
+        for k in range(n):
+            a_, b_ = at(k * step), at((k + 1) * step)
+            c = (a_ + b_) / 2
+            dd = (b_ - a_).normalized()
+            Mk, _ = port.frame_on(c - dd * link / 2, c + dd * link / 2, up=(0, 0, 1) if abs(dd.z) < 0.9 else (1, 0, 0))
+            Mk = Mk @ _Rx(90 * (k % 2))
+            hw = link * 0.3
+            path = [Mk @ Vector((link - hw + hw * math.cos(-PI / 2 + PI * q / 6), hw * math.sin(-PI / 2 + PI * q / 6), 0)) for q in range(7)]
+            path += [Mk @ Vector((hw + hw * math.cos(PI / 2 + PI * q / 6), hw * math.sin(PI / 2 + PI * q / 6), 0)) for q in range(7)]
+            loop_tube(mb, path, wire, seg=12, mat=mat, normal=Mk.to_3x3() @ Vector((0, 0, 1)))
+
+
 def mortar(seed=0, elev=60.0):
     """Mortero de infantería clase 81 mm, genérico: tubo de 1,27 m (Ø ext. ~ 100 mm) con recámara de aletas de enfriamiento,
     culata con rótula esférica y anillo atenuador en la boca; bípode con collarín de 2 mitades atornilladas, 2 amortiguadores,
@@ -1709,7 +2505,7 @@ def mortar(seed=0, elev=60.0):
     # ---------------- placa base
     Rp = 0.26
     revolve(mb, [(0.0, 0.002), (Rp - 0.012, 0.0), (Rp, 0.006), (Rp, 0.020), (Rp - 0.008, 0.026), (0.20, 0.034), (0.11, 0.050),
-                 (0.075, 0.056)], OD, seg=SEG_B, caps=False)
+                 (0.075, 0.056)], OD, seg=64, caps=False)
     revolve(mb, [(0.075, 0.056), (0.078, 0.062), (0.060, 0.086), (0.0, 0.090)], OD, seg=SEG, caps=False)
     revolve(mb, [(0.064, 0.060), (0.084, 0.060), (0.084, 0.074), (0.064, 0.080)], ST, seg=SEG, closed=True)   # anillo de cierre
     for k in range(3):                                           # orejas del anillo
@@ -1735,7 +2531,7 @@ def mortar(seed=0, elev=60.0):
     prof += [(0.050, z + 0.006), (0.0505, z + 0.03), (0.0485, 1.17), (0.0485, 1.235), (0.056, 1.240), (0.056, 1.268),
              (0.050, 1.272), (0.0415, 1.272), (0.0415, 1.240)]
     mats = [ST] * 5 + [OD] * (len(prof) - 6) + ["cable"]
-    revolve(mb, prof, mats, seg=SEG, M=Mt, caps=False)
+    revolve(mb, prof, mats, seg=48, M=Mt, caps=False)
     # ---------------- collarín, amortiguadores, horquilla, dirección, elevación, patas
     sc = 0.90
     C = B + d * sc
@@ -1755,15 +2551,21 @@ def mortar(seed=0, elev=60.0):
         revolve(mb, [(0.0, -0.012), (0.022, -0.008), (0.022, 0.12), (0.010, 0.125), (0.010, La)], OD, seg=SEG, M=Ma @ _Ry(90),
                 caps=False)
         revolve(mb, [(0.012, La - 0.012), (0.012, La + 0.012)], ST, seg=SEG, M=Ma @ _Ry(90))
+        hel = [tuple(Ma @ _Ry(90) @ Vector((0.0145 * math.cos(2 * PI * t * 9), 0.0145 * math.sin(2 * PI * t * 9),
+                                             0.127 + (La - 0.141) * t))) for t in [k / (9 * 16) for k in range(9 * 16 + 1)]]
+        with mb.soft():
+            mb.tube(hel, 0.0022, seg=10, mat=ST, caps=True)
         mb.tube([tuple(C + nb * 0.045 + Vector((0, sy * 0.045, 0)) + d * 0.02), tuple(p0 + nb * 0.004)], 0.012, seg=SEG, mat=OD)
     Y0 = C + nb * 0.070 - d * 0.20                               # extremo inferior de los amortiguadores: horquilla
-    plank(mb, (Y0.x - 0.035, -0.062, Y0.z - 0.035), (Y0.x + 0.035, 0.062, Y0.z + 0.025), OD, ch=0.006)
+    side(mb, [(Y0.x - 0.035, Y0.z - 0.035), (Y0.x + 0.035, Y0.z - 0.035), (Y0.x + 0.035, Y0.z + 0.025), (Y0.x - 0.035, Y0.z + 0.025)],
+         [0.010] * 4, 0.124, OD, re=0.005, n=3, ne=2)
     # mecanismo de dirección: caja horizontal (Y) con tornillo y volante a la derecha
     Tz = Y0.z - 0.055
     revolve(mb, [(0.026, -0.13), (0.028, -0.125), (0.028, 0.125), (0.026, 0.13)], OD, seg=SEG, M=_T(Y0.x, 0, Tz) @ _Rx(90))
     revolve(mb, [(0.012, 0.13), (0.012, 0.175)], ST, seg=SEG, M=_T(Y0.x, 0, Tz) @ _Rx(-90))
     _handwheel(mb, _T(Y0.x, 0.178, Tz) @ _Rx(-90), R=0.055)
-    plank(mb, (Y0.x - 0.018, -0.03, Tz + 0.010), (Y0.x + 0.018, 0.03, Y0.z - 0.030), OD, ch=0.004)
+    side(mb, [(Y0.x - 0.018, Tz + 0.010), (Y0.x + 0.018, Tz + 0.010), (Y0.x + 0.018, Y0.z - 0.030), (Y0.x - 0.018, Y0.z - 0.030)],
+         [0.006] * 4, 0.060, OD, re=0.004, n=3, ne=2)
     # columna de elevación y manivela
     Az = 0.26
     revolve(mb, [(0.030, Az - 0.04), (0.032, Az - 0.035), (0.032, Tz - 0.03), (0.026, Tz - 0.02)], OD, seg=SEG, M=_T(Y0.x, 0, 0))
@@ -1790,24 +2592,40 @@ def mortar(seed=0, elev=60.0):
     # cadena de abertura entre las patas
     pa = Vector((Y0.x + 0.02, -0.03, Az + 0.05)) + (feet[0] - Vector((Y0.x + 0.02, -0.03, Az + 0.05))) * 0.55
     pb = Vector((Y0.x + 0.02, 0.03, Az + 0.05)) + (feet[1] - Vector((Y0.x + 0.02, 0.03, Az + 0.05))) * 0.55
-    from kit.clinic_equipo import chain as _chain
     mid = (pa + pb) / 2 - Vector((0, 0, 0.03))
-    _chain(mb, [tuple(pa), tuple(mid), tuple(pb)], link=0.028, wire=0.0032, mat=ST)
-    # ---------------- soporte del aparato de puntería (izquierda de la horquilla)
+    _chain_round(mb, spline([tuple(pa), tuple(mid), tuple(pb)], 6), link=0.028, wire=0.0032, mat=ST)
+    # ---------------- soporte y aparato de puntería (izquierda de la horquilla): ménsula de cola de milano con perilla,
+    # cuerpo de cantos redondeados, cabeza del objetivo con ventana, ocular acodado con copa de hule, perillas de deflexión
+    # y elevación moleteadas con tambores micrométricos graduados, 2 niveles de burbuja
     S0 = Vector((Y0.x, -0.062, Y0.z))
-    plank(mb, (S0.x - 0.02, -0.090, S0.z - 0.02), (S0.x + 0.02, -0.0615, S0.z + 0.06), OD, ch=0.004)
-    zs = S0.z + 0.06
-    xloft(mb, [(S0.x - 0.07, 0.045, 0.060, zs + 0.035, 0.008), (S0.x + 0.07, 0.045, 0.060, zs + 0.035, 0.008)], GM, n=4,
-          M=_T(0, -0.076, 0) @ _T(0, 0.0, 0))
-    revolve(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.012), (0.0, 0.012)], "cable", seg=SEG, M=_T(S0.x, -0.076, zs + 0.065))
-    Me = _T(S0.x - 0.07, -0.076, zs + 0.04) @ _Ry(-90)
-    revolve(mb, [(0.0, -0.002), (0.016, -0.002), (0.016, 0.03), (0.019, 0.034), (0.019, 0.050), (0.012, 0.052), (0.0, 0.052)],
-            ["polymer"] * 5 + ["cable"], seg=SEG, M=Me)
-    revolve(mb, [(0.0, -0.002), (0.016, -0.002), (0.016, 0.03), (0.012, 0.032), (0.0, 0.032)], GM, seg=SEG,
-            M=_T(S0.x + 0.03, -0.076, zs + 0.065) @ _T(0, 0, 0.0))
-    for xx in (S0.x - 0.03, S0.x + 0.03):                        # perillas de deflexión / elevación del aparato
-        revolve(mb, [(0.0, 0.0), (0.014, 0.0), (0.014, 0.012), (0.0115, 0.015), (0.0, 0.015)], "polymer", seg=SEG,
-                M=_T(xx, -0.0985, zs + 0.035) @ _Rx(90))
+    side(mb, [(S0.x - 0.020, S0.z - 0.020), (S0.x + 0.020, S0.z - 0.020), (S0.x + 0.020, S0.z + 0.062), (S0.x - 0.020, S0.z + 0.062)],
+         [0.006] * 4, 0.028, OD, y0=-0.076, re=0.003, n=3, ne=2)
+    _knob_k(mb, _T(S0.x, -0.090, S0.z + 0.010) @ _Rx(90), 0.011, 0.010, "polymer", nt=20, dp=0.0008)
+    zs = S0.z + 0.062
+    yc = -0.084
+    side(mb, [(S0.x - 0.060, zs), (S0.x + 0.060, zs), (S0.x + 0.060, zs + 0.060), (S0.x - 0.060, zs + 0.060)],
+         [0.008, 0.008, 0.012, 0.012], 0.046, GM, y0=yc, re=0.005, n=3, ne=3)
+    revolve(mb, [(0.0175, 0.0), (0.0175, 0.028), (0.0160, 0.032), (0.0, 0.033)], GM, seg=48, M=_T(S0.x + 0.020, yc, zs + 0.058))
+    side(mb, [(-0.010, 0.006), (0.010, 0.006), (0.010, 0.022), (-0.010, 0.022)], [0.003] * 4, 0.0016, "glass", re=0.0,
+         M=_T(S0.x + 0.0372, yc, zs + 0.058) @ _Rz(90))
+    Me = _T(S0.x - 0.050, yc, zs + 0.040) @ _Ry(-125)                            # ocular acodado hacia atrás y arriba
+    revolve(mb, [(0.0, -0.004), (0.0130, -0.004), (0.0130, 0.040), (0.0150, 0.044), (0.0150, 0.052)], GM, seg=48, M=Me, caps=False)
+    revolve(mb, [(0.0150, 0.052), (0.0175, 0.056), (0.0190, 0.072), (0.0165, 0.074), (0.0120, 0.068), (0.0090, 0.064), (0.0, 0.063)],
+            ["rubber"] * 5 + ["glass"], seg=48, M=Me, caps=False)
+    for (yy, Mr, nm) in ((yc - 0.023, _Rx(90), "def"), (yc + 0.023, _Rx(-90), "ele")):
+        Mk = _T(S0.x - 0.012 if nm == "def" else S0.x + 0.010, yy, zs + 0.030) @ Mr
+        revk(mb, [(0.0165, 0.0), (0.0165, 0.010)], GM, M=Mk, knurl=(48, 0.0003, set()), caps=False)
+        for k in range(24):                                                     # graduación del tambor
+            a = 2 * PI * k / 24
+            plan(mb, [(-0.0004, 0.0), (0.0004, 0.0), (0.0004, 0.004 if k % 4 == 0 else 0.0025), (-0.0004, 0.004 if k % 4 == 0 else 0.0025)],
+                 0.0, 0.0003, "sign_white", z0=-0.0001, re=0.0, M=Mk @ _Rz(math.degrees(a)) @ _T(0.0165, 0, 0.001) @ _Ry(90))
+        _knob_k(mb, Mk @ _T(0, 0, 0.010), 0.0135, 0.014, "polymer", nt=24, dp=0.0008)
+    for (dx, rot) in ((-0.030, 0.0), (0.0, 90.0)):                               # niveles de burbuja
+        Mv = _T(S0.x + dx, yc, zs + 0.061) @ _Rz(rot)
+        side(mb, [(-0.016, 0.0), (0.016, 0.0), (0.016, 0.009), (-0.016, 0.009)], [0.0, 0.0, 0.003, 0.003], 0.012, GM, re=0.0012, n=2,
+             ne=1, M=Mv)
+        revolve(mb, [(0.0, -0.013), (0.0042, -0.012), (0.0042, 0.012), (0.0, 0.013)], "glass", seg=24, M=Mv @ _T(0, 0, 0.0085) @
+                _Ry(90), caps=False)
     # ---------------- estarcido en el tubo y centrado de la huella
     bb = [v.co for v in mb.bm.verts]
     cx = (min(c.x for c in bb) + max(c.x for c in bb)) / 2
@@ -1817,79 +2635,158 @@ def mortar(seed=0, elev=60.0):
 
 
 # ======================================================================================================== lanzacohetes desechable
+def cyl_text(mb, s, size, R, M, ang, mat="paint_yellow", font="stencil", depth=0.0004, z0=0.0):
+    """Estarcido (kit.fonts) envuelto sobre un cilindro de radio R cuyo eje es Z local de M: el texto corre a lo largo del
+    eje (centrado en z0) y su línea base sigue el perímetro en el ángulo ang (rad, 0 = +X local)."""
+    from kit.fonts import text_font
+    tmp = MB()
+    text_font(tmp, s, size, depth, mat, Matrix(), font=font, res=3 if size > 0.012 else 2)
+    vs = list(tmp.bm.verts)
+    if not vs:
+        return
+    ys = [v.co.y for v in vs]
+    yc = (min(ys) + max(ys)) / 2
+    for v in vs:
+        u, w, d = v.co.x, v.co.y - yc, v.co.z
+        a = ang - w / R
+        r = R + d
+        v.co = Vector((r * math.cos(a), r * math.sin(a), z0 + u))
+    mb.join(tmp, M)
+
+
 def launcher_tube(seed=0):
-    """Lanzacohetes desechable genérico (tubo de lanzamiento de fibra de vidrio pintado, ~ 1,02 m, Ø ~ 104 mm sobre las
-    bandas): tubo con bandas de refuerzo, tapa delantera de hule con lengüeta, tapa trasera / amortiguador de la tobera,
-    mecanismo de disparo superior (caja, palanca de armado, seguro y botón de disparo), alza y guion abatidos bajo sus
-    tapas corredizas, almohadilla de hombro y apoyo plegados al costado, correa de transporte con abrazaderas y hebilla,
-    estarcidos «FRONT» y «REAR». Pintado verde olivo (semilla par) o arena (impar). ORIGEN: piso bajo el centro del tubo
-    (reposa en las tapas); eje del tubo a lo largo de X, boca hacia +X, mecanismo arriba.
-    Fuentes: en.wikipedia.org/wiki/AT4 y man.fas.org/dod-101/sys/land/at4.htm (1020 mm, 6,7 kg, calibre 84 mm)."""
+    """Lanzacohetes desechable genérico (tubo de lanzamiento de fibra de vidrio pintado, ~ 1,02 m, Ø 101 mm, ~ 104 mm
+    sobre las bandas): tubo con 4 bandas de refuerzo de canto redondeado, tapa delantera de hule con lengüeta y nervios,
+    amortiguador trasero de la tobera con 8 nervios de apoyo, mecanismo de disparo superior (carcasa moldeada, palanca de
+    armado acodada con estrías, seguro de palanca, botón rojo con anillo de guarda, pasador de seguridad de transporte con
+    argolla y cordón), alza y guion bajo tapas corredizas estriadas, hombrera plegada que sigue la curva del tubo (hule
+    estriado) y empuñadura delantera plegada sobre su pivote, correa de transporte con abrazaderas, hebilla y costuras de
+    barra, estarcidos envueltos «FRONT», «REAR» y lote (kit.fonts). Pintado verde olivo (semilla par) o arena (impar).
+    ORIGEN: piso bajo el centro del tubo (reposa en las tapas); eje del tubo a lo largo de X, boca hacia +X, mecanismo
+    arriba. Fuentes: en.wikipedia.org/wiki/AT4 y man.fas.org/dod-101/sys/land/at4.htm (1020 mm, 6,7 kg, calibre 84 mm)."""
     mb = MB()
     P = "paint_od" if seed % 2 == 0 else "paint_tan"
     L = 1.016
     R = 0.0505
     zc = 0.0585                                       # eje (las tapas de Ø 117 mm apoyan en el piso)
-    M = _T(-L / 2, 0, zc) @ _Ry(90)                    # z local = +X
+    M = _T(-L / 2, 0, zc) @ _Ry(90)                    # z local = +X ; x local = -Z mundial ; y local = +Y
     prof = [(R - 0.004, 0.052), (R, 0.052)]
     for (z0, z1) in ((0.080, 0.130), (0.330, 0.360), (0.650, 0.680), (0.880, 0.930)):
-        prof += [(R, z0 - 0.004), (R + 0.0028, z0), (R + 0.0028, z1), (R, z1 + 0.004)]
+        prof += [(R, z0 - 0.004), (R + 0.0012, z0 - 0.002), (R + 0.0026, z0), (R + 0.0028, z0 + 0.002), (R + 0.0028, z1 - 0.002),
+                 (R + 0.0026, z1), (R + 0.0012, z1 + 0.002), (R, z1 + 0.004)]
     prof += [(R, 0.962), (R - 0.004, 0.962)]
-    revolve(mb, prof, P, seg=SEG_B, M=M, caps=False)
-    revolve(mb, [(R - 0.004, 0.052), (R - 0.004, 0.962)], "cable", seg=SEG_B, M=M, caps=False)          # interior oscuro
-    # tapa trasera (amortiguador de la tobera): copa de polímero con nervaduras
-    revolve(mb, [(R - 0.006, 0.075), (0.0545, 0.072), (0.0565, 0.060), (0.0565, 0.012), (0.0535, 0.0), (0.030, -0.004), (0.0, -0.005)],
-            "polymer", seg=SEG_B, M=M)
-    for k in range(8):                                 # nervaduras del amortiguador (apoyan en el piso)
+    revolve(mb, prof, P, seg=64, M=M, caps=False)
+    revolve(mb, [(R - 0.004, 0.052), (R - 0.004, 0.962)], "cable", seg=48, M=M, caps=False)          # interior oscuro
+    # amortiguador trasero de la tobera: copa de polímero con nervios
+    revolve(mb, [(R - 0.006, 0.075), (0.0545, 0.072), (0.0562, 0.068), (0.0565, 0.060), (0.0565, 0.014), (0.0555, 0.004),
+                 (0.0530, 0.0), (0.030, -0.004), (0.0, -0.005)], "polymer", seg=64, M=M)
+    for k in range(8):
         a = 2 * PI * k / 8 + PI / 8
-        arc_solid(mb, 0.055, 0.0585, 0.016, 0.056, a - 0.07, a + 0.07, 2, "polymer", M=M)
-    # tapa delantera de hule con lengüeta
-    revolve(mb, [(R - 0.006, 0.940), (0.0565, 0.944), (0.0585, 0.956), (0.0585, 1.004), (0.0545, 1.014), (0.030, 1.018), (0.0, 1.019)],
-            "rubber", seg=SEG_B, M=M)
-    side(mb, [(L / 2 - 0.002, zc + 0.052), (L / 2 + 0.012, zc + 0.054), (L / 2 + 0.016, zc + 0.070), (L / 2 + 0.004, zc + 0.072)],
-         [0.0, 0.004, 0.006, 0.006], 0.020, "rubber", re=0.0)
-    # mecanismo de disparo (arriba, tercio delantero-medio)
+        arc_solid(mb, 0.0555, 0.0585, 0.018, 0.056, a - 0.07, a + 0.07, 2, "polymer", M=M)
+        revolve(mb, [(0.0, 0.0), (0.0012, 0.0), (0.0012, 0.0006)], "polymer", seg=8,
+                M=M @ _T(0.0585 * math.cos(a), 0.0585 * math.sin(a), 0.037) @ _Rz(math.degrees(a)) @ _Ry(90), caps=False)
+    # tapa delantera de hule con nervios y lengüeta
+    revolve(mb, [(R - 0.006, 0.940), (0.0560, 0.944), (0.0585, 0.956), (0.0585, 1.004), (0.0570, 1.011), (0.0545, 1.014),
+                 (0.030, 1.018), (0.0, 1.019)], "rubber", seg=64, M=M)
+    for z0 in (0.962, 0.978, 0.994):
+        revolve(mb, [(0.0583, z0), (0.0596, z0 + 0.002), (0.0596, z0 + 0.006), (0.0583, z0 + 0.008)], "rubber", seg=64, M=M,
+                caps=False)
+    side(mb, [(L / 2 - 0.004, zc + 0.050), (L / 2 + 0.010, zc + 0.053), (L / 2 + 0.016, zc + 0.068), (L / 2 + 0.004, zc + 0.073)],
+         [0.0, 0.005, 0.006, 0.006], 0.020, "rubber", re=0.0025, n=3, ne=2)
+    # ---- mecanismo de disparo (arriba)
     xm0, xm1 = -0.02, 0.17
     zt = zc + R
-    xloft(mb, [(xm0, 0.040, 0.030, zt + 0.006, (0.010, 0.010, 0.002, 0.002)), (xm0 + 0.010, 0.046, 0.036, zt + 0.008, (0.012, 0.012, 0.002, 0.002)),
-               (xm1 - 0.010, 0.046, 0.036, zt + 0.008, (0.012, 0.012, 0.002, 0.002)), (xm1, 0.040, 0.030, zt + 0.006, (0.010, 0.010, 0.002, 0.002))],
-          "polymer", n=4)
-    side(mb, [(xm0 + 0.03, zt + 0.024), (xm0 + 0.11, zt + 0.024), (xm0 + 0.11, zt + 0.033), (xm0 + 0.04, zt + 0.036)],
-         [0.0, 0.0, 0.004, 0.006], 0.014, P, y0=-0.016, re=0.0012, ne=1, n=2)        # palanca de armado
-    revolve(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.006), (0.0070, 0.009), (0.0, 0.009)], "sign_red", seg=SEG,
-            M=_T(xm1 - 0.030, 0.0, zt + 0.025))                                         # botón de disparo
-    side(mb, [(xm1 - 0.075, zt + 0.024), (xm1 - 0.050, zt + 0.024), (xm1 - 0.052, zt + 0.032), (xm1 - 0.073, zt + 0.032)],
-         [0.0, 0.0, 0.002, 0.002], 0.010, "polymer", y0=0.020, re=0.0)                # seguro
-    # alza (atrás) y guion (adelante) bajo tapas corredizas
+    xloft(mb, [(xm0, 0.040, 0.026, zt + 0.004, (0.010, 0.010, 0.002, 0.002)), (xm0 + 0.004, 0.044, 0.032, zt + 0.006, (0.012, 0.012, 0.002, 0.002)),
+               (xm0 + 0.014, 0.047, 0.036, zt + 0.008, (0.013, 0.013, 0.002, 0.002)), (xm1 - 0.014, 0.047, 0.036, zt + 0.008, (0.013, 0.013, 0.002, 0.002)),
+               (xm1 - 0.004, 0.044, 0.032, zt + 0.006, (0.012, 0.012, 0.002, 0.002)), (xm1, 0.040, 0.026, zt + 0.004, (0.010, 0.010, 0.002, 0.002))],
+          "polymer", n=5)
+    for s in (-1, 1):                                  # costuras de moldeo de la carcasa
+        prism_x(mb, _T(xm0 + 0.016, s * 0.0236, zt + 0.0035), [(-0.0005, -0.0008), (0.0005, -0.0008), (0.0005, 0.0008),
+                (-0.0005, 0.0008)], [0.0004] * 4, xm1 - xm0 - 0.032, re=0.0004, mat="polymer")
+    # palanca de armado acodada, con pivote y estrías
+    revolve(mb, [(0.0055, -0.003), (0.0055, 0.004), (0.0045, 0.005)], P, seg=24, M=_T(xm0 + 0.030, -0.0236, zt + 0.020) @ _Rx(90))
+    side(mb, [(xm0 + 0.024, zt + 0.023), (xm0 + 0.100, zt + 0.024), (xm0 + 0.112, zt + 0.028), (xm0 + 0.112, zt + 0.034),
+              (xm0 + 0.098, zt + 0.035), (xm0 + 0.030, zt + 0.031)], [0.004, 0.006, 0.003, 0.003, 0.006, 0.006], 0.012, P,
+         y0=-0.012, re=0.0015, n=3, ne=2)
+    for k in range(5):
+        xr = xm0 + 0.082 + k * 0.0055
+        side(mb, [(xr, zt + 0.0335), (xr + 0.0022, zt + 0.0335), (xr + 0.0022, zt + 0.0362), (xr, zt + 0.0362)], [0.0008] * 4,
+             0.011, P, y0=-0.012, re=0.0005, n=2, ne=1)
+    # seguro (palanca derecha) y botón rojo con anillo de guarda
+    side(mb, [(xm1 - 0.080, zt + 0.0225), (xm1 - 0.048, zt + 0.0225), (xm1 - 0.050, zt + 0.0305), (xm1 - 0.078, zt + 0.0305)],
+         [0.002, 0.002, 0.003, 0.003], 0.010, "polymer", y0=0.0165, re=0.0015, n=2, ne=1)
+    revolve(mb, [(0.0115, -0.002), (0.0115, 0.0062), (0.0105, 0.0072), (0.0092, 0.0072), (0.0092, 0.0030), (0.0, 0.0030)],
+            "polymer", seg=40, M=_T(xm1 - 0.030, 0.0, zt + 0.0255), caps=False)
+    revolve(mb, [(0.0, 0.0020), (0.0078, 0.0020), (0.0078, 0.0070), (0.0068, 0.0082), (0.0, 0.0085)], "sign_red", seg=40,
+            M=_T(xm1 - 0.030, 0.0, zt + 0.0255), caps=False)
+    # pasador de seguridad de transporte con argolla y cordón
+    revolve(mb, [(0.0, 0.0), (0.0019, 0.0), (0.0019, 0.040), (0.0, 0.041)], "steel", seg=16,
+            M=_T(xm0 + 0.060, -0.030, zt + 0.014) @ _Rx(-90) @ _T(0, 0, -0.012), caps=False)
+    ring = [(xm0 + 0.060 + 0.0085 * math.cos(a), -0.0352, zt + 0.0055 + 0.0085 * math.sin(a)) for a in
+            [2 * PI * k / 24 for k in range(24)]]
+    from kit.clinic_equipo import loop_tube
+    with mb.soft():
+        loop_tube(mb, ring, 0.0011, seg=10, mat="steel", normal=(0, 1, 0))
+    # ---- alza (atrás) y guion (adelante) bajo tapas corredizas
     for (x0, x1, h) in ((-0.30, -0.20, 0.026), (0.30, 0.37, 0.022)):
-        xloft(mb, [(x0, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.0, 0.0)),
-                   (x1, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.0, 0.0))], "polymer", n=4)
-        plank(mb, (x0 + 0.008, -0.016, zt + h - 0.006), (x1 - 0.008, 0.016, zt + h - 0.0035), P, ch=0.001)
-        for k in range(4):                                                              # estrías de la tapa corrediza
-            xx = x0 + 0.015 + k * 0.006
-            plank(mb, (xx, -0.013, zt + h - 0.0040), (xx + 0.0025, 0.013, zt + h - 0.0018), P, ch=0.0006)
-    # almohadilla de hombro y apoyo delantero plegados contra el costado (-Y)
-    sh = MB()
-    slab2(sh, Matrix(), 0.13, 0.040, 0.012, 0.010, "rubber", re_t=0.004, ne_t=4, re_b=0.0, ne_b=0, nc=4)
-    mb.join(sh, _T(-0.13, -R + 0.002, zc) @ _Rx(90))
-    side(mb, [(0.06, zc - 0.012), (0.14, zc - 0.012), (0.14, zc + 0.012), (0.06, zc + 0.012)], [0.006] * 4, 0.010, "polymer",
-         y0=-R - 0.002, re=0.002, ne=1, n=2)
-    # abrazaderas de la correa y correa a lo largo del costado +Y
+        xloft(mb, [(x0, 0.026, h - 0.002, zt + h / 2 - 0.004, (0.005, 0.005, 0.001, 0.001)),
+                   (x0 + 0.004, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.001, 0.001)),
+                   (x1 - 0.004, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.001, 0.001)),
+                   (x1, 0.026, h - 0.002, zt + h / 2 - 0.004, (0.005, 0.005, 0.001, 0.001))], "polymer", n=4)
+        side(mb, [(x0 + 0.006, zt + h - 0.0065), (x1 - 0.010, zt + h - 0.0065), (x1 - 0.010, zt + h - 0.0035),
+                  (x0 + 0.006, zt + h - 0.0035)], [0.0012] * 4, 0.032, P, re=0.0010, n=2, ne=1)
+        for k in range(5):
+            xx = x0 + 0.012 + k * 0.0055
+            side(mb, [(xx, zt + h - 0.0040), (xx + 0.0022, zt + h - 0.0040), (xx + 0.0022, zt + h - 0.0018), (xx, zt + h - 0.0018)],
+                 [0.0008] * 4, 0.026, P, re=0.0004, n=2, ne=1)
+    # ---- hombrera plegada (costado -Y): concha de hule que sigue la curva del tubo, con estrías
+    Ms = M @ _Rz(-90)                                 # ángulo 0 = -Y mundial
+    arc_solid(mb, R + 0.0010, R + 0.0130, 0.255, 0.390, -0.42, 0.42, 16, "rubber", M=Ms)
+    for k in range(9):
+        z0 = 0.262 + k * 0.0145
+        arc_solid(mb, R + 0.0125, R + 0.0145, z0, z0 + 0.0060, -0.36, 0.36, 14, "rubber", M=Ms)
+    arc_solid(mb, R + 0.0005, R + 0.0060, 0.390, 0.405, -0.25, 0.25, 8, P, M=Ms)                   # bisagra
+    revolve(mb, [(0.0035, -0.016), (0.0035, 0.016)], "steel", seg=20, M=_T(-L / 2 + 0.398, -R - 0.0035, zc) @ _Rx(0) @ _Ry(0))
+    # ---- empuñadura delantera plegada (abajo a la izquierda) sobre su pivote
+    Mg = M @ _Rz(-45)                                 # ángulo 0 = abajo-izquierda
+    arc_solid(mb, R + 0.0005, R + 0.0060, 0.555, 0.600, -0.30, 0.30, 8, P, M=Mg)
+    rg = R + 0.0175
+    Xg, Zg = Vector((1, 0, 0)), Vector((0, -0.7071, -0.7071))
+    Yg = Zg.cross(Xg)
+    Mgr = Matrix(((Xg.x, Yg.x, Zg.x, -L / 2 + 0.572), (Xg.y, Yg.y, Zg.y, -rg * 0.7071), (Xg.z, Yg.z, Zg.z, zc - rg * 0.7071),
+                  (0, 0, 0, 1)))
+    port.loft(mb, [(0.0, 0.020, 0.016, 0.0), (0.010, 0.026, 0.024, 0.0), (0.080, 0.028, 0.026, 0.0), (0.092, 0.024, 0.020, 0.0),
+                   (0.098, 0.016, 0.012, 0.0)], seg=32, mat="polymer", M=Mgr, ex=2.6)
+    for k in range(4):                                # estrías de los dedos
+        revolve(mb, [(0.0136, -0.002), (0.0146, 0.0), (0.0136, 0.002)], "polymer", seg=32, M=Mgr @ _T(0.026 + k * 0.016, 0, 0) @
+                _Ry(90), caps=False)
+    # ---- abrazaderas de la correa y correa a lo largo del costado +Y, con hebilla y costuras
     for x in (-0.38, 0.40):
-        revolve(mb, [(R + 0.0026, -0.011), (R + 0.0048, -0.010), (R + 0.0048, 0.010), (R + 0.0026, 0.011)], "steel", seg=SEG_B,
+        revolve(mb, [(R + 0.0026, -0.011), (R + 0.0048, -0.010), (R + 0.0048, 0.010), (R + 0.0026, 0.011)], "steel", seg=64,
                 M=_ax(x, 0, zc), closed=True)
         side(mb, [(x - 0.012, zc - 0.006), (x + 0.012, zc - 0.006), (x + 0.012, zc + 0.012), (x - 0.012, zc + 0.012)], [0.003] * 4,
-             0.010, "steel", y0=R + 0.008, re=0.0)
-        wire(mb, [(x - 0.008, R + 0.008, zc + 0.016), (x - 0.008, R + 0.016, zc + 0.016), (x + 0.008, R + 0.016, zc + 0.016),
-                  (x + 0.008, R + 0.008, zc + 0.016)], 0.0022, "steel", bend=0.004, nseg=2)
-    sl = spline([(-0.38, R + 0.016, zc + 0.020), (-0.30, R + 0.022, zc + 0.000), (0.0, R + 0.024, zc - 0.012), (0.30, R + 0.022, zc + 0.000),
-                 (0.40, R + 0.016, zc + 0.020)], 2)
-    strap(mb, sl, 0.030, 0.0022, "canvas", up=(0, 1, 0), r=0.0009)
+             0.010, "steel", y0=R + 0.008, re=0.0012, n=2, ne=1)
+        _screw_h(mb, _T(x, R + 0.013, zc + 0.003) @ _Rx(-90), d=0.0055, mat="steel")
+        with mb.soft():
+            wire(mb, [(x - 0.008, R + 0.012, zc + 0.012), (x - 0.008, R + 0.018, zc + 0.020), (x + 0.008, R + 0.018, zc + 0.020),
+                      (x + 0.008, R + 0.012, zc + 0.012)], 0.0022, "steel", bend=0.004, nseg=3, seg=12)
+    sl = spline([(-0.388, R + 0.0185, zc + 0.024), (-0.30, R + 0.024, zc + 0.002), (0.0, R + 0.026, zc - 0.012),
+                 (0.30, R + 0.024, zc + 0.002), (0.408, R + 0.0185, zc + 0.024)], 4)
+    with mb.soft():
+        strap(mb, sl, 0.030, 0.0022, "canvas", up=(0, 1, 0), r=0.0009)
+    for xe in (-0.362, 0.382):
+        prism_x(mb, _T(xe - 0.004, R + 0.0262, zc + 0.012), [(-0.0002, -0.0125), (0.0004, -0.0125), (0.0004, 0.0125),
+                                                             (-0.0002, 0.0125)], [0.0] * 4, 0.008, re=0.0001, mat="fabric")
     plan(mb, [(-0.022, -0.020), (0.022, -0.020), (0.022, 0.020), (-0.022, 0.020)], [0.004] * 4, 0.0066, "plastic", z0=-0.0033,
-         re=0.001, ne=1, n=2, M=_T(0.10, R + 0.0242, zc - 0.009) @ _Rx(-90))
-    # estarcidos
-    stencil(mb, "FRONT", 0.020, _T(0.26, -R - 0.0002, zc - 0.008) @ _Rx(90), "paint_yellow")
-    stencil(mb, "REAR", 0.020, _T(-0.42, -R - 0.0002, zc - 0.008) @ _Rx(90), "paint_yellow")
+         re=0.0012, ne=2, n=3, M=_T(0.10, R + 0.0262, zc - 0.009) @ _Rx(-90))
+    for k in range(3):
+        plan(mb, [(-0.018, -0.0025), (0.018, -0.0025), (0.018, 0.0025), (-0.018, 0.0025)], [0.001] * 4, 0.0012,
+             "plastic", z0=0.0028, re=0.0004, n=2, ne=1, M=_T(0.10, R + 0.0262, zc - 0.009 - 0.011 + k * 0.011) @ _Rx(-90))
+    # ---- estarcidos envueltos (kit.fonts)
+    cyl_text(mb, "FRONT", 0.022, R + 0.0002, M, -PI / 2, z0=0.80)
+    cyl_text(mb, "REAR", 0.022, R + 0.0002, M, -PI / 2, z0=0.20)
+    cyl_text(mb, "LOT 27-05  RKT LAUNCHER", 0.0085, R + 0.0002, M, -PI / 2 + 0.30, font="stencil2", z0=0.50)
+    cyl_text(mb, "FIRE FROM SHOULDER ONLY", 0.0075, R + 0.0002, M, -PI / 2 - 0.30, font="stencil2", z0=0.50)
     return mb
 
 
@@ -1928,15 +2825,90 @@ def _surface_z(tree, x, y, z0=1.0):
     return loc.z if loc is not None else 0.0
 
 
+def _binding(mb, M, P, R, r=0.0024, mat="canvas", n=4):
+    """Cinta de ribete (vivo) que envuelve el canto de un acolchado _pad: tubo cerrado sobre el contorno en el plano medio."""
+    from kit.clinic_equipo import loop_tube
+    pts = [tuple(M @ Vector((x, y, 0.0))) for (x, y) in rpoly_n(P, R, r * 0.35, n)]
+    with mb.soft():
+        loop_tube(mb, pts, r, seg=12, mat=mat, normal=M.to_3x3() @ Vector((0, 0, 1)))
+
+
+def _stitch(mb, M, pts2d, tree, lift=0.00025, r=0.00055, closed=True, mat="fabric"):
+    """Pespunte: hilo fino (tubo suave) que sigue la cara de un acolchado (rayo contra su BVH) por los puntos (x, y)."""
+    P = [(x, y, _surface_z(tree, x, y) + lift) for (x, y) in pts2d]
+    if closed:
+        P.append(P[0])
+    with mb.soft():
+        mb.tube([tuple(M @ Vector(p)) for p in P], r, seg=6, mat=mat, caps=not closed)
+
+
+def _resample2(pts, step, closed=True):
+    P = [Vector((p[0], p[1])) for p in pts] + ([Vector((pts[0][0], pts[0][1]))] if closed else [])
+    out = [P[0]]
+    for a, b in zip(P[:-1], P[1:]):
+        n = max(1, int((b - a).length / step))
+        out += [a.lerp(b, k / n) for k in range(1, n + 1)]
+    if closed:
+        out = out[:-1]
+    return [(p.x, p.y) for p in out]
+
+
+def _webbing(mb, M, tree, x0, x1, y, w=0.025, t=0.0016, pitch=0.0381, mat="canvas"):
+    """Hilera de cinta PALS sobre la cara de un acolchado: se abomba entre presillas y lleva costura de barra (rectángulo
+    de hilo) en cada presilla."""
+    pts = []
+    nt = max(1, int(round((x1 - x0) / pitch)))
+    for k in range(nt * 4 + 1):
+        x = x0 + (x1 - x0) * k / (nt * 4)
+        ph = (k % 4) / 4.0
+        lift = 0.0021 * math.sin(PI * ph) if k % 4 else 0.0
+        pts.append((x, y, _surface_z(tree, x, y) + t / 2 + 0.0002 + lift))
+    with mb.soft():
+        strap(mb, [tuple(M @ Vector(p)) for p in pts], w, t, mat, up=tuple(M.to_3x3() @ Vector((0, 0, 1))), r=t * 0.45)
+    for k in range(nt + 1):                                   # costuras de barra
+        x = x0 + (x1 - x0) * k / nt
+        z = _surface_z(tree, x, y) + t + 0.0002
+        plan(mb, [(x - 0.0016, y - w / 2 + 0.002), (x + 0.0016, y - w / 2 + 0.002), (x + 0.0016, y + w / 2 - 0.002),
+                  (x - 0.0016, y + w / 2 - 0.002)], [0.0] * 4, 0.0007, "fabric", z0=z - 0.0001, re=0.0002, n=2, ne=1, M=M)
+
+
+def _ladder_lock(mb, M, w=0.030, mat="plastic"):
+    """Hebilla de escalera (ladder lock) de plástico en el plano XY local: marco con 2 barras y orejas."""
+    holed(mb, M @ _T(0, 0, -0.0016), (0.0, 0.0, w / 2 + 0.003, 0.012, 0.0035), (0.0, -0.004, w / 2 - 0.001, 0.0028, 0.0012),
+          0.0032, re_o=0.0010, re_i=0.0006, n=32, mat=mat, ne=1, ctr=(0.0, -0.004))
+    plan(mb, [(-w / 2 + 0.001, 0.0030), (w / 2 - 0.001, 0.0030), (w / 2 - 0.001, 0.0058), (-w / 2 + 0.001, 0.0058)],
+         [0.0008] * 4, 0.0030, mat, z0=-0.0015, re=0.0006, n=2, ne=1, M=M)
+
+
+def _strap_tail(mb, p0, d0, L, w=0.025, t=0.0016, sag=0.0, side=(1, 0, 0), mat="canvas", n=10, curl=0.0):
+    """Punta de cinta suelta que cuelga por gravedad desde p0 (dirección inicial d0): se dobla hacia abajo, punta
+    sellada (termofundida) con su costura."""
+    p = Vector(p0)
+    d = Vector(d0).normalized()
+    g = Vector((0, 0, -1))
+    pts = [tuple(p)]
+    seg = L / n
+    for k in range(n):
+        d = (d + g * 0.22 + Vector(side) * curl).normalized()
+        p = p + d * seg
+        pts.append(tuple(p))
+    up = Vector(side).cross(Vector((0, 0, -1)))
+    with mb.soft():
+        strap(mb, pts, w, t, mat, up=tuple(up if up.length > 0.1 else Vector((0, -1, 0))), r=t * 0.45)
+    return pts
+
+
 def vest(seed=0):
     """Chaleco portaplacas colgado de un gancho de muro: bolsas de placa delantera y trasera acolchadas (malla subdividida,
-    canto redondo, abombado y arrugas leves; corte de hombro para placa de 9,5 × 12,5 in), hombreras acolchadas, faja
-    (cummerbund) elástica a los costados, 4 hileras de cinta PALS de 25 mm con presillas cada 38 mm (la cinta se abomba entre
-    costuras), triple portacargador abierto con cargadores, cordón elástico y tirador, panel de velcro, asa de arrastre de
-    cinta colgada del gancho y gancho de acero en J con placa y tapón de hule. ORIGEN: cara del muro (y = 0) en el centro del
+    canto redondo, abombado y arrugas; corte de hombro para placa de 9,5 × 12,5 in) con ribete en todo el canto y pespunte
+    a 8 mm; hombreras acolchadas con ribete, hebillas de escalera y puntas de cinta que cuelgan por gravedad; faja
+    (cummerbund) elástica a los costados con 2 hileras PALS; 6 hileras de cinta PALS de 25 mm al frente con costuras de
+    barra cada 38 mm (la cinta se abomba entre presillas); triple portacargador alto con cargadores reales (base arriba),
+    ribetes, banda elástica, cordones elásticos y tiradores; panel de velcro con pespunte; asa de arrastre cosida colgada
+    del gancho; gancho de acero en J con placa, 2 tornillos y tapón de hule. ORIGEN: cara del muro (y = 0) en el centro del
     gancho (z = 0); el chaleco cuelga hacia -Z y sobresale hacia -Y (frente del chaleco hacia -Y).
     Fuentes: en.wikipedia.org/wiki/MOLLE (cinta de 1 in, hileras a 1 in, presillas cada 1,5 in); shellbacktactical.com
-    (placa SAPI mediana 9,5 × 12,5 in)."""
+    (placa SAPI mediana 9,5 × 12,5 in); magpul.com (cargador de 30, 7,5 in)."""
     from mathutils.bvhtree import BVHTree
     r = rng(seed)
     mb = MB()
@@ -1950,62 +2922,85 @@ def vest(seed=0):
     zf_top, yf = -0.085, -0.122                         # placa delantera
     Mb = _T(0, yb, zb_top - H / 2) @ Mv
     Mf = _T(0, yf, zf_top - H / 2) @ Mv @ _Rz(float(r.uniform(-1.5, 1.5)))
-    _pad(mb, Mb, P, R, T, 0.005, 0.0, C, nin_f=1, nin_b=0, wrinkle=0.0012, seed=float(seed))
+    _pad(mb, Mb, P, R, T, 0.005, 0.0, C, nin_f=3, nin_b=0, wrinkle=0.0012, seed=float(seed))
+    _binding(mb, Mb, P, R)
     front = MB()
-    _pad(front, Matrix(), P, R, T, 0.007, 0.002, C, nin_f=3, nin_b=1, wrinkle=0.0016, seed=float(seed) + 7.0)
+    _pad(front, Matrix(), P, R, T, 0.008, 0.002, C, nin_f=6, nin_b=1, ne=8, inset=0.07, wrinkle=0.0018, seed=float(seed) + 7.0)
     tree = BVHTree.FromBMesh(front.bm)
-    # cinta PALS: 3 hileras donde se teje el portacargadores
-    rows = [-0.146 + 0.0254 * k for k in range(3)]
+    _binding(front, Matrix(), P, R)
+    _stitch(front, Matrix(), _resample2(rpoly_n(P, R, 0.008, 3), 0.004), tree)
+    # cinta PALS: 3 hileras bajo el portacargadores y 3 visibles arriba
     x0, x1 = -W / 2 + 0.030, W / 2 - 0.030
-    for yr in rows:
-        pts = []
-        ntack = int(round((x1 - x0) / 0.0381))
-        for k in range(ntack * 2 + 1):
-            x = x0 + (x1 - x0) * k / (ntack * 2)
-            lift = 0.0022 if k % 2 else 0.0
-            pts.append((x, yr, _surface_z(tree, x, yr) + 0.0007 + lift))
-        strap(front, pts, 0.025, 0.0016, C, up=(0, 0, 1), r=0.0006)
-    zs = max(_surface_z(tree, 0.0, rows[0]), _surface_z(tree, 0.0, rows[2])) + 0.0038
-    for i in range(3):                                   # triple portacargador abierto (bolsas blandas)
+    for yr in [-0.146 + 0.0254 * k for k in range(3)] + [0.005 + 0.0254 * k for k in range(3)]:
+        _webbing(front, Matrix(), tree, x0, x1, yr)
+    # triple portacargador alto (bolsas blandas) con cargadores reales invertidos
+    hp = 0.150
+    yp0 = -0.160
+    zs = max(_surface_z(tree, 0.0, -0.146), _surface_z(tree, 0.0, -0.095)) + 0.0036
+    for i in range(3):
         xc = (i - 1) * 0.074
-        yp0 = -0.160
-        hp = 0.100
-        _pad(front, _T(xc, yp0 + hp / 2, zs + 0.0145), [(-0.034, -hp / 2), (0.034, -hp / 2), (0.034, hp / 2), (-0.034, hp / 2)],
-             [0.011, 0.011, 0.008, 0.008], 0.029, 0.0008, 0.0, C, nin_f=1, nin_b=0, inset=0.004, wrinkle=0.0, seed=float(seed + i))
-        # cargador invertido (base arriba) asomando por la boca
-        slab2(front, _T(xc, yp0 + hp - 0.010, zs + 0.0145) @ _Rx(-90), 0.060, 0.022, 0.040, 0.004, "polymer", re_t=0.0, nc=4)
-        slab2(front, _T(xc, yp0 + hp + 0.030, zs + 0.0145) @ _Rx(-90), 0.068, 0.027, 0.008, 0.006, "polymer", re_t=0.0022,
-              ne_t=1, nc=4)
-        cord = [(xc - 0.031, yp0 + hp - 0.006, zs + 0.0275), (xc - 0.018, yp0 + hp + 0.037, zs + 0.030), (xc, yp0 + hp + 0.040, zs + 0.030),
-                (xc + 0.018, yp0 + hp + 0.037, zs + 0.030), (xc + 0.031, yp0 + hp - 0.006, zs + 0.0275)]
-        front.tube(cord, 0.0022, seg=SEG_T, mat="cable", caps=False)     # los extremos entran en la bolsa
-        plan(front, [(-0.009, -0.006), (0.009, -0.006), (0.009, 0.006), (-0.009, 0.006)], [0.004] * 4, 0.003, "plastic", z0=-0.0015,
-             re=0.001, ne=1, n=2, M=_T(xc, yp0 + hp + 0.040, zs + 0.030))
-    # panel de velcro (parte alta)
-    zv = _surface_z(tree, 0.0, 0.085)
-    slab2(front, _T(0, 0.085, zv - 0.0015), 0.15, 0.06, 0.0035, 0.006, C, re_t=0.0015, ne_t=1, nc=4)
+        Pp = [(-0.0355, -hp / 2), (0.0355, -hp / 2), (0.0355, hp / 2), (-0.0355, hp / 2)]
+        Rp = [0.012, 0.012, 0.006, 0.006]
+        Mp = _T(xc, yp0 + hp / 2, zs + 0.0150)
+        _pad(front, Mp, Pp, Rp, 0.030, 0.0012, 0.0, C, nin_f=3, nin_b=0, inset=0.010, wrinkle=0.0005, seed=float(seed + i))
+        _binding(front, Mp, Pp, Rp, r=0.0018)
+        # banda elástica en la boca
+        slab2(front, _T(xc, yp0 + hp - 0.016, zs + 0.0295) @ _Rx(0), 0.066, 0.022, 0.0016, 0.004, C, re_t=0.0007, ne_t=1, nc=3)
+        # cargador invertido: la base asoma 45 mm sobre la boca
+        mg = MB()
+        Mbp = _mag(mg, Matrix(), lite=True, inserted=True, cal="556", seed=seed + i)
+        mg.transform(Mbp.inverted())
+        mg.transform(_Rx(180))
+        front.join(mg, _T(xc, yp0 + hp + 0.044, zs + 0.0150) @ _Rx(-90) @ _Rz(0))
+        # cordón elástico sobre la base con tirador
+        ytop = yp0 + hp + 0.0525
+        cord = [(xc - 0.031, yp0 + hp - 0.004, zs + 0.0302), (xc - 0.030, ytop - 0.004, zs + 0.0285), (xc - 0.018, ytop, zs + 0.0270),
+                (xc, ytop + 0.0008, zs + 0.0265), (xc + 0.018, ytop, zs + 0.0270), (xc + 0.030, ytop - 0.004, zs + 0.0285),
+                (xc + 0.031, yp0 + hp - 0.004, zs + 0.0302)]
+        with front.soft():
+            front.tube(spline(cord, 4), 0.0021, seg=12, mat="cable", caps=False)
+        plan(front, [(-0.009, 0.0), (0.009, 0.0), (0.009, 0.016), (-0.009, 0.016)], [0.0, 0.0, 0.004, 0.004], 0.0022, "plastic",
+             z0=zs + 0.0255, re=0.0008, n=2, ne=1, M=_T(xc, ytop, 0))
+    # panel de velcro (parte alta) con pespunte
+    zv = _surface_z(tree, 0.0, 0.110)
+    slab2(front, _T(0, 0.110, zv - 0.0012), 0.15, 0.065, 0.0034, 0.006, C, re_t=0.0014, ne_t=2, nc=4)
+    sp = _resample2(rr_pts(0.140, 0.055, 0.004, 3), 0.004)
+    with front.soft():
+        front.tube([(x, 0.110 + y, zv + 0.0024) for (x, y) in sp] + [(sp[0][0], 0.110 + sp[0][1], zv + 0.0024)], 0.0005, seg=6,
+                   mat="fabric", caps=False)
     mb.join(front, Mf)
-    # hombreras: de las esquinas superiores de la trasera, sobre el gancho, a las de la delantera
+    # hombreras acolchadas: de las esquinas superiores de la trasera, sobre el gancho, a las de la delantera
     for sx in (-1, 1):
         x = sx * 0.085
-        path = spline([(x, yb - 0.004, zb_top - 0.012), (x, yb - 0.018, zb_top + 0.020), (x, (yb + yf) / 2, zb_top + 0.032),
-                       (x, yf + 0.020, zf_top + 0.010), (x, yf + 0.002, zf_top - 0.015)], 3)
-        strap(mb, path, 0.013, 0.058, C, up=(1, 0, 0), r=0.006, n=1)
-    # faja (cummerbund) elástica a los costados, con 2 hileras PALS
+        path = spline([(x, yb - 0.006, zb_top - 0.020), (x, yb - 0.016, zb_top + 0.018), (x, (yb + yf) / 2, zb_top + 0.032),
+                       (x, yf + 0.020, zf_top + 0.012), (x, yf - 0.002, zf_top - 0.030)], 5)
+        sec = [(0.026 * math.copysign(abs(math.cos(t)) ** 0.45, math.cos(t)), 0.0065 * math.copysign(abs(math.sin(t)) ** 0.7,
+                math.sin(t))) for t in [2 * PI * k / 28 for k in range(28)]]
+        with mb.soft():
+            sweep_frame(mb, sec, path, C, up=(1, 0, 0))
+        # hebilla de escalera al frente y punta de cinta que cuelga
+        pb = Vector(path[-3])
+        _ladder_lock(mb, _T(x, pb.y - 0.0085, pb.z) @ _Rx(90), w=0.026)
+        _strap_tail(mb, (x + sx * 0.002, pb.y - 0.0115, pb.z - 0.010), (0.0, -0.25, -1.0), 0.085 + 0.01 * sx, w=0.025,
+                    side=(sx * 1.0, 0, 0), curl=0.02)
+    # faja (cummerbund) elástica a los costados, con 2 hileras PALS y puntas sueltas
     for sx in (-1, 1):
         zc = zf_top - H * 0.70
         path = spline([(sx * (W / 2 - 0.015), yf + 0.004, zc), (sx * (W / 2 + 0.018), yf + 0.030, zc + 0.004),
                        (sx * (W / 2 + 0.026), (yb + yf) / 2, zc + 0.010), (sx * (W / 2 + 0.012), yb - 0.010, zc + 0.018),
-                       (sx * (W / 2 - 0.015), yb - 0.002, zc + 0.022)], 3)
-        strap(mb, path, 0.007, 0.125, C, up=(0, 0, 1), r=0.003, n=1)
+                       (sx * (W / 2 - 0.015), yb - 0.002, zc + 0.022)], 4)
+        sec = [(0.0045 * math.copysign(abs(math.cos(t)) ** 0.6, math.cos(t)), 0.064 * math.copysign(abs(math.sin(t)) ** 0.3,
+                math.sin(t))) for t in [2 * PI * k / 24 for k in range(24)]]
+        with mb.soft():
+            sweep_frame(mb, sec, path, C, up=(0, 0, 1))
         Pp = [Vector(q) for q in path]
         acc = [0.0]
         for a_, b_ in zip(Pp[:-1], Pp[1:]):
             acc.append(acc[-1] + (b_ - a_).length)
-        for dz in (-0.022, 0.004):
+        for dz in (-0.022, 0.006):
             pts = []
             s0, s1 = 0.02, acc[-1] - 0.02
-            nt = max(2, int(round((s1 - s0) / 0.019)))
+            nt = max(2, int(round((s1 - s0) / 0.0095)))
             for k in range(nt + 1):
                 sv = s0 + (s1 - s0) * k / nt
                 i = next(j for j in range(1, len(acc)) if acc[j] >= sv - 1e-9)
@@ -2015,89 +3010,163 @@ def vest(seed=0):
                 nrm = Vector((tng.y, -tng.x, 0.0)).normalized()
                 if nrm.x * sx < 0:
                     nrm = -nrm
-                lift = 0.0021 if k % 2 else 0.0
-                pts.append(tuple(q + nrm * (0.0035 + lift) + Vector((0, 0, dz))))
-            strap(mb, pts, 0.0016, 0.025, C, up=(0, 0, 1), r=0.0006)
-    # asa de arrastre (cinta) colgada del brazo del gancho
+                lift = 0.0019 * math.sin(PI * (k % 4) / 4) if k % 4 else 0.0
+                pts.append(tuple(q + nrm * (0.0053 + lift) + Vector((0, 0, dz))))
+            with mb.soft():
+                strap(mb, pts, 0.0016, 0.025, C, up=(0, 0, 1), r=0.0006)
+        _strap_tail(mb, (sx * (W / 2 - 0.008), yf - 0.004, zc - 0.050), (sx * 0.4, -0.2, -1.0), 0.11, w=0.025, side=(0, -1, 0),
+                    curl=0.01 * sx)
+    # asa de arrastre (cinta) colgada del brazo del gancho, con costura de barra
     loop = spline([(-0.030, yb - 0.004, zb_top - 0.004), (-0.020, yb - 0.004, -0.012), (-0.0095, yb - 0.004, 0.004),
-                   (0.0, yb - 0.004, 0.0105), (0.0095, yb - 0.004, 0.004), (0.020, yb - 0.004, -0.012), (0.030, yb - 0.004, zb_top - 0.004)], 2)
-    strap(mb, loop, 0.0028, 0.026, C, up=(0, 1, 0), r=0.0012)
+                   (0.0, yb - 0.004, 0.0105), (0.0095, yb - 0.004, 0.004), (0.020, yb - 0.004, -0.012), (0.030, yb - 0.004, zb_top - 0.004)], 4)
+    with mb.soft():
+        strap(mb, loop, 0.0028, 0.026, C, up=(0, 1, 0), r=0.0012)
+    for sx in (-1, 1):
+        plan(mb, [(-0.012, -0.0016), (0.012, -0.0016), (0.012, 0.0016), (-0.012, 0.0016)], [0.0] * 4, 0.0005, "fabric",
+             z0=-0.0001, re=0.0, M=_T(sx * 0.0295, yb - 0.0055, zb_top - 0.010) @ _Rx(90) @ _Rz(90))
     # gancho en J: placa al muro con 2 tornillos, brazo de varilla Ø 14 mm y tapón de hule
     plan(mb, [(-0.022, -0.035), (0.022, -0.035), (0.022, 0.035), (-0.022, 0.035)], [0.006] * 4, 0.004, "steel", z0=0.0, re=0.0012,
          ne=1, n=2, M=_T(0, 0, 0) @ _Rx(90))
     for zz in (-0.024, 0.024):
-        rivet(mb, _T(0, -0.004, zz) @ _Rx(90), d=0.008, mat="steel")
-    wire(mb, [(0, -0.003, 0.0), (0, -0.060, 0.0), (0, -0.068, 0.030)], 0.007, "steel", bend=0.014, nseg=5, seg=SEG_T)
-    revolve(mb, [(0.0, -0.002), (0.0085, 0.0), (0.0095, 0.008), (0.0085, 0.014), (0.0, 0.016)], "rubber", seg=SEG,
-            M=_T(*port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].translation) @
-            port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].to_3x3().to_4x4() @ _Ry(90))
+        _screw_h(mb, _T(0, -0.0040, zz) @ _Rx(90), d=0.0085, mat="steel", hexs=False)
+    wire(mb, [(0, -0.003, 0.0), (0, -0.060, 0.0), (0, -0.068, 0.030)], 0.007, "steel", bend=0.014, nseg=6, seg=24)
+    Mr, _ = port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))
+    revolve(mb, [(0.0, -0.002), (0.0085, 0.0), (0.0095, 0.008), (0.0085, 0.014), (0.0, 0.016)], "rubber", seg=32, M=Mr @ _Ry(90))
     return mb
 
 
 # ======================================================================================================== maleta rígida
+def _case_handle(mb, M, span=0.120, mat="polymer"):
+    """Asa abatible (abatida) de maleta en el plano XZ local (cara del casco en y = 0, crece hacia -Y): 2 alojamientos de
+    pivote, asa de varilla con empuñadura de hule de dedos marcados."""
+    hs = span / 2
+    for s in (-1, 1):
+        side(mb, [(s * hs - 0.011, -0.020), (s * hs + 0.011, -0.020), (s * hs + 0.011, 0.008), (s * hs - 0.011, 0.008)],
+             [0.004, 0.004, 0.004, 0.004], 0.0140, mat, y0=-0.0068, re=0.0025, n=3, ne=2, M=M)
+        revolve(mb, [(0.0045, -0.008), (0.0045, 0.008)], "steel", seg=24, M=M @ _T(s * hs, -0.0120, -0.006) @ _Ry(90))
+    path = fillet([(-hs, -0.0120, -0.006), (-hs + 0.004, -0.0150, -0.040), (hs - 0.004, -0.0150, -0.040), (hs, -0.0120, -0.006)],
+                  0.010, 4)
+    mb.tube([tuple(M @ Vector(p)) for p in path], 0.0055, seg=24, mat=mat, caps=False)
+    prof = [(0.0090, -0.046), (0.0110, -0.044)]
+    for k in range(4):
+        z0 = -0.040 + k * 0.022
+        prof += [(0.0112, z0), (0.0104, z0 + 0.010), (0.0112, z0 + 0.020)]
+    prof += [(0.0110, 0.046), (0.0090, 0.048)]
+    revolve(mb, prof, "rubber", seg=32, M=M @ _T(0, -0.0150, -0.040) @ _Ry(90), caps=False)
+
+
+def _case_latch(mb, x, yf, zp, mat="polymer"):
+    """Cierre de doble acción en la cara frontal (yf, crece hacia -Y): orejas y pasador en el casco, palanca curva con
+    estrías y gancho sobre la uña de la tapa; guardas laterales moldeadas a ambos lados."""
+    for s in (-1, 1):                                    # guardas laterales (nervios del casco y de la tapa)
+        plan(mb, [(x + s * 0.030 - 0.005, yf + 0.001), (x + s * 0.030 + 0.005, yf + 0.001), (x + s * 0.030 + 0.004, yf - 0.011),
+                  (x + s * 0.030 - 0.004, yf - 0.011)], [0.0, 0.0, 0.003, 0.003], zp - 0.0145 - 0.016, mat, z0=0.016, re=0.003,
+             n=3, ne=2)
+        plan(mb, [(x + s * 0.030 - 0.005, yf + 0.001), (x + s * 0.030 + 0.005, yf + 0.001), (x + s * 0.030 + 0.004, yf - 0.011),
+                  (x + s * 0.030 - 0.004, yf - 0.011)], [0.0, 0.0, 0.003, 0.003], 0.030, mat, z0=zp + 0.0145, re=0.003, n=3, ne=2)
+    for s in (-1, 1):                                    # orejas del pivote
+        side(mb, [(x + s * 0.0215 - 0.003, zp - 0.054), (x + s * 0.0215 + 0.003, zp - 0.054), (x + s * 0.0215 + 0.003, zp - 0.036),
+                  (x + s * 0.0215 - 0.003, zp - 0.036)], [0.0015] * 4, 0.012, mat, y0=yf - 0.005, re=0.0012, n=2, ne=1)
+    revolve(mb, [(0.0030, -0.0245), (0.0030, 0.0245)], "steel", seg=20, M=_T(x, yf - 0.0075, zp - 0.046) @ _Ry(90))
+    side(mb, [(x - 0.018, zp - 0.050), (x + 0.018, zp - 0.050), (x + 0.020, zp + 0.020), (x + 0.017, zp + 0.025),
+              (x - 0.017, zp + 0.025), (x - 0.020, zp + 0.020)], [0.004, 0.004, 0.003, 0.002, 0.002, 0.003], 0.0068, mat,
+         y0=yf - 0.0135, re=0.0022, n=3, ne=2)
+    for k in range(5):
+        zr = zp - 0.040 + k * 0.0055
+        side(mb, [(x - 0.014, zr), (x + 0.014, zr), (x + 0.014, zr + 0.0022), (x - 0.014, zr + 0.0022)], [0.001] * 4, 0.0016, mat,
+             y0=yf - 0.0175, re=0.0006, n=2, ne=1)
+    side(mb, [(x - 0.017, zp + 0.014), (x + 0.017, zp + 0.014), (x + 0.017, zp + 0.025), (x - 0.017, zp + 0.025)],
+         [0.0015] * 4, 0.0075, mat, y0=yf - 0.0075, re=0.0015, n=2, ne=1)                # gancho sobre la uña
+    side(mb, [(x - 0.016, zp + 0.010), (x + 0.016, zp + 0.010), (x + 0.016, zp + 0.016), (x - 0.016, zp + 0.016)],
+         [0.0015] * 4, 0.0060, mat, y0=yf - 0.0030, re=0.0012, n=2, ne=1)                # uña de la tapa
+
+
 def hard_case(seed=0, L=1.0):
     """Maleta rígida de polímero para arma larga (L × 0,37 × 0,14 m; L = 1,0 por omisión, clase «42 in»): casco inferior y
-    tapa moldeados con esquinas redondeadas, labios engrosados en la línea de cierre (junta visible), panel superior con
-    nervaduras transversales, patines inferiores, 4 cierres de palanca al frente (caja + palanca con uña), 2 bisagras de
-    nudillo atrás, asa central abatible con empuñadura de hule, asa de cinta en el extremo +X, 2 ruedas en el extremo -X
-    con su eje y orejas, patas de hule y válvula de presión. ORIGEN: centro de la base en el piso; largo en X, frente
-    (cierres, asa) hacia -Y.
-    Fuentes: planooutdoors.com (All Weather 2 42": 44,4 × 16,8 × 6,4 in, cierres, ruedas); 511tactical.com (Hard Case 42:
-    42,5 × 14,5 × 5,5 in)."""
+    tapa moldeados de esquinas redondeadas, rebordes de lengüeta y ranura en la línea de cierre con empaque oscuro visible,
+    nervios verticales de refuerzo, panel superior realzado con patas de apilado, esquinas reforzadas, 4 cierres de doble
+    acción con guardas y estrías, 2 asas frontales y 1 de extremo abatibles con hule de dedos, 2 bisagras de nudillos con
+    pasador atrás, 2 portacandados con barreno, válvula de presión moleteada, ruedas con eje en el extremo -X dentro de sus
+    alojamientos, patines y patas de hule. ORIGEN: centro de la base en el piso; largo en X, frente (cierres, asas) hacia -Y.
+    Fuentes: pelican.com (1720 / 1750: cierres de doble acción, válvula de presión, ruedas, portacandados); planooutdoors.com
+    (All Weather 2 42": 44,4 × 16,8 × 6,4 in); 511tactical.com (Hard Case 42: 42,5 × 14,5 × 5,5 in)."""
     mb = MB()
     PL = "polymer" if seed % 2 == 0 else "paint_tan"
     D, H = 0.37, 0.14
     zp = 0.084                                           # línea de cierre
     rc = 0.032
-    slab2(mb, _T(0, 0, 0.006), L, D, zp - 0.006, rc, PL, re_b=0.008, ne_b=1, nc=4)          # casco inferior
-    slab2(mb, _T(0, 0, zp), L, D, H - zp, rc, PL, re_t=0.016, ne_t=4, nc=4)                 # tapa
-    slab2(mb, _T(0, 0, zp - 0.015), L + 0.008, D + 0.008, 0.0135, rc + 0.004, PL, re_t=0.002, ne_t=1, re_b=0.003, ne_b=1, nc=4)
-    slab2(mb, _T(0, 0, zp + 0.0015), L + 0.008, D + 0.008, 0.0135, rc + 0.004, PL, re_t=0.003, ne_t=1, re_b=0.002, ne_b=1, nc=4)
-    slab2(mb, _T(0, 0, H - 0.0015), L - 0.17, D - 0.11, 0.0045, 0.02, PL, re_t=0.003, ne_t=1, nc=4)   # panel superior
-    for k in range(3):                                   # nervaduras transversales del panel
-        x = -(L - 0.17) / 2 + 0.10 + (L - 0.37) * k / 2
-        plank(mb, (x - 0.006, -(D - 0.11) / 2 + 0.01, H + 0.0025), (x + 0.006, (D - 0.11) / 2 - 0.01, H + 0.0062), PL, ch=0.002)
-    for y in (-0.10, 0.10):                              # patines inferiores
-        plank(mb, (-L / 2 + 0.09, y - 0.012, 0.0045), (L / 2 - 0.05, y + 0.012, 0.0105), PL, ch=0.003)
-    for (x, y) in ((L / 2 - 0.07, -0.13), (L / 2 - 0.07, 0.13), (-L / 2 + 0.16, -0.13), (-L / 2 + 0.16, 0.13)):
-        revolve(mb, [(0.013, 0.0), (0.015, 0.008)], "rubber", seg=16, M=_T(x, y, 0), caps=False)          # patas
-    # cierres de palanca (frente -Y)
-    yf = -D / 2 - 0.004
-    for x in [-L / 2 + 0.10 + (L - 0.20) * k / 3 for k in range(4)]:
-        Mf = _T(x, yf + 0.001, zp) @ _Rx(90)              # z local hacia -Y, y local hacia +Z
-        plan(mb, [(-0.022, -0.030), (0.022, -0.030), (0.022, 0.026), (-0.022, 0.026)], [0.005, 0.005, 0.004, 0.004], 0.010, PL,
-             z0=-0.001, re=0.0, n=2, M=Mf)                                             # caja
-        plan(mb, [(-0.019, -0.024), (0.019, -0.024), (0.019, 0.020), (-0.012, 0.020), (-0.019, 0.013)],
-             [0.004, 0.004, 0.003, 0.0, 0.003], 0.005, PL, z0=0.0085, re=0.0, n=2, M=Mf)   # palanca con uña
-    # bisagras de nudillo (atrás +Y)
-    yb = D / 2 + 0.0065
-    for x in (-L / 2 + 0.20, L / 2 - 0.20):
-        for (x0, x1, za, zb_) in ((x - 0.040, x - 0.002, zp + 0.002, zp + 0.020), (x + 0.002, x + 0.040, zp - 0.020, zp - 0.002)):
-            side(mb, [(x0, za), (x1, za), (x1, zb_), (x0, zb_)], 0.0, 0.008, PL, y0=D / 2 + 0.002, re=0.0)
-            revolve(mb, [(0.0058, x0), (0.0058, x1)], PL, seg=16, M=_T(0, yb, zp) @ _Ry(90))
-    # asa central abatible (frente) con empuñadura de hule
+    Lb, Db = L - 0.008, D - 0.008
+    slab2(mb, _T(0, 0, 0.007), Lb, Db, zp - 0.0125 - 0.007, rc, PL, re_b=0.014, ne_b=4, nc=6)      # casco inferior
+    slab2(mb, _T(0, 0, zp + 0.0125), Lb, Db, H - zp - 0.0125, rc, PL, re_t=0.018, ne_t=5, nc=6)     # tapa
+    slab2(mb, _T(0, 0, zp - 0.0135), L, D, 0.0115, rc + 0.004, PL, re_t=0.0018, ne_t=2, re_b=0.004, ne_b=2, nc=6)
+    slab2(mb, _T(0, 0, zp + 0.0020), L, D, 0.0115, rc + 0.004, PL, re_t=0.004, ne_t=2, re_b=0.0018, ne_b=2, nc=6)
+    slab2(mb, _T(0, 0, zp - 0.0030), L - 0.006, D - 0.006, 0.0060, rc + 0.001, "rubber", nc=6)     # empaque
+    slab2(mb, _T(0, 0, H - 0.0012), L - 0.17, D - 0.11, 0.0040, 0.022, PL, re_t=0.0025, ne_t=2, nc=6)   # panel realzado
     for sx in (-1, 1):
-        plan(mb, [(-0.012, -0.016), (0.012, -0.016), (0.012, 0.016), (-0.012, 0.016)], [0.004] * 4, 0.012, PL, z0=-0.001, re=0.0,
-             n=2, M=_T(sx * 0.075, yf + 0.001, zp - 0.032) @ _Rx(90))
-    hp = [(-0.075, yf - 0.010, zp - 0.034), (-0.068, yf - 0.012, zp - 0.062), (0.068, yf - 0.012, zp - 0.062), (0.075, yf - 0.010, zp - 0.034)]
-    wire(mb, hp, 0.0055, PL, bend=0.010, nseg=2, seg=SEG_T, caps=False)
-    revolve(mb, [(0.0105, -0.052), (0.0105, 0.052)], "rubber", seg=SEG, M=_T(0.0, yf - 0.012, zp - 0.062) @ _Ry(90))
-    # asa de cinta en el extremo +X
-    xe = L / 2 + 0.004
+        for sy in (-1, 1):                               # patas de apilado (tapa) y esquinas reforzadas
+            slab2(mb, _T(sx * (L / 2 - 0.055), sy * (D / 2 - 0.045), H - 0.0035), 0.050, 0.040, 0.0050, 0.012, PL, re_t=0.002,
+                  ne_t=2, nc=4)
+    # nervios verticales de refuerzo (frente y espalda) entre cierres
+    xl = [-L / 2 + 0.10 + (L - 0.20) * k / 3 for k in range(4)]
     for sy in (-1, 1):
-        side(mb, [(xe - 0.006, zp - 0.030), (xe + 0.008, zp - 0.030), (xe + 0.008, zp - 0.008), (xe - 0.006, zp - 0.008)], 0.0, 0.020, PL,
-             y0=sy * 0.06, re=0.0)
-    strap(mb, spline([(xe + 0.004, -0.06, zp - 0.019), (xe + 0.022, -0.045, zp - 0.022), (xe + 0.026, 0.0, zp - 0.023),
-                      (xe + 0.022, 0.045, zp - 0.022), (xe + 0.004, 0.06, zp - 0.019)], 1), 0.0035, 0.024, "canvas", up=(0, 0, 1), r=0.001)
-    # ruedas en el extremo -X
-    xw, zw = -L / 2 + 0.010, 0.030
+        yf = sy * Db / 2
+        for k in ((1,) if sy < 0 else (0, 1, 2)):
+            xm = (xl[k] + xl[k + 1]) / 2
+            for dx in (-0.020, 0.020):
+                P = [(xm + dx - 0.004, yf), (xm + dx + 0.004, yf), (xm + dx + 0.003, yf + sy * 0.0055), (xm + dx - 0.003, yf + sy * 0.0055)]
+                plan(mb, P, [0.0, 0.0, 0.0022, 0.0022], zp - 0.0145 - 0.018, PL, z0=0.018, re=0.003, n=3, ne=2)
+    # cierres
+    for x in xl:
+        _case_latch(mb, x, -Db / 2, zp, PL)
+    # asas frontales y de extremo
+    for x in ((xl[0] + xl[1]) / 2, (xl[2] + xl[3]) / 2):
+        _case_handle(mb, _T(x, -Db / 2, zp - 0.022), 0.120, PL)
+    _case_handle(mb, _T(L / 2 - 0.004 + 0.004, 0, zp - 0.020) @ _Rz(90) @ _T(0, 0.004, 0), 0.110, PL)
+    # bisagras de nudillos atrás (+Y)
+    yb = Db / 2 + 0.0068
+    for xc in (-L / 2 + 0.22, L / 2 - 0.22):
+        for k in range(5):
+            xa = xc - 0.065 + k * 0.026
+            lid_k = k % 2 == 1
+            revolve(mb, [(0.0062, xa + 0.0006), (0.0068, xa + 0.0016), (0.0068, xa + 0.0244), (0.0062, xa + 0.0254)], PL, seg=32,
+                    M=_T(0, yb, zp) @ _Ry(90), caps=True)
+            za, zb_ = (zp + 0.002, zp + 0.024) if lid_k else (zp - 0.024, zp - 0.002)
+            side(mb, [(xa + 0.0010, za), (xa + 0.0250, za), (xa + 0.0250, zb_), (xa + 0.0010, zb_)], [0.002] * 4, 0.0070, PL,
+                 y0=Db / 2 + 0.0026, re=0.0015, n=2, ne=1)
+        revolve(mb, [(0.0, -0.002), (0.0035, -0.002), (0.0035, 0.0), (0.0021, 0.0), (0.0021, 0.132), (0.0035, 0.132),
+                     (0.0035, 0.134), (0.0, 0.134)], "steel", seg=20, M=_T(xc - 0.066, yb, zp) @ _Ry(90), caps=False)
+    # portacandados (tapa + casco) en los extremos del frente
+    for s in (-1, 1):
+        x = s * (L / 2 - 0.050)
+        for (z0, z1) in ((zp - 0.032, zp - 0.003), (zp + 0.003, zp + 0.032)):
+            holed(mb, _T(x, -Db / 2 + 0.0005, (z0 + z1) / 2) @ _Rx(90), (0.0, 0.0, 0.0090, (z1 - z0) / 2, 0.004),
+                  (0.0, (0.008 if z0 < zp else -0.008), 0.0042, 0.0042, 0.0042), 0.0110, re_o=0.0018, re_i=0.0012, n=40,
+                  mat=PL, ne=2, ctr=(0.0, 0.0))
+    # válvula de presión (frente del casco, a la izquierda)
+    Mv = _T((xl[1] + xl[2]) / 2 - 0.075, -Db / 2, zp - 0.040) @ _Rx(90)
+    revolve(mb, [(0.0135, -0.001), (0.0135, 0.0020), (0.0120, 0.0032), (0.0, 0.0032)], PL, seg=6, M=Mv, caps=False, phase=PI / 6)
+    _knob_k(mb, Mv @ _T(0, 0, 0.0030), 0.0110, 0.0080, PL, nt=28, dp=0.0007)
+    revolve(mb, [(0.0, 0.0), (0.0030, 0.0), (0.0030, 0.0004), (0.0, 0.0004)], "cable", seg=16, M=Mv @ _T(0, 0, 0.0108), caps=False)
+    # ruedas en el extremo -X dentro de sus alojamientos
+    xw, zw = -L / 2 + 0.034, 0.033
     for sy in (-1, 1):
-        revolve(mb, [(0.0125, -0.0115), (0.030, -0.0115), (0.030, 0.0115), (0.0125, 0.0115)], "rubber", seg=SEG,
-                M=_T(xw, sy * 0.12, zw) @ _Rx(90), closed=True)
-        revolve(mb, [(0.0128, -0.010), (0.0128, 0.010)], "plastic", seg=SEG, M=_T(xw, sy * 0.12, zw) @ _Rx(90))
-        side(mb, [(xw - 0.004, zw - 0.006), (xw + 0.06, zw - 0.006), (xw + 0.06, zw + 0.03), (xw - 0.004, zw + 0.03)], 0.0, 0.006, PL,
-             y0=sy * 0.12 + sy * 0.016, re=0.0)
-    revolve(mb, [(0.004, -0.14), (0.004, 0.14)], "steel", seg=SEG_T, M=_T(xw, 0, zw) @ _Rx(90), caps=False)
-    revolve(mb, [(0.012, -0.002), (0.012, 0.004), (0.0, 0.007)], "plastic", seg=20,
-            M=_T(-L / 2 + 0.24, -D / 2 - 0.0035, H - 0.030) @ _Rx(90), caps=False)   # válvula de presión
+        y = sy * 0.122
+        slab2(mb, _T(xw + 0.004, y, 0.006), 0.090, 0.050, 0.074, 0.018, PL, re_t=0.010, ne_t=3, re_b=0.004, ne_b=2, nc=5)
+        Mw = _T(xw - 0.012, y + sy * 0.0265, zw) @ _Rx(-90 * sy)
+        prof = [(0.0150, 0.0), (0.0270, 0.0), (0.0315, 0.0030), (0.0332, 0.0080), (0.0332, 0.0170), (0.0315, 0.0220),
+                (0.0270, 0.0250), (0.0150, 0.0250)]
+        revolve(mb, prof, "rubber", seg=40, M=Mw, closed=True)
+        revolve(mb, [(0.0040, -0.001), (0.0150, -0.001), (0.0150, 0.026), (0.0040, 0.026)], "plastic", seg=40, M=Mw, closed=True)
+        for k in range(5):                               # rayos de la maza
+            a = 2 * PI * k / 5
+            side(mb, [(0.0042, -0.0095), (0.0152, -0.0095), (0.0152, 0.0095), (0.0042, 0.0095)], 0.0, 0.0030, "plastic",
+                 re=0.0006, n=2, ne=1, M=Mw @ _T(0, 0, 0.0125) @ _Rz(math.degrees(a)))
+    revolve(mb, [(0.0, -0.152), (0.0045, -0.152), (0.0045, 0.152), (0.0, 0.152)], "steel", seg=20,
+            M=_T(xw - 0.012, 0, zw) @ _Rx(90), caps=False)
+    # patines inferiores y patas de hule
+    for y in (-0.095, 0.095):
+        plan(mb, [(-L / 2 + 0.10, y - 0.012), (L / 2 - 0.06, y - 0.012), (L / 2 - 0.06, y + 0.012), (-L / 2 + 0.10, y + 0.012)],
+             [0.010] * 4, 0.0060, PL, z0=0.0040, re=0.0025, n=3, ne=2)
+    for (x, y) in ((L / 2 - 0.07, -0.13), (L / 2 - 0.07, 0.13), (-L / 2 + 0.16, -0.13), (-L / 2 + 0.16, 0.13)):
+        revolve(mb, [(0.0, 0.0), (0.0120, 0.0), (0.0145, 0.0025), (0.0150, 0.0080)], "rubber", seg=32, M=_T(x, y, 0), caps=False)
     return mb

@@ -11,8 +11,9 @@ Convenciones (todas las funciones devuelven un MB de kit.clinic, que bisela box(
 Materiales: steel, galvanized, aluminium, concrete, rubber, cable, plastic, paint_yellow, sign_white, sign_red, glass,
 metal_rust (muy poco), sandbag (polipropileno tejido), geotextile (liner HESCO), canvas, net (red de camuflaje, DOS CARAS),
 paint_od (acero verde olivo), paint_tan (acero arena), sand (relleno).
-Cilindros visibles >= 24 lados; tubos/cables >= 14 (el kit suaviza a 30°). Excepción documentada: los alambres de 4 mm de la
-malla HESCO y la bobina de sus juntas van de 4 y 3 lados (presupuesto de 3,5 k tris por celda).
+Cilindros visibles >= 24 lados; tubos/cuerdas >= 14 (el kit suaviza a 30°); alambres y cordeles de <= 6 mm (malla y bobinas
+HESCO, alma y fleje de la concertina, cordel de la red, amarres, cordón de los sacos, cordones de soldadura) de 12 lados con
+sombreado continuo (MB.soft / _np_faces(soft=True)). Lo que se repite mucho se arma en bloque con numpy (_np_faces, _tubes_np).
 Medidas verificadas contra fuentes reales: ver el bloque de cada función y ESTADO.md.
 """
 import math
@@ -70,29 +71,11 @@ def grid_faces(mb, G, mat, flip=False, smooth=True):
 def ngon(mb, verts, mat, smooth=True):
     """Cara plana de n lados triangulada al momento (BEAUTY): bordes planos con vértices colineales sin uniones en T."""
     f = mb.face(verts, mat)
+    f.normal_update()                                      # sin normal, la proyección del polyfill sale mal (cóncavos)
     res = bmesh.ops.triangulate(mb.bm, faces=[f], quad_method="BEAUTY", ngon_method="BEAUTY")
     for g in res["faces"]:
         g.smooth = smooth
     return res["faces"]
-
-
-def bar4(mb, p0, p1, r, side, mat="galvanized", cap0=True, cap1=True):
-    """Alambre recto de 4 lados (sección en rombo: un vértice hacia `side`, otro hacia dir × side). 8 tris + tapas."""
-    p0, p1 = _v(p0), _v(p1)
-    d = (p1 - p0).normalized()
-    s = _v(side)
-    s = (s - d * s.dot(d)).normalized()
-    n = d.cross(s)
-    offs = [s * r, n * r, -s * r, -n * r]
-    A = [mb.bm.verts.new(p0 + o) for o in offs]
-    B = [mb.bm.verts.new(p1 + o) for o in offs]
-    for k in range(4):
-        kk = (k + 1) % 4
-        mb.face([A[k], A[kk], B[kk], B[k]], mat)
-    if cap0:
-        mb.face(list(reversed(A)), mat)
-    if cap1:
-        mb.face(B, mat)
 
 
 def tube_path(mb, pts, r, seg=SEG_T, mat="cable", bend=None, nseg=6, caps=True, radii=None):
@@ -112,19 +95,75 @@ def catenary(p0, p1, sag, n=12):
     return [tuple(p0.lerp(p1, k / n) - Vector((0, 0, 4 * sag * (k / n) * (1 - k / n)))) for k in range(n + 1)]
 
 
-def _smooth1d(a, k=1, it=1):
-    a = np.asarray(a, float)
-    for _ in range(it):
-        b = a.copy()
-        b[1:-1] = (a[:-2] + a[1:-1] + a[2:]) / 3.0
-        a = b
-    return a
+# ===================================================================================================== mallas en bloque
+def _np_faces(mb, V, F, mat, soft=False, smooth=True):
+    """Crea en bloque los vértices V (N × 3) y las caras F (listas de índices en V) con un material; soft = sombreado
+    continuo (ver MB.soft). Devuelve la lista de BMVerts."""
+    bm = mb.bm
+    vs = [bm.verts.new(p) for p in np.asarray(V, float).reshape(-1, 3).tolist()]
+    mi = mb.mi(mat)
+    sl = mb._soft_layer() if soft else None
+    for q in F:
+        f = bm.faces.new([vs[i] for i in q])
+        f.material_index = mi
+        f.smooth = smooth
+        if soft:
+            f[sl] = 1
+    return vs
+
+
+def _grid_quads(nr, nc, closed=False, off=0):
+    """Índices de cuadriláteros de una rejilla nr × nc (filas × columnas), cerrada en columnas si closed."""
+    idx = np.arange(nr * nc).reshape(nr, nc) + off
+    if closed:
+        idx = np.concatenate([idx, idx[:, :1]], 1)
+    return np.stack([idx[:-1, :-1], idx[:-1, 1:], idx[1:, 1:], idx[1:, :-1]], -1).reshape(-1, 4)
+
+
+def _tube_rings(P, r, seg=12, N0=None):
+    """Anillos (K × seg × 3) de un tubo circular por la polilínea P (K × 3) con marco de transporte paralelo. r escalar o (K,)."""
+    P = np.asarray(P, float)
+    K = len(P)
+    T = np.gradient(P, axis=0) if K > 2 else np.repeat((P[1:] - P[:1]), K, 0)
+    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-12)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(T[0][2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    N = (ref - T[0] * ref.dot(T[0])) if N0 is None else np.asarray(N0, float)
+    N = N / np.linalg.norm(N)
+    an = 2 * PI * np.arange(seg) / seg
+    ca, sa = np.cos(an), np.sin(an)
+    rr = np.broadcast_to(np.asarray(r, float), (K,))
+    out = np.empty((K, seg, 3))
+    for i in range(K):
+        N = N - T[i] * N.dot(T[i])
+        N /= np.linalg.norm(N)
+        B = np.cross(T[i], N)
+        out[i] = P[i] + rr[i] * (np.outer(ca, N) + np.outer(sa, B))
+    return out
+
+
+def _tubes_np(mb, paths, r, seg=12, mat="galvanized", soft=True, caps=True):
+    """Varios tubos circulares de una vez (alambres, varillas, cordones): paths = lista de polilíneas (K × 3)."""
+    V, F = [], []
+    off = 0
+    for P in paths:
+        R = _tube_rings(P, r, seg)
+        K = len(R)
+        V.append(R.reshape(-1, 3))
+        F.extend(_grid_quads(K, seg, closed=True, off=off).tolist())
+        if caps:
+            F.append(list(range(off + seg - 1, off - 1, -1)))
+            F.append(list(range(off + (K - 1) * seg, off + K * seg)))
+        off += K * seg
+    if V:
+        _np_faces(mb, np.concatenate(V, 0), F, mat, soft=soft)
 
 
 # ============================================================================================================ HESCO
-# HESCO / Concertainer MIL (fuentes: hesco.com vía tabla de dimensiones nominales MIL1 54"×42", MIL7 87"×84", MIL8 54"×48";
-# malla soldada 75 × 75 mm (3") de alambre de 4 mm Alu-Zinc / Galfan, bisagras de espiral y pasadores de unión de 4 mm, liner
-# de geotextil no tejido de polipropileno gris/arena). Celdas cuadradas: largo de celda = ancho del muro.
+# HESCO / Concertainer MIL (hesco.com, tabla de dimensiones nominales: MIL1 54" × 42" (1,37 × 1,06 m), MIL7 87" × 84"
+# (2,21 × 2,13 m), MIL8 54" × 48"; malla electrosoldada de 76,2 mm (3") de alambre de 4-5 mm galvanizado Galfan; esquinas
+# unidas con bisagra de espiral y pasador; liner de geotextil no tejido de PP de 250-350 g/m², beige o verde). Celdas
+# cuadradas: largo de celda = ancho del muro. Lleno, el relleno empuja el geotextil por cada cuadro de la malla (acolchado de
+# ~1 cm) y toda la cara se panzea entre las bobinas (2-4 cm, más en MIL7).
 HESCO = {"MIL1": (1.37, 1.06), "MIL7": (2.21, 2.13), "MIL8": (1.37, 1.22)}
 HW_R = 0.002          # radio del alambre de la malla (4 mm)
 H_MESH = 0.0762       # paso nominal de la malla (3")
@@ -135,54 +174,101 @@ H_LIN_T = 0.003       # espesor del geotextil
 H_CORNER_R = 0.032    # radio de la esquina del liner (queda por fuera de la bobina)
 
 
+class _HescoBelly:
+    """Panza de una cara expuesta: desplazamiento hacia afuera B(u, z) nulo en las bobinas (u = 0, c) y en el piso, máximo
+    a ~45 % de la altura; con una ondulación suave para que ninguna cara sea igual a otra."""
+
+    def __init__(self, r, c, H, amp):
+        self.c, self.H = c, H
+        self.amp = amp * float(r.uniform(0.75, 1.25))
+        self.k = (float(r.uniform(0, 6)), float(r.uniform(0, 6)), float(r.uniform(-0.15, 0.15)))
+
+    def __call__(self, u, z):
+        u = np.asarray(u, float)
+        z = np.asarray(z, float)
+        su = np.clip(np.sin(PI * np.clip(u / self.c, 0, 1)), 0, 1) ** 0.85
+        zz = np.clip(z / self.H, 0, 1.05)
+        sv = np.sin(PI * np.clip(zz, 0, 1) ** 0.78 * 0.9)
+        w = 1 + 0.12 * np.sin(2 * PI * u / self.c * 1.3 + self.k[0]) * np.sin(PI * zz * 1.7 + self.k[1])
+        return self.amp * su * sv * w * (1 + self.k[2] * (u / self.c - 0.5))
+
+
 def _hesco_panel_frame(O, U, N):
     """Matriz del panel: x local = u (a lo largo), y local = profundidad (+ hacia afuera, N), z = altura."""
     O, U, N = _v(O), _v(U), _v(N)
     return Matrix(((U.x, N.x, 0, O.x), (U.y, N.y, 0, O.y), (U.z, N.z, 1, O.z), (0, 0, 0, 1)))
 
 
-def _hesco_mesh(mb, M, c, H, us, vs, vmin=None, h_ext=(-0.001, -0.001)):
-    """Malla soldada de un panel (coordenadas de panel: u 0..c, profundidad y, altura z). Verticales en la capa exterior
-    (+HW_R), horizontales en la interior (-HW_R), soldadas una sobre otra. vmin: solo la parte de arriba (divisiones).
-    h_ext: cuánto rebasan (o no llegan, si es negativo) los horizontales a los verticales de orilla, en cada extremo: las
-    puntas de los paneles vecinos quedan dentro de la bobina sin tocarse."""
-    lay_v, lay_h = HW_R, -HW_R
+def _hesco_mesh(mb, M, c, H, us, vs, r, belly=None, vmin=None, h_ext=(-0.001, -0.001)):
+    """Malla electrosoldada de un panel (u 0..c, profundidad y, altura z): verticales en la capa exterior (+HW_R),
+    horizontales en la interior (-HW_R), alambres de 4 mm de 12 lados con sombreado continuo que siguen la panza de la cara
+    (belly) con una ondulación de ±0,6 mm, y un punto de soldadura (botón aplastado) en cada cruce. vmin: solo la parte de
+    arriba (divisiones interiores). h_ext: cuánto rebasan los horizontales a los verticales de orilla en cada extremo."""
+    Mn = np.array(M)
+    R3, t3 = Mn[:3, :3], Mn[:3, 3]
     z0 = -0.02 if vmin is None else vmin
-    X = M.to_3x3() @ Vector((1, 0, 0))
-    Y = M.to_3x3() @ Vector((0, 1, 0))
+    zt = H                                                  # las verticales mueren a ras del horizontal de arriba
+    B = belly if belly is not None else (lambda u, z: np.zeros(np.broadcast(np.asarray(u), np.asarray(z)).shape))
+    nzs = max(4, int(round((zt - z0) / 0.17)))
+    paths = []
     for u in us:
-        bar4(mb, M @ Vector((u, lay_v, z0)), M @ Vector((u, lay_v, H + 0.006)), HW_R, X, cap0=vmin is not None)
-    for v in vs:
-        if vmin is not None and v < vmin + 0.01:
-            continue
-        bar4(mb, M @ Vector((us[0] - h_ext[0], lay_h, v)), M @ Vector((us[-1] + h_ext[1], lay_h, v)), HW_R, Y, cap0=False, cap1=False)
+        zz = np.linspace(z0, zt, nzs + 1)
+        wob = 0.0004 * np.sin(zz * float(r.uniform(5, 9)) + float(r.uniform(0, 6)))
+        P = np.stack([np.full_like(zz, u), HW_R + B(u, zz) + wob, zz], 1)
+        paths.append(P @ R3.T + t3)
+    vrows = [v for v in vs if vmin is None or v >= vmin + 0.01]
+    nus = max(4, int(round(c / 0.15)))
+    for v in vrows:
+        uu = np.linspace(us[0] - h_ext[0], us[-1] + h_ext[1], nus + 1)
+        wob = 0.0004 * np.sin(uu * float(r.uniform(5, 9)) + float(r.uniform(0, 6)))
+        P = np.stack([uu, -HW_R + B(uu, v) + wob, np.full_like(uu, v)], 1)
+        paths.append(P @ R3.T + t3)
+    _tubes_np(mb, paths, HW_R, seg=12, mat="galvanized", soft=True, caps=True)
+    # soldaduras: botón elíptico (3,4 mm en el plano de la malla, 1,7 mm de grueso) en el plano de contacto de las capas
+    UU, ZZ = np.meshgrid(np.asarray(us, float), np.asarray(vrows, float))
+    UU, ZZ = UU.ravel(), ZZ.ravel()
+    D = B(UU, ZZ)
+    na = 6
+    an = 2 * PI * (np.arange(na) + 0.5) / na
+    V, F = [], []
+    for k in range(len(UU)):
+        ctr = np.array([UU[k], D[k], ZZ[k]])
+        ring = ctr + np.stack([0.0034 * np.cos(an), np.zeros(na), 0.0034 * np.sin(an)], 1)
+        poles = ctr + np.array([[0.0, 0.0017, 0.0], [0.0, -0.0017, 0.0]])
+        o = k * (na + 2)
+        V.append(np.concatenate([ring, poles], 0))
+        for j in range(na):
+            jj = (j + 1) % na
+            F.append([o + j, o + jj, o + na])
+            F.append([o + jj, o + j, o + na + 1])
+    _np_faces(mb, np.concatenate(V, 0) @ R3.T + t3, F, "galvanized", soft=True)
 
 
 def _hesco_coil(mb, axis_xy, H, vs, quad, pitch, phase=0.19):
-    """Bisagra de espiral (alambre de 4 mm, 3 lados, 4 puntos por vuelta girados 45°) + pasador de unión con gancho.
-    quad = ángulo (rad) de la dirección 'hacia afuera' de la junta; la fase evita los alambres horizontales."""
+    """Bisagra de espiral (alambre de 4 mm, 12 lados, 10 puntos por vuelta) que abraza los verticales de orilla de los dos
+    paneles + pasador de unión de 6 mm con gancho doblado sobre la orilla de arriba. quad = ángulo (rad) de la dirección
+    'hacia afuera' de la junta; la fase evita los alambres horizontales."""
     x, y = axis_xy
     z0 = vs[0] + phase * pitch
     turns = int((H - 0.01 - z0) / pitch)
-    pts = []
-    Rk = H_COIL_R / math.cos(PI / 4)
-    for k in range(turns * 4 + 1):
-        a = quad + PI / 4 + k * PI / 2
-        pts.append((x + Rk * math.cos(a), y + Rk * math.sin(a), z0 + pitch * k / 4))
-    mb.tube(pts, HW_R, seg=3, mat="galvanized", caps=True)
-    # pasador: varilla de 6 mm con la punta doblada en gancho sobre la orilla superior
+    k = np.arange(turns * 10 + 1)
+    a = quad + PI / 4 + k * 2 * PI / 10
+    pts = np.stack([x + H_COIL_R * np.cos(a), y + H_COIL_R * np.sin(a), z0 + pitch * k / 10], 1)
     hook = [(x, y, 0.02), (x, y, H + 0.035), (x + 0.025 * math.cos(quad), y + 0.025 * math.sin(quad), H + 0.05),
             (x + 0.045 * math.cos(quad), y + 0.045 * math.sin(quad), H + 0.02)]
-    mb.tube(fillet(hook, 0.012, 2), 0.003, seg=4, mat="galvanized", caps=True)
+    _tubes_np(mb, [pts], HW_R, seg=12, soft=True)
+    _tubes_np(mb, [np.array(fillet(hook, 0.012, 4))], 0.003, seg=12, soft=True)
 
 
 def hesco_run(n=5, kind="MIL1", seed=0):
     """Línea de n celdas de muro HESCO MIL (MIL1 1,37 × 1,06; MIL7 2,21 × 2,13; MIL8 1,37 × 1,22 m) a lo largo de +X desde
-    x = 0; cara exterior en -Y, muro centrado en y = 0 (ancho W). Construcción: malla soldada de 76,2 mm con alambres de 4 mm
-    de geometría real (verticales por fuera, horizontales por dentro), bisagra de espiral + pasador con gancho en cada esquina,
-    liner de geotextil de 3 mm con esquinas redondeadas por dentro de la bobina que asoma acolchado entre los alambres (el
-    relleno lo empuja; el abombado crece hacia el centro de cada cara), liner flojo y ondulado arriba del relleno, y tapón de
-    tierra compactada con corona en cada celda. Presupuesto: <= 3,5 k tris por celda MIL1, <= 6 k por celda MIL7."""
+    x = 0; cara exterior en -Y, muro centrado en y = 0 (ancho W). Construcción: malla electrosoldada de 76,2 mm con alambres
+    de 4 mm de 12 lados (verticales por fuera, horizontales por dentro) y un punto de soldadura en cada cruce; bisagra de
+    espiral + pasador con gancho en cada esquina; liner de geotextil de 3 mm con esquinas redondeadas dentro de la bobina,
+    acolchado entre alambres (el relleno lo empuja 8-14 mm por cada cuadro), panza de toda la cara entre bobinas (2-3 cm en
+    MIL1, 3-4,5 cm en MIL7) que la malla sigue, orilla de arriba doblada hacia afuera sobre el alambre superior en las caras
+    expuestas y hacia adentro en las divisiones, y tapa de tierra irregular con terrones y piedras. Toda la línea con un
+    ligero desplome (< 0,5°) que varía de celda en celda."""
     H, W = HESCO[kind]
     r = rng(seed)
     mb = MB()
@@ -193,26 +279,29 @@ def hesco_run(n=5, kind="MIL1", seed=0):
     vs = [0.025 + (H - 0.025) * j / nrow for j in range(nrow + 1)]
     pitch = vs[1] - vs[0]
     big = kind == "MIL7"
-    # región acolchada (central) de cada cara: el borde queda plano y se triangula en abanico
-    qa = (ncol - (12 if big else 8)) // 2
-    qb = ncol - qa
-    ja, jb = (4, nrow - 9) if big else (2, nrow - 4)
     L = n * c
-    # paredes exteriores: frente (-Y), fondo (+Y) por celda; extremos en x = 0 y x = L
-    walls = []
-    for i in range(n):
-        walls.append(("f", i, (i * c, -W / 2, 0), (1, 0, 0), (0, -1, 0)))
-        walls.append(("b", i, ((i + 1) * c, W / 2, 0), (-1, 0, 0), (0, 1, 0)))
-    walls.append(("e0", 0, (0, W / 2, 0), (0, -1, 0), (-1, 0, 0)))
-    walls.append(("e1", n - 1, (L, -W / 2, 0), (0, 1, 0), (1, 0, 0)))
     fills = [float(H - 0.075 + r.uniform(-0.02, 0.012)) for _ in range(n)]
+    bamp = 0.038 if big else 0.024
+    # paredes exteriores: frente (-Y), fondo (+Y) por celda; extremos en x = 0 y x = L. Cada una con su panza.
+    walls = []
+    bellies = {}
+    for i in range(n):
+        bellies[("f", i)] = _HescoBelly(r, c, H, bamp)
+        bellies[("b", i)] = _HescoBelly(r, c, H, bamp)
+        walls.append((("f", i), (i * c, -W / 2, 0), (1, 0, 0), (0, -1, 0)))
+        walls.append((("b", i), ((i + 1) * c, W / 2, 0), (-1, 0, 0), (0, 1, 0)))
+    bellies[("e0", 0)] = _HescoBelly(r, c, H, bamp * 0.9)
+    bellies[("e1", n - 1)] = _HescoBelly(r, c, H, bamp * 0.9)
+    walls.append((("e0", 0), (0, W / 2, 0), (0, -1, 0), (-1, 0, 0)))
+    walls.append((("e1", n - 1), (L, -W / 2, 0), (0, 1, 0), (1, 0, 0)))
     # ---------------------------------------------------------------- malla de alambre
-    for (tag, i, O, U, N) in walls:
-        _hesco_mesh(mb, _hesco_panel_frame(O, U, N), c, H, us, vs, h_ext=(-0.003, -0.003) if tag[0] == "e" else (0.001, 0.001))
+    for (key, O, U, N) in walls:
+        _hesco_mesh(mb, _hesco_panel_frame(O, U, N), c, H, us, vs, r, belly=bellies[key],
+                    h_ext=(-0.003, -0.003) if key[0][0] == "e" else (0.001, 0.001))
     us_d = [0.006 + (c - 0.012) * k / ncol for k in range(ncol + 1)]
     for i in range(1, n):                                  # divisiones: solo asoman arriba del relleno
         M = _hesco_panel_frame((i * c, -W / 2, 0), (0, 1, 0), (1, 0, 0))
-        _hesco_mesh(mb, M, c, H, us_d, vs, vmin=min(fills[i - 1], fills[i]) - 0.03, h_ext=(0.0, 0.0))
+        _hesco_mesh(mb, M, c, H, us_d, vs, r, vmin=min(fills[i - 1], fills[i]) - 0.03, h_ext=(0.0, 0.0))
     # ---------------------------------------------------------------- bobinas + pasadores (4 por celda de esquina, 2 por junta)
     for i in range(n + 1):
         x = i * c
@@ -220,163 +309,261 @@ def hesco_run(n=5, kind="MIL1", seed=0):
         _hesco_coil(mb, (x, W / 2), H, vs, PI / 2 if 0 < i < n else (3 * PI / 4 if i == 0 else PI / 4), pitch)
     # ---------------------------------------------------------------- liner + relleno por celda
     for i in range(n):
-        _hesco_cell_liner(mb, i, c, W, H, us, vs, fills[i], (qa, qb, ja, jb), r, ends=(i == 0, i == n - 1))
+        bl = [bellies[("f", i)], None, bellies[("b", i)], None]
+        if i == n - 1:
+            bl[1] = bellies[("e1", n - 1)]
+        if i == 0:
+            bl[3] = bellies[("e0", 0)]
+        _hesco_cell_liner(mb, i, c, W, H, us, vs, fills[i], bl, r, big)
+        _hesco_fill(mb, i, c, W, H, fills[i], r)
+    # ---------------------------------------------------------------- desplome: la línea se ladea apenas, distinto en cada celda
+    lean = [float(r.uniform(-0.006, 0.006)) for _ in range(n + 1)]
+    xs = np.array([i * c for i in range(n + 1)])
+    for v in mb.bm.verts:
+        co = v.co
+        lz = float(np.interp(co.x, xs, lean))
+        co.y += lz * max(co.z, 0.0)
+        co.x += 0.25 * lz * max(co.z, 0.0)
     return mb
 
 
-def _hesco_cell_liner(mb, i, c, W, H, us, vs, zf, quilt, r, ends=(False, False)):
-    """Liner de una celda: lazo en planta (4 paredes rectas + 4 esquinas redondeadas) con su cara exterior completa, cara
-    interior y canto superior solo arriba del relleno; acolchado entre alambres en las caras a la vista; tapón de relleno."""
-    qa, qb, ja, jb = quilt
+def _hesco_cell_liner(mb, i, c, W, H, us, vs, zf, bellies, r, big=False):
+    """Liner de una celda como una sola hoja de 3 mm: lazo en planta (4 paredes + 4 esquinas redondeadas) × perfil vertical.
+    Perfil de cada columna (línea media de la tela): sube pegado a la malla (acolchado entre alambres + panza de la cara),
+    se dobla en la orilla de arriba (hacia afuera sobre el alambre superior en las caras expuestas, hacia adentro en las
+    divisiones y las esquinas) y cuelga 2-4,5 cm con la orilla ondulada; la cara interior baja hasta perderse en el
+    relleno. Malla densa (4 × 4 por cuadro en las caras expuestas), sombreado continuo."""
     x0 = i * c
-    d0 = H_LIN_D
-    t = H_LIN_T
+    d0, t = H_LIN_D, H_LIN_T
     Rc = H_CORNER_R
-    amp = float(r.uniform(0.8, 1.15))
-    v0l = -0.02
-    v1l = H - 0.016
-    ph = float(r.uniform(0, 100))
-    zin = zf - 0.03
-    # paredes: (origen de la esquina inicial, dirección U, normal N hacia afuera, ¿cara expuesta?)
-    exposed = {0: True, 1: ends[1], 2: True, 3: ends[0]}   # 0 frente, 1 lado +x, 2 fondo, 3 lado -x
+    s0 = Rc + d0
     corners = [(x0, -W / 2), (x0 + c, -W / 2), (x0 + c, W / 2), (x0, W / 2)]
-    dirs = [Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((-1, 0, 0)), Vector((0, -1, 0))]
-    nors = [Vector((0, -1, 0)), Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((-1, 0, 0))]
-    s0 = Rc + d0                                           # la parte recta empieza tras la esquina redondeada
-    rows_full = [v0l] + [v for v in vs[:-1]] + [v1l]
-    outer_cols = []                                        # por pared: lista de columnas (cada una lista de vértices de abajo arriba)
-    inner_rows = []                                        # por pared: (verts superiores exteriores, interiores arriba, interiores abajo)
-
-    def P(w, u, depth, z):
-        C = Vector((corners[w][0], corners[w][1], 0.0))
-        return C + dirs[w] * u + nors[w] * depth + Vector((0, 0, z))
-
-    def top_wave(w, u):
-        return 0.009 * noise.noise(Vector((u * 7.0 + w * 3.1, ph, 0.3))) - 0.003
-
+    dirs = [np.array((1.0, 0, 0)), np.array((0, 1.0, 0)), np.array((-1.0, 0, 0)), np.array((0, -1.0, 0))]
+    nors = [np.array((0, -1.0, 0)), np.array((1.0, 0, 0)), np.array((0, 1.0, 0)), np.array((-1.0, 0, 0))]
+    sub = 3 if big else 4
+    pu = us[1] - us[0]
+    pv = vs[1] - vs[0]
+    ph = float(r.uniform(0, 100))
+    # ---- columnas del lazo: (punto base en planta, normal hacia afuera, pared, u, signo del doblez, acolchado?)
+    cols = []
     for w in range(4):
-        ex = exposed[w]
-        ucols = [s0] + [u for u in us[1:-1] if s0 + 0.01 < u < c - s0 - 0.01] + [c - s0]
-        if not ex:
-            ucols = [s0 + (c - 2 * s0) * k / 4 for k in range(5)]
-
-        def V(u, z, w=w):
-            zz, dd = z, -d0
-            if z == v1l:                                   # orilla del liner floja: ondula y se ladea hacia adentro
-                edge = min(1.0, min(u - s0, c - s0 - u) / 0.12)
-                zz = z + top_wave(w, u) * edge
-                dd = -d0 - 0.012 * edge * (0.45 + 0.55 * noise.noise(Vector((u * 4.0, ph, w))))
-            return mb.bm.verts.new(P(w, u, dd, zz))
+        ex = bellies[w] is not None
         if ex:
-            ka = ucols.index(us[qa])
-            kb = ucols.index(us[qb])
-            qrows = vs[ja:jb + 1]
-            # cuadro acolchado: rejilla en los cruces + un vértice central por abertura empujado por el relleno
-            Q = [[V(u, z) for u in ucols[ka:kb + 1]] for z in qrows]
-            for j in range(len(qrows) - 1):
-                for k in range(kb - ka):
-                    q = [Q[j][k], Q[j][k + 1], Q[j + 1][k + 1], Q[j + 1][k]]
-                    uc = (ucols[ka + k] + ucols[ka + k + 1]) / 2
-                    zc = (qrows[j] + qrows[j + 1]) / 2
-                    eu = math.sin(PI * (uc - ucols[ka]) / (ucols[kb] - ucols[ka])) ** 0.6
-                    ev = math.sin(PI * (zc - qrows[0]) / (qrows[-1] - qrows[0])) ** 0.6
-                    e = min(1.0, eu * ev * amp * (0.85 + 0.3 * (0.5 + 0.5 * noise.noise(Vector((uc * 7.0, zc * 7.0, ph + w))))))
-                    if zc > zf - 0.02:
-                        e *= max(0.0, 1.0 - (zc - zf + 0.02) / 0.05)
-                    cv = mb.bm.verts.new(P(w, uc, -d0 + e * (d0 + 0.0055), zc))
-                    for a_, b_ in ((q[0], q[1]), (q[1], q[2]), (q[2], q[3]), (q[3], q[0])):
-                        mb.face([a_, b_, cv], "geotextile").smooth = True
-            # franja superior (de la orilla del acolchado a la orilla del liner) a todo lo ancho; bordes planos (abajo,
-            # izquierda, derecha) triangulados entre cadenas: sin uniones en T ni triángulos degenerados
-            band0 = [V(ucols[0], qrows[-1])] + Q[-1] + [V(ucols[-1], qrows[-1])]
-            band1 = [V(u, v1l) for u in ucols]
-            zip_chains(mb, band0, band1, "geotextile")
-            BL, BR = V(ucols[0], v0l), V(ucols[-1], v0l)
-            QBL, QBR = V(ucols[ka], v0l), V(ucols[kb], v0l)
-            zip_chains(mb, [QBL, QBR], Q[0], "geotextile")
-            zip_chains(mb, [BL, band0[0]], [QBL] + [Q[j][0] for j in range(len(qrows))], "geotextile")
-            zip_chains(mb, [QBR] + [Q[j][-1] for j in range(len(qrows))], [BR, band0[-1]], "geotextile")
-            G = [[BL, band0[0], band1[0]], [BR, band0[-1], band1[-1]]]
-            outer_cols.append((G[0], G[1]))
-            top_o = band1
+            uc = [us[0] + pu * k / sub for k in range(len(us) * sub)]
+            uc = [u for u in uc if s0 + 0.006 < u < c - s0 - 0.006]
+            uc = [s0] + uc + [c - s0]
         else:
-            rows = [v0l, zin, v1l]
-            G = [[V(u, z) for u in ucols] for z in rows]
-            grid_faces(mb, G, "geotextile")
-            outer_cols.append(([G[j][0] for j in range(3)], [G[j][-1] for j in range(3)]))
-            top_o = G[-1]
-        # cara interior arriba del relleno y canto superior
-        ti = [mb.bm.verts.new(v.co - nors[w] * t) for v in top_o]
-        bi = [mb.bm.verts.new(P(w, ucols[k], -d0 - t, zin)) for k in range(len(ucols))]
-        grid_faces(mb, [top_o, ti], "geotextile", flip=True)
-        grid_faces(mb, [bi, ti], "geotextile", flip=True)
-        inner_rows.append((top_o, ti, bi))
-    # esquinas redondeadas (columnas de 2 filas: piso y orilla) cosidas con zip a las columnas de las paredes
-    for w in range(4):
+            uc = [s0 + (c - 2 * s0) * k / 6 for k in range(7)]
+        C = np.array((corners[w][0], corners[w][1], 0.0))
+        for u in uc:
+            e = min(u - s0, c - s0 - u)
+            if ex:                                         # la orilla floja no es pareja: tramos doblados afuera, parados, adentro
+                fold = 0.55 + 0.9 * noise.noise(Vector((float(C[0] + dirs[w][0] * u) * 2.6, float(C[1] + dirs[w][1] * u) * 2.6, ph)))
+                sg = min(max(fold, -0.7), 1.0)
+                sg = min(sg, -0.6 + 1.6 * e / 0.09)
+            else:
+                sg = -1.0
+            cols.append((C + dirs[w] * u, nors[w], w, u, sg, ex))
+        # esquina redondeada hacia la pared siguiente (3 columnas intermedias)
         wn = (w + 1) % 4
-        endcol = outer_cols[w][1]
-        startcol = outer_cols[wn][0]
-        C = Vector((corners[wn][0], corners[wn][1], 0.0))
-        ctr = C - dirs[w] * s0 + dirs[wn] * s0             # centro del arco (dirs[wn] = hacia adentro de la pared w)
-        cols = []
-        for k in (1, 2):
-            a = k / 3 * (PI / 2)
-            pdir = (nors[w] * math.cos(a) + dirs[w] * math.sin(a))
-            p = ctr + pdir * Rc
-            cols.append([mb.bm.verts.new(Vector((p.x, p.y, v0l))), mb.bm.verts.new(Vector((p.x, p.y, v1l)))])
-        zip_chains(mb, endcol, cols[0], "geotextile")
-        grid_faces(mb, [[cols[0][0], cols[1][0]], [cols[0][1], cols[1][1]]], "geotextile")
-        zip_chains(mb, cols[1], startcol, "geotextile")
-        # interior y canto en la esquina (arriba del relleno)
-        to_a, ti_a, bi_a = inner_rows[w]
-        to_b, ti_b, bi_b = inner_rows[wn]
-        ci_t, ci_b = [], []
-        for k in (1, 2):
-            a = k / 3 * (PI / 2)
-            pdir = (nors[w] * math.cos(a) + dirs[w] * math.sin(a))
-            p = ctr + pdir * (Rc - t)
-            ci_t.append(mb.bm.verts.new(Vector((p.x, p.y, v1l))))
-            ci_b.append(mb.bm.verts.new(Vector((p.x, p.y, zin))))
-        ot = [to_a[-1], cols[0][1], cols[1][1], to_b[0]]
-        it = [ti_a[-1]] + ci_t + [ti_b[0]]
-        ib = [bi_a[-1]] + ci_b + [bi_b[0]]
-        grid_faces(mb, [ot, it], "geotextile", flip=True)
-        grid_faces(mb, [ib, it], "geotextile", flip=True)
-    # tapón de relleno: domo de tierra compactada que muere dentro del espesor del liner + faldón + fondo (sólido cerrado)
-    din = d0 + t * 0.5
-    ring = []
-    for w in range(4):
-        nk = 6 if c > 1.5 else 4
-        for k in range(nk):
-            u = s0 + (c - 2 * s0) * k / nk
-            ring.append(P(w, u, -din, 0.0))
-        wn = (w + 1) % 4
-        C = Vector((corners[wn][0], corners[wn][1], 0.0))
-        ctr = C - dirs[w] * s0 + dirs[wn] * s0
-        for k in (1, 2):
-            a = k / 3 * (PI / 2)
-            ring.append(ctr + (nors[w] * math.cos(a) + dirs[w] * math.sin(a)) * (Rc - t * 0.5))
+        Cn = np.array((corners[wn][0], corners[wn][1], 0.0))
+        ctr = Cn - dirs[w] * s0 + dirs[wn] * s0
+        for k in (1, 2, 3):
+            a = k / 4 * (PI / 2)
+            nd = nors[w] * math.cos(a) + dirs[w] * math.sin(a)
+            cols.append((ctr + nd * (Rc + d0), nd, -1, 0.0, -0.8, False))
+    nc = len(cols)
+    # ---- filas de la parte recta del perfil: densas (sub por cuadro) bajo el relleno, ralas arriba
+    zc_top = H + 0.0078                                    # centro del doblez (libra el alambre de arriba)
+    rows = [-0.02]
+    for j in range(len(vs) - 1):
+        for k in range(sub):
+            z = vs[j] + pv * k / sub
+            if z < zf - 0.01:
+                rows.append(z)
+    zq = rows[-1]
+    nadd = max(2, int(math.ceil((zc_top - zq) / 0.022)))
+    rows += [zq + (zc_top - zq) * k / nadd for k in range(1, nadd + 1)]
+    rows = np.array(rows)
+    nz = len(rows)
+    zin = zf - 0.03
+    # presión del relleno: plena abajo, nula en el nivel del relleno
+    press = np.clip((zf - 0.012 - rows) / 0.12, 0, 1) ** 0.8 * (0.75 + 0.25 * np.clip(rows / 0.08, 0, 1))
+    na, nfl = 7, 4                                         # puntos del doblez y del faldón colgante
+    Rm = 0.0055 + t / 2                                    # radio medio del doblez
+    # amplitud del acolchado por cuadro (8-14 mm, al azar) y del abombado de cada columna
+    nap = len(us) + 2
+    A_ap = r.uniform(0.0085, 0.0135, (len(vs) + 2, nap))
+    mids = []                                              # por columna: (puntos (m × 2) en (d, z), normales, índice zin)
+    for (P0, nrm, w, u, sg, ex) in cols:
+        bel = bellies[w] if (w >= 0 and bellies[w] is not None) else None
+        Bz = bel(u, rows) if bel is not None else np.zeros(nz)
+        D = np.zeros(nz)
+        if ex:
+            fu = (u - us[0]) / pu
+            iu = int(np.clip(math.floor(fu), 0, nap - 1))
+            Su = abs(math.sin(PI * (fu - math.floor(fu)))) ** 0.85
+            fz = (rows - vs[0]) / pv
+            iz = np.clip(np.floor(fz).astype(int), 0, len(vs))
+            Sv = np.abs(np.sin(PI * (fz - np.floor(fz)))) ** 0.85 * (rows > vs[0] - 0.0005)
+            Sv = np.where(rows < vs[0], np.abs(np.sin(PI * (rows - vs[0]) / pv * 0.5)) ** 0.85, Sv)
+            Aap = A_ap[iz, iu]
+            g = 2 * HW_R - 0.0004
+            D = Sv * (g + (Aap - g) * Su) * press
+        # orilla de arriba: largo del faldón ondulado; columnas de esquina y de división, cortito
+        if ex:
+            Lf = 0.024 + 0.014 * (0.5 + 0.5 * noise.noise(Vector((float(P0[0]) * 6, float(P0[1]) * 6, ph)))) + 0.006 * math.sin(u * 37 + ph)
+        else:
+            Lf = 0.016 + 0.006 * (0.5 + 0.5 * noise.noise(Vector((float(P0[0]) * 6, float(P0[1]) * 6, ph + 4))))
+        Lf *= min(1.0, 0.35 + 0.65 * abs(sg))
+        dm = -d0 - t / 2
+        Pz = [(dm + D[k] + Bz[k], rows[k]) for k in range(nz)]
+        # doblez: arco de radio Rm hacia el lado sg (afuera > 0), barrido |sg|·180°
+        side = 1.0 if sg >= 0 else -1.0
+        sweep = abs(sg) * PI
+        dtop = dm + Bz[-1]
+        cx = dtop + side * Rm
+        for k in range(1, na + 1):
+            th = PI / 2 + side * PI / 2 - side * sweep * k / na   # ángulo desde el centro del arco
+            Pz.append((cx + Rm * math.cos(th), zc_top + Rm * math.sin(th)))
+        th_end = PI / 2 + side * PI / 2 - side * sweep
+        tdir = np.array((math.sin(th_end), -math.cos(th_end))) * side
+        if np.linalg.norm(tdir) < 1e-6:
+            tdir = np.array((0.0, 1.0))
+        pe = np.array(Pz[-1])
+        for k in range(1, nfl + 1):
+            s_ = Lf * k / nfl
+            flare = 0.12 * s_ * side * (1 if sweep > PI * 0.7 else 0)
+            wv = 0.0022 * math.sin(u * 23 + ph + k) * k / nfl
+            q = pe + tdir * s_ + np.array((flare + wv * side, 0.0))
+            Pz.append((float(q[0]), float(q[1])))
+        Pz = np.array(Pz)
+        tg = np.gradient(Pz, axis=0)
+        tg /= np.maximum(np.linalg.norm(tg, axis=1, keepdims=True), 1e-12)
+        nn = np.stack([tg[:, 1], -tg[:, 0]], 1)            # normal hacia +d en la parte que sube
+        mids.append((P0, nrm, Pz, nn))
+    # ---- vértices: cara A (hacia la malla) de abajo hasta la punta del faldón, luego cara B (hacia el relleno) de la punta
+    # de regreso hasta zin
+    m = len(mids[0][2])
+    kin = int(np.searchsorted(rows, zin))
+    nb = m - kin
+    NR = m + nb
+    V = np.zeros((NR, nc, 3))
+    for j, (P0, nrm, Pz, nn) in enumerate(mids):
+        A = Pz + nn * (t / 2)
+        Bf = (Pz - nn * (t / 2))[kin:][::-1]
+        prof = np.concatenate([A, Bf], 0)
+        V[:, j, :] = P0[None, :] + nrm[None, :] * prof[:, 0:1] + np.array((0, 0, 1.0))[None, :] * prof[:, 1:2]
+    F = _grid_quads(NR, nc, closed=True)
+    _np_faces(mb, V.reshape(-1, 3), F.tolist(), "geotextile", soft=True)
+
+
+def _hesco_fill(mb, i, c, W, H, zf, r):
+    """Tapa de relleno de una celda: rejilla en planta de ~3 cm recortada al contorno interior del liner (cuadro de esquinas
+    redondeadas), tierra compactada con corona baja e irregular (ruido en tres escalas + hondonadas de las paladas) que muere
+    bajo la cara interior del liner, faldón que baja dentro de la tela; terrones (arena) y piedras (concreto) sueltos."""
+    x0 = i * c
+    din = H_LIN_D + H_LIN_T * 0.6
+    hx = c / 2 - din
+    hy = W / 2 - din
+    rc = H_CORNER_R - H_LIN_T * 0.6
+    ph = float(r.uniform(0, 100))
     cx, cy = x0 + c / 2, 0.0
+    n_ = max(12, int(round(2 * hx / 0.03)))
+    a = np.linspace(-1.0, 1.0, n_ + 1)
+    A_, B_ = np.meshgrid(a, a)
+    X = cx + A_ * hx
+    Y = cy + B_ * hy
+    # esquinas: los puntos que caen fuera del arco se proyectan sobre él
+    qx, qy = np.abs(X - cx) - (hx - rc), np.abs(Y - cy) - (hy - rc)
+    out = (qx > 0) & (qy > 0)
+    d = np.hypot(qx, qy)
+    k = np.where(out & (d > rc), rc / np.maximum(d, 1e-9), 1.0)
+    X = np.where(out, cx + np.sign(X - cx) * (hx - rc + qx * k), X)
+    Y = np.where(out, cy + np.sign(Y - cy) * (hy - rc + qy * k), Y)
     mound = float(r.uniform(0.03, 0.05)) * (c / 1.06) ** 0.5
-    loops = []
-    for sc in (1.0, 0.88, 0.72, 0.54, 0.34, 0.15):
-        L = []
-        for p in ring:
-            dx, dy = p.x - cx, p.y - cy
-            rr_ = math.hypot(dx, dy) or 1.0
-            rnd = (1 - sc) ** 0.7                          # curvas de nivel cada vez más redondas hacia la corona
-            k_ = (1 - rnd) + rnd * (c * 0.47) / rr_
-            x = cx + dx * sc * k_
-            y = cy + dy * sc * k_
-            z = zf + mound * (1 - sc ** 2) + 0.018 * noise.noise(Vector((x * 4, y * 4, ph))) * (1 - sc ** 4) \
-                + 0.006 * noise.noise(Vector((x * 13, y * 13, ph + 3))) * (1 - sc ** 2)
-            if sc == 1.0:
-                z = zf + 0.004 * noise.noise(Vector((x * 6, y * 6, ph)))
-            L.append((x, y, z))
-        loops.append(L)
-    loops.append([(cx, cy, zf + mound * 1.0 + 0.01 * noise.noise(Vector((cx * 5, 0.0, ph))))])
-    skirt = [(p[0], p[1], zf - 0.06) for p in loops[0]]
-    skin(mb, [skirt] + loops, "sand", cap0=True, cap1=False)
+    f1, f2, f3 = _sfield(r, 6, 4.0, 8.0), _sfield(r, 9, 18.0, 34.0), _sfield(r, 12, 55.0, 95.0)
+    digs = [(cx + float(r.uniform(-0.3, 0.3)) * c, cy + float(r.uniform(-0.3, 0.3)) * W, float(r.uniform(0.06, 0.13)),
+             float(r.uniform(0.006, 0.016))) for _ in range(int(r.integers(2, 5)))]
+
+    def hgt(x, y):
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        ea = np.clip(1 - np.abs(x - cx) / hx, 0, 1)
+        eb = np.clip(1 - np.abs(y - cy) / hy, 0, 1)
+        e = np.minimum(ea, eb)                             # 0 en la orilla, 1 al centro
+        edge = np.clip(e / 0.06, 0, 1) ** 0.6              # junto a la tela el relleno queda al nivel de llenado
+        P = np.stack([x, y, np.full(np.shape(x), ph)], -1)
+        z = (zf + mound * (1 - (1 - ea) ** 2) * (1 - (1 - eb) ** 2) + (0.014 * f1(P) + 0.0065 * f2(P)) * edge
+             + 0.0028 * f3(P) * edge)
+        for (gx, gy, gr, gd) in digs:
+            z = z - gd * np.exp(-((x - gx) ** 2 + (y - gy) ** 2) / (gr * gr)) * edge
+        return z
+    Z = hgt(X, Y)
+    nr = n_ + 1
+    V = np.stack([X, Y, Z], -1).reshape(-1, 3)
+    F = _grid_quads(nr, nr).tolist()
+    # faldón: el contorno de la rejilla baja 6 cm dentro de la tela y se cierra abajo
+    idx = np.arange(nr * nr).reshape(nr, nr)
+    bnd = list(idx[0, :]) + list(idx[1:, -1]) + list(idx[-1, -2::-1]) + list(idx[-2:0:-1, 0])
+    o = len(V)
+    sk = V[bnd].copy()
+    sk[:, 2] = zf - 0.06
+    V = np.concatenate([V, sk], 0)
+    nb = len(bnd)
+    for j in range(nb):
+        jj = (j + 1) % nb
+        F.append([bnd[j], o + j, o + jj, bnd[jj]])
+    F.append(list(range(o + nb - 1, o - 1, -1)))
+    _np_faces(mb, V, F, "sand", soft=True)
+    # terrones y piedras sobre la tapa (poliedros irregulares, medio hundidos)
+    nst = int(r.integers(34, 48)) if c < 1.5 else int(r.integers(80, 110))
+    ico = _rock_proto()
+    for k in range(nst):
+        px = cx + float(r.uniform(-0.88, 0.88)) * hx
+        py = cy + float(r.uniform(-0.88, 0.88)) * hy
+        pz = float(hgt(np.array([px]), np.array([py]))[0])
+        stone = r.uniform() < 0.4
+        size = float(r.uniform(0.008, 0.016) if r.uniform() < 0.6 else r.uniform(0.016, 0.04))
+        if not stone:
+            size *= 1.3
+        S = np.array([size, size * float(r.uniform(0.6, 1.0)), size * float(r.uniform(0.35, 0.6) if not stone else r.uniform(0.5, 0.8))])
+        Vr = ico[0] * S * (1 + 0.22 * r.uniform(-1, 1, (len(ico[0]), 1)))
+        a_ = float(r.uniform(0, 2 * PI))
+        Rz = np.array([[math.cos(a_), -math.sin(a_), 0], [math.sin(a_), math.cos(a_), 0], [0, 0, 1]])
+        Vr = Vr @ Rz.T + np.array([px, py, pz + S[2] * 0.25])
+        _np_faces(mb, Vr, ico[1], "concrete" if stone else "sand", soft=not stone)   # piedra angulosa; terrón redondo
+
+
+_ROCK = None
+
+
+def _rock_proto():
+    """Icosaedro subdividido una vez (42 vértices, 80 caras) de radio 1: base de terrones y piedras."""
+    global _ROCK
+    if _ROCK is None:
+        t_ = (1 + 5 ** 0.5) / 2
+        V = [(-1, t_, 0), (1, t_, 0), (-1, -t_, 0), (1, -t_, 0), (0, -1, t_), (0, 1, t_), (0, -1, -t_), (0, 1, -t_),
+             (t_, 0, -1), (t_, 0, 1), (-t_, 0, -1), (-t_, 0, 1)]
+        F = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6),
+             (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7),
+             (9, 8, 1)]
+        V = [np.array(v, float) / np.linalg.norm(v) for v in V]
+        mid = {}
+
+        def mp(a, b):
+            k = (min(a, b), max(a, b))
+            if k not in mid:
+                p = V[a] + V[b]
+                V.append(p / np.linalg.norm(p))
+                mid[k] = len(V) - 1
+            return mid[k]
+        F2 = []
+        for (a, b, c_) in F:
+            ab, bc, ca = mp(a, b), mp(b, c_), mp(c_, a)
+            F2 += [(a, ab, ca), (b, bc, ab), (c_, ca, bc), (ab, bc, ca)]
+        _ROCK = (np.array(V), F2)
+    return _ROCK
 
 
 # ========================================================================================================== sacos
@@ -719,17 +906,20 @@ class _HField:
         versión muy desenfocada (gaussiana sigma celdas) para la tapa."""
         H = self.H
         S1 = H.copy()
+        M1 = H.copy()                                      # máximo 3 × 3: cubre las caras entre vértices vecinos
         for dj in range(-rmax, rmax + 1):
             for di in range(-rmax, rmax + 1):
                 if di * di + dj * dj <= rmax * rmax:
                     S1 = np.maximum(S1, np.roll(np.roll(H, dj, 0), di, 1))
+                if abs(di) <= 1 and abs(dj) <= 1:
+                    M1 = np.maximum(M1, np.roll(np.roll(H, dj, 0), di, 1))
 
         def blur(A, sg):
             k = np.exp(-0.5 * (np.arange(-3 * sg, 3 * sg + 1) / sg) ** 2)
             k /= k.sum()
             B = np.apply_along_axis(lambda v: np.convolve(np.pad(v, 3 * sg, mode="edge"), k, "valid"), 1, A)
             return np.apply_along_axis(lambda v: np.convolve(np.pad(v, 3 * sg, mode="edge"), k, "valid"), 0, B)
-        S1 = np.maximum(blur(S1, 2), H)
+        S1 = np.maximum(blur(S1, 2), M1)
         return S1, blur(S1, sigma)
 
     def sample(self, A, x, y):
@@ -763,9 +953,9 @@ def _bag_stack(courses, seed, bounds, hs_course=None, lod=0):
     nc = len(courses)
     for ci, course in enumerate(courses):
         S1, S2 = hf.filtered()
-        if ci:
-            S1 = S1 + 0.001
-            S2 = S2 + 0.001
+        if ci:                                             # 1,2 mm de holgura: apoyado a la vista, sin caras coplanares
+            S1 = S1 + 0.0012
+            S2 = S2 + 0.0012
         placed = []
         for item in course:
             x, y, ang, ls, ws = item[:5]
@@ -863,181 +1053,394 @@ def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
 
 
 # ================================================================================================ barreras de concreto
-def _offset_loop(pts, d):
-    """Desplaza un lazo 2D antihorario (y, z) hacia adentro `d` (inglete): chaflán de los extremos de una pieza colada."""
-    n = len(pts)
+def _rpoly(corners, radii, spacing, nseg=4):
+    """Polígono 2D cerrado (y, z) con esquinas de radio real y lados densificados. corners: vértices antihorarios; radii[k]
+    (0 = sin redondeo); spacing[k] = paso máximo del lado k -> k+1 (None = sin puntos intermedios). Devuelve (pts N × 2,
+    tags) con tag = ('c', k, t) para puntos del arco de la esquina k (t de 0 a 1) o ('e', k, i) para puntos del lado k."""
+    C = [np.array(p, float) for p in corners]
+    n = len(C)
+    arcs = []
+    for k in range(n):
+        p, a, b = C[k], C[k - 1], C[(k + 1) % n]
+        d0 = (a - p) / np.linalg.norm(a - p)
+        d1 = (b - p) / np.linalg.norm(b - p)
+        th = math.acos(max(-1.0, min(1.0, float(d0 @ d1))))
+        rr = radii[k]
+        if rr <= 0 or th > PI - 1e-3:
+            arcs.append([p])
+            continue
+        t = rr / math.tan(th / 2)
+        t = min(t, 0.45 * np.linalg.norm(a - p), 0.45 * np.linalg.norm(b - p))
+        rr = t * math.tan(th / 2)
+        bis = (d0 + d1) / np.linalg.norm(d0 + d1)
+        ctr = p + bis * (rr / math.sin(th / 2))
+        pa, pb = p + d0 * t, p + d1 * t
+        a0 = math.atan2(pa[1] - ctr[1], pa[0] - ctr[0])
+        a1 = math.atan2(pb[1] - ctr[1], pb[0] - ctr[0])
+        da = (a1 - a0 + PI) % (2 * PI) - PI
+        arcs.append([ctr + rr * np.array((math.cos(a0 + da * j / nseg), math.sin(a0 + da * j / nseg))) for j in range(nseg + 1)])
+    pts, tags = [], []
+    for k in range(n):
+        A = arcs[k]
+        for j, q in enumerate(A):
+            pts.append(q)
+            tags.append(("c", k, j / max(len(A) - 1, 1)))
+        B0, B1 = A[-1], arcs[(k + 1) % n][0]
+        sp = spacing[k]
+        if sp:
+            m = max(1, int(math.ceil(np.linalg.norm(B1 - B0) / sp)))
+            for i in range(1, m):
+                pts.append(B0 + (B1 - B0) * i / m)
+                tags.append(("e", k, i))
+    return np.array(pts), tags
+
+
+def _loop_normals2(P, reach=0.0):
+    """Normales hacia afuera de un lazo 2D antihorario. reach > 0: cada normal sale de los puntos que quedan a esa
+    distancia (por longitud de arco) antes y después, así los detalles diminutos (rebabas) no la tuercen."""
+    if reach <= 0:
+        d = np.roll(P, -1, 0) - np.roll(P, 1, 0)
+    else:
+        n_ = len(P)
+        seg = np.linalg.norm(np.roll(P, -1, 0) - P, axis=1)
+        acc = np.concatenate([[0.0], np.cumsum(seg)])
+        tot = acc[-1]
+        a = acc[:-1]
+        fx = np.concatenate([P[:, 0], P[:1, 0]])
+        fy = np.concatenate([P[:, 1], P[:1, 1]])
+        pa = (a - reach) % tot
+        pb = (a + reach) % tot
+        A = np.stack([np.interp(pa, acc, fx), np.interp(pa, acc, fy)], 1)
+        B = np.stack([np.interp(pb, acc, fx), np.interp(pb, acc, fy)], 1)
+        d = B - A
+        del n_
+    n = np.stack([d[:, 1], -d[:, 0]], 1)
+    return n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+
+
+def _cast_piece(mb, prof, tags, xs, L, r_end, mat="concrete", chips=(), end_chips=(), notches=(), recesses=(),
+                wave=0.0009, seed=0):
+    """Pieza de concreto colado extruida a lo largo de X (0..L) con el perfil redondeado `prof` (antihorario en (y, z)):
+    - cantos verticales de los extremos redondeados (radio r_end: el perfil se encoge en 4 estaciones de arco);
+    - despostilladuras: chips = [(índice_de_esquina, x, ancho, hondo)] en cantos longitudinales; end_chips = [(extremo 0|1,
+      z, alto, hondo, lado ±1)] en los cantos verticales de los extremos;
+    - muescas por debajo (ranuras de izaje / drenaje): notches = [(x0, x1, alto)];
+    - huecos: recesses = [(x, índice de punto del perfil, radio, hondo, radio_fondo)] (conos de tirante, cajas de izaje):
+      el nodo (estación, punto) debe existir; se arma el hueco con su pared cónica y su fondo;
+    - ondulación de cimbra de ±wave en las caras (nada queda perfectamente plano). Tapas de los extremos trianguladas."""
+    r = rng(seed)
+    N2 = _loop_normals2(prof, reach=0.012)
+    npf = len(prof)
+    # estaciones: arco de los extremos + interiores
+    ends = [(r_end * (1 - math.cos(f)), r_end * (1 - math.sin(f))) for f in np.linspace(0, PI / 2, 4)]
+    st = [(x, d, 0) for (x, d) in ends] + [(L - x, d, 1) for (x, d) in ends]
+    st += [(x, 0.0, -1) for x in xs if r_end + 0.004 < x < L - r_end - 0.004]
+    st.sort(key=lambda s: s[0])
+    X = np.array([s[0] for s in st])
+    ph = float(r.uniform(0, 50))
+    V = np.zeros((len(st), npf, 3))
+    zmax = prof[:, 1].max()
+    for i, (x, d, side) in enumerate(st):
+        P = prof.copy()
+        dd = np.full(npf, d)
+        for (e, zc, hz, dep, sd) in end_chips:             # despostilladura en el canto vertical de un extremo
+            if side == e:
+                sel = (np.sign(prof[:, 0]) == sd) | (sd == 0)
+                dd = dd + dep * np.exp(-((prof[:, 1] - zc) / hz) ** 2) * sel * (d / max(r_end, 1e-6))
+        P = P - N2 * dd[:, None]
+        for (k, xc, w, dep) in chips:                       # despostilladura en un canto longitudinal
+            g = math.exp(-((x - xc) / w) ** 2)
+            if g < 0.02:
+                continue
+            for j, tg in enumerate(tags):
+                if tg[0] == "c" and tg[1] == k:
+                    P[j] = P[j] - N2[j] * dep * g * (0.35 + 0.65 * math.sin(PI * tg[2]))
+        for (x0, x1, hz) in notches:                        # muesca abierta abajo: los puntos bajos suben al techo
+            if x0 - 1e-6 <= x <= x1 + 1e-6:
+                low = np.where(prof[:, 1] < hz)[0]
+                for sgn in (1, -1):
+                    ids = [j for j in low if np.sign(prof[j, 0]) == sgn or (prof[j, 0] == 0 and sgn == 1)]
+                    if not ids:
+                        continue
+                    # ancho del perfil a la altura hz (interpolado sobre el lado)
+                    side_pts = prof[np.sign(prof[:, 0]) == sgn]
+                    yw = float(np.interp(hz, *zip(*sorted((p[1], abs(p[0])) for p in side_pts))))
+                    ids.sort(key=lambda j: prof[j, 1] + 1e-3 * (-abs(prof[j, 0])))
+                    m = len(ids)
+                    for q, j in enumerate(ids):
+                        P[j] = (sgn * (yw - 0.004 - 0.05 * (1 - (q + 1) / m)), hz + 0.0015 * (q + 1) / m)
+        wv = wave * np.sin(x * 7.3 + prof[:, 1] * 5.1 + ph) * np.sin(x * 2.9 - prof[:, 1] * 3.7 + 2 * ph)
+        wv = wv * (prof[:, 1] > 0.01)
+        P = P + N2 * wv[:, None]
+        V[i, :, 0] = x
+        V[i, :, 1] = P[:, 0]
+        V[i, :, 2] = P[:, 1]
+    V[..., 2] = np.maximum(V[..., 2], 0.0)
+    bm = mb.bm
+    VV = [[bm.verts.new(p) for p in row] for row in V.tolist()]
+    mi = mb.mi(mat)
+    skip = set()
+    rec_specs = []
+    for (xr, j, rad, dep, rad2) in recesses:
+        i = int(np.argmin(np.abs(X - xr)))
+        rec_specs.append((i, j, rad, dep, rad2))
+        for (a_, b_) in ((i - 1, j - 1), (i, j - 1), (i - 1, j), (i, j)):
+            skip.add((a_, b_ % npf))
+    for i in range(len(st) - 1):
+        for j in range(npf):
+            if (i, j) in skip:
+                continue
+            jj = (j + 1) % npf
+            f = bm.faces.new((VV[i][j], VV[i + 1][j], VV[i + 1][jj], VV[i][jj]))
+            f.material_index = mi
+            f.smooth = True
+    for row, rev in ((VV[0], True), (VV[-1], False)):
+        ngon(mb, list(reversed(row)) if rev else list(row), mat)
+    # huecos (cono de tirante / caja de izaje)
     out = []
-    for i in range(n):
-        p0, p1, p2 = Vector((*pts[i - 1], 0)), Vector((*pts[i], 0)), Vector((*pts[(i + 1) % n], 0))
-        e0 = (p1 - p0).normalized()
-        e1 = (p2 - p1).normalized()
-        n0 = Vector((-e0.y, e0.x, 0))
-        n1 = Vector((-e1.y, e1.x, 0))
-        m = (n0 + n1)
-        m = m.normalized() if m.length > 1e-6 else n0
-        c = max(m.dot(n0), 0.35)
-        q = p1 + m * (d / c)
-        out.append((q.x, q.y))
+    for (i, j, rad, dep, rad2) in rec_specs:
+        c = VV[i][j].co.copy()
+        ex = Vector((1, 0, 0))
+        ey = (VV[i][(j + 1) % npf].co - VV[i][j - 1].co).normalized()
+        nrm = ex.cross(ey).normalized()
+        if nrm.dot(Vector((0.0, N2[j][0], N2[j][1]))) < 0:
+            nrm = -nrm
+        bnd = [VV[i - 1][j - 1], VV[i][j - 1], VV[i + 1][j - 1], VV[i + 1][j], VV[i + 1][(j + 1) % npf],
+               VV[i][(j + 1) % npf], VV[i - 1][(j + 1) % npf], VV[i - 1][j]]
+        ns_ = 16
+        ang = [math.radians(225 + 22.5 * m) for m in range(ns_)]
+        circ = [bm.verts.new(c + (ex * math.cos(a) + ey * math.sin(a)) * rad) for a in ang]
+        for q in range(4):
+            ch = [bnd[2 * q], bnd[2 * q + 1], bnd[(2 * q + 2) % 8]]
+            arc = [circ[(4 * q + m) % ns_] for m in range(5)]
+            zip_chains(mb, ch, arc, mat)
+        rings = [circ]
+        for (fd, fr) in ((0.003, rad * 0.97), (dep, rad2)):
+            rings.append([bm.verts.new(c - nrm * fd + (ex * math.cos(a) + ey * math.sin(a)) * fr) for a in ang])
+        for A_, B_ in zip(rings[:-1], rings[1:]):
+            for m in range(ns_):
+                mm = (m + 1) % ns_
+                f = bm.faces.new((A_[m], A_[mm], B_[mm], B_[m]))
+                f.material_index = mi
+                f.smooth = True
+        cb = bm.verts.new(c - nrm * dep)
+        for m in range(ns_):
+            f = bm.faces.new((rings[-1][m], rings[-1][(m + 1) % ns_], cb))
+            f.material_index = mi
+            f.smooth = True
+        bm.verts.remove(VV[i][j])
+        out.append((c, nrm, ex, ey))
     return out
-
-
-def _prof_extrude(mb, stations, mat="concrete"):
-    """Sólido colado por estaciones a lo largo de X: cada estación = (x, cadena derecha [(y, z)] de abajo arriba, cadena
-    izquierda de abajo arriba), mismas cuentas en todas. Tapas por zip entre las dos cadenas (sección horizontalmente
-    convexa: T invertida, perfil New Jersey): sin n-gonos cóncavos ni triángulos degenerados."""
-    rings = []
-    for (x, R, Lf) in stations:
-        loop = [(x, y, z) for (y, z) in R] + [(x, y, z) for (y, z) in reversed(Lf)]
-        rings.append([mb.bm.verts.new(Vector(p)) for p in loop])
-    k = len(rings[0])
-    for i in range(len(rings) - 1):
-        A, B = rings[i], rings[i + 1]
-        for j in range(k):
-            jj = (j + 1) % k
-            mb.face([A[j], B[j], B[jj], A[jj]], mat)
-    nR = len(stations[0][1])
-    for idx, flip in ((0, False), (-1, True)):
-        ring = rings[idx]
-        R = ring[:nR]
-        Lf = list(reversed(ring[nR:]))
-        zip_chains(mb, R, Lf, mat, flip=flip)
-    return rings
-
-
-def _chip_set(r, zs, n, lo, hi):
-    """Alturas de despostilladuras pequeñas (n) sobre una arista vertical, entre lo y hi."""
-    return sorted(float(z) for z in r.uniform(lo, hi, n)) if n else []
 
 
 def t_wall(seed=0):
     """Muro T (T-wall / tipo Alaska) de concreto precolado: 3,66 m (12 ft) de alto, segmento de 1,52 m (5 ft) a lo largo de +X
-    desde x = 0, base en T invertida de 1,37 m (4,5 ft) de fondo centrada en y = 0 (frente en -Y). Alma ahusada 0,30 -> 0,20 m,
-    acartelamiento de la base a 22°, chaflanes de 15-20 mm en todas las aristas, juntas de cimbra (ranuras horizontales de
-    3 mm), dos asas de izaje de varilla de 7/8" en la corona y algunas despostilladuras chicas en las aristas de los extremos.
-    Fuentes: globalsecurity.org (2007: "T barrier ... 12 feet high ... four and a half feet wide ... ~10,000 lb"); peso del
-    modelo ~2,0 m³ × 2400 kg/m³ = 4,8 t (10 600 lb)."""
+    desde x = 0, base en T invertida de 1,37 m (4,5 ft) de fondo centrada en y = 0 (frente en -Y). Alma ahusada 0,31 -> 0,20 m,
+    acartelamiento de la base a 22° con transición curva (R 70 mm) al alma; cantos redondeados de colado (R 12-18 mm) y cantos
+    verticales de los extremos (R 9 mm); dos rebabas de junta de cimbra (1,5 mm) a lo ancho de cada cara del alma; seis conos
+    de tirante de cimbra resanados por cara (Ø 32 mm); dos cajas de izaje en la corona con su asa de varilla de 7/8" en U
+    ahogada; ondulación de cimbra de ±0,9 mm; despostilladuras chicas en cantos y extremos (pieza limpia, en servicio).
+    Fuentes: globalsecurity.org (2007: "T barrier ... 12 feet high ... four and a half feet wide ... ~10,000 lb"); 48barriers.com
+    (T-wall: módulos autoportantes de concreto precolado); peso del modelo ~2,0 m³ × 2400 kg/m³ = 4,8 t."""
     r = rng(seed)
     mb = MB()
     L, H = 1.52, 3.66
     hb, hy = 0.685, 0.20
-    ch = 0.018
-    grooves = [1.22 + float(r.uniform(-0.01, 0.01)), 2.44 + float(r.uniform(-0.01, 0.01))]
-    chips = _chip_set(r, None, 3, 0.7, 3.4)
-    zs = [0.52]
-    for z in [0.9, 1.5, 2.0, 2.9, 3.3] + chips:
-        zs.append(z)
-    for g in grooves:
-        zs += [g - 0.005, g, g + 0.005]
-    zs = sorted(set(round(z, 4) for z in zs))
-
-    def stem_y(z):
-        return 0.15 - 0.05 * (z - 0.5) / (H - 0.5)
-
-    def right_chain(chip=None):
-        R = [(hb - ch * 0.6, 0.0), (hb, ch * 0.6), (hb, hy - ch), (hb - ch, hy + ch * 0.45)]
-        R += [(0.17, 0.417), (stem_y(0.47) + 0.004, 0.462)]
-        for z in zs:
-            y = stem_y(z)
-            if any(abs(z - g) < 1e-4 for g in grooves):
-                y -= 0.003
-            if chip and z in chip:
-                y -= chip[z]
-            R.append((y, z))
-        R += [(stem_y(H) , H - ch), (stem_y(H) - ch, H)]
-        return R
-    # despostilladuras: (lado, estación extremo, {z: profundidad}) -> en las 4 aristas verticales de los extremos
-    chipmap = {}
-    for z in chips:
-        key = (int(r.integers(2)), int(r.integers(2)))
-        chipmap.setdefault(key, {})[round(z, 4)] = float(r.uniform(0.006, 0.014))
-    stations = []
-    for (x, end) in ((0.0, 0), (ch, 0), (L - ch, 1), (L, 1)):
-        R = right_chain(chipmap.get((0, end)))
-        Lf = [(-y, z) for (y, z) in right_chain(chipmap.get((1, end)))]
-        if x in (0.0, L):                                  # chaflán del extremo: perfil desplazado hacia adentro
-            loop = R + list(reversed(Lf))
-            off = _offset_loop(loop, ch)
-            off = [(y, max(z, 0.0)) for (y, z) in off]
-            n = len(R)
-            R, Lf = off[:n], list(reversed(off[n:]))
-            R[0] = (R[0][0], 0.0)
-            Lf[0] = (Lf[0][0], 0.0)
-        stations.append((x, R, Lf))
-    _prof_extrude(mb, stations)
-    # asas de izaje: varilla corrugada de 7/8" doblada en U, ahogada en la corona
-    for xc in (0.38, L - 0.38):
-        xc += float(r.uniform(-0.01, 0.01))
-        path = [(xc - 0.065, 0.0, H - 0.06), (xc - 0.065, 0.0, H + 0.075), (xc + 0.065, 0.0, H + 0.075), (xc + 0.065, 0.0, H - 0.06)]
-        tube_path(mb, path, 0.0111, seg=SEG_T, mat="steel", bend=0.05, nseg=5, caps=False)
+    yC, zC = 0.155, 0.42                                   # arranque del alma (fin del acartelamiento)
+    yD = 0.10                                              # paño del alma en la corona
+    stem = lambda z: yC + (yD - yC) * (z - zC) / (H - zC)  # noqa: E731
+    flash = [1.22 + float(r.uniform(-0.01, 0.01)), 2.44 + float(r.uniform(-0.01, 0.01))]
+    # lado derecho (y > 0) de abajo hacia arriba, con las rebabas de cimbra como esquinas sin redondeo
+    right = [(hb, 0.0, 0.012, None), (hb, hy, 0.018, 0.13), (yC, zC, 0.07, 0.1)]
+    for zf in flash:
+        right += [(stem(zf - 0.003), zf - 0.003, 0.0, None), (stem(zf - 0.0015) + 0.0015, zf - 0.0015, 0.0, None),
+                  (stem(zf + 0.0015) + 0.0015, zf + 0.0015, 0.0, None), (stem(zf + 0.003), zf + 0.003, 0.0, 0.1)]
+    right += [(yD, H, 0.016, 0.045)]
+    left = [(-y, z, rr, None) for (y, z, rr, sp) in reversed(right)]
+    # espaciado del lado izquierdo: el del tramo simétrico
+    sps = [sp for (_, _, _, sp) in right]
+    for k in range(len(left) - 1):
+        left[k] = (left[k][0], left[k][1], left[k][2], sps[len(right) - 2 - k])
+    corners = right + [(0.0, H, 0.0, 0.045)] + left
+    prof, tags = _rpoly([(y, z) for (y, z, _, _) in corners], [c[2] for c in corners], [c[3] for c in corners], nseg=4)
+    # nodos para huecos: puntos del perfil sobre el alma a ~1,0 / 2,0 / 3,0 m y el centro de la corona
+    def node(y_sign, z):
+        cand = [j for j in range(len(prof)) if np.sign(prof[j, 0]) == y_sign and tags[j][0] == "e"]
+        return min(cand, key=lambda j: abs(prof[j, 1] - z))
+    j_top = int(np.argmin(np.abs(prof[:, 0]) + np.abs(prof[:, 1] - H)))
+    xs_tie = (0.43 + float(r.uniform(-0.02, 0.02)), L - 0.43 + float(r.uniform(-0.02, 0.02)))
+    xs_lift = (0.38, L - 0.38)
+    spec = list(xs_tie) + list(xs_lift)
+    xs = [x for x in np.arange(0.06, L - 0.05, 0.1) if min(abs(x - s_) for s_ in spec) > 0.06]
+    xs += spec + [s_ + d for s_ in spec for d in (-0.085, 0.085)]
+    xs = sorted(xs)
+    xs = [x for i_, x in enumerate(xs) if i_ == 0 or x - xs[i_ - 1] > 0.02]
+    recs = []
+    for ysg in (1, -1):
+        for zt in (1.0, 2.0, 3.0):
+            j = node(ysg, zt + float(r.uniform(-0.05, 0.05)))
+            for xt in xs_tie:
+                recs.append((xt, j, 0.016, 0.022, 0.009))
+    for xl in xs_lift:
+        recs.append((xl, j_top, 0.034, 0.05, 0.03))
+    # despostilladuras chicas: cantos de la base y de la corona; cantos verticales de los extremos
+    ci = [k for k, c in enumerate(corners) if c[2] > 0.01]
+    chips = []
+    for _ in range(int(r.integers(2, 5))):
+        x_ = float(r.uniform(0.15, L - 0.15))
+        if min(abs(x_ - xl) for xl in xs_lift + xs_tie) < 0.16:
+            continue
+        chips.append((int(r.choice(ci)), x_, float(r.uniform(0.012, 0.03)), float(r.uniform(0.004, 0.009))))
+    end_chips = [(int(r.integers(2)), float(r.uniform(0.6, 3.4)), float(r.uniform(0.02, 0.05)), float(r.uniform(0.004, 0.01)),
+                  int(r.choice([-1, 1]))) for _ in range(int(r.integers(1, 4)))]
+    for (k, xc, w, dep) in chips:                          # estaciones extra donde hay despostilladura
+        xs += [xc - w, xc, xc + w]
+    xs = sorted(xs)
+    out = _cast_piece(mb, prof, tags, xs, L, 0.009, chips=chips, end_chips=end_chips, recesses=recs, seed=seed)
+    # asas de izaje: varilla de 7/8" en U ahogada en el fondo de cada caja de la corona
+    for (c, nrm, ex, ey) in out:
+        if c.z < H - 0.01:
+            continue
+        zb = c.z - 0.05
+        path = [(c.x - 0.019, c.y, zb), (c.x - 0.019, c.y, H + 0.06), (c.x + 0.019, c.y, H + 0.06), (c.x + 0.019, c.y, zb)]
+        P = np.array(fillet(path, 0.018, 6))
+        _tubes_np(mb, [P], 0.0111, seg=16, mat="steel", soft=False, caps=True)
     return mb
 
 
 def jersey_barrier(L=3.0, seed=0):
     """Barrera tipo New Jersey de concreto precolado (temporal, de conexión pin-and-loop): 0,81 m (32") de alto, base 0,61 m
-    (24"), corona 0,15 m (6"): 76 mm verticales, talud de 55° hasta 0,33 m y cara de 84° hasta la corona (FHWA/DOT). Largo L a
-    lo largo de +X desde x = 0, centrada en y = 0. Dos ranuras de izaje pasantes en la base a 0,9 m de cada extremo (WisDOT:
-    "two lifting slots ... 3'-0" from each end"), chaflanes de 15 mm, lazos de varilla de 3/4" que salen de los extremos (dos
-    por extremo, alturas alternadas para encajar con la vecina) y pasador de 25 mm × 0,7 m con cabeza en el extremo +X."""
+    (24"), corona 0,15 m (6"): 76 mm verticales, talud de 55° hasta 0,33 m y cara de 84° hasta la corona (FHWA/DOT), quiebre
+    del talud redondeado (R 0,1 m). Largo L a lo largo de +X desde x = 0, centrada en y = 0. Dos ranuras de izaje / drenaje
+    pasantes en la base de 0,30 × 0,10 m a 0,9 m de cada extremo (WisDOT: "two lifting slots ... 3'-0" from each end"),
+    cantos redondeados de colado (R 10-20 mm), rebaba de junta de cimbra en el quiebre del talud, dos insertos de izaje en
+    la corona, despostilladuras chicas; lazos de varilla de 3/4" que salen de los extremos (dos por extremo, alturas
+    alternadas para encajar con la vecina) y pasador de 25 mm × 0,7 m con cabeza en el extremo +X."""
     r = rng(seed)
     mb = MB()
-    ch = 0.015
-    zs = 0.10                                              # alto de la ranura de izaje
-
-    def chain(slot=False):
-        R = [(0.305 - ch * 0.5, 0.0), (0.305, ch * 0.5), (0.305, 0.076), (0.127, 0.33), (0.075 + ch * 0.9, 0.81 - ch * 0.4),
-             (0.075 - ch * 0.4, 0.81)]
-        if slot:
-            yz = lambda z: 0.305 - (z - 0.076) / math.tan(math.radians(55))  # noqa: E731
-            R[0] = (yz(zs) - 0.0005, zs)
-            R[1] = (yz(zs + 0.004), zs + 0.004)
-            R[2] = (yz(zs + 0.008), zs + 0.008)
-        return R
-    xs = []
+    zb = 0.33                                              # quiebre del talud
+    yb = 0.305 - (zb - 0.076) / math.tan(math.radians(55))
+    right = [(0.305, 0.0, 0.01, None), (0.305, 0.076, 0.02, 0.08), (yb, zb - 0.0025, 0.0, None),
+             (yb + 0.0016, zb, 0.0, None), (yb - 0.0003, zb + 0.0025, 0.0, 0.08), (0.075, 0.81, 0.018, 0.03)]
+    # el quiebre del talud lleva radio grande: se redondea la esquina sin la rebaba (que queda como un hilo de 1,6 mm)
+    left = [(-y, z, rr, None) for (y, z, rr, sp) in reversed(right)]
+    sps = [sp for (_, _, _, sp) in right]
+    for k in range(len(left) - 1):
+        left[k] = (left[k][0], left[k][1], left[k][2], sps[len(right) - 2 - k])
+    corners = right + [(0.0, 0.81, 0.0, 0.03)] + left
+    prof, tags = _rpoly([(y, z) for (y, z, _, _) in corners], [c[2] for c in corners], [c[3] for c in corners], nseg=4)
+    j_top = int(np.argmin(np.abs(prof[:, 0]) + np.abs(prof[:, 1] - 0.81)))
+    xs_lift = (0.75, L - 0.75)
+    notch = []
     for xc in (0.9, L - 0.9):
-        xs += [(xc - 0.16, False), (xc - 0.15, True), (xc + 0.15, True), (xc + 0.16, False)]
-    stations = []
-    for (x, slot) in [(0.0, False), (ch, False)] + xs + [(L - ch, False), (L, False)]:
-        R = chain(slot)
-        Lf = [(-y, z) for (y, z) in chain(slot)]
-        if x in (0.0, L):
-            loop = R + list(reversed(Lf))
-            off = _offset_loop(loop, ch)
-            n = len(R)
-            R, Lf = off[:n], list(reversed(off[n:]))
-            R[0] = (R[0][0], 0.0)
-            Lf[0] = (Lf[0][0], 0.0)
-        stations.append((x, R, Lf))
-    # despostilladuras chicas en la corona de los extremos
-    for k in (1, -2):
-        x, R, Lf = stations[k]
-        if r.uniform() < 0.7:
-            R[-2] = (R[-2][0] - float(r.uniform(0.004, 0.009)), R[-2][1] - float(r.uniform(0.004, 0.01)))
-    _prof_extrude(mb, stations)
+        notch.append((xc - 0.15, xc + 0.15, 0.10))
+    xs = list(np.arange(0.05, L - 0.04, 0.12))
+    for (a_, b_, _) in notch:
+        xs = [x for x in xs if not (a_ - 0.03 < x < b_ + 0.03)]
+        xs += [a_ - 0.012, a_, a_ + 0.1, b_ - 0.1, b_, b_ + 0.012]
+    for xl in xs_lift:
+        xs = [x for x in xs if abs(x - xl) > 0.05]
+        xs += [xl - 0.09, xl, xl + 0.09]
+    ci = [k for k, c in enumerate(corners) if c[2] > 0.01]
+    chips = []
+    for _ in range(int(r.integers(1, 4))):
+        x_ = float(r.uniform(0.2, L - 0.2))
+        if min([abs(x_ - xl) for xl in xs_lift] + [abs(x_ - (a_ + b_) / 2) for (a_, b_, _) in notch]) < 0.25:
+            continue
+        chips.append((int(r.choice(ci)), x_, float(r.uniform(0.012, 0.03)), float(r.uniform(0.004, 0.009))))
+        xs += [x_ - 0.02, x_, x_ + 0.02]
+    end_chips = [(int(r.integers(2)), float(r.uniform(0.15, 0.7)), float(r.uniform(0.02, 0.04)), float(r.uniform(0.004, 0.009)),
+                  int(r.choice([-1, 1]))) for _ in range(int(r.integers(1, 3)))]
+    xs = sorted(xs)
+    recs = [(xl, j_top, 0.022, 0.03, 0.016) for xl in xs_lift]
+    out = _cast_piece(mb, prof, tags, xs, L, 0.008, chips=chips, end_chips=end_chips, notches=notch, recesses=recs, seed=seed)
+    # insertos de izaje: anillo de acero ahogado en el fondo de cada hueco de la corona
+    for (c, nrm, ex, ey) in out:
+        Mi = _T(c.x, c.y, c.z - 0.03)
+        lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.012), (0.0065, 0.012), (0.0065, 0.004), (0.0, 0.004)], seg=SEG,
+              mat="steel", M=Mi)
     # pin-and-loop: lazos de varilla en U que salen 9 cm de cada cara de extremo
     for (xe, sgn, zl) in ((0.0, -1, (0.22, 0.56)), (L, 1, (0.30, 0.64))):
         for z in zl:
             w = 0.05
             path = [(xe - sgn * 0.04, -w, z), (xe + sgn * 0.09, -w, z), (xe + sgn * 0.09, w, z), (xe - sgn * 0.04, w, z)]
-            tube_path(mb, path, 0.0095, seg=SEG_T, mat="steel", bend=0.035, nseg=3, caps=False)
-    # pasador (en el extremo +X, pasa por los lazos de este lado): barra de 25 mm con cabeza doblada
-    xp = L + 0.055
-    lathe(mb, [(0.0, 0.05), (0.0125, 0.05), (0.0125, 0.74), (0.02, 0.745), (0.02, 0.765), (0.0, 0.77)], seg=SEG, mat="steel",
-          M=_T(xp, 0.0, 0.0))
+            tube_path(mb, path, 0.0095, seg=16, mat="steel", bend=0.035, nseg=6, caps=True)
+    # pasador (en el extremo +X, pasa por los lazos de este lado): barra de 25 mm con cabeza recalcada y punta achaflanada
+    xp = L + 0.09 - 0.0095 - 0.0125 + 0.0002                # apoyado contra el fondo de los lazos, la punta en el piso
+    lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.0125, 0.004), (0.0125, 0.69), (0.021, 0.695), (0.022, 0.702), (0.022, 0.715),
+               (0.018, 0.72), (0.0, 0.721)], seg=SEG, mat="steel", M=_T(xp, 0.0, 0.0))
     return mb
 
 
 # ============================================================================================================ concertina
-# Alambre de navajas en espiral con grapas (concertina): diámetro 730 mm típico (24"-28"), navaja BTO-22 (largo 22 mm, ancho
-# 15 mm, paso 34-40 mm, fleje de 0,5 mm sobre alambre de alta resistencia de 2,5 mm), 3 a 5 grapas por vuelta que unen cada
-# espira con la vecina; ~56 espiras por rollo de 10-15 m estirado (rapidtech.co.ke 730 mm, firstfence.co.uk, citadel
-# razor-wire spec). FM 5-102: concertina triple estándar (dos rollos abajo + uno arriba, piquetes largos 1,65 m).
-CON_P = 0.036         # paso entre navajas a lo largo del fleje
+# Alambre de navajas en espiral con grapas (concertina), navaja BTO-22: fleje de acero de 0,5 mm engargolado sobre un alma de
+# alambre de alta resistencia de 2,5 mm; cada racimo de navajas mide 22 mm de largo × 15 mm de ancho (cuatro puntas, dos
+# pares encontrados) cada 34 mm (fichas de fabricante: globalsources BTO-22 0,5 / 2,5 / 22 / 15 / 34 mm; otras dan 16 mm de
+# ancho y 35 mm de paso). Rollo de 600-730 mm de diámetro, ~56 espiras estiradas a 10-15 m, 3 a 5 grapas por vuelta que
+# unen cada espira con la vecina (rapidtech.co.ke 730 mm, firstfence.co.uk). FM 5-102: concertina triple estándar.
+CON_P = 0.034         # paso entre racimos de navajas a lo largo del fleje
 CON_SP = 0.22         # separación entre espiras estiradas
 CON_CLIPS = 3.5       # grapas por vuelta (media: alternan con la espira anterior y la siguiente)
+CON_RS = 0.00175      # radio exterior del fleje engargolado (alma 2,5 mm + 2 × 0,5 mm de fleje)
+CON_RC = 0.00125      # radio del alma
+
+
+def _barb_cluster_proto():
+    """Racimo de navajas BTO-22 en coordenadas locales (t a lo largo del fleje, u a lo ancho, v espesor): cuatro puntas
+    triangulares de lámina de 0,5 mm (dos pares encontrados: una hacia atrás y otra hacia adelante de cada lado), con su
+    base metida en el engargolado. Devuelve (vértices K × 3, caras)."""
+    V, F = [], []
+    for su in (1.0, -1.0):
+        for sd in (-1.0, 1.0):
+            tri = [(sd * 0.0016, su * 0.0010), (sd * 0.0078, su * 0.0010), (sd * 0.011, su * 0.0075)]
+            o = len(V)
+            for v in (-0.00025, 0.00025):
+                for (t, u) in tri:
+                    V.append((t, u, v))
+            F += [[o, o + 1, o + 2], [o + 5, o + 4, o + 3]]
+            for k in range(3):
+                kk = (k + 1) % 3
+                F.append([o + k, o + 3 + k, o + 3 + kk, o + kk])
+    return np.array(V), F
+
+
+def _clip_band(a, b, tang, w=0.012, t=0.0006):
+    """Grapa: fleje de acero de 12 mm × 0,6 mm cerrado en estadio alrededor de dos fajas que se cruzan (centros a y b).
+    Devuelve (V, F) de un sólido cerrado (cara exterior, interior y dos cantos)."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    ax = np.asarray(tang, float)
+    e1 = b - a
+    e1 = e1 - ax * e1.dot(ax)
+    gap = np.linalg.norm(e1)
+    e1 = e1 / max(gap, 1e-9) if gap > 1e-6 else np.cross(ax, [0.0, 0.0, 1.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(ax, e1)
+    mid = (a + b) / 2
+    hl = max(gap / 2, 0.0005)
+    ang = np.concatenate([np.linspace(-PI / 2, PI / 2, 8), np.linspace(PI / 2, 1.5 * PI, 8)])
+    sgn = np.concatenate([np.ones(8), -np.ones(8)])
+    rings = []
+    for R_ in (CON_RS + 0.0002 + t, CON_RS + 0.0002):
+        for x in (-w / 2, w / 2):
+            pinch = 1.0
+            P = (mid[None, :] + ax[None, :] * x + e1[None, :] * (sgn * hl + R_ * np.cos(ang))[:, None]
+                 + e2[None, :] * (R_ * np.sin(ang) * pinch)[:, None])
+            rings.append(P)
+    V = np.concatenate(rings, 0)
+    n = 16
+    F = []
+    for (A_, B_) in ((0, 1), (3, 2), (2, 0), (1, 3)):      # exterior, interior, canto -x, canto +x
+        for j in range(n):
+            jj = (j + 1) % n
+            F.append([A_ * n + j, A_ * n + jj, B_ * n + jj, B_ * n + j])
+    return V, F
 
 
 def _coil(mb, L, d, seed, ctr=(0.0, None), squash=0.94, ground=True, clip_out=None):
-    """Una espira continua de fleje de navajas a lo largo de +X (0..L), eje en (y, z) = ctr. Devuelve los puntos de grapa."""
+    """Una espira continua de navaja BTO-22 a lo largo de +X (0..L), eje en (y, z) = ctr: fleje engargolado (tubo de 3,5 mm,
+    12 lados, sombreado continuo) que se tuerce a lo largo del rollo, racimos de 4 navajas de lámina de 0,5 mm cada 34 mm,
+    alma de 2,5 mm que asoma en las puntas, y grapas de fleje cerrado en estadio donde cada espira toca a la vecina (patrón
+    de rombos de la concertina). Devuelve los puntos del eje de la espira."""
     r = rng(seed)
     R = d / 2 - 0.008
     yc, zc = ctr[0], ((R * squash - 0.02) if ctr[1] is None else ctr[1])
@@ -1047,7 +1450,6 @@ def _coil(mb, L, d, seed, ctr=(0.0, None), squash=0.94, ground=True, clip_out=No
     A = 0.47 * p
     ns = 72
     th = np.linspace(0.0, 2 * PI * nt, ns * nt + 1)
-    # forma de cada espira: círculo apenas aplastado (gravedad), radio con ruido de baja frecuencia (fleje que no es perfecto)
     rr = R * (1 + 0.025 * np.array([noise.noise(Vector((t * 0.35, ph, 0.0))) for t in th]))
     x = p * th / (2 * PI) + A * np.cos(CON_CLIPS * th) + p * 0.25 + 0.006 * np.array([noise.noise(Vector((t * 0.8, ph, 2.0))) for t in th])
     y = yc + rr * np.cos(th) * (2 - squash)
@@ -1059,63 +1461,73 @@ def _coil(mb, L, d, seed, ctr=(0.0, None), squash=0.94, ground=True, clip_out=No
     seg = np.linalg.norm(np.diff(P, axis=0), axis=1)
     acc = np.concatenate([[0.0], np.cumsum(seg)])
     tot = acc[-1]
-    # estaciones del fleje: angosta en cada paso, punta de navaja desfasada 0,32 / 0,68 (dientes encontrados)
-    st = []
-    k = 0
-    s = 0.004
-    while s < tot - 0.004:
-        st.append((s, 0))
-        t_ = s + CON_P * (0.32 if k % 2 == 0 else 0.68)
-        if t_ < tot - 0.004:
-            st.append((t_, 1))
-        s += CON_P
-        k += 1
-    S = np.array([a for a, _ in st])
-    Px = np.interp(S, acc, P[:, 0])
-    Py = np.interp(S, acc, P[:, 1])
-    Pz = np.interp(S, acc, P[:, 2])
-    Q = np.stack([Px, Py, Pz], 1)
-    T = np.gradient(Q, axis=0)
-    T /= np.linalg.norm(T, axis=1, keepdims=True)
-    rings = []
-    for i, (sv, tip) in enumerate(st):
-        t = Vector(T[i])
-        c = Vector(Q[i])
-        rad = Vector((0.0, c.y - yc, c.z - zc))
-        rad = (rad - t * rad.dot(t))
-        rad = rad.normalized() if rad.length > 1e-6 else Vector((0, 0, 1))
-        bn = t.cross(rad)
-        tw = 2 * PI * sv / 1.1 + 0.9 * noise.noise(Vector((sv * 0.7, ph, 5.0)))
-        U = rad * math.cos(tw) + bn * math.sin(tw)          # el fleje se tuerce a lo largo del rollo
-        Vn = t.cross(U)
-        w = 0.0076 if tip else 0.0019
-        tk = 0.0006 if tip else 0.0013
-        rings.append([c + U * w, c + Vn * tk, c - U * w, c - Vn * tk])
-    V = [[mb.bm.verts.new(q) for q in ring] for ring in rings]
-    for i in range(len(V) - 1):
-        for j in range(4):
-            jj = (j + 1) % 4
-            mb.face([V[i][j], V[i][jj], V[i + 1][jj], V[i + 1][j]], "galvanized")
-    mb.face(list(reversed(V[0])), "galvanized")
-    mb.face(V[-1], "galvanized")
-    # grapas: fleje de acero de 12 mm doblado sobre las dos espiras donde se tocan
+
+    def frame(S):
+        Q = np.stack([np.interp(S, acc, P[:, k]) for k in range(3)], 1)
+        Th = np.interp(S, acc, th)
+        dP = np.stack([np.interp(S + 0.002, acc, P[:, k]) - np.interp(S - 0.002, acc, P[:, k]) for k in range(3)], 1)
+        T = dP / np.linalg.norm(dP, axis=1, keepdims=True)
+        rad = np.stack([np.zeros(len(S)), Q[:, 1] - yc, Q[:, 2] - zc], 1)
+        rad = rad - T * (rad * T).sum(1, keepdims=True)
+        rad /= np.maximum(np.linalg.norm(rad, axis=1, keepdims=True), 1e-9)
+        bn = np.cross(T, rad)
+        tw = 2 * PI * S / 1.1 + 0.9 * np.array([noise.noise(Vector((float(s_) * 0.7, ph, 5.0))) for s_ in S])
+        U = rad * np.cos(tw)[:, None] + bn * np.sin(tw)[:, None]   # ancho del fleje: se tuerce a lo largo del rollo
+        Vn = np.cross(T, U)
+        return Q, T, U, Vn, Th
+    # ---- fleje engargolado: tubo de 12 lados con anillos cada ~25 mm (4,7° de curva a 0,3 m de radio)
+    S = np.arange(0.006, tot - 0.006, CON_P * 0.72)
+    Q, T, U, Vn, _ = frame(S)
+    an = 2 * PI * np.arange(12) / 12
+    ring = Q[:, None, :] + CON_RS * (np.cos(an)[None, :, None] * U[:, None, :] + np.sin(an)[None, :, None] * Vn[:, None, :])
+    K = len(S)
+    F = _grid_quads(K, 12, closed=True).tolist()
+    F.append(list(range(11, -1, -1)))
+    F.append(list(range((K - 1) * 12, K * 12)))
+    _np_faces(mb, ring.reshape(-1, 3), F, "galvanized", soft=True)
+    # ---- alma de 2,5 mm: asoma 12 mm en cada punta del rollo (corte de cizalla)
+    paths = []
+    for (s0, s1) in ((0.006, -0.006), (tot - 0.006, tot + 0.006)):
+        e = Q[0] if s1 < s0 else Q[-1]
+        tt = T[0] if s1 < s0 else T[-1]
+        sg = -1.0 if s1 < s0 else 1.0
+        paths.append(np.array([e - sg * tt * 0.004, e + sg * tt * 0.006, e + sg * tt * 0.012]))
+    _tubes_np(mb, paths, CON_RC, seg=12, soft=True)
+    # ---- racimos de navajas (lámina de 0,5 mm, cantos vivos)
+    Sc = np.arange(0.006 + CON_P / 2, tot - 0.02, CON_P)
+    Qc, Tc, Uc, Vc, _ = frame(Sc)
+    pv, pf = _barb_cluster_proto()
+    nv = len(pv)
+    jit = r.normal(0.0, 0.06, len(Sc))                     # navajas apenas fuera del plano (dobladas al manejar el rollo)
+    Vall, Fall = [], []
+    for k in range(len(Sc)):
+        u_ = Uc[k] * math.cos(jit[k]) + Vc[k] * math.sin(jit[k])
+        v_ = np.cross(Tc[k], u_)
+        Vall.append(Qc[k] + np.outer(pv[:, 0], Tc[k]) + np.outer(pv[:, 1], u_) + np.outer(pv[:, 2], v_))
+        Fall.extend((np.array(f) + k * nv).tolist() for f in pf)
+    if Vall:
+        _np_faces(mb, np.concatenate(Vall, 0), Fall, "galvanized", soft=False)
+    # ---- grapas donde cada espira toca a la siguiente
     m = 0
     clips = []
+    Vg, Fg = [], []
     while True:
         t0 = 2 * PI * m / CON_CLIPS
         if t0 + 2 * PI > th[-1] - 1e-6:
             break
         pa = np.array([np.interp(t0, th, P[:, j]) for j in range(3)])
         pb = np.array([np.interp(t0 + 2 * PI, th, P[:, j]) for j in range(3)])
-        a_, b_ = Vector(pa), Vector(pb)
-        if b_.x < a_.x:
-            a_, b_ = b_, a_
-        radial = Vector((0.0, a_.y - yc, a_.z - zc)).normalized()
-        Mc = _frame(a_, b_, radial)
-        gap = (b_ - a_).length
-        mb.box((-0.004, -0.006, -0.0022), (gap + 0.004, 0.006, 0.0022), "steel", bevel=0.0, m=Mc)
-        clips.append(a_.lerp(b_, 0.5))
+        ta = np.array([np.interp(t0 + 0.01, th, P[:, j]) - np.interp(t0 - 0.01, th, P[:, j]) for j in range(3)])
+        tb = np.array([np.interp(t0 + 2 * PI + 0.01, th, P[:, j]) - np.interp(t0 + 2 * PI - 0.01, th, P[:, j]) for j in range(3)])
+        tg = ta / np.linalg.norm(ta) + tb / np.linalg.norm(tb)
+        tg /= max(np.linalg.norm(tg), 1e-9)
+        Vb, Fb = _clip_band(pa, pb, tg)
+        Fg.extend((np.array(f) + sum(len(v) for v in Vg)).tolist() for f in Fb)
+        Vg.append(Vb)
+        clips.append(Vector(((pa + pb) / 2).tolist()))
         m += 1
+    if Vg:
+        _np_faces(mb, np.concatenate(Vg, 0), Fg, "steel", soft=False)
     if clip_out is not None:
         clip_out.extend(clips)
     return P
@@ -1133,31 +1545,46 @@ def _frame(p0, p1, up):
 
 
 def concertina(L=10.0, d=0.75, seed=0):
-    """Rollo de concertina de navajas estirado en el piso a lo largo de +X (0..L), eje en y = 0, base en z = 0. Fleje de
-    navajas BTO-22 de geometría real (sección en rombo con el alma de 2,5 mm al centro, dientes de 7,6 mm que se encuentran
-    por pares cada 36 mm, fleje que se tuerce), espiras de diámetro d separadas 0,22 m con 3,5 grapas por vuelta que alternan
-    con la espira anterior y la siguiente (el patrón de rombos cruzados de la concertina), espiras de abajo aplanadas en el
-    piso. ~5,5 k tris por metro."""
+    """Rollo de concertina de navajas BTO-22 estirado en el piso a lo largo de +X (0..L), eje en y = 0, base en z = 0: fleje
+    engargolado de 3,5 mm sobre alma de 2,5 mm, racimos de cuatro navajas de lámina (22 × 15 mm, cada 34 mm) en pares
+    encontrados, fleje que se tuerce, espiras de diámetro d separadas 0,22 m con 3,5 grapas por vuelta que alternan con la
+    espira anterior y la siguiente (el patrón de rombos de la concertina), espiras de abajo aplanadas en el piso.
+    ~20 k tris por metro."""
     mb = MB()
     _coil(mb, L, d, seed)
     return mb
 
 
 def _u_picket(mb, x, y, h, rot=0.0, mat="paint_od"):
-    """Piquete en U de acero (perfil de 75 × 35 × 3 mm, con alas dobladas) hincado; asoma h m. Ojos en la cara para amarres."""
+    """Piquete en U de acero (perfil de 75 × 35 × 3 mm con alas dobladas y radios de doblez reales) hincado; asoma h m."""
     t = 0.003
     prof = [(-0.0375, 0.0), (-0.0375, 0.012), (-0.03, 0.035), (0.03, 0.035), (0.0375, 0.012), (0.0375, 0.0),
             (0.0375 - t, 0.0), (0.0375 - t, 0.011), (0.03 - t * 0.6, 0.035 - t), (-0.03 + t * 0.6, 0.035 - t),
             (-0.0375 + t, 0.011), (-0.0375 + t, 0.0)]
+    radii = [0.0006, 0.0045, 0.0045, 0.0045, 0.0045, 0.0006, 0.0006, 0.0015, 0.0015, 0.0015, 0.0015, 0.0006]
+    pp, _ = _rpoly(prof, radii, [None] * len(prof), nseg=3)
     M = _T(x, y, 0.0) @ _Rz(rot)
-    rings = [[M @ Vector((px, py - 0.017, z)) for (px, py) in prof] for z in (-0.15, h)]
+    rings = [[M @ Vector((float(px), float(py) - 0.017, z)) for (px, py) in pp] for z in (-0.15, h - 0.004, h)]
+    rings[-1] = [M @ Vector((float(px) * 0.985, float(py) * 0.985 - 0.017 + 0.0003, h)) for (px, py) in pp]
     loft_rings(mb, rings, mat)
+
+
+def _tie_wire(mb, c, axis, rad, turns=2.0, r=0.0008, n=16):
+    """Amarre de alambre recocido (1,6 mm, 12 lados, sombreado continuo): hélice de `turns` vueltas alrededor de `axis`."""
+    c, axis = np.asarray(c, float), np.asarray(axis, float)
+    axis /= np.linalg.norm(axis)
+    e1 = np.cross(axis, [0.0, 0.0, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0.0, 0.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(axis, e1)
+    a = np.linspace(0.0, 2 * PI * turns, int(n * turns) + 1)
+    P = c + np.outer(np.cos(a) * rad, e1) + np.outer(np.sin(a) * rad, e2) + np.outer((a / (2 * PI) - turns / 2) * 0.0024, axis)
+    _tubes_np(mb, [P], r, seg=12, mat="steel", soft=True)
 
 
 def concertina_triple(L=10.0, d=0.75, seed=0):
     """Concertina triple estándar (FM 5-102): dos rollos lado a lado en el piso y un tercero encima en la junta, a lo largo de
     +X (0..L), centrada en y = 0; piquetes de U de acero de 1,65 m metidos en los rollos de abajo cada ~4,5 m (y a 0,3 m de
-    cada extremo), y amarres de alambre que sujetan los rollos a los piquetes."""
+    cada extremo), y amarres de alambre recocido que sujetan los rollos a los piquetes."""
     r = rng(seed)
     mb = MB()
     R = d / 2
@@ -1172,20 +1599,16 @@ def concertina_triple(L=10.0, d=0.75, seed=0):
             x = 0.3 + (L - 0.6) * i / (npk - 1) + float(r.uniform(-0.1, 0.1))
             y = side * yb * 0.55 + float(r.uniform(-0.03, 0.03))
             _u_picket(mb, x, y, 1.65, rot=float(r.uniform(-8, 8)) + (0 if side < 0 else 180))
-            for z in (0.4, 1.5):                           # amarres: dos vueltas de alambre suave alrededor del piquete
-                for k in range(2):
-                    pts = [(x + 0.045 * math.cos(a) * 1.0, y + 0.03 * math.sin(a), z + 0.006 * k + 0.002 * a)
-                           for a in np.linspace(0, 2 * PI, 13)[:-1]]
-                    pts.append(pts[0])
-                    mb.tube([(p[0], p[1], p[2]) for p in pts], 0.0012, seg=SEG_T, mat="steel", caps=True)
+            for z in (0.4, 1.5):                           # amarres: dos vueltas de alambre alrededor del piquete
+                _tie_wire(mb, (x, y - side * 0.017, z), (0.0, 0.0, 1.0), 0.045, turns=2.0, n=40)
     return mb
 
 
 def concertina_fence_top(L=10.0, d=0.6, seed=0, with_fence=False):
     """Un rollo de concertina montado sobre una malla ciclónica de 2,4 m (kit.telecom.fence_run, brazos a 45° hacia -Y):
     coordenadas del tramo de cerca (x a lo largo, y = 0 eje de los postes, z = piso). El rollo descansa sobre los 3 hilos de
-    púas de los brazos, centrado sobre el hilo medio, y se amarra a los hilos con grapas cada ~0,45 m.
-    with_fence=True agrega el tramo de cerca 'lite' (solo para revisar)."""
+    púas de los brazos, centrado sobre el hilo medio, y se amarra a los hilos cada ~0,45 m con dos vueltas de alambre
+    recocido que abrazan el hilo y el fleje. with_fence=True agrega el tramo de cerca 'lite' (solo para revisar)."""
     from kit import telecom as tel
     mb = MB()
     z_b, n, z_top, zr, zp, zt = tel.fence_levels(2.4)
@@ -1196,15 +1619,25 @@ def concertina_fence_top(L=10.0, d=0.6, seed=0, with_fence=False):
     strands = [base + dv * s + up * 0.0048 for s in (0.115, 0.22, 0.325)]
     R = d / 2
     c = strands[1] + up * (R + 0.004)
-    _coil(mb, L, d, seed, ctr=(c.y, c.z), ground=False, squash=0.97)
-    # grapas de amarre del rollo a los hilos de púas
-    x = 0.25
-    k = 0
-    while x < L - 0.2:
-        p = strands[k % 3]
-        mb.box((-0.006, -0.002, -0.0035), (0.006, 0.002, 0.012), "steel", bevel=0.0, m=_T(x, p.y, p.z) @ _Rx(-45))
-        x += 0.45
-        k += 1
+    P = _coil(mb, L, d, seed, ctr=(c.y, c.z), ground=False, squash=0.97)
+    # amarres: en cada hilo, donde la espira pasa más cerca, dos vueltas que abrazan hilo + fleje
+    for k, sp in enumerate(strands):
+        x = 0.25 + 0.15 * k
+        while x < L - 0.2:
+            sel = np.abs(P[:, 0] - x) < 0.12
+            if sel.any():
+                Pc = P[sel]
+                dd = np.hypot(Pc[:, 1] - sp.y, Pc[:, 2] - sp.z)
+                iq = int(np.flatnonzero(sel)[int(np.argmin(dd))])
+                q = P[iq]
+                mid = (np.array((q[0], sp.y, sp.z)) + q) / 2
+                gap = float(np.min(dd))
+                if gap < 0.014 and 0 < iq < len(P) - 1:
+                    tq = P[iq + 1] - P[iq - 1]
+                    tq /= np.linalg.norm(tq)
+                    ax = np.array((1.0, 0.0, 0.0)) + tq * (1.0 if tq[0] >= 0 else -1.0)
+                    _tie_wire(mb, mid, ax, gap / 2 + 0.0042, turns=2.0, n=28)
+            x += 0.45 * 2
     if with_fence:
         mb.join(tel.fence_run(L=L, fabric="lite"))
     return mb
@@ -1586,6 +2019,47 @@ def floodlight_tripod(seed=0):
 
 
 # ========================================================================================================== torre de guardia
+def _plate_bev(mb, outline, t, M, mat="galvanized", b=0.0015, rc=0.004):
+    """Placa de acero de espesor t con contorno 2D `outline` (antihorario, plano XY local, z de 0 a t): esquinas de planta
+    redondeadas (rc) y cantos rotos (b) arriba y abajo: nada de arista perfecta."""
+    pp, _ = _rpoly(outline, [rc] * len(outline), [None] * len(outline), nseg=3)
+    N2 = _loop_normals2(pp)
+    loops = []
+    for (inset, z) in ((b, 0.0), (0.0, b), (0.0, t - b), (b, t)):
+        Q = pp - N2 * inset
+        loops.append([(float(q[0]), float(q[1]), z) for q in Q])
+    skin(mb, loops, mat, M, cap0=True, cap1=True)
+
+
+def _weld(mb, pts, r=0.0035, mat="galvanized", closed=False):
+    """Cordón de soldadura de filete: tubo de 12 lados con ondas de avance (rizos cada ~4 mm) siguiendo la junta."""
+    P = np.asarray(pts, float)
+    if closed:
+        P = np.concatenate([P, P[:1]], 0)
+    acc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))])
+    n = max(3, int(acc[-1] / 0.006))
+    s = np.linspace(0, acc[-1], n + 1)
+    Q = np.stack([np.interp(s, acc, P[:, k]) for k in range(3)], 1)
+    rad = r * (1 + 0.12 * np.abs(np.sin(PI * s / 0.006)))
+    R = _tube_rings(Q, rad, seg=12)
+    K = len(Q)
+    F = _grid_quads(K, 12, closed=True).tolist()
+    F.append(list(range(11, -1, -1)))
+    F.append(list(range((K - 1) * 12, K * 12)))
+    _np_faces(mb, R.reshape(-1, 3), F, mat, soft=True)
+
+
+def _bolt(mb, M, d=0.016, stub=0.012, mat="galvanized"):
+    """Tornillo visto del lado de la tuerca: rondana plana, tuerca hexagonal con chaflán y punta de la rosca con chaflán.
+    M: origen en la cara de apoyo, +Z hacia afuera."""
+    lathe(mb, [(d * 0.55, 0.0), (d * 1.05, 0.0), (d * 1.08, 0.0012), (d * 1.05, d * 0.18), (d * 0.55, d * 0.18)], seg=24, mat=mat,
+          M=M, caps=True)
+    hexnut(mb, M @ _T(0, 0, d * 0.18), s=d * 1.5, h=d * 0.85, mat=mat)
+    z0 = d * 0.18 + d * 0.85
+    lathe(mb, [(0.0, z0 - 0.002), (d * 0.48, z0 - 0.002), (d * 0.48, z0 + stub * 0.7), (d * 0.38, z0 + stub), (0.0, z0 + stub)],
+          seg=16, mat=mat, M=M)
+
+
 def _ring_courses(half, rows, opening=None, pitch=0.5):
     """Hiladas de sacos en un cuadro (eje del muro a `half` del centro): las esquinas se traslapan alternando qué lados pasan
     de largo en cada hilada; opening = (lado, medio_ancho) deja un hueco (lado: 'b' = +Y)."""
@@ -1617,19 +2091,22 @@ def _ring_courses(half, rows, opening=None, pitch=0.5):
                     x = c[0] + d[0] * um
                     y = c[1] + d[1] * um
                     ang = 0.0 if d[0] else 90.0
-                    row.append((x, y, ang + (180.0 if (i + k) % 2 else 0.0), (b_ - a_) / 0.515, 1.0))
+                    row.append((x, y, ang + (180.0 if (i + k) % 2 else 0.0), (b_ - a_) / 0.515 * 0.985, 1.0))
         courses.append(row)
     return courses
 
 
 def guard_tower(seed=0):
-    """Torre de vigilancia de acero de 4 patas: plataforma a 5,0 m, patas de PTR 100 × 100 con talud (2,6 m entre ejes abajo,
-    2,2 m arriba) sobre dados de concreto con placa base, cartabones y 4 anclas; travesaños de ángulo 75 × 6 y contravientos
-    en X de solera 60 × 8 con placas de conexión atornilladas; piso de rejilla electrosoldada (soleras 30 × 3 a 33 mm) sobre
-    marco de PTR; barandal de tubo de 48 mm con rodapié; muro de sacos terreros de 6 hiladas sobre el piso (hueco de acceso
-    al fondo); techo a un agua de lámina acanalada sobre postes de 60 × 60, largueros y tornillos con arandela; escalera
-    marina en el fondo (+Y) con jaula de seguridad (aros a partir de 2,4 m, OSHA 1910.28/ANSI A14.3: peldaños a 0,30 m, ancho
-    libre 0,42 m). Origen: centro del pie de la torre; frente (lado vigilado) hacia -Y."""
+    """Torre de vigilancia de acero galvanizado de 4 patas: plataforma a 5,0 m, patas de PTR 100 × 100 × 6 con talud (2,6 m
+    entre ejes abajo, 2,2 m arriba) sobre dados de concreto con placa base de 320 × 320 × 20 (cantos rotos), cartabones de
+    10 mm soldados (cordones de filete con rizos), 4 anclas de 3/4" con rondana y tuerca; travesaños de ángulo 75 × 6 y
+    contravientos en X de solera 60 × 8 con placas de conexión y tornillos de 5/8" (rondana, tuerca, punta de rosca); piso de
+    rejilla electrosoldada (soleras 30 × 3 a 33 mm, varilla transversal Ø 6 a 100 mm, marco de solera) sobre marco de PTR;
+    barandal de tubo de 48 mm continuo con curvas de radio real (R 120 mm) en las esquinas, pasamanos a 1,07 m, intermedio a
+    0,55 m y rodapié de 100 mm (OSHA 1910.29); muro de sacos terreros de 6 hiladas sobre el piso (hueco de acceso al fondo);
+    techo a un agua de lámina acanalada sobre postes de 60 × 60 con placa base atornillada, largueros y pijas con rondana de
+    neopreno; escalera marina en el fondo (+Y) con jaula (aros a partir de 2,4 m; OSHA 1910.28/ANSI A14.3: peldaños a 0,30 m,
+    ancho libre 0,42 m). Origen: centro del pie de la torre; frente (lado vigilado) hacia -Y."""
     r = rng(seed)
     mb = MB()
     zd = 5.0
@@ -1640,23 +2117,42 @@ def guard_tower(seed=0):
     def half(z):
         return b0 + (b1 - b0) * (z - zb) / (zf - zb)
     st = "galvanized"
-    # ---- dados, placas base, anclas, cartabones y patas
+    tl = math.atan2(b0 - b1, zf - zb)                     # talud de las patas
+    # ---- dados, placas base, anclas, cartabones, soldaduras y patas
     for sx in (-1, 1):
         for sy in (-1, 1):
             x0, y0 = sx * b0, sy * b0
-            slab(mb, _T(x0, y0, -0.08), 0.6, 0.6, 0.33, rc=0.03, re=0.02, mat="concrete", nc=3, ne=2)
-            mb.box((x0 - 0.16, y0 - 0.16, 0.25), (x0 + 0.16, y0 + 0.16, zb), st, bevel=0.003, seg=1)
+            slab(mb, _T(x0, y0, -0.08), 0.6, 0.6, 0.33, rc=0.03, re=0.02, mat="concrete", nc=4, ne=3)
+            _plate_bev(mb, [(-0.16, -0.16), (0.16, -0.16), (0.16, 0.16), (-0.16, 0.16)], 0.02, _T(x0, y0, 0.25), st, b=0.002, rc=0.012)
             for ax in (-1, 1):
                 for ay in (-1, 1):
                     Ma = _T(x0 + ax * 0.115, y0 + ay * 0.115, zb)
-                    hexnut(mb, Ma, s=0.032, h=0.02, mat=st)
-                    lathe(mb, [(0.0, 0.0), (0.0095, 0.0), (0.0095, 0.045), (0.007, 0.05), (0.0, 0.05)], seg=SEG_T, mat=st, M=Ma)
+                    _bolt(mb, Ma, d=0.019, stub=0.022)
             top = Vector((sx * b1, sy * b1, zf))
             bot = Vector((x0, y0, zb))
-            rtube(mb, bot, top, 0.1, 0.1, st, up=(1, 0, 0), r=0.006)
-            for (gx, gy) in ((1, 0), (0, 1)):              # cartabones
-                Mg = _T(x0, y0, zb) @ (_Rx(90) if gx else _Rz(90) @ _Rx(90))
-                mb.plate([(-0.15, 0.0), (0.15, 0.0), (0.05, 0.16), (-0.05, 0.16)], 0.01, st, m=Mg @ _T(0, 0, -0.005))
+            rtube(mb, bot, top, 0.1, 0.1, st, up=(1, 0, 0), r=0.008)
+            # cordón perimetral de la pata sobre la placa base
+            loop = [(x0 + 0.054 * math.cos(a), y0 + 0.054 * math.sin(a), zb + 0.003) for a in np.linspace(0, 2 * PI, 33)[:-1]]
+            loop = [(x0 + max(-0.054, min(0.054, (p[0] - x0) * 1.42)), y0 + max(-0.054, min(0.054, (p[1] - y0) * 1.42)), p[2])
+                    for p in loop]
+            _weld(mb, loop, r=0.0035, closed=True)
+            for (gx, gy) in ((1, 0), (0, 1)):              # cartabones de 10 mm a cada cara, soldados a pata y placa
+                for sg in (-1, 1):
+                    if gx:
+                        M = _T(x0 + sg * 0.05, y0, zb) @ _Rz(0 if sg > 0 else 180) @ _Rx(90)
+                        outward = sg * sx > 0
+                    else:
+                        M = _T(x0, y0 + sg * 0.05, zb) @ _Rz(90 if sg > 0 else -90) @ _Rx(90)
+                        outward = sg * sy > 0
+                    sh = 0.0437 * 0.17 * (1 if outward else -1)   # la cara de la pata se inclina con el talud
+                    _plate_bev(mb, [(-0.004, 0.0), (0.1, 0.0), (0.1, 0.02), (-sh, 0.17), (-sh - 0.004, 0.17)], 0.01,
+                               M @ _T(0, 0, -0.005), st, b=0.0012, rc=0.003)
+                    for side in (-1, 1):                   # cordones de filete a pie y a la pata
+                        q0 = M @ Vector((0.0, 0.002, side * 0.0075))
+                        q1 = M @ Vector((0.095, 0.002, side * 0.0075))
+                        q2 = M @ Vector((-sh, 0.16, side * 0.0075))
+                        _weld(mb, [q0, q1], r=0.003)
+                        _weld(mb, [q0, q2], r=0.003)
     # ---- travesaños (ángulo 75 × 6) y contravientos en X (solera 60 × 8) por cara y entrepiso
     levels = [zb + 0.1, 1.75, 3.3, zf - 0.08]
     faces = [((-1, -1), (1, -1)), ((1, -1), (1, 1)), ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))]
@@ -1671,6 +2167,8 @@ def guard_tower(seed=0):
             T_ = (p1 - p0).normalized()
             B = T_.cross(Vector((0, 0, 1)))
             angle_l(mb, p0, p1, 0.075, 0.006, up=(0, 0, 1), s=1 if B.dot(-out) > 0 else -1, mat=st)
+            for pp in (p0, p1):                            # soldadura del ángulo a la pata
+                _weld(mb, [pp - Vector((0, 0, 0.0)) + d * 0.0, pp + Vector((0, 0, 0.074))], r=0.003)
         for li in range(len(levels) - 1):
             z0, z1 = levels[li], levels[li + 1]
             h0, h1 = half(z0), half(z1)
@@ -1684,55 +2182,76 @@ def guard_tower(seed=0):
                 o = out0 * (0.066 + 0.009 * k)
                 Mf = _frame(pa + o, pb + o, out0)
                 ln = (pb - pa).length
-                mb.box((0.0, -0.03, -0.004), (ln, 0.03, 0.004), st, bevel=0.0015, seg=1, m=Mf)
-                for (pp, ll) in ((pa + o, 0.03), (pb + o, ln - 0.03)):
-                    Mg = Mf @ _T(ll, 0, 0.004)
-                    mb.box((-0.07, -0.06, -0.012), (0.07, 0.06, -0.004), st, bevel=0.002, seg=1, m=Mf @ _T(ll, 0, 0))
-                    hexnut(mb, Mg, s=0.024, h=0.014, mat=st)
+                rbox(mb, (0.0, -0.03, -0.004), (ln, 0.03, 0.004), st, r=0.0015, m=Mf)
+                tp = 0.066 + 0.009 * k - 0.05 - 0.004          # placa de conexión: del paño de la pata a la solera
+                for ll in (0.03, ln - 0.03):
+                    _plate_bev(mb, [(-0.07, -0.06), (0.07, -0.06), (0.07, 0.06), (-0.07, 0.06)], tp,
+                               Mf @ _T(ll, 0, -0.004 - tp), st, b=0.0012, rc=0.008)
+                    _bolt(mb, Mf @ _T(ll, 0, 0.004), d=0.016, stub=0.008)
             # perno de cruce de las diagonales
             zc = (z0 + z1) / 2
             hc = half(zc)
             pc = Vector(((a_[0] + b_[0]) / 2 * hc, (a_[1] + b_[1]) / 2 * hc, zc)) + out0 * 0.083
-            hexnut(mb, face_M(pc, out0), s=0.024, h=0.014, mat=st)
-    # ---- marco del piso, rejilla, rodapié y barandal
+            _bolt(mb, face_M(pc, out0), d=0.016, stub=0.008)
+    # ---- marco del piso, rejilla electrosoldada, rodapié y barandal
     H2 = 1.32
     for (p0, p1) in (((-H2, -H2), (H2, -H2)), ((-H2, H2), (H2, H2)), ((-H2, -H2), (-H2, H2)), ((H2, -H2), (H2, H2)),
                      ((-H2, -0.45), (H2, -0.45)), ((-H2, 0.45), (H2, 0.45))):
-        rtube(mb, (p0[0], p0[1], zd - 0.105), (p1[0], p1[1], zd - 0.105), 0.075, 0.15, st, up=(0, 0, 1), r=0.005)
-    ny = int((2 * H2 - 0.08) / 0.033)
-    for k in range(ny + 1):
-        y = -H2 + 0.04 + k * 0.033
-        mb.box((-H2 + 0.04, y - 0.0015, zd - 0.03), (H2 - 0.04, y + 0.0015, zd), st, bevel=0.0)
-    for k in range(int((2 * H2 - 0.08) / 0.1) + 1):
-        x = -H2 + 0.04 + k * 0.1
-        mb.box((x - 0.003, -H2 + 0.04, zd - 0.006), (x + 0.003, H2 - 0.04, zd - 0.0005), st, bevel=0.0)
+        rtube(mb, (p0[0], p0[1], zd - 0.105), (p1[0], p1[1], zd - 0.105), 0.075, 0.15, st, up=(0, 0, 1), r=0.006)
+    gx0, gx1 = -H2 + 0.035, H2 - 0.035
+    ny = int((gx1 - gx0 - 0.01) / 0.033)
+    for k in range(ny + 1):                                # soleras portantes de 30 × 3
+        y = gx0 + 0.006 + k * (gx1 - gx0 - 0.012) / ny
+        mb.box((gx0 + 0.004, y - 0.0015, zd - 0.03), (gx1 - 0.004, y + 0.0015, zd), st, bevel=0.0005, seg=1)
+    rods = []
+    for k in range(int((gx1 - gx0) / 0.1) + 1):            # varilla transversal Ø 6 hundida a ras en las soleras
+        x = gx0 + 0.03 + k * 0.1
+        if x > gx1 - 0.02:
+            break
+        rods.append(np.array([(x, gx0 + 0.004, zd - 0.0032), (x, gx1 - 0.004, zd - 0.0032)]))
+    _tubes_np(mb, rods, 0.003, seg=12, mat=st, soft=True)
+    for (p0, p1) in (((gx0, gx0), (gx1, gx0)), ((gx1, gx0), (gx1, gx1)), ((gx1, gx1), (gx0, gx1)), ((gx0, gx1), (gx0, gx0))):
+        Mt = _frame(Vector((p0[0], p0[1], zd - 0.03)), Vector((p1[0], p1[1], zd - 0.03)), Vector((0, 0, 1)))
+        Lb = (Vector(p1) - Vector(p0)).length
+        rbox(mb, (-0.002, -0.0015, 0.0), (Lb + 0.002, 0.0015, 0.03), st, r=0.0006, m=Mt @ _T(0, 0, 0))   # solera de marco
+    # rodapié de 100 mm (lámina de 6 mm) por dentro de los postes
     for (p0, p1) in (((-H2, -H2), (H2, -H2)), ((H2, -H2), (H2, H2)), ((H2, H2), (0.4, H2)), ((-0.4, H2), (-H2, H2)),
                      ((-H2, H2), (-H2, -H2))):
         a_, b_ = Vector((*p0, 0)), Vector((*p1, 0))
-        d = (b_ - a_).normalized()
-        nrm = Vector((d.y, -d.x, 0))
-        Mt = _frame(Vector((a_.x, a_.y, zd)) - nrm * 0.0, Vector((b_.x, b_.y, zd)), Vector((0, 0, 1)))
-        mb.box((0.0, -0.003, 0.0), ((b_ - a_).length, 0.003, 0.1), st, bevel=0.0015, seg=1, m=Mt @ _T(0, 0, 0))
-        mb.cyl((a_.x, a_.y, zd + 1.07), (b_.x, b_.y, zd + 1.07), 0.024, seg=SEG, mat=st)
-        mb.cyl((a_.x, a_.y, zd + 0.55), (b_.x, b_.y, zd + 0.55), 0.021, seg=SEG, mat=st)
-    for (x, y) in ((-H2, -H2), (H2, -H2), (H2, H2), (-H2, H2), (0.0, -H2), (H2, 0.0), (-H2, 0.0), (0.4, H2), (-0.4, H2)):
-        lathe(mb, [(0.0, zd), (0.024, zd), (0.024, zd + 1.07), (0.0, zd + 1.095)], seg=SEG, mat=st, M=_T(x, y, 0))
+        Mt = _frame(Vector((a_.x, a_.y, zd)), Vector((b_.x, b_.y, zd)), Vector((0, 0, 1)))
+        rbox(mb, (0.0, -0.003, 0.0), ((b_ - a_).length, 0.003, 0.1), st, r=0.0015, m=Mt)
+    # barandal: pasamanos e intermedio continuos con curvas de R 120 mm; postes de 48 mm; hueco de acceso al fondo
+    Hr = H2 - 0.03
+    rail = [(0.4, Hr, 0.0), (Hr, Hr, 0.0), (Hr, -Hr, 0.0), (-Hr, -Hr, 0.0), (-Hr, Hr, 0.0), (-0.4, Hr, 0.0)]
+    for zr_, rr_ in ((1.07, 0.024), (0.55, 0.021)):
+        P = [(x, y, zd + zr_) for (x, y, _) in rail]
+        tube_path(mb, P, rr_, seg=SEG, mat=st, bend=0.12, nseg=8, caps=True)
+    cpost = Hr - 0.12 * (1 - 1 / math.sqrt(2))            # postes de esquina en el centro de la curva
+    posts = [(-cpost, -cpost), (cpost, -cpost), (cpost, cpost), (-cpost, cpost), (0.0, -Hr), (Hr, 0.0), (-Hr, 0.0),
+             (0.4, Hr), (-0.4, Hr)]
+    for (x, y) in posts:
+        lathe(mb, [(0.0, zd), (0.024, zd), (0.024, zd + 1.07), (0.017, zd + 1.083), (0.0, zd + 1.088)], seg=SEG, mat=st,
+              M=_T(x, y, 0), caps=False)
+        ring = [(x + 0.0265 * math.cos(a), y + 0.0265 * math.sin(a), zd + 0.002) for a in np.linspace(0, 2 * PI, 25)[:-1]]
+        _weld(mb, ring, r=0.003, closed=True)              # pie del poste soldado al marco
     # ---- muro de sacos sobre el piso (hueco de acceso al fondo)
-    bags = _bag_stack(_ring_courses(1.08, 6, opening=("b", 0.42)), seed, (-1.6, 1.6, -1.6, 1.6), lod=0)
+    bags = _bag_stack(_ring_courses(1.08, 6, opening=("b", 0.42)), seed, (-1.6, 1.6, -1.6, 1.6), lod=1)   # a 5 m de altura
     mb.join(bags, _T(0, 0, zd))
-    # ---- techo a un agua: postes, marco, largueros, lámina acanalada y tornillos
+    # ---- techo a un agua: postes con placa base atornillada, marco, largueros, lámina acanalada y pijas con rondana
     zr_f, zr_b = zd + 2.25, zd + 2.05
     zr = lambda y: zr_f + (zr_b - zr_f) * (y + 1.22) / 2.44  # noqa: E731
     for (x, y) in ((-1.22, -1.22), (1.22, -1.22), (1.22, 1.22), (-1.22, 1.22)):
-        rtube(mb, (x, y, zd), (x, y, zr(y) - 0.06), 0.06, 0.06, st, up=(1, 0, 0), r=0.004)
+        rtube(mb, (x, y, zd + 0.012), (x, y, zr(y) - 0.06), 0.06, 0.06, st, up=(1, 0, 0), r=0.004)
+        _plate_bev(mb, [(-0.06, -0.06), (0.06, -0.06), (0.06, 0.06), (-0.06, 0.06)], 0.012, _T(x, y, zd), st, b=0.0012, rc=0.008)
+        for (dx, dy) in ((-0.042, -0.042), (0.042, 0.042)):
+            _bolt(mb, _T(x + dx, y + dy, zd + 0.012), d=0.012, stub=0.004)
     for x in (-1.22, 1.22):
         rtube(mb, (x, -1.3, zr(-1.3) - 0.03), (x, 1.3, zr(1.3) - 0.03), 0.05, 0.06, st, up=(0, 0, 1), r=0.004)
     for y in (-1.22, -0.4, 0.4, 1.22):
         rtube(mb, (-1.35, y, zr(y) + 0.0), (1.35, y, zr(y) + 0.0), 0.05, 0.05, st, up=(0, 0, 1), r=0.004)
-    # lámina acanalada (onda de 76 mm, 18 mm de peralte), canales a lo largo de la pendiente (Y)
     Wr, pitch, A = 2.95, 0.0762, 0.009
     nw = int(Wr / pitch)
-    xs = [-nw * pitch / 2 + pitch * k / 8 for k in range(nw * 8 + 1)]
+    xs = [-nw * pitch / 2 + pitch * k / 10 for k in range(nw * 10 + 1)]
     t = 0.0015
     slope = math.atan2(zr_b - zr_f, 2.44)
 
@@ -1749,39 +2268,47 @@ def guard_tower(seed=0):
     mb.face([rows[0][0], rows[3][0], rows[2][0], rows[1][0]], st)
     mb.face([rows[0][-1], rows[1][-1], rows[2][-1], rows[3][-1]], st)
     for y in (-1.22, -0.4, 0.4, 1.22):
-        for k in range(1, nw, 4):
-            x = -nw * pitch / 2 + pitch * k + pitch / 2
+        for k in range(1, nw, 3):
+            x = -nw * pitch / 2 + pitch * k
             p = sheet_pt(x, y, 0.0)
             Ms = _T(p.x, p.y, p.z) @ _Rx(math.degrees(slope))
-            hexnut(mb, Ms @ _T(0, 0, -0.001), s=0.008, h=0.007, mat=st)   # tornillo autotaladrante de cabeza hexagonal
+            lathe(mb, [(0.0, -0.0005), (0.0085, -0.0005), (0.0085, 0.002), (0.006, 0.003), (0.0, 0.003)], seg=24, mat="rubber",
+                  M=Ms)                                    # rondana de neopreno
+            lathe(mb, [(0.0065, 0.003), (0.0075, 0.0036), (0.0075, 0.0045), (0.0, 0.0045)], seg=24, mat=st, M=Ms)
+            hexnut(mb, Ms @ _T(0, 0, 0.0045), s=0.008, h=0.0055, mat=st)   # pija autotaladrante de cabeza hexagonal
     # ---- escalera marina con jaula (fondo, +Y)
     yl = 1.5
     ztop = zd + 1.1
     for sx in (-1, 1):
-        mb.box((sx * 0.235 - 0.006, yl - 0.03, 0.0), (sx * 0.235 + 0.006, yl + 0.03, ztop), st, bevel=0.002, seg=1)
+        rbox(mb, (sx * 0.235 - 0.006, yl - 0.03, 0.0), (sx * 0.235 + 0.006, yl + 0.03, ztop), st, r=0.0018)
         lathe(mb, [(0.0, -0.002), (0.07, -0.002), (0.07, 0.01), (0.0, 0.01)], seg=SEG, mat="concrete", M=_T(sx * 0.235, yl, 0.0))
     z = 0.3
     while z < zd + 0.05:
-        mb.cyl((-0.229, yl, z), (0.229, yl, z), 0.011, seg=16, mat=st, caps=False)
+        lathe(mb, [(0.011, -0.229), (0.011, 0.229)], seg=SEG, mat=st, M=_T(0.0, yl, z) @ _Ry(90), caps=True)
+        for sx in (-1, 1):                                 # soldadura del peldaño al larguero
+            ring = [(sx * 0.2285, yl + 0.0125 * math.cos(a), z + 0.0125 * math.sin(a)) for a in np.linspace(0, 2 * PI, 17)[:-1]]
+            _weld(mb, ring, r=0.0022, closed=True)
         z += 0.3
     for z in (1.75, 3.3, zf - 0.08):                       # ménsulas de la escalera a la cara del fondo
         h = half(z)
         for sx in (-1, 1):
-            mb.box((sx * 0.235 - 0.03, h + 0.05, z - 0.004), (sx * 0.235 + 0.03, yl - 0.03, z + 0.004), st, bevel=0.002, seg=1)
+            rbox(mb, (sx * 0.235 - 0.03, h + 0.05, z - 0.004), (sx * 0.235 + 0.03, yl - 0.03, z + 0.004), st, r=0.0015)
+            _bolt(mb, _T(sx * 0.235, yl - 0.05, z + 0.004), d=0.012, stub=0.005)
     hoops = [2.4 + 0.9 * k for k in range(4)]
     hoops.append(ztop - 0.05)
     Rc = 0.36
     cy = yl + 0.05
     for z in hoops:
-        path = [(-0.24, yl, z), (-Rc, cy, z)] + [(Rc * math.cos(a), cy + Rc * math.sin(a), z) for a in np.linspace(PI, 0, 15)][1:-1] + \
+        path = [(-0.24, yl, z), (-Rc, cy, z)] + [(Rc * math.cos(a), cy + Rc * math.sin(a), z) for a in np.linspace(PI, 0, 25)][1:-1] + \
                [(Rc, cy, z), (0.24, yl, z)]
-        sweep_frame(mb, [(-0.003, -0.025), (0.003, -0.025), (0.003, 0.025), (-0.003, 0.025)], path, st, up=(0, 0, 1))
+        sweep_frame(mb, [(-0.003, -0.025), (-0.0022, -0.0255), (0.0022, -0.0255), (0.003, -0.025), (0.003, 0.025), (0.0022, 0.0255),
+                         (-0.0022, 0.0255), (-0.003, 0.025)], path, st, up=(0, 0, 1))
     for a in np.linspace(PI * 0.88, PI * 0.12, 5):
         p = Vector((Rc * math.cos(a), cy + Rc * math.sin(a), 0))
         nrm = Vector((math.cos(a), math.sin(a), 0))
         Mv = _frame(Vector((p.x, p.y, hoops[0] - 0.03)) + nrm * 0.006, Vector((p.x, p.y, hoops[-1] + 0.03)) + nrm * 0.006, nrm)
-        mb.box((0.0, -0.02, -0.003), (hoops[-1] - hoops[0] + 0.06, 0.02, 0.003), st, bevel=0.0012, seg=1, m=Mv)
-    del r
+        rbox(mb, (0.0, -0.02, -0.003), (hoops[-1] - hoops[0] + 0.06, 0.02, 0.003), st, r=0.0012, m=Mv)
+    del r, tl
     return mb
 
 
@@ -1935,8 +2462,9 @@ def light_tower(seed=0):
 # ======================================================================================================== red de camuflaje
 # ULCANS (Ultra Lightweight Camouflage Net System): módulo hexagonal ~32,2 × 27,9 ft (673 ft²) + rómbico 27,9 × 16,1 ft,
 # postes seccionales de aluminio, separadores ("spreaders"), estacas y bolsa (armynavyoutdoors.com, Darley; TM 5-1080-250-12&P).
-# La guarnición (garnish) es una lámina cortada con huecos y solapas: aquí es geometría (material "net" de DOS CARAS);
-# rejilla de 7,2 cm recortada por isolíneas (marching triangles) de un ruido de 3 octavas.
+# La guarnición (garnish) es una lámina cortada con incisiones en U y en V cuyas solapas cuelgan o se rizan: geometría real
+# (material "net" de DOS CARAS) sobre una red de soporte de cordel en rombos (~12 cm, cordel de 3 mm: medida estimada de
+# fotos de redes LCSS/ULCANS; MIL-C-53004 / MIL-C-52765 no se pudieron consultar en línea).
 def _drape(w, l, supports, ties, k_in=0.13, k_edge=0.1, h=0.2, iters=2500):
     """Campo de alturas de la red sobre una rejilla gruesa: membrana con peso (Poisson) fijada en los separadores (discos) y en
     los amarres de orilla; las orillas libres cuelgan como cadena entre amarres. Devuelve (xs, ys, Z)."""
@@ -1984,15 +2512,21 @@ def _bilerp(xs, ys, Z, x, y):
 
 
 def camo_net(w=8.0, l=10.0, seed=0, poles=True):
-    """Toldo de red de camuflaje de w (X) × l (Y) m centrado en el origen: guarnición cortada con huecos orgánicos y orillas
-    deshilachadas (geometría real, material 'net' de dos caras), colgada sobre postes seccionales de aluminio Ø 38 mm con
-    separador (disco abovedado) en los postes interiores de ~3,4 m y postes de orilla de 2,3 m en esquinas y medios lados; la
-    red forma picos en los separadores y cuelga entre apoyos; las orillas libres hacen catenaria; relinga perimetral, vientos
-    con estacas de acero. poles=False: solo la red con su relinga (la misma forma, para colgarla sobre otra pieza)."""
+    """Toldo de red de camuflaje de w (X) × l (Y) m centrado en el origen, como el sistema LCSS / ULCANS:
+    - red de soporte de cordel de poliéster de 3 mm en rombos de 12 cm, con un nudo en cada cruce (12 lados, sombreado
+      continuo), que sigue la caída de la red;
+    - guarnición (garnish) de tela cortada: lámina de dos caras apoyada sobre la red, con incisiones en U y en V; cada
+      lóbulo cortado cuelga por su bisagra a través de un rombo de la red (cae 55-85°, con curvatura y giro), y deja en la
+      tela el hueco de su forma (geometría real, material 'net' de dos caras);
+    - relinga perimetral de 10 mm con amarres de cordel cada 0,3 m;
+    - postes seccionales de aluminio Ø 38 mm con separador (sombrilla de 0,48 m con nervios) en los interiores de ~3,4 m y
+      postes de orilla de 2,3 m; la red forma picos en los separadores y cae por gravedad entre apoyos (membrana con peso);
+      vientos de cuerda con estacas de varilla.
+    poles=False: solo la red, la guarnición y la relinga (la misma forma, para colgarla sobre otra pieza)."""
     r = rng(seed)
     mb = MB()
     ph = float(r.uniform(0, 100))
-    # ---- apoyos
+    # ---- apoyos y caída
     nxp = max(1, int(round(w / 4.5)))
     nyp = max(1, int(round(l / 4.5)))
     inner = [(-w / 2 + w * (i + 0.5) / nxp, -l / 2 + l * (j + 0.5) / nyp) for i in range(nxp) for j in range(nyp)]
@@ -2005,108 +2539,244 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
                 continue
             edge_p.append((sx * w / 2, sy * l / 2))
     ze = [2.25 + float(r.uniform(-0.08, 0.08)) for _ in edge_p]
-    supports = [(x, y, z + 0.06, 0.34) for (x, y), z in zip(inner, zi)]
+    supports = [(x, y, z + 0.045, 0.34) for (x, y), z in zip(inner, zi)]   # la red apoya en el domo del separador
     ties = [(x, y, z + 0.03) for (x, y), z in zip(edge_p, ze)]
     xs, ys, Z = _drape(w, l, supports, ties)
-    # ---- red: rejilla de 6,5 cm recortada por un campo de ruido (huecos de la guarnición) con contornos interpolados
-    a = 0.072
+    wf1, wf2, wf3 = _sfield(r, 6, 0.6, 1.2), _sfield(r, 8, 2.5, 4.5), _sfield(r, 10, 7.0, 11.0)
+    sup = np.array([(px, py) for (px, py, _, _) in supports]) if supports else np.zeros((0, 2))
+
+    def zat(x, y):
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        z = _bilerp(xs, ys, Z, x, y)
+        P = np.stack([x, y, np.full(x.shape, ph)], -1)
+        wr = 0.03 * wf1(P) + 0.014 * wf2(P) + 0.006 * wf3(P)
+        if len(sup):
+            near = np.min(np.hypot(x[..., None] - sup[:, 0], y[..., None] - sup[:, 1]), -1)
+            wr = np.where(near < 0.5, np.abs(wr) * (near / 0.5), wr)
+        return z + wr
+
+    def nrm_at(x, y, e=0.02):
+        zx = (zat(x + e, y) - zat(x - e, y)) / (2 * e)
+        zy = (zat(x, y + e) - zat(x, y - e)) / (2 * e)
+        n = np.stack([-zx, -zy, np.ones(np.shape(zx))], -1)
+        return n / np.linalg.norm(n, axis=-1, keepdims=True)
+    # ---- red de soporte: rombos de 12 cm (cordel de 3 mm), nudo en cada cruce, 7,5 mm bajo la tela
+    s_ = 0.12
+    rt2 = math.sqrt(2.0)
+    hw_, hl_ = w / 2 - 0.02, l / 2 - 0.02
+    umax = (hw_ + hl_) / rt2
+    ks = np.arange(-int(umax / s_), int(umax / s_) + 1)
+    paths = []
+    for fam in (1, -1):
+        for k in ks:
+            c0 = k * s_                                     # u (o v) constante
+            # puntos de la línea: x = (c0 + t)/√2, y = fam·(c0 - t)/√2 con t múltiplo de s_
+            tt = np.arange(-int(umax / s_) - 1, int(umax / s_) + 2) * s_
+            x = (c0 + tt) / rt2
+            y = fam * (c0 - tt) / rt2
+            ok = (np.abs(x) <= hw_) & (np.abs(y) <= hl_)
+            if ok.sum() < 2:
+                continue
+            idx = np.flatnonzero(ok)
+            x, y = x[idx[0]:idx[-1] + 1], y[idx[0]:idx[-1] + 1]
+            paths.append(np.stack([x, y, zat(x, y) - 0.0075], 1))
+    _tubes_np(mb, paths, 0.0015, seg=12, mat="fabric", soft=True)
+    # nudos: botón de cordel en cada cruce
+    kx = []
+    for P in paths[:len(paths) // 2]:
+        kx.append(P)
+    Kn = np.concatenate(kx, 0) if kx else np.zeros((0, 3))
+    na = 6
+    an = 2 * PI * (np.arange(na) + 0.5) / na
+    Vk, Fk = [], []
+    for k, p in enumerate(Kn):
+        o = k * (na + 2)
+        rot = float(r.uniform(0, PI))
+        ring = p + np.stack([0.0042 * np.cos(an + rot), 0.0042 * np.sin(an + rot), np.zeros(na)], 1)
+        Vk.append(np.concatenate([ring, p + np.array([[0.0, 0.0, 0.0028], [0.0, 0.0, -0.0028]])], 0))
+        for j in range(na):
+            jj = (j + 1) % na
+            Fk += [[o + j, o + jj, o + na], [o + jj, o + j, o + na + 1]]
+    if Vk:
+        _np_faces(mb, np.concatenate(Vk, 0), Fk, "fabric", soft=True)
+    # ---- lóbulos de la guarnición. (a) en ~85 % de los rombos: el corte cuelga a través del rombo de la red; (b) cortes
+    # chicos entre ellos cuya solapa, tiesa, se levanta o se riza hacia arriba (nunca atraviesan el cordel de abajo)
+    lobes = []
+    for i_ in range(-int(umax / s_) - 1, int(umax / s_) + 1):
+        for j_ in range(-int(umax / s_) - 1, int(umax / s_) + 1):
+            u, v = (i_ + 0.5) * s_, (j_ + 0.5) * s_
+            cx, cy = (u + v) / rt2, (u - v) / rt2
+            if abs(cx) > w / 2 - 0.2 or abs(cy) > l / 2 - 0.2:
+                continue
+            if len(sup) and np.min(np.hypot(sup[:, 0] - cx, sup[:, 1] - cy)) < 0.42:
+                continue
+            if r.uniform() > 0.85:
+                continue
+            ang = float(r.uniform(0, 2 * PI))
+            ln = float(r.uniform(0.075, 0.125))
+            wd = float(r.uniform(0.045, 0.072))
+            kind = 0 if r.uniform() < 0.55 else 1          # 0: corte en U (punta redonda), 1: corte en V (punta aguda)
+            d = np.array((math.cos(ang), math.sin(ang)))
+            hx, hy = cx - d[0] * 0.03, cy - d[1] * 0.03
+            lobes.append((hx, hy, d, ln, wd, kind, float(r.uniform(0.85, 1.4)), float(r.uniform(-0.5, 0.5))))
+    nb_ = int(len(lobes) * 0.6)
+    tries = 0
+    pts_b = []
+    while len(pts_b) < nb_ and tries < nb_ * 6:
+        tries += 1
+        cx, cy = float(r.uniform(-w / 2 + 0.2, w / 2 - 0.2)), float(r.uniform(-l / 2 + 0.2, l / 2 - 0.2))
+        if len(sup) and np.min(np.hypot(sup[:, 0] - cx, sup[:, 1] - cy)) < 0.42:
+            continue
+        uu, vv = (cx + cy) / rt2 / s_, (cx - cy) / rt2 / s_
+        if abs(uu - round(uu)) > 0.3 and abs(vv - round(vv)) > 0.3:   # lejos de los cordeles: ese hueco es de un lóbulo (a)
+            continue
+        pts_b.append((cx, cy))
+    for (cx, cy) in pts_b:
+        ang = float(r.uniform(0, 2 * PI))
+        d = np.array((math.cos(ang), math.sin(ang)))
+        ln = float(r.uniform(0.04, 0.07))
+        wd = float(r.uniform(0.028, 0.045))
+        lobes.append((cx - d[0] * ln / 2, cy - d[1] * ln / 2, d, ln, wd, int(r.uniform() < 0.5), -float(r.uniform(0.1, 0.38)),
+                      float(r.uniform(-0.6, 0.6))))
+
+    def hwf(t, wd, kind):
+        t = np.clip(t, 0.0, 1.0)
+        return wd / 2 * (np.sqrt(np.clip(1 - t ** 2.5, 0, 1)) if kind == 0 else (1 - t) ** 0.9)
+    # ---- lámina de la guarnición: rejilla de 2 cm recortada por los huecos de los lóbulos (contornos interpolados)
+    a = 0.02
     nx = int(round(w / a))
     ny = int(round(l / a))
     gx = np.linspace(-w / 2, w / 2, nx + 1)
     gy = np.linspace(-l / 2, l / 2, ny + 1)
     GX, GY = np.meshgrid(gx, gy)
-
-    def field(x, y):
-        f = np.array([0.6 * noise.noise(Vector((float(u) * 2.2, float(v) * 2.2, ph))) + noise.noise(Vector((float(u) * 6.0, float(v) * 6.0,
-                      ph + 7.0))) + 0.45 * noise.noise(Vector((float(u) * 14.0, float(v) * 14.0, ph + 13.0)))
-                      for u, v in zip(np.ravel(x), np.ravel(y))]).reshape(np.shape(x))
-        f = f + 0.12
-        border = np.minimum(np.minimum(x + w / 2, w / 2 - x), np.minimum(y + l / 2, l / 2 - y))
-        f = f + np.clip((0.16 - border) / 0.06, 0, 3)          # orilla continua donde corre la relinga
-        for (px, py, _, _) in supports:
-            f = f + 2.5 * np.clip(1 - np.hypot(x - px, y - py) / 0.45, 0, 1)
-        return f
-    F = field(GX, GY)
-
-    def zat(x, y):
-        z = _bilerp(xs, ys, Z, x, y)
-        wr = 0.035 * noise.noise(Vector((x * 0.9, y * 0.9, ph + 3))) + 0.016 * noise.noise(Vector((x * 3.5, y * 3.5, ph + 5))) \
-            + 0.008 * noise.noise(Vector((x * 9.0, y * 9.0, ph + 6)))
-        near = min([math.hypot(x - px, y - py) for (px, py, _, _) in supports] + [9.0])
-        if near < 0.5:
-            wr = abs(wr) * (near / 0.5)
-        return float(z) + wr
+    F = np.full(GX.shape, 1.0)
+    for (hx, hy, d, ln, wd, kind, _, _) in lobes:
+        i0 = max(0, int((hx - 0.13 + w / 2) / a))
+        i1 = min(nx, int((hx + 0.13 + w / 2) / a) + 1)
+        j0 = max(0, int((hy - 0.13 + l / 2) / a))
+        j1 = min(ny, int((hy + 0.13 + l / 2) / a) + 1)
+        X_, Y_ = GX[j0:j1 + 1, i0:i1 + 1] - hx, GY[j0:j1 + 1, i0:i1 + 1] - hy
+        ap = X_ * d[0] + Y_ * d[1]
+        bp = -X_ * d[1] + Y_ * d[0]
+        sdf = np.maximum(np.maximum(np.abs(bp) - hwf(ap / ln, wd, kind), -ap), ap - ln)
+        F[j0:j1 + 1, i0:i1 + 1] = np.minimum(F[j0:j1 + 1, i0:i1 + 1], sdf / 0.01)
+    border = np.minimum(np.minimum(GX + w / 2, w / 2 - GX), np.minimum(GY + l / 2, l / 2 - GY))
+    F = np.maximum(F, (0.1 - border) / 0.02)               # orilla continua donde corre la relinga
+    for (px, py, _, _) in supports:
+        F = np.maximum(F, 2.0 * (1 - np.hypot(GX - px, GY - py) / 0.4))
+    Zg = zat(GX, GY)
     vid = {}
+    bm = mb.bm
+    nn = nx + 1
 
-    def V(i, j):
-        if (i, j) not in vid:
-            x, y = gx[i], gy[j]
-            vid[(i, j)] = mb.bm.verts.new(Vector((x, y, zat(x, y))))
-        return vid[(i, j)]
+    def V(k):
+        if k not in vid:
+            j, i = divmod(k, nn)
+            vid[k] = bm.verts.new((gx[i], gy[j], Zg[j, i]))
+        return vid[k]
     eid = {}
+    Ff = F.ravel()
 
     def E(p, q):
         key = (min(p, q), max(p, q))
         if key not in eid:
-            (i0, j0), (i1, j1) = key
-            f0, f1 = F[j0, i0], F[j1, i1]
-            t = min(max(f0 / (f0 - f1), 0.04), 0.96)          # nunca encima de un vértice: sin caras de área cero
+            k0, k1 = key
+            f0, f1 = Ff[k0], Ff[k1]
+            t = min(max(f0 / (f0 - f1), 0.04), 0.96)
+            j0, i0 = divmod(k0, nn)
+            j1, i1 = divmod(k1, nn)
             x = gx[i0] + (gx[i1] - gx[i0]) * t
             y = gy[j0] + (gy[j1] - gy[j0]) * t
-            # deshilachado: el corte no es limpio; la solapa se levanta o cae un poco
-            jx = 0.009 * noise.noise(Vector((x * 40, y * 40, ph + 9)))
-            jy = 0.009 * noise.noise(Vector((x * 40, y * 40, ph + 11)))
-            dz = 0.024 * noise.noise(Vector((x * 9, y * 9, ph + 17)))
-            eid[key] = mb.bm.verts.new(Vector((x + jx, y + jy, zat(x, y) + dz)))
+            jx = 0.0025 * math.sin(x * 211 + y * 97 + ph)       # el corte no es limpio: hilos sueltos
+            zz = Zg[j0, i0] + (Zg[j1, i1] - Zg[j0, i0]) * t
+            eid[key] = bm.verts.new((x + jx, y - jx, zz + 0.0015 * math.sin(x * 157 - y * 61)))
         return eid[key]
-
-    def tri(ids):
-        vals = [F[j, i] for (i, j) in ids]
-        if all(v >= 0 for v in vals):
-            mb.face([V(*p) for p in ids], "net").smooth = True
-            return
-        if all(v < 0 for v in vals):
-            return
+    mi = mb.mi("net")
+    sl = mb._soft_layer()
+    idx = np.arange((ny + 1) * nn).reshape(ny + 1, nn)
+    A_, B_, C_, D_ = idx[:-1, :-1], idx[:-1, 1:], idx[1:, 1:], idx[1:, :-1]
+    alt = ((np.arange(nx)[None, :] + np.arange(ny)[:, None]) % 2).astype(bool)
+    T1 = np.where(alt[..., None], np.stack([A_, B_, C_], -1), np.stack([A_, B_, D_], -1)).reshape(-1, 3)
+    T2 = np.where(alt[..., None], np.stack([A_, C_, D_], -1), np.stack([B_, C_, D_], -1)).reshape(-1, 3)
+    TT = np.concatenate([T1, T2], 0)
+    ins = Ff[TT] >= 0
+    for tri in TT[ins.all(1)].tolist():
+        f_ = bm.faces.new([V(k) for k in tri])
+        f_.material_index = mi
+        f_.smooth = True
+        f_[sl] = 1
+    for tri in TT[ins.any(1) & ~ins.all(1)].tolist():
+        vals = [Ff[k] for k in tri]
         poly = []
         for k in range(3):
-            p, q = ids[k], ids[(k + 1) % 3]
-            fp, fq = vals[k], vals[(k + 1) % 3]
-            if fp >= 0:
-                poly.append(V(*p))
-            if (fp >= 0) != (fq >= 0):
+            p, q = tri[k], tri[(k + 1) % 3]
+            if vals[k] >= 0:
+                poly.append(V(p))
+            if (vals[k] >= 0) != (vals[(k + 1) % 3] >= 0):
                 poly.append(E(p, q))
         for k in range(1, len(poly) - 1):
             try:
-                mb.face([poly[0], poly[k], poly[k + 1]], "net").smooth = True
+                f_ = bm.faces.new([poly[0], poly[k], poly[k + 1]])
             except ValueError:
-                pass
-    for j in range(ny):
-        for i in range(nx):
-            A_, B_, C_, D_ = (i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)
-            if (i + j) % 2:
-                tri((A_, B_, C_))
-                tri((A_, C_, D_))
-            else:
-                tri((A_, B_, D_))
-                tri((B_, C_, D_))
-    # ---- relinga perimetral (cuerda de 12 mm cosida a la orilla)
+                continue
+            f_.material_index = mi
+            f_.smooth = True
+            f_[sl] = 1
+    # ---- lóbulos: lámina con bisagra en la tela, cae por el rombo de la red con curvatura y giro
+    nla, nlb = 6, 4
+    Vl, Fl = [], []
+    for li, (hx, hy, d, ln, wd, kind, phi0, twist) in enumerate(lobes):
+        h = np.array((hx, hy, float(zat(np.array([hx]), np.array([hy]))[0]) + (0.0018 if phi0 > 0 else 0.0)))
+        nz = nrm_at(np.array([hx]), np.array([hy]))[0]
+        dd = np.array((d[0], d[1], 0.0))
+        dd = dd - nz * dd.dot(nz)
+        dd /= np.linalg.norm(dd)
+        sd = np.cross(nz, dd)
+        aa = np.concatenate([[-0.008], np.linspace(0.0, ln, nla - 1)])
+        phi = phi0 * np.clip(aa / 0.014, 0, 1) ** 0.8 + (0.25 if phi0 > 0 else -0.5) * (np.clip(aa, 0, None) / ln) ** 1.5
+        phi = np.where(aa < 0, 0.0, phi)
+        stepv = np.stack([np.cos(phi)[:, None] * dd + 0 * nz, -np.sin(phi)[:, None] * nz], 0).sum(0)
+        da = np.diff(aa, prepend=0.0)
+        spine = h + np.cumsum(stepv * da[:, None], 0)
+        psi = twist * np.clip(aa / ln, 0, 1)
+        nf = np.cos(phi)[:, None] * nz + np.sin(phi)[:, None] * dd
+        side = np.cos(psi)[:, None] * sd + np.sin(psi)[:, None] * nf
+        hw = np.maximum(hwf(np.clip(aa, 0, None) / ln, wd, kind), 0.0015)
+        bb = np.linspace(-1.0, 1.0, nlb)
+        cup = 0.004 * (1 - bb ** 2)                        # la tela se acopa un poco
+        P = spine[:, None, :] + side[:, None, :] * (hw[:, None] * bb[None, :])[..., None] + nf[:, None, :] * cup[None, :, None]
+        o = li * nla * nlb
+        Vl.append(P.reshape(-1, 3))
+        Fl.extend((_grid_quads(nla, nlb) + o).tolist())
+    if Vl:
+        _np_faces(mb, np.concatenate(Vl, 0), Fl, "net", soft=True)
+    # ---- relinga perimetral (cuerda de 10 mm) con amarres de cordel cada 0,3 m
     per = []
-    for i in range(0, nx + 1, 4):
-        per.append((i, 0))
-    for j in range(0, ny + 1, 4):
-        per.append((nx, j))
-    for i in range(nx, -1, -4):
-        per.append((i, ny))
-    for j in range(ny, -1, -4):
-        per.append((0, j))
-    pts = []
-    for (i, j) in per:
-        p = Vector((gx[i], gy[j], zat(gx[i], gy[j]) - 0.007))
-        if not pts or (p - Vector(pts[-1])).length > 1e-4:
-            pts.append(tuple(p))
-    pts.append(pts[0])
-    pts.append(pts[1])
-    mb.tube(pts, 0.006, seg=SEG_T, mat="canvas", caps=False)
+    for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (w / 2, -l / 2, w / 2, l / 2), (w / 2, l / 2, -w / 2, l / 2),
+                             (-w / 2, l / 2, -w / 2, -l / 2)):
+        n_ = max(2, int(math.hypot(x1 - x0, y1 - y0) / 0.1))
+        for k in range(n_):
+            per.append((x0 + (x1 - x0) * k / n_, y0 + (y1 - y0) * k / n_))
+    per = np.array(per)
+    # esquinas un poco redondeadas (la cuerda no dobla a 90° vivos)
+    per = (np.roll(per, 1, 0) + 2 * per + np.roll(per, -1, 0)) / 4
+    Pr = np.concatenate([per, (zat(per[:, 0], per[:, 1]) - 0.001)[:, None]], 1)
+    Pr = np.concatenate([Pr, Pr[:2]], 0)
+    _tubes_np(mb, [Pr], 0.005, seg=16, mat="canvas", soft=False, caps=False)
+    acc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(Pr[:-2], axis=0), axis=1))])
+    lash = []
+    for s0 in np.arange(0.15, acc[-1], 0.3):
+        i = int(np.searchsorted(acc, s0))
+        i = min(max(i, 1), len(Pr) - 4)
+        c = Pr[i]
+        tg = Pr[i + 1] - Pr[i - 1]
+        tg /= np.linalg.norm(tg)
+        e1 = np.array((-tg[1], tg[0], 0.0))
+        e2 = np.cross(tg, e1)
+        a_ = np.linspace(0, 2 * PI * 1.5, 25)
+        lash.append(c + np.outer(np.cos(a_), e1) * 0.0072 + np.outer(np.sin(a_), e2) * 0.0072 + np.outer(a_ / (2 * PI) * 0.0035, tg))
+    _tubes_np(mb, lash, 0.001, seg=12, mat="fabric", soft=True)
     if not poles:
         return mb
     # ---- postes seccionales con separador (interiores) y postes de orilla con vientos y estacas
@@ -2125,10 +2795,10 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
         if spreader:                                   # separador: domo de plástico de 0,48 m con nervios y cubo
             Ms = _T(x, y, ztop + 0.012)
             lathe(mb, [(0.0, 0.0), (0.03, 0.0), (0.06, 0.02), (0.24, 0.035), (0.245, 0.042), (0.06, 0.05), (0.03, 0.06), (0.0, 0.062)],
-                  seg=32, mat="plastic", M=Ms, rmod=lambda i, a_, rr, z: rr * (1 + 0.02 * math.cos(8 * a_)) if i in (3, 4) else rr)
+                  seg=40, mat="plastic", M=Ms, rmod=lambda i, a_, rr, z: rr * (1 + 0.02 * math.cos(8 * a_)) if i in (3, 4) else rr)
             for k in range(8):
                 ang = math.radians(22.5 + 45 * k)
-                mb.box((0.04, -0.004, 0.0), (0.22, 0.004, 0.028), "plastic", bevel=0.002, seg=1,
+                mb.box((0.04, -0.004, 0.0), (0.22, 0.004, 0.028), "plastic", bevel=0.002, seg=2,
                        m=Ms @ _Rz(math.degrees(ang)) @ _T(0, 0, 0.004))
     for (x, y), z in zip(inner, zi):
         pole(x, y, z, True)
@@ -2140,18 +2810,18 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
         for d in dirs:
             g = Vector((x, y, 0)) + d * 1.6 + Vector((d.y, -d.x, 0)) * float(r.uniform(-0.2, 0.2))
             stakes.append(g)
-            tube_path(mb, catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=8), 0.005, seg=SEG_T, mat="canvas", caps=True)
+            tube_path(mb, catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=16), 0.005, seg=16, mat="canvas", caps=True)
     # amarres intermedios de la orilla a estacas
     for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (-w / 2, l / 2, w / 2, l / 2), (-w / 2, -l / 2, -w / 2, l / 2),
                              (w / 2, -l / 2, w / 2, l / 2)):
         for t in (0.25, 0.75):
             x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
-            zz = float(_bilerp(xs, ys, Z, np.array(x), np.array(y)))
+            zz = float(zat(np.array([x]), np.array([y]))[0])
             d = Vector((math.copysign(1, x) if abs(x0 - x1) < 1e-6 else 0.0, math.copysign(1, y) if abs(y0 - y1) < 1e-6 else 0.0, 0))
             g = Vector((x, y, 0)) + d * 1.1
             stakes.append(g)
-            tube_path(mb, catenary((x, y, zz - 0.01), (g.x, g.y, 0.07), 0.02, n=7), 0.0045, seg=SEG_T, mat="canvas", caps=True)
+            tube_path(mb, catenary((x, y, zz - 0.01), (g.x, g.y, 0.07), 0.02, n=14), 0.0045, seg=16, mat="canvas", caps=True)
     for g in stakes:                                       # estaca de varilla con gancho, hincada
-        tube_path(mb, [(g.x, g.y, -0.12), (g.x, g.y, 0.08), (g.x + 0.03, g.y, 0.1), (g.x + 0.05, g.y, 0.07)], 0.006, seg=SEG_T,
-                  mat="steel", bend=0.015, nseg=2, caps=True)
+        tube_path(mb, [(g.x, g.y, -0.12), (g.x, g.y, 0.08), (g.x + 0.03, g.y, 0.1), (g.x + 0.05, g.y, 0.07)], 0.006, seg=16,
+                  mat="steel", bend=0.015, nseg=5, caps=True)
     return mb
