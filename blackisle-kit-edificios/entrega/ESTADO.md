@@ -762,3 +762,9 @@ tubo de 12 lados del kit salía facetado (el suavizado por ángulo de 30° marca
   llanta sin letras y rin con ventanas ciegas; malla de la jaula con cruces traslapados (sin botón de soldadura); montacargas
   sin motor modelado bajo el cofre; carga de racks en lod=1 (sin golpes ni veta en geometría); a 0,5 m la punta de la gota
   del rack se ve angulosa; esténciles y glifos 3D dejan aristas abiertas (no visibles).
+- **Kit UE5 (exportación validada, todas las comprobaciones OK):** SM_MIL_1_almacen: Estructura 149 168 · Detalle 1 585 240 ·
+  Mobiliario 2 967 718 · Perímetro 1 889 128 · Carga 2 777 565 · **Malla 3 347 800** · Vidrio 22 516 · Colision 70 573 + cajas
+  (≈ 12,8 M; 720 MB de GLB). SM_MIL_2_avanzada: Detalle 1 127 899 · Mobiliario 1 737 374 · Perímetro 788 766 · Carga 1 123 960 ·
+  Vidrio 28 574 (≈ 4,8 M; 211 MiB). Horneado de MIL_1 en una pasada con 15 GB de RAM (pico ~11 GB). ZIP: MIL_1 en 3 partes
+  (91,8 + 76,4 + 25,1 MiB; el empaquetador ahora reparte por tamaño comprimido medido), MIL_2 72,8 MiB, común en 2 partes.
+  Los .blend horneados de MIL salen de git (pasan de 100 MB) y se regeneran con `scripts/cadena_ue5.sh`.

@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "27c1fb6",
+ "version_repo": "47bf315",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -22,12 +22,17 @@
   "Perimetro": {
    "nanite": true,
    "colision": "ninguna",
-   "nota": "perímetro (MIL_1): malla con navaja, portón, muros T, HESCO y barreras; su colisión son cajas dentro de la malla Colision"
+   "nota": "perímetro: muros T, HESCO, torres, pluma y barreras (MIL_1); HESCO y muros de costales (MIL_2); su colisión son cajas dentro de la malla Colision"
+  },
+  "Malla": {
+   "nanite": true,
+   "colision": "ninguna",
+   "nota": "malla ciclónica del frente, portón y rollo de concertina (MIL_1); colisión en cajas dentro de Colision"
   },
   "Carga": {
    "nanite": true,
    "colision": "ninguna",
-   "nota": "carga de los racks (MIL_1): tarimas de cajas y proyectiles; colisión en cajas dentro de Colision"
+   "nota": "carga: tarimas de los racks (MIL_1); armas, munición y cajas de la tienda (MIL_2); colisión en cajas dentro de Colision"
   },
   "Escombro": {
    "nanite": false,
@@ -3912,7 +3917,7 @@
     "Estructura": {
      "nombre": "SM_MIL_1_almacen_Estructura",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Estructura.glb",
-     "triangulos": 132978,
+     "triangulos": 149168,
      "ranuras": [
       "MIL_1_almacen_walls_main",
       "MIL_1_almacen_walls_rest",
@@ -3925,117 +3930,135 @@
       "BLK_sign_red",
       "BLK_brass"
      ],
-     "mib": 6.37
+     "mib": 7.4
     },
     "Detalle": {
      "nombre": "SM_MIL_1_almacen_Detalle",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Detalle.glb",
-     "triangulos": 364501,
+     "triangulos": 1585240,
      "ranuras": [
       "BLK_paint_tan",
-      "BLK_concrete",
       "BLK_galvanized",
+      "BLK_rubber",
+      "BLK_concrete",
       "BLK_aluminium",
       "BLK_steel",
-      "BLK_rubber",
       "BLK_paint_yellow",
       "BLK_brass",
       "BLK_plastic",
-      "BLK_wood_od",
+      "BLK_cable",
+      "BLK_paint_od",
       "BLK_sign_white",
       "BLK_sign_red",
-      "BLK_cable",
       "BLK_copper",
       "BLK_gravel",
-      "BLK_sandbag"
+      "BLK_sandbag",
+      "BLK_sign_green",
+      "BLK_metal_rust"
      ],
-     "mib": 19.88
+     "mib": 78.24
     },
     "Mobiliario": {
      "nombre": "SM_MIL_1_almacen_Mobiliario",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Mobiliario.glb",
-     "triangulos": 446934,
+     "triangulos": 2967718,
      "ranuras": [
       "BLK_rack_blue",
-      "BLK_cable",
       "BLK_galvanized",
       "BLK_paint_yellow",
       "BLK_steel",
+      "BLK_rubber",
+      "BLK_sign_white",
+      "BLK_sign_red",
+      "BLK_cable",
       "BLK_rack_orange",
       "BLK_plastic",
-      "BLK_paint_od",
-      "BLK_rubber",
-      "BLK_polymer",
-      "BLK_gunmetal",
-      "BLK_paint_tan",
-      "BLK_sign_white",
       "BLK_brass",
+      "BLK_paint_od",
+      "BLK_gunmetal",
+      "BLK_polymer",
+      "BLK_paint_tan",
+      "BLK_copper",
       "BLK_wood_od",
-      "BLK_canvas",
-      "BLK_sign_red",
-      "BLK_fabric",
-      "BLK_cardboard",
       "BLK_aluminium",
-      "BLK_paper",
+      "BLK_fabric",
+      "BLK_canvas",
       "BLK_wood",
+      "BLK_paper",
       "BLK_sign_green"
      ],
-     "mib": 27.88
+     "mib": 151.2
     },
     "Perimetro": {
      "nombre": "SM_MIL_1_almacen_Perimetro",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Perimetro.glb",
-     "triangulos": 957549,
+     "triangulos": 1889128,
      "ranuras": [
       "BLK_concrete",
-      "BLK_galvanized",
-      "BLK_aluminium",
-      "BLK_cable",
       "BLK_steel",
       "BLK_paint_yellow",
-      "BLK_sign_red",
+      "BLK_galvanized",
+      "BLK_cable",
+      "BLK_brass",
+      "BLK_aluminium",
       "BLK_sign_white",
+      "BLK_sign_red",
       "BLK_rubber",
       "BLK_geotextile",
       "BLK_sand",
       "BLK_sandbag"
      ],
-     "mib": 68.3
+     "mib": 75.19
     },
     "Carga": {
      "nombre": "SM_MIL_1_almacen_Carga",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Carga.glb",
-     "triangulos": 867368,
+     "triangulos": 2777565,
      "ranuras": [
       "BLK_wood_od",
       "BLK_paint_od",
-      "BLK_brass",
+      "BLK_polymer",
       "BLK_steel",
       "BLK_paint_yellow",
       "BLK_fabric",
-      "BLK_cardboard",
       "BLK_canvas",
-      "BLK_rubber"
+      "BLK_cardboard",
+      "BLK_rubber",
+      "BLK_aluminium",
+      "BLK_galvanized"
      ],
-     "mib": 56.55
+     "mib": 164.18
+    },
+    "Malla": {
+     "nombre": "SM_MIL_1_almacen_Malla",
+     "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Malla.glb",
+     "triangulos": 3347800,
+     "ranuras": [
+      "BLK_concrete",
+      "BLK_galvanized",
+      "BLK_aluminium",
+      "BLK_cable",
+      "BLK_steel"
+     ],
+     "mib": 215.34
     },
     "Vidrio": {
      "nombre": "SM_MIL_1_almacen_Vidrio",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Vidrio.glb",
-     "triangulos": 2680,
+     "triangulos": 22516,
      "ranuras": [
       "BLK_glass"
      ],
-     "mib": 0.14
+     "mib": 0.75
     },
     "Colision": {
      "nombre": "SM_MIL_1_almacen_Colision",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Colision.glb",
-     "triangulos": 60403,
+     "triangulos": 70573,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 2.51
+     "mib": 2.85
     }
    },
    "texturas": {
@@ -4143,18 +4166,18 @@
     ]
    ],
    "medidas_m": {
-    "x": 47.37,
-    "y": 48.99,
-    "z": 9.5,
+    "x": 47.372,
+    "y": 48.992,
+    "z": 9.506,
     "min": [
-     -24.685,
-     -27.305,
+     -24.686,
+     -27.306,
      -0.09
     ],
     "max": [
-     22.685,
-     21.685,
-     9.41
+     22.686,
+     21.686,
+     9.416
     ],
     "escombro_min": null,
     "escombro_max": null,
@@ -4196,6 +4219,10 @@
     "Carga_ranuras": true,
     "Carga_un_uv": true,
     "Carga_color0": true,
+    "Malla_presente": true,
+    "Malla_ranuras": true,
+    "Malla_un_uv": true,
+    "Malla_color0": true,
     "Vidrio_presente": true,
     "Vidrio_ranuras": true,
     "Vidrio_un_uv": true,
@@ -4207,7 +4234,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 181.63,
+   "mib_total": 695.15,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "portón vehicular de la malla del frente y el andén con las dos cortinas; muros T al fondo y a los lados"
@@ -4239,64 +4266,104 @@
     "Detalle": {
      "nombre": "SM_MIL_2_avanzada_Detalle",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Detalle.glb",
-     "triangulos": 105468,
+     "triangulos": 1127899,
      "ranuras": [
-      "BLK_canvas",
-      "BLK_fabric",
-      "BLK_steel",
-      "BLK_cable",
       "BLK_aluminium",
+      "BLK_steel",
       "BLK_galvanized",
+      "BLK_gunmetal",
+      "BLK_canvas",
+      "BLK_brass",
+      "BLK_cable",
+      "BLK_fabric",
+      "BLK_polymer",
       "BLK_net",
+      "BLK_rubber",
       "BLK_plastic"
      ],
-     "mib": 4.3
+     "mib": 48.47
     },
     "Mobiliario": {
      "nombre": "SM_MIL_2_avanzada_Mobiliario",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Mobiliario.glb",
-     "triangulos": 312492,
+     "triangulos": 1737374,
      "ranuras": [
       "BLK_wood",
-      "BLK_plywood",
       "BLK_steel",
-      "BLK_aluminium",
+      "BLK_plywood",
+      "BLK_galvanized",
       "BLK_wood_od",
-      "BLK_paint_od",
+      "BLK_fabric",
+      "BLK_cable",
+      "BLK_paint_yellow",
       "BLK_sign_white",
-      "BLK_plastic",
+      "BLK_rubber",
+      "BLK_aluminium",
       "BLK_wood_dark",
       "BLK_paper",
-      "BLK_cable",
+      "BLK_plastic",
       "BLK_cardboard",
+      "BLK_paint_od",
+      "BLK_brass",
+      "BLK_sign_red",
+      "BLK_sign_green",
+      "BLK_metal_rust",
+      "BLK_paint_tan"
+     ],
+     "mib": 77.1
+    },
+    "Perimetro": {
+     "nombre": "SM_MIL_2_avanzada_Perimetro",
+     "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Perimetro.glb",
+     "triangulos": 788766,
+     "ranuras": [
+      "BLK_galvanized",
+      "BLK_geotextile",
+      "BLK_sand",
+      "BLK_concrete",
+      "BLK_sandbag"
+     ],
+     "mib": 31.8
+    },
+    "Carga": {
+     "nombre": "SM_MIL_2_avanzada_Carga",
+     "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Carga.glb",
+     "triangulos": 1123960,
+     "ranuras": [
       "BLK_polymer",
+      "BLK_brass",
+      "BLK_copper",
+      "BLK_cardboard",
+      "BLK_sign_white",
+      "BLK_cable",
+      "BLK_paint_od",
+      "BLK_steel",
       "BLK_paint_yellow",
       "BLK_rubber",
       "BLK_gunmetal",
       "BLK_paint_tan",
       "BLK_canvas",
       "BLK_fabric",
-      "BLK_galvanized",
-      "BLK_geotextile",
-      "BLK_sand",
-      "BLK_sandbag",
-      "BLK_sign_red"
+      "BLK_plastic",
+      "BLK_wood_od",
+      "BLK_aluminium",
+      "BLK_galvanized"
      ],
-     "mib": 16.99
+     "mib": 52.6
     },
     "Vidrio": {
      "nombre": "SM_MIL_2_avanzada_Vidrio",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Vidrio.glb",
-     "triangulos": 1362,
+     "triangulos": 28574,
      "ranuras": [
       "BLK_glass"
      ],
-     "mib": 0.06
+     "mib": 0.89
     },
     "Colision": {
      "nombre": "SM_MIL_2_avanzada_Colision",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Colision.glb",
-     "triangulos": 396,
+     "triangulos": 394,
      "ranuras": [
       "BLK_colision"
      ],
@@ -4348,22 +4415,22 @@
     [
      -4.575,
      -5.65,
-     1.86
+     1.98
     ]
    ],
    "medidas_m": {
-    "x": 14.999,
-    "y": 14.473,
-    "z": 3.552,
+    "x": 15.073,
+    "y": 14.451,
+    "z": 3.549,
     "min": [
-     -7.499,
+     -7.536,
      -9.306,
      -0.12
     ],
     "max": [
-     7.499,
-     5.167,
-     3.432
+     7.536,
+     5.145,
+     3.429
     ],
     "escombro_min": null,
     "escombro_max": null,
@@ -4393,6 +4460,14 @@
     "Mobiliario_ranuras": true,
     "Mobiliario_un_uv": true,
     "Mobiliario_color0": true,
+    "Perimetro_presente": true,
+    "Perimetro_ranuras": true,
+    "Perimetro_un_uv": true,
+    "Perimetro_color0": true,
+    "Carga_presente": true,
+    "Carga_ranuras": true,
+    "Carga_un_uv": true,
+    "Carga_color0": true,
     "Vidrio_presente": true,
     "Vidrio_ranuras": true,
     "Vidrio_un_uv": true,
@@ -4404,7 +4479,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 21.37,
+   "mib_total": 210.88,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "costado largo de la tienda enrollado con el mostrador y la red de camuflaje; generador al fondo (+y)"

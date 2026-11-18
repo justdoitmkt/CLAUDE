@@ -5,7 +5,7 @@ Uso: python3 scripts/empaquetar_kit_ue5.py [--solo ID1,ID2]
 Escribe blackisle-kit-edificios/kit_ue5_descargas/BLACKISLE_UE5_comun.zip y BLACKISLE_UE5_<ID>.zip. Todos llevan rutas que
 empiezan por kit_ue5/: al descomprimirlos en la misma carpeta queda el kit completo tal como lo espera LEEME_UE5.md.
 Un ZIP (común o de modelo) que no cabe en 95 MB se reparte por archivos en BLACKISLE_UE5_<X>.zip, BLACKISLE_UE5_<X>_parte2.zip,
-... (por tamaño en disco); todas las partes van a la misma carpeta al descomprimir.
+... (por tamaño comprimido); todas las partes van a la misma carpeta al descomprimir.
 """
 import json
 import os
@@ -32,6 +32,19 @@ def _write(path, files):
     return os.path.getsize(path)
 
 
+def _zsize(path, chunk=1 << 22):
+    import zlib
+    c = zlib.compressobj(6)
+    n = 0
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            n += len(c.compress(b))
+    return n + len(c.flush())
+
+
 def pack(tag, files, head=()):
     """Escribe BLACKISLE_UE5_<tag>.zip; si comprimido no cabe en LIMIT, reparte por tamaño en disco en
     <tag>.zip, <tag>_parte2.zip, ... (los archivos de `head` van siempre en la primera parte). Devuelve {tag: bytes}."""
@@ -42,15 +55,18 @@ def pack(tag, files, head=()):
     n = _write(first, list(head) + sorted(files))
     if n <= LIMIT:
         return {tag: n}
-    bins, cur, acc = [], list(head), sum(os.path.getsize(p) for p in head)
-    for p in sorted(files, key=os.path.getsize, reverse=True):   # reparto voraz
-        k = os.path.getsize(p)
-        if cur and acc + k > LIMIT - 2**20:
-            bins.append(cur)
-            cur, acc = [], 0
-        cur.append(p)
-        acc += k
-    bins.append(cur)
+    csize = {p: _zsize(p) for p in list(head) + list(files)}   # tamaño comprimido medido (zlib 6 >= zlib 9 del ZIP)
+    bins, loads = [list(head)], [sum(csize[p] for p in head)]
+    for p in sorted(files, key=lambda q: csize[q], reverse=True):   # primer ajuste decreciente por tamaño comprimido
+        k = csize[p]
+        for i, ld in enumerate(loads):
+            if ld + k <= LIMIT - 3 * 2**20:
+                bins[i].append(p)
+                loads[i] += k
+                break
+        else:
+            bins.append([p])
+            loads.append(k)
     sizes = {}
     for i, group in enumerate(bins):
         t = tag if i == 0 else f"{tag}_parte{i + 1}"
