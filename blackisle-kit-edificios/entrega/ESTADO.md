@@ -768,3 +768,37 @@ tubo de 12 lados del kit salía facetado (el suavizado por ángulo de 30° marca
   Vidrio 28 574 (≈ 4,8 M; 211 MiB). Horneado de MIL_1 en una pasada con 15 GB de RAM (pico ~11 GB). ZIP: MIL_1 en 3 partes
   (91,8 + 76,4 + 25,1 MiB; el empaquetador ahora reparte por tamaño comprimido medido), MIL_2 72,8 MiB, común en 2 partes.
   Los .blend horneados de MIL salen de git (pasan de 100 MB) y se regeneran con `scripts/cadena_ue5.sh`.
+
+## MIL_1 + MIL_2 · auditoría de coherencia (2026-11-19)
+El usuario encontró una bajada pluvial cruzando el vano de la puerta de personal y el puesto de tirador con la entrada hacia
+la malla (cubriéndose de su propio almacén). Las dos cosas salían en las vistas previas y pasaron mi revisión: revisé cada
+pieza de cerca pero no la coherencia del conjunto. Se hizo una auditoría sistemática
+(`scratchpad coh/coherence.py`): registra cada pieza que coloca `mil_builder` (con MIL_2 puesto junto al almacén) y busca
+(1) piezas que se atraviesan (BVH entre piezas cuyas cajas se cruzan) y (2) zonas que deben quedar libres (cortinas, puerta de
+personal, frente del andén para camiones, portón, rampa, pasillos de racks, entrada de la tienda, frente del mostrador, paso
+bajo la red, pasillo interior de la tienda), más una revisión de lógica de uso y orientación. Errores encontrados y corregidos:
+- Bajada pluvial central del frente dentro del vano de la puerta de personal → el frente solo lleva bajadas en las esquinas.
+- Anillo de costales con la entrada hacia afuera → girado 180°: la cara cerrada mira a la malla y el acceso, la entrada al almacén.
+- Contraventeo de varilla del muro del frente en la crujía de la cortina poniente (las varillas cruzaban el vano por dentro) →
+  todo el contraventeo (techo y muros) pasa a la crujía 4, sin vanos; banco y estación de extintor reubicados libres de las varillas.
+- Torre de vigilancia con las patas metidas en las celdas HESCO → atrás de los HESCO (y = -15,4); se quitó el muro de costales
+  suelto de esa esquina.
+- Avanzada en (16; 6,5): los vientos y estacas de la tienda atravesaban el muro oriente de la nave y el muro T → reubicada en
+  (9,5; -11,4) girada -90°, con el mostrador hacia el portón, fuera del frente del andén, de la rampa y de la torre de luz.
+- Red de camuflaje con vientos hacia la tienda (atravesaban el piso de triplay, el mostrador y la mesa), a 15 cm del alero y con
+  un poste frente al mostrador → parámetros `back_ties` / `front_ties` en `camo_net`, red a 0,45 m del alero y corrida para que
+  sus postes queden fuera del mostrador; HESCO de las esquinas y reflector fuera de la red y de sus vientos.
+- Vientos intermedios del frente de la tienda cruzando el paso de los clientes → el frente enrollado solo lleva los de esquina.
+- Letrero SUPPLY a la altura de la cabeza frente al mostrador → colgado de la orilla del mostrador, al frente de las cajas.
+- Existencias tiradas a media tienda (pasillo entre mostrador y anaqueles) → contra los testeros, sin tapar las puertas.
+- Mostrador montado sobre la pata del arco central → entre las patas de los arcos (x -2,41 a 0).
+- Anaquel del fondo tocado por la panza de la pared; generador atravesado por un viento → separados.
+- Cajas largas del nivel alto de los racks chocando por los herrajes → 0,50 m entre ejes; caja abierta de la jaula metida en el
+  panel → recorrida 0,25 m.
+- Pasillo del fondo entre racks de 3,18 m (insuficiente para un montacargas de 5000 lb girando con tarima) → 3,78 m.
+- Torre de luz del poniente con los reflectores hacia el muro de la nave a 1,5 m → patio oriente, reflectores hacia el patio.
+- Revisado y correcto: orientación de la torre (vigila al frente, escalera del lado del almacén), pluma y su letrero hacia
+  afuera, chicana Jersey (obliga a zigzaguear hacia el portón), remates de la malla contra los muros T y el portón, rifles en
+  los armeros (contactos, no cruces), focos colgados de la cumbrera. El rollo de la pared enrollada de la tienda queda a
+  1,70–1,75 m: es la altura real de una TEMPER (alero de 6'9"); el cliente se queda afuera del mostrador.
+- Lo que el verificador sigue marcando son contactos de apoyo (piezas sobre su soporte, abrazaderas, amarres) revisados a la vista.
