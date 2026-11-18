@@ -1,5 +1,5 @@
 {
- "tris": 2772010,
+ "tris": 12739135,
  "mem_mb": 388.4,
  "materials": [
   "BLK_aluminium",
@@ -15,6 +15,7 @@
   "BLK_glass",
   "BLK_gravel",
   "BLK_gunmetal",
+  "BLK_metal_rust",
   "BLK_paint_od",
   "BLK_paint_tan",
   "BLK_paint_yellow",
