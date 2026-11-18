@@ -1212,7 +1212,7 @@ def _window(mb, S, xa, xb, za, zb, kind, side, seed):
     vv = np.linspace(za - 0.01, zb + 0.01, 7)
     Uu, Vv = np.meshgrid(uu, vv, indexing="ij")
     Pm, Nm = S.F(Uu, Vv)
-    _slab_grid(mb, Pm, Nm, -0.0046, -0.004, "net")
+    _slab_grid(mb, Pm, Nm, -0.0046, -0.004, "cable")          # mosquitero oscuro (no la tela de camuflaje)
     zs = zb + 0.12
     if kind == "open":
         R = 0.03
@@ -1645,7 +1645,7 @@ class _EndWall:
         zz = np.linspace(za - 0.01, zb + 0.01, 5)
         Pm = np.array([[tuple(self.pt(u, z)[0]) for z in zz] for u in uu])
         Nm = np.array([[tuple(self.pt(u, z)[1]) for z in zz] for u in uu])
-        _slab_grid(mb, Pm, Nm, -0.0046, -0.004, "net")
+        _slab_grid(mb, Pm, Nm, -0.0046, -0.004, "cable")          # mosquitero oscuro (no la tela de camuflaje)
         # solapa: cosida 4 cm sobre el vano, abierta 28° hacia afuera, dos varillas de aluminio la sostienen
         end = self.end
         zh = zb + 0.04
@@ -2080,6 +2080,8 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
             base = Vector((x + lean.x * 1.45, sy * (W / 2 + 1.35), 0.0))
             _guy(mb, pa, dd, base, lean, seed + k * 3 + (sy > 0))
     for end in (-1, 1):
+        if end < 0 and open_front:
+            continue                      # entrada abierta: sin viento de cumbrera cruzando frente a la puerta
         P, N = rf.F(np.array([end * (rf.x_hb + rf.e_r * 0.5)]), np.array([g["s_r"]]))
         c, n = Vector(P[0]), Vector(N[0])
         out = Vector((end, 0, -0.35)).normalized()
