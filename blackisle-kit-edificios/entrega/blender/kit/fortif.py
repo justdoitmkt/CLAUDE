@@ -576,8 +576,8 @@ def _bag_rings(r, ls=1.0, ws=1.0, hs=1.0, blunt=0.0, lod=0):
     tl = float(r.uniform(0.85, 1.15)) * (0.75 if blunt > 0.5 else 1.0)
     fr = 0.7 if blunt > 0.5 else 1.0                       # en un muro la cola va más pegada a la cabeza
     path = np.array([(xn + 0.012, 0.0, z_neck), (xn + 0.022 * fr + 0.002, 0.0, z_neck - 0.004),
-                     (xn + 0.03 * fr, 0.0, z_neck - 0.017), (xn + 0.027 * fr, 0.0, z_neck - 0.031),
-                     (xn + 0.012 * fr, 0.0, 0.0082), (xn - 0.016 * tl, 0.0, 0.0058), (xn - 0.058 * tl, 0.0, 0.005)])
+                     (xn + 0.03 * fr, 0.0, z_neck - 0.015), (xn + 0.028 * fr, 0.0, 0.4 * z_neck + 0.006),
+                     (xn + 0.014 * fr, 0.0, 0.0084), (xn - 0.016 * tl, 0.0, 0.0058), (xn - 0.058 * tl, 0.0, 0.005)])
     wid = np.array([1.05, 1.35, 1.8, 2.3, 2.8, 3.05, 3.05]) * rn
     thk = np.array([0.95, 0.75, 0.5, 0.36, 0.3, 0.26, 0.22]) * rn
     tail = []
@@ -838,6 +838,7 @@ def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
     `opening_deg` grados hacia -Y. Origen: centro, en el piso."""
     courses = []
     pitch = 0.515
+    rf = rng(seed + 77)
     for k in range(rows):
         arc0 = -PI / 2 + math.radians(opening_deg) / 2
         arc = 2 * PI - math.radians(opening_deg)
@@ -849,7 +850,9 @@ def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
         idx = [i + off for i in range(n)] if not off else [i + off for i in range(n - 1)]
         for t in idx:
             a = arc0 + da * (t + 0.5)
-            row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, ls, 1.0, radius))
+            fl = rf.uniform() < 0.5                        # boca hacia uno u otro lado (el saco se curva igual)
+            row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + (270.0 if fl else 90.0), ls, 1.0,
+                        -radius if fl else radius))
         if off:                                            # medios sacos en las cabezas de la entrada
             for t in (0.25, n - 0.25):
                 a = arc0 + da * t

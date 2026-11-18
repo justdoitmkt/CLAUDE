@@ -180,8 +180,7 @@ def _board(mb, x0, x1, y0, y1, z0, z1, mat, r=0.003, M=None, step=0.25, disp=Non
 def _screw_cs(mb, M, d=0.0082, seed=0, proud=0.0004, mat="steel"):
     """Tornillo avellanado de cabeza plana con cruz (Phillips): cabeza a ras (proud sobre la cara, sin z-fighting), bisel que se
     hunde en la madera y cruz de 4 brazos hundida 1,3 mm. M: z local = normal de la cara, origen en la cara."""
-    r = rng(seed)
-    rot = _f(r.uniform(0, PI / 2))
+    rot = ((abs(int(seed)) * 0.618034) % 1.0) * PI / 2
     seg = 12
     R = d / 2
 
@@ -280,15 +279,16 @@ def _ply_zs(z0, t, r, n_ply=7):
     return _axis_samples(z0, z0 + t, r, 2, 1.0, forced=pz + cz)
 
 
-def _ply_sheet(mb, x0, x1, y0, y1, z0, t, seed, topfn=None, chips=(), M=None, step=0.1, r=0.0016, extra_x=(), extra_y=()):
+def _ply_sheet(mb, x0, x1, y0, y1, z0, t, seed, topfn=None, chips=(), M=None, step=0.15, r=0.0016, extra_x=(), extra_y=()):
     """Hoja de triplay como sólido: cara superior en rejilla (alabeo, desgaste y desniveles vía topfn(x, y) -> dz), canto con
-    las chapas a la vista (las chapas cruzadas 0,2 mm hundidas), cantos matados r y despostilladuras chips = [(lado, s, largo,
-    profundidad)] con lado 0 x-, 1 x+, 2 y-, 3 y+ y s la coordenada a lo largo del canto. Fondo plano de un polígono (apoyado)."""
-    fx = list(extra_x)
-    fy = list(extra_y)
+    las chapas a la vista (las chapas cruzadas 0,3 mm hundidas), cantos matados r y despostilladuras chips = [(lado, s, largo,
+    profundidad)] con lado 0 x-, 1 x+, 2 y-, 3 y+ y s la coordenada a lo largo del canto: la chapa de cara se desprende en un
+    escalón de borde vivo (meseta con flancos cortos), no una abolladura. Fondo plano de un polígono (cara apoyada)."""
+    fx = list(extra_x) + [x0 + 0.004, x0 + 0.009, x1 - 0.004, x1 - 0.009]
+    fy = list(extra_y) + [y0 + 0.004, y0 + 0.009, y1 - 0.004, y1 - 0.009]
     for (side, s, ln, dep) in chips:
         tgt = fy if side < 2 else fx
-        tgt += [s - ln * 0.9, s - ln * 0.45, s, s + ln * 0.45, s + ln * 0.9]
+        tgt += [s - ln / 2 - 0.002, s - ln / 2 + 0.0015, s - ln * 0.15, s + ln * 0.2, s + ln / 2 - 0.0015, s + ln / 2 + 0.002]
     xs = _axis_samples(x0, x1, r, 2, step, forced=fx)
     ys = _axis_samples(y0, y1, r, 2, step, forced=fy)
     zs = _ply_zs(z0, t, r)
@@ -305,8 +305,8 @@ def _ply_sheet(mb, x0, x1, y0, y1, z0, t, seed, topfn=None, chips=(), M=None, st
         rec = np.zeros(len(Q))
         for (za, zb) in cross:
             zc, hw = (za + zb) / 2, (zb - za) / 2
-            rec += np.clip(1 - np.abs(Q[:, 2] - zc) / hw, 0, 1)
-        rec *= side * 0.0002
+            rec += np.clip(1.6 * (1 - np.abs(Q[:, 2] - zc) / hw), 0, 1)
+        rec *= side * 0.0003
         D[:, 0] -= N[:, 0] * rec
         D[:, 1] -= N[:, 1] * rec
         for (sd, s, ln, dep) in chips:
@@ -318,11 +318,12 @@ def _ply_sheet(mb, x0, x1, y0, y1, z0, t, seed, topfn=None, chips=(), M=None, st
                 along, edge = Q[:, 0], (y0 if sd == 2 else y1)
                 dist = np.abs(Q[:, 1] - edge)
                 nx_, ny_ = 0.0, (1.0 if sd == 2 else -1.0)
-            g = np.exp(-((along - s) / (ln * 0.5)) ** 2)
-            h = np.exp(-(dist / (dep * 1.4)) ** 2) * np.clip((Q[:, 2] - (z0 + t - dep * 2.2)) / (dep * 2.2), 0, 1)
+            g = np.clip((ln / 2 - np.abs(along - s)) / 0.003, 0, 1)            # meseta con flancos de 3 mm
+            reach = 0.0065 * (0.8 + 0.4 * np.sin(along * 900.0 + s * 37.0))   # orilla del desprendimiento irregular
+            h = np.clip((reach - dist) / 0.0025, 0, 1) * np.clip((Q[:, 2] - (z0 + t - dep * 2.5)) / (dep * 1.5), 0, 1)
             a = dep * g * h
-            D[:, 0] += nx_ * a * 0.8
-            D[:, 1] += ny_ * a * 0.8
+            D[:, 0] += nx_ * a * 0.35
+            D[:, 1] += ny_ * a * 0.35
             D[:, 2] -= a
         return D
     _dbox(mb, M, xs, ys, zs, r, "plywood", disp=disp, ngon=(4,))
@@ -417,7 +418,7 @@ def plywood_floor(L=9.5, W=5.8, seed=0, ramp=True):
                     s = _f(rs.uniform(ta + 0.08, tb - 0.08))
                 else:
                     s = _f(rs.uniform(sa + 0.08, sb - 0.08))
-                chips.append((sd_, s, _f(rs.uniform(0.012, 0.03)), _f(rs.uniform(0.0012, 0.0028))))
+                chips.append((sd_, s, _f(rs.uniform(0.012, 0.035)), _f(rs.uniform(0.0007, 0.0013))))
             _ply_sheet(mb, sa, sb, ta, tb, zb, t, sd, topfn=topfn, chips=chips)
             # tornillos sobre los durmientes que caen en esta hoja
             for x in jx:
@@ -432,7 +433,7 @@ def plywood_floor(L=9.5, W=5.8, seed=0, ramp=True):
                 else:
                     xx = x
                     pitch = 0.3048
-                yy = ta + 0.0095 + 0.03
+                yy = ta + 0.04
                 while yy < tb - 0.0095:
                     px, py = xx + _jit(rs, 0.002), yy + _jit(rs, 0.004)
                     pz = zt + _f(topfn(np.array([px]), np.array([py]))[0])
@@ -451,29 +452,27 @@ def _floor_ramp(mb, xe, zt, r, wr=1.10, lr=0.60):
     t = PLY_T
     xa = xe - 0.003                                 # canto alto de la rampa (holgura con el piso)
     xt = xa - lr                                    # punta
-    z_hi, z_lo = zt, 0.018
+    z_hi, z_lo = zt, 0.0195
     ang = math.atan2(z_hi - z_lo, lr)
     Ld = lr / math.cos(ang)
     # cubierta: hoja en su marco inclinado (origen en la arista superior alta, X local hacia la punta)
     Md = _T(xa, 0.0, z_hi) @ _Ry(-math.degrees(ang)) @ _Rz(180)
     _ply_sheet(mb, 0.0, Ld, -wr / 2, wr / 2, -t, t, 7, M=Md,
-               chips=[(2, Ld * 0.6, 0.02, 0.002)], step=0.08,
-               topfn=lambda X, Y: -0.0004 * np.exp(-((Y) / 0.3) ** 2) * np.clip(X / Ld, 0, 1))
-    # largueros cónicos (2×4 cortados en cuña) bajo la cubierta
+               chips=[(2, Ld * 0.6, 0.02, 0.001)], step=0.1, extra_x=(Ld - 0.03, Ld - 0.018, Ld - 0.008),
+               topfn=lambda X, Y: (-0.0004 * np.exp(-((Y) / 0.3) ** 2) * np.clip(X / Ld, 0, 1)
+                                   - 0.009 * np.clip((X - (Ld - 0.03)) / 0.03, 0, 1) ** 1.3))
+    # largueros cónicos (2×4 cortados en cuña) bajo la cubierta: caja de cantos matados aplastada hacia la punta
+    xs_lo, xs_hi = xt + 0.035, xa - 0.002
+    def under(x):
+        return z_hi - t / math.cos(ang) - (xa - x) * math.tan(ang) - 0.0002
+    h_hi = under(xs_hi)
     for yy in (-wr / 2 + 0.03, 0.0, wr / 2 - 0.03):
-        prof_hi = z_hi - t - 0.0002
-        loops = []
-        for (xx, zz) in ((xa - 0.002, prof_hi), (xt + 0.04, z_lo - t + 0.004)):
-            loops.append([(xx, yy + dy, z) for (dy, z) in ((-0.019, 0.0), (0.019, 0.0), (0.019, zz), (-0.019, zz))])
-        # sección con cantos matados: escalón en lugar de cuña afilada (corte real de 4 mm en la punta)
-        Lp = []
-        for (xx, zz) in ((xa - 0.002, prof_hi), (xt + 0.04, max(z_lo - t + 0.004, 0.004))):
-            ring = []
-            for (dy, z) in ((-0.019, 0.002), (-0.017, 0.0), (0.017, 0.0), (0.019, 0.002), (0.019, zz - 0.002), (0.017, zz),
-                            (-0.017, zz), (-0.019, zz - 0.002)):
-                ring.append((xx, yy + dy, z))
-            Lp.append(ring)
-        skin(mb, Lp, "wood")
+        def dsq(Q, N, P):
+            D = np.zeros_like(Q)
+            fac = np.array([under(x) for x in Q[:, 0]]) / h_hi
+            D[:, 2] = Q[:, 2] * (fac - 1.0)
+            return D
+        _board(mb, xs_lo, xs_hi, yy - 0.019, yy + 0.019, 0.0, h_hi, "wood", r=0.003, step=0.2, disp=dsq, ngon=(4,))
     # listones antiderrapantes atornillados
     nl = 3
     for k in range(nl):
@@ -484,12 +483,12 @@ def _floor_ramp(mb, xe, zt, r, wr=1.10, lr=0.60):
             _screw_cs(mb, Ml @ _T(0.0, yy, 0.0095), d=0.007, seed=k * 7 + int(yy * 100))
     # escuadras de lámina (largueros extremos -> cara del durmiente de remate)
     for yy in (-wr / 2 + 0.03, wr / 2 - 0.03):
-        for sy in (-1,) if yy < 0 else (1,):
-            yo = yy + sy * 0.0192
-            Mb = _T(xe, yo, 0.012)
-            _board(mb, -0.003, 0.0, 0.0 if sy > 0 else -0.0016, 0.0016 if sy > 0 else 0.0, 0.0, 0.05, "galvanized", r=0.0006,
-                   M=Mb, step=1.0)
-            _board(mb, -0.05, -0.003, 0.0 if sy > 0 else -0.0016, 0.0016 if sy > 0 else 0.0, 0.0, 0.05, "galvanized", r=0.0006,
-                   M=Mb, step=1.0)
-            for (dx, dz) in ((-0.03, 0.015), (-0.03, 0.037)):
-                _screw_cs(mb, Mb @ _T(dx, sy * 0.0016, dz) @ _Rx(-90 * sy), d=0.006, seed=int(dz * 1000))
+        sy = 1 if yy > 0 else -1
+        yo = yy + sy * 0.0191
+        ya_, yb_ = sorted((yo, yo + sy * 0.045))
+        _board(mb, xe - 0.0016, xe, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
+        ya_, yb_ = sorted((yo, yo + sy * 0.0016))
+        _board(mb, xe - 0.055, xe, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
+        for dz in (0.026, 0.052):
+            _screw_cs(mb, _T(xe - 0.0016, yo + sy * 0.03, dz) @ _Ry(-90), d=0.006, seed=int(dz * 1000) + sy)
+            _screw_cs(mb, _T(xe - 0.032, yo + sy * 0.0016, dz) @ _Rx(-90 * sy), d=0.006, seed=int(dz * 1000) + 3 * sy)
