@@ -49,6 +49,10 @@ kit_ue5/
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
+**Descarga:** el kit llega en ZIP (`BLACKISLE_UE5_comun.zip` y uno por modelo). Un ZIP de más de 95 MB viene en partes
+(`BLACKISLE_UE5_comun_parte2.zip`, `..._<ID>_parte2.zip`): se descomprimen **todas** en la misma carpeta; las rutas de
+adentro ya empiezan por `kit_ue5/` y arman el árbol de arriba.
+
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
 ## 3. Las piezas de cada modelo (5; algunos traen Mobiliario y el almacén militar además Perímetro y Carga)
@@ -105,7 +109,7 @@ centro del edificio principal, a nivel de banqueta (z = 0); piso interior a +0,4
   acondicionado, pasamanos). Es la malla más pesada del kit (Nanite); se coloca con las demás y se puede ocultar en bloque.
   Su colisión son **cajas simples** dentro de la pieza Colision; muros, pisos y escalones vienen completos.
 - **Peso:** ~2 M de triángulos (mobiliario 1,6 M); el GLB del mobiliario pesa ~81 MB sin comprimir (el ZIP, ~40 MB). Si algún
-  modelo llegara a venir en varias partes (`..._parte2.zip`), se descomprimen todas en la misma carpeta.
+  ZIP viene en varias partes (`..._parte2.zip`), se descomprimen todas en la misma carpeta (ver §2).
 - **Textos en inglés** en letreros 3D (COMMUNITY HOSPITAL, EMERGENCY, EXAM 1/2, PHARMACY, X-RAY, WARD, NURSES, EXIT…).
 - **Luces:** cada luminaria fluorescente es un foco en `modelos.HOS_1_pueblo.focos_m_blender`; `ib.focos(actor)` les pone
   una luz puntual. Para un hospital encendido, súbeles los lúmenes (~2000) y temperatura 4000 K.

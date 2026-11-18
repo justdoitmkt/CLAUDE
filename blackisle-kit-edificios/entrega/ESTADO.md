@@ -685,6 +685,10 @@ b4b4ee1c, 22fdd350, 69a1fda1, 2235e7c1, f420198d, d7c6dd1b). Revisadas con mis o
   importador y LEEME §3.5); el importador toma el Detalle como raíz cuando no hay Estructura (MIL_2). Texturas nuevas T15–T20
   y materiales canvas, sandbag, geotextile, wood_od, net, plywood, paint_od, paint_tan, rack_orange, rack_blue (repetibles) y
   brass, gunmetal, polymer (color); la lámina arena usa la capa de pintura sobre óxido con desgaste bajo (umbral por wear).
+- **ZIP:** MIL_1 45,0 MiB, MIL_2 6,8 MiB. Con T15–T20 el común pasó de 95 MB: `empaquetar_kit_ue5.py` ahora reparte en
+  partes cualquier ZIP que no quepa (común incluido) → `BLACKISLE_UE5_comun.zip` (93,4 MiB, con LEEME, manifiesto e
+  importador) + `BLACKISLE_UE5_comun_parte2.zip` (7,4 MiB); verificado que entre los dos están los 111 archivos sin
+  duplicados. LEEME §2 explica las partes.
 - **Por debajo del estándar, dicho con honestidad**: alambres de la malla HESCO de 4 lados y su bobina de 3, y alambre de la
   malla ciclónica de 3 (presupuesto: se notan a < 1 m); las navajas de la concertina son un fleje dentado, no hojas sueltas;
   la lona de la tienda tiene arrugas anchas (sin pliegues finos) y la red de camuflaje cae por cálculo aproximado, sin la red
