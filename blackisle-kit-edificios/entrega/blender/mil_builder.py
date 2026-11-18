@@ -1312,7 +1312,7 @@ def outpost(furn, det, r, standalone=True):
     for k in range(3):
         put(_fn("jerry_can", ft)(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
     put(_fn("floodlight_tripod", ft)(seed=7), _T(-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 0.0))
-    LIGHTS.append([-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 1.86])
+    LIGHTS.append([-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 1.98])
     for k in range(4):
         put(_fn("jerry_can", ft)(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
     if hasattr(ft, "camo_net"):
