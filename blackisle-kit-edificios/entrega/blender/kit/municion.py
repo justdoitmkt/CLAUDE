@@ -321,9 +321,16 @@ def spline(pts, n=3):
 
 
 def rope_knot(mb, M, s=0.0056, r=0.0062, mat="fabric", phase=0.0):
-    """Nudo de tope (trébol apretado) de la cuerda, centrado en el origen de M; cabe en ~ 6,5 s × 6,5 s × 2 (s + r)."""
+    """Nudo de tope (trébol apretado) de la cuerda, centrado en el origen de M; cabe en ~ 6,5 s × 6,5 s × 2 (s + r).
+    Versión ligera: vuelta y cuarto de cuerda en espiral apretada (se lee como el mismo nudo sin quedar arrugada)."""
     pts = []
-    n = 13 if _lo() else 22
+    if _lo():
+        for k in range(15):
+            t = 2 * PI * 1.3 * k / 14 + phase
+            pts.append(M @ Vector((0.0068 * math.cos(t), 0.0068 * math.sin(t), -0.0045 + 0.0085 * k / 14)))
+        rope(mb, pts, r=r, pitch=0.030, mat=mat, caps=True, phase=phase, smooth=False)
+        return
+    n = 22
     for k in range(n + 1):
         t = 2 * PI * k / n + 0.35
         pts.append(M @ Vector((s * (math.sin(t) + 2 * math.sin(2 * t)), s * (math.cos(t) - 2 * math.cos(2 * t)),

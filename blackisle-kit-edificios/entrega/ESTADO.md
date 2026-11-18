@@ -695,3 +695,70 @@ b4b4ee1c, 22fdd350, 69a1fda1, 2235e7c1, f420198d, d7c6dd1b). Revisadas con mis o
   base de cordel; agujeros del tablero y gotas del rack son pastillas oscuras; carrocería del montacargas simplificada;
   cargadores sin nervaduras; puertas del generador lisas; esténciles con la fuente de Blender; tornillería chica de 12–20
   lados. Las armas son genéricas (proporciones de fichas reales, no réplicas).
+
+## MIL_1 + MIL_2 · segunda pasada AAA completa (2026-11-18)
+Orden del usuario: "da la segunda pasada, esta vez completa en los detalles". Se auditaron en arcilla, a < 2 m, las 53 piezas
+de los módulos y la nave (`scratchpad p2/r0`, `nave_r0`): la primera versión estaba muy por debajo de R-AAA (costal de 388
+triángulos facetado, cargador = caja curva de 288, pistola de 1,8 k, rifles de 7 k con receptor de caja, agujeros del
+tablero pintados, piso de triplay plano, cajas OD que parecían de cartón, lona lisa, alambres de 3–4 lados) y además todo
+tubo de 12 lados del kit salía facetado (el suavizado por ángulo de 30° marca dura la arista de 30° justos).
+- **Infraestructura:** `kit.common.MB` con caras *soft* (sombreado continuo para alambres de <= 6 mm; `tube()` con r <= 3 mm
+  lo aplica solo; `MB.soft()` para lo demás). `kit/fonts.py`: texto con tipografías OFL (Saira Stencil One y Allerta Stencil
+  para esténciles con puentes reales, Overpass para letreros), en `blender/fonts/`. `telecom.fence_run/fence_gate(lite_hq=True)`:
+  malla ciclónica de alambre de 12 lados soft con herrajes completos (~54 k triángulos por metro). Pieza nueva del kit
+  **Malla** (cerca del frente y concertina de MIL_1) y MIL_2 repartido en Detalle / Mobiliario / Perímetro / Carga para que
+  ningún GLB pase de ~3,5 M. `bake_apt` guarda el .blend comprimido.
+- **Siete módulos rehechos** (agentes con brief común; revisé cada pieza en sus renders a < 2 m antes de integrarla):
+  - `kit/fortif.py`: costal 388 → 4,4 k (saco de 14×26" lleno a 2/3, dobladillo cosido, cuello amarrado con frunces y cola
+    doblada, orejas, arrugas; hiladas asentadas sin interpenetración); HESCO con alambre de 4 mm redondo, soldaduras, liner
+    acolchado entre cuadros (8–13 mm), panza de cara y tapa de tierra; muro T y Jersey con radios de colado, rebabas, conos de
+    tirante e izajes; concertina BTO-22 con navajas sueltas en racimos cada 34 mm sobre el fleje torcido; red LCSS con red de
+    cordel anudada y guarnición con lóbulos; torre de vigilancia con soldaduras, rejilla y barandal curvo.
+  - `kit/fortif_equipo.py` (nuevo): bidón OTAN con X embutida y tapa de leva (19 k), generador AMMPS 10 kW con patín, puertas,
+    persianas y tablero completo (173 k), pluma con gabinete, contrapeso, faldón y STOP (104 k), reflector en trípode (45 k),
+    torre de luz con remolque, muelles, llantas con dibujo, mástil de 4 tramos y 4 LED (335 k).
+  - `kit/armory.py`: rifles 7 k → 50–57 k (receptores con cortes, ventana con tapa, selector, retenes, M-LOK real, riel,
+    culata, miras con perillas), pistola 1,8 k → 18 k, funda 21 k, cargador con costillas y cartucho (6,4 k lite), MG, mortero,
+    lanzador, chaleco con MOLLE (38 k) y estuche (24 k).
+  - `kit/municion.py` (nuevo): latas M2A1/M19A1 (11,5 k; abierta con cinta .50), caja de cartón, cajas de madera de tablas con
+    holgura, bisagras, broches, flejes y asas de cuerda (28–43 k), GMA, tarima de 155 mm M107 con varillas y tuercas.
+    `lod=1` solo para la carga de los racks (caja 5–6 k, tarima de 6 cajas 39 k): racks de MIL_1 1,95 M en vez de 12 M.
+  - `kit/tienda_lona.py` (nuevo): tienda TEMPER 69 k → 613 k (caída entre arcos, arrugas de tensión, costuras dobles, faldón,
+    lazadas, costado enrollado en espiral con 7 cintas, puertas con cremallera de dientes, ventanas con malla y solapa, vientos
+    con tensor y estacas forjadas).
+  - `kit/tienda_mobiliario.py` (nuevo): piso de triplay con canto de chapas, 725 tornillos y rampa (158 k), mostrador de cajas
+    reales (183 k), anaquel con gotas pasantes, armero con candado laminado, tablero con 1 748 perforaciones reales, mesa y silla,
+    focos E26, letrero de tabla con cadena.
+  - `kit/campaign.py` (nave): rack de gota 25 k → 217 k (gotas pasantes donde se ven, conectores de 3 remaches, parrillas),
+    jaula con malla 2×2" cal. 10 redonda (267 k), montacargas Yale GC050VX (272 k), banco con tornillo de banco (56 k),
+    luminaria UFO de 24 aletas (11 k), extintor ABC 10 lb (30 k).
+- **Nave (`mil_builder.py`, mío):** medidor con domo, anillo de sello y precinto + desconectador NEMA 3R con palanca y
+  portacandado + conduit con codo LB y abrazaderas; abrazaderas de fleje en U de las bajadas; salpicadero acanalado; grava de
+  piedra triturada (6 formas, 2 600 piezas); tapones de cimbra en el andén; rampa con aristas boleadas; cámara bala con rótula,
+  visera curva y gaza de goteo; esténciles del muro con Saira Stencil; todos los cilindros visibles a >= 24 lados.
+- **Fuentes nuevas (además de las de arriba):** sacos [webstaurant](https://www.webstaurantstore.com/documents/specsheets/sandbags_spec_sheet.pdf),
+  [NDSU AE-626](https://ndsu.edu/agriculture/sites/default/files/2023-04/ae626.pdf); BTO-22 [globalsources](https://p.globalsources.com/IMAGES/PDT/SPEC/203/K1173060203.pdf);
+  HESCO [bimobject](https://www.bimobject.com/en/hesco/product/hesco-mil-1b-cl); T-wall [48barriers](https://48barriers.com/products/concrete/t-walls-2/);
+  Jersey [Iowa DOT BA-401](https://ia.iowadot.gov/design/SRP/IndividualStandards/ba401.pdf); LCSS [FAS](https://man.fas.org/dod-101/sys/land/lccs.htm);
+  AMMPS [Cummins](https://www.cummins.com/generators/ammps); bidón [Wavian](https://artemisoverland.com/collections/fuel-water-storage/products/wavian-fuel-can-the-original-nato-steel-jerry-can-20l-5-3-gal);
+  pluma [Automatic Systems BL10](https://www.automatic-systems.com/ier-content/uploads/2018/03/bl10-ft-en-09.pdf); torre de luz [Mosa TF](https://www.manelservice.com/en/lighting-systems/lighting-towers/mosa-tf-nm9-l-4x240-led-lighting-tower);
+  M4/M16/M110 (Wikipedia), [M-LOK](https://en.wikipedia.org/wiki/M-LOK), [5.56](https://en.wikipedia.org/wiki/5.56%C3%9745mm_NATO), pistola [G17 ficha](https://us.glock.com/en/Pistols/G17-Gen5-FS-US) (solo medidas);
+  latas [luckygunner M2A1](https://www.luckygunner.com/ammo-can-50-cal-green-new-m2a1-mil-spec-1-blackhawk); [M107](https://en.wikipedia.org/wiki/M107_projectile);
+  GMA [racklify](https://racklify.com/encyclopedia/the-anatomy-of-the-gma-style-wooden-pallet/); TEMPER [TM 10-8340-224-13](https://WWW.radionerds.com/images/5/53/TM-10-8340-224-13_TEMPER.pdf),
+  estaca [NSN 8340-00-823-7461](https://www.fastenersplus.com/products/5-8-x-18-tent-stake-hot-forged-tent-pin-red-nsn-8340-00-823-7461), cremallera [#10 moldeada](https://www.paskal.co.il/paskal.co.il/originals/molded_product_spec_10mm_v2.pdf);
+  mesa [Lifetime 2924](https://www.lifetime.com/lifetime-2924g-6-foot-folding-table), piso [APA](https://apawood.org/Data/Sites/1/documents/handouts/quality-floors-from-start-to-finish.pdf),
+  anaquel [Global Industrial](https://www.globalindustrial.com/p/shelving-48x18x72-with-5-shelves-no-deck), candado [Master Lock 3](https://masterlock.com/products/product/3);
+  rack [Damotech](https://www.damotech.com/blog/teardrop-pallet-racks-advantages-disadvantages-and-common-uses), malla [WireCrafters](https://www.wirecrafters.com/wp-content/uploads/2x2-10-GA-Welded-Mesh-Specs.pdf),
+  montacargas [GC050VX](https://www.lectura-specs.com/en/model/forklifts/lpg-forklifts-yale/gc050vx-11720405), luminaria [Superia UFO 150 W](https://ikioledlighting.com/documents/products/Industrial/High%20Bays/UFO/Superia%20UFO%20High%20Bay/Technical%20Data%20Sheet/Superia_UHB_150W_5000K_TDS.pdf),
+  extintor [Oval 10J-ABC](https://safetyemporium.com/content/oval/10J-ABC_specs.pdf). Varias fichas de fabricante (Cummins, MARCORSYSCOM, DLA, gd-ots,
+  wbparts) están bloqueadas por la red de la sesión: esas medidas salen de los extractos del buscador.
+- **Por debajo del estándar, dicho con honestidad:** nudos de la malla ciclónica en inglete (cruce, no doblez envuelto);
+  cama de grava = superficie ondulada con textura + piedras sueltas (sin desplazamiento a escala de piedra); costuras y
+  pespuntes como surcos continuos (sin puntadas sueltas) y lona de una sola superficie (por dentro más lisa); arrugas de lona
+  procedurales, no simulación; red de camuflaje sin espesor; dos postes de la red forman picos altos; en la torre, el
+  intermedio del barandal sin soldadura en el cruce con el poste, escalera sin cuello de ganso y techo de un panel; tapa de
+  expulsión del rifle siempre cerrada; textura del grip de la pistola casi invisible a 1 m; trípode de la MG y placa base del
+  mortero solo subidos de resolución; estuche sin interior; generador y torre con tablero genérico (carátulas sin numerales);
+  llanta sin letras y rin con ventanas ciegas; malla de la jaula con cruces traslapados (sin botón de soldadura); montacargas
+  sin motor modelado bajo el cofre; carga de racks en lod=1 (sin golpes ni veta en geometría); a 0,5 m la punta de la gota
+  del rack se ve angulosa; esténciles y glifos 3D dejan aristas abiertas (no visibles).

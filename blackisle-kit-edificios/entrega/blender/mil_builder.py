@@ -1373,6 +1373,7 @@ def perimeter(det, towers, r):
     put(ft.sandbag_wall(3.0, rows=3, seed=9), _T(-23.2, -15.2, Z_GRAVEL) @ _Rz(0))
 
 
+LOD_RACK = {}                     # se llena con lod=1 si kit.municion lo acepta (carga de racks ligera: ~2 M en vez de 12 M)
 RACK_ROWS = [(16.30, 0), (11.94, 180), (10.07, 0)]       # (y del origen, giro): fila del fondo y doble fila al centro
 RACK_XS = (-15.20, -6.80)                                 # dos racks de 3 claros por fila
 
@@ -1385,11 +1386,16 @@ def warehouse_interior(furn, r, cargo=None):
     if cp is None:
         return
     zf = FFL
+    import inspect
+    mu = _mod("municion")
+    LOD_RACK.clear()
+    if mu is not None and "lod" in inspect.signature(mu.crate_pallet).parameters:
+        LOD_RACK["lod"] = 1
 
-    def put(piece, M, solid=True):
+    def put(piece, M, solid=True, mb=None):
         if solid:
             _proxy(piece, M)
-        furn.join(piece, M)
+        (mb if mb is not None else furn).join(piece, M)
     slots = cp.pallet_rack_slots(3, 3, 1.1, 2.7)
     for ri, (yr, rot) in enumerate(RACK_ROWS):
         for xi, xr in enumerate(RACK_XS):
@@ -1403,15 +1409,16 @@ def warehouse_interior(furn, r, cargo=None):
                     continue                                    # huecos: lo que ya salió
                 Mx = Mr @ Ms @ _Rz(180 * int(r.integers(2)))
                 if lev == 0:
-                    piece = _fn("shell_pallet", ar)(seed=int(r.integers(1e6))) if r.random() < 0.3 else \
-                        _fn("crate_pallet", ar)(6, seed=int(r.integers(1e6)))
+                    piece = _fn("shell_pallet", ar)(seed=int(r.integers(1e6)), **LOD_RACK) if r.random() < 0.3 else \
+                        _fn("crate_pallet", ar)(6, seed=int(r.integers(1e6)), **LOD_RACK)
                 elif lev == 1:
-                    piece = _fn("crate_pallet", ar)(3, seed=int(r.integers(1e6)))
+                    piece = _fn("crate_pallet", ar)(3, seed=int(r.integers(1e6)), **LOD_RACK)
                 else:
                     piece = cl.MB()
-                    _fn("pallet_gma", ar)(piece)
+                    _fn("pallet_gma", ar)(piece, **LOD_RACK)
                     for j in range(2):
-                        piece.join(_fn("ammo_crate", ar)("long", seed=int(r.integers(1e6))), _T(0, (j - 0.5) * 0.47, 0.135) @ _Rz(0))
+                        piece.join(_fn("ammo_crate", ar)("long", seed=int(r.integers(1e6)), **LOD_RACK),
+                                   _T(0, (j - 0.5) * 0.47, 0.135) @ _Rz(0))
                 (cargo or furn).join(piece, Mx)
     # líneas amarillas de pasillo frente a cada cara de rack y la de la zona de recibo
     for y in (15.66, 12.57, 9.43, 6.20):
@@ -1446,7 +1453,8 @@ def warehouse_interior(furn, r, cargo=None):
     # zona de recibo: tarimas en espera y montacargas
     if ar is not None:
         for k, (x, y) in enumerate(((-17.2, 3.4), (-15.6, 3.4), (-10.2, 3.6), (-8.4, 2.9))):
-            put(_fn("crate_pallet", ar)(6, seed=300 + k) if k != 2 else _fn("shell_pallet", ar)(seed=300 + k), _T(x, y, zf) @ _Rz(90 if k % 2 else 0))
+            put(_fn("crate_pallet", ar)(6, seed=300 + k) if k != 2 else _fn("shell_pallet", ar)(seed=300 + k), _T(x, y, zf) @ _Rz(90 if k % 2 else 0),
+                mb=cargo if cargo is not None else furn)    # versión completa (se ve a < 1 m) en la malla Carga
     put(cp.forklift(seed=31), _T(-3.4, 4.2, zf) @ _Rz(-70))
     # banco de trabajo y estaciones de extintor contra el muro del frente (por dentro)
     yi = WY0 - RIB_T + WT
