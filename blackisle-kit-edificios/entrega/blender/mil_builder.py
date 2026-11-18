@@ -603,8 +603,6 @@ def floor_slab(inter):
         inter.box((x - 0.003, y0, FFL - 0.004), (x + 0.003, y1, FFL + 0.0004), "rubber", bevel=0.0)
     for y in (6.0, 12.0):
         inter.box((x0, y - 0.003, FFL - 0.004), (x1, y + 0.003, FFL + 0.0004), "rubber", bevel=0.0)
-    for (a, b, c, d) in ((x0 + 0.6, x1 - 0.6, 7.6, 7.7), (x0 + 0.6, x1 - 0.6, 10.3, 10.4)):
-        inter.box((a, c, FFL), (b, d, FFL + 0.0015), "paint_yellow", bevel=0.0)
 
 
 # ------------------------------------------------------------------------------------------------------------ frente
@@ -993,7 +991,7 @@ def _mod(name):
         return None
 
 
-def front_fence(furn, r):
+def front_fence(furn, r):   # (se le pasa Detalle: la malla va con el exterior; Mobiliario queda para el interior)
     """Malla ciclónica del frente (modo ligero de kit/telecom.py) sobre la guarnición, con portón vehicular doble de 6 m."""
     tel = _mod("telecom")
     if tel is None:
@@ -1044,7 +1042,7 @@ def outpost(furn, det, r, standalone=True):
                    ((-TENT_L / 2 - 0.25, -TENT_W / 2), (-TENT_L / 2 + 0.05, TENT_W / 2)),
                    ((TENT_L / 2 - 0.05, -TENT_W / 2), (TENT_L / 2 + 0.25, TENT_W / 2))):
         _proxy_box((a[0], a[1], 0.0), (b[0], b[1], 2.2))
-    put(cp.plywood_floor(L=9.6, W=5.9, seed=int(r.integers(1e6))), Matrix(), solid=False)
+    put(cp.plywood_floor(L=9.5, W=5.8, seed=int(r.integers(1e6))), Matrix(), solid=False)
     zf = FLOOR_TOP
     # mostrador y mesa de exhibición al frente
     put(cp.crate_counter(L=2.4, seed=int(r.integers(1e6))), _T(-0.6, -2.35, zf))
@@ -1173,6 +1171,89 @@ def perimeter(det, furn, r):
     put(ft.sandbag_wall(3.0, rows=3, seed=9), _T(-23.2, -15.2, Z_GRAVEL) @ _Rz(0))
 
 
+RACK_ROWS = [(16.30, 0), (11.94, 180), (10.07, 0)]       # (y del origen, giro): fila del fondo y doble fila al centro
+RACK_XS = (-15.20, -6.80)                                 # dos racks de 3 claros por fila
+
+
+def warehouse_interior(furn, r):
+    """Almacén: 3 filas de racks selectivos (fondo y doble fila central) con tarimas de cajas de munición flejadas, tarimas de
+    proyectiles y cajas largas; jaula de seguridad con armero, fusiles, ametralladoras y morteros; montacargas estacionado
+    en la zona de recibo con tarimas en espera; banco de trabajo, estaciones de extintor y luminarias de nave."""
+    cp, ar = _mod("campaign"), _mod("armory")
+    if cp is None:
+        return
+    zf = FFL
+
+    def put(piece, M, solid=True):
+        if solid:
+            _proxy(piece, M)
+        furn.join(piece, M)
+    slots = cp.pallet_rack_slots(3, 3, 1.1, 2.7)
+    for ri, (yr, rot) in enumerate(RACK_ROWS):
+        for xi, xr in enumerate(RACK_XS):
+            Mr = _T(xr, yr, zf) @ _Rz(rot)
+            put(cp.pallet_rack(3, 3, 1.1, 2.7, seed=10 * ri + xi), Mr)
+            if ar is None:
+                continue
+            for k, Ms in enumerate(slots):
+                lev = (k // 2) % 3
+                if r.random() < (0.12, 0.22, 0.35)[lev]:
+                    continue                                    # huecos: lo que ya salió
+                Mx = Mr @ Ms @ _Rz(180 * int(r.integers(2)))
+                if lev == 0:
+                    piece = ar.shell_pallet(seed=int(r.integers(1e6))) if r.random() < 0.3 else \
+                        ar.crate_pallet(6, seed=int(r.integers(1e6)))
+                elif lev == 1:
+                    piece = ar.crate_pallet(3, seed=int(r.integers(1e6)))
+                else:
+                    piece = cl.MB()
+                    ar.pallet_gma(piece)
+                    for j in range(2):
+                        piece.join(ar.ammo_crate("long", seed=int(r.integers(1e6))), _T(0, (j - 0.5) * 0.43, 0.135) @ _Rz(0))
+                furn.join(piece, Mx)
+    # líneas amarillas de pasillo frente a cada cara de rack y la de la zona de recibo
+    for y in (15.66, 12.57, 9.43, 6.20):
+        furn.box((-19.4, y - 0.05, zf), (-2.6 if y > 6.3 else 9.4, y + 0.05, zf + 0.0015), "paint_yellow", bevel=0.0)
+    # jaula de armas con su contenido
+    cxg, cyg, cw, cd = 6.55, 14.75, 5.5, 4.5
+    put(cp.security_cage(cw, cd, 2.6, seed=21), _T(cxg, cyg, zf), solid=False)
+    for (a, b) in (((cxg - cw / 2, cyg - cd / 2), (cxg + cw / 2, cyg - cd / 2 + 0.08)), ((cxg - cw / 2, cyg + cd / 2 - 0.08), (cxg + cw / 2, cyg + cd / 2)),
+                   ((cxg - cw / 2, cyg - cd / 2), (cxg - cw / 2 + 0.08, cyg + cd / 2)), ((cxg + cw / 2 - 0.08, cyg - cd / 2), (cxg + cw / 2, cyg + cd / 2))):
+        _proxy_box((a[0], a[1], zf), (b[0], b[1], zf + 2.6))
+    if ar is not None:
+        Mw = _T(cxg - 1.4, cyg + cd / 2 - 0.45, zf)
+        put(cp.weapon_rack(8, seed=22), Mw)
+        for j, Ms in enumerate(cp.weapon_rack_slots(8)):
+            put(ar.rifle(seed=200 + j, kind=("assault", "carbine", "dmr")[j % 3]), Mw @ Ms, solid=False)
+        for k, x in enumerate((cxg + 0.4, cxg + 1.7)):
+            if hasattr(ar, "machine_gun_tripod"):
+                put(ar.machine_gun_tripod(seed=210 + k), _T(x, cyg + 1.2, zf) @ _Rz(-90))
+        if hasattr(ar, "mortar"):
+            put(ar.mortar(seed=220), _T(cxg + 1.6, cyg - 0.6, zf) @ _Rz(30))
+        for k in range(3):
+            put(ar.ammo_crate("long", seed=230 + k), _T(cxg - 1.6, cyg - 0.9 + 0.0, zf + k * 0.27) @ _Rz(0))
+        for k in range(4):
+            put(ar.ammo_can("large", seed=240 + k), _T(cxg + 0.2 + (k % 2) * 0.32, cyg - 1.4 + (k // 2) * 0.17, zf))
+        if hasattr(ar, "hard_case"):
+            put(ar.hard_case(seed=250, L=1.2), _T(cxg - 0.2, cyg + 0.2, zf) @ _Rz(90))
+    # zona de recibo: tarimas en espera y montacargas
+    if ar is not None:
+        for k, (x, y) in enumerate(((-17.2, 3.4), (-15.6, 3.4), (-10.2, 3.6), (-8.4, 2.9))):
+            put(ar.crate_pallet(6, seed=300 + k) if k != 2 else ar.shell_pallet(seed=300 + k), _T(x, y, zf) @ _Rz(90 if k % 2 else 0))
+    put(cp.forklift(seed=31), _T(-3.4, 4.2, zf) @ _Rz(-70))
+    # banco de trabajo y estaciones de extintor contra el muro del frente (por dentro)
+    yi = WY0 - RIB_T + WT
+    put(cp.workbench(seed=32), _T(4.4, yi + 0.40, zf) @ _Rz(180))
+    for x in (-12.5, -1.0, 8.2):
+        put(cp.extinguisher_station(seed=33), _T(x, yi, zf) @ _Rz(180), solid=False)
+    # luminarias de nave colgadas de los largueros
+    for x in (-16.0, -9.0, -2.0, 5.0):
+        for y in (4.5, 9.0, 13.5):
+            z = roof_z(y) - 0.22
+            furn.join(cp.high_bay_light(), _T(x, y, z))
+            LIGHTS.append([x, y, round(z - 0.25, 3)])
+
+
 def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     cfg = cfg_mil1(bid)
     cid = cfg["id"]
@@ -1198,8 +1279,9 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     lightning(det)
     site_ground(det, r)
     if dress_on and kw.get("dress", True):
-        front_fence(furn, r)
+        front_fence(det, r)
         perimeter(det, furn, r)
+        warehouse_interior(furn, r)
     for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", rf), ("Furniture", furn)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))

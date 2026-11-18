@@ -1282,7 +1282,7 @@ def _belt_round(mb, M, link=True, k=0):
                  (0.0075, 0.090), (0.0072, 0.099)], "brass", seg=16, M=M, caps=False)
     revolve(mb, [(0.0065, 0.098), (0.0065, 0.112), (0.0050, 0.128), (0.0, 0.140)], "brass", seg=16, M=M, caps=False)
     if link:                                    # eslabón: dos abrazaderas de fleje y lengüeta
-        for zc in (0.030, 0.064):
+        for zc in ((0.030, 0.064) if k % 2 == 0 else (0.047,)):          # eslabones alternados: 2 asas / 1 asa
             revolve(mb, [(0.0106, zc - 0.006), (0.0118, zc - 0.006), (0.0118, zc + 0.006), (0.0106, zc + 0.006)], "steel", seg=16,
                     M=M, closed=True)
         z0 = 0.026 if k % 2 == 0 else 0.046                       # lengüetas alternadas (no se encimen)
@@ -1458,15 +1458,387 @@ def machine_gun_tripod(seed=0):
         wire(mb, [e, tuple(pleg)], 0.010, OD, seg=SEG_T)
     # ---------------- lata de munición abierta en la cuna (izquierda) y cinta
     can = ammo_can("large", seed=seed, open=True)
-    can.transform(_T(-0.03, -0.155, zh - 0.12) @ _Rz(0))
+    zc0 = zh - 0.115                                                  # fondo de la lata (bandeja de la cuna)
+    can.transform(_T(-0.03, -0.235, zc0) @ _Rz(90))                   # tapa abisagrada hacia fuera (-Y)
     mb.join(can)
-    plank(mb, (-0.10, -0.085, zh - 0.125), (0.04, -0.06, zh - 0.10), OD, ch=0.003)
-    plank(mb, (-0.098, -0.0835, zh - 0.127), (-0.084, -0.0615, zr0 - 0.01), OD, ch=0.003)
-    belt = spline([(-0.04, -0.155, zh + 0.03), (-0.04, -0.140, zh + 0.10), (-0.04, -0.110, BZ - 0.01), (-0.04, -0.080, BZ + 0.012)], 2)
+    plank(mb, (-0.12, -0.39, zc0 - 0.012), (0.06, -0.075, zc0 + 0.0005), OD, ch=0.003)          # bandeja
+    for xx in (-0.115, 0.055):
+        plank(mb, (xx - 0.005, -0.392, zc0 - 0.006), (xx + 0.005, -0.075, zc0 + 0.03), OD, ch=0.002)  # topes
+    plank(mb, (0.035, -0.080, zc0 - 0.012), (0.060, -0.0625, zr0 - 0.01), OD, ch=0.003)      # brazo a la cuna
+    fine = [Vector(p) for p in spline([(-0.04, -0.205, zc0 + 0.15), (-0.04, -0.175, zc0 + 0.215), (-0.04, -0.120, BZ - 0.004),
+                                       (-0.04, -0.080, BZ + 0.012)], 12)]
+    belt, acc, nxt = [tuple(fine[0])], 0.0, 0.027                      # paso de eslabón constante (27 mm)
+    for a_, b_ in zip(fine[:-1], fine[1:]):
+        acc += (b_ - a_).length
+        if acc >= nxt:
+            belt.append(tuple(b_))
+            nxt += 0.027
     for i in range(len(belt) - 1):
         p, q = Vector(belt[i]), Vector(belt[i + 1])
         t = (q - p).normalized()
         Mr, _ = port.frame_on(p - Vector((0.07, 0, 0)), p + Vector((0.07, 0, 0)), up=tuple(t.cross(Vector((1, 0, 0))) * -1))
         _belt_round(mb, Mr @ _Ry(90), link=True, k=i)
     del r
+    return mb
+
+
+# ======================================================================================================== mortero
+def _handwheel(mb, M, R=0.045, rr=0.006, spokes=3, mat="paint_od", knob=True):
+    """Volante de mando: aro de sección redonda (32 lados), maza, rayos y perilla giratoria; plano XY local, eje +Z."""
+    revolve(mb, [(R - rr, 0.0), (R, -rr), (R + rr, 0.0), (R, rr)], mat, seg=32, M=M, closed=True)
+    revolve(mb, [(0.013, -0.012), (0.013, 0.010), (0.0, 0.012)], mat, seg=SEG, M=M)
+    for k in range(spokes):
+        a = 2 * PI * k / spokes
+        pa = M @ Vector((0.011 * math.cos(a), 0.011 * math.sin(a), 0))
+        pb = M @ Vector(((R - rr * 0.5) * math.cos(a), (R - rr * 0.5) * math.sin(a), 0))
+        mb.tube([tuple(pa), tuple(pb)], 0.0045, seg=SEG_T, mat=mat)
+    if knob:
+        a = 0.5
+        revolve(mb, [(0.0065, 0.0), (0.0078, 0.004), (0.0078, 0.032), (0.0055, 0.037), (0.0, 0.038)], "polymer", seg=SEG_T,
+                M=M @ _T(R * math.cos(a), R * math.sin(a), rr * 0.6))
+
+
+def mortar(seed=0, elev=60.0):
+    """Mortero de infantería clase 81 mm, genérico: tubo de 1,27 m (Ø ext. ~ 100 mm) con recámara de aletas de enfriamiento,
+    culata con rótula esférica y anillo atenuador en la boca; bípode con collarín de 2 mitades atornilladas, 2 amortiguadores,
+    horquilla sobre el mecanismo de dirección (tornillo horizontal con volante), columna de elevación con manivela,
+    patas tubulares con zapatas de espolón, mecanismo de nivelación con perilla y cadena de abertura; soporte de cola de
+    milano con aparato de puntería (cuerpo, burbuja, ocular acodado); placa base circular de ~ 0,52 m con nervaduras
+    radiales, rótula con anillo de cierre y asa abatible. Tubo a `elev` grados. ORIGEN: piso, centro de la huella (placa
+    base + zapatas); el tubo apunta a +X.
+    Fuentes: en.wikipedia.org/wiki/M252_mortar ; man.fas.org/dod-101/sys/land/m252.htm (tubo de 1,27 m / 50 in, bípode
+    ~ 12 kg, placa base ~ 11,6 kg, conjunto ~ 40 kg); army.mil/article/139736 (M252A1, tubo con aletas)."""
+    r = rng(seed)
+    mb = MB()
+    OD, GM, ST = "paint_od", "gunmetal", "steel"
+    th = math.radians(elev)
+    d = Vector((math.cos(th), 0.0, math.sin(th)))                 # eje del tubo
+    nb = Vector((math.sin(th), 0.0, -math.cos(th)))              # perpendicular "bajo el tubo"
+    B = Vector((0.0, 0.0, 0.078))                                 # centro de la rótula
+    Mt = _T(*B) @ Matrix.Rotation(PI / 2 - th, 4, "Y")          # z local = eje del tubo
+    # ---------------- placa base
+    Rp = 0.26
+    revolve(mb, [(0.0, 0.002), (Rp - 0.012, 0.0), (Rp, 0.006), (Rp, 0.020), (Rp - 0.008, 0.026), (0.20, 0.034), (0.11, 0.050),
+                 (0.075, 0.056)], OD, seg=SEG_B, caps=False)
+    revolve(mb, [(0.075, 0.056), (0.078, 0.062), (0.060, 0.086), (0.0, 0.090)], OD, seg=SEG, caps=False)
+    revolve(mb, [(0.064, 0.060), (0.084, 0.060), (0.084, 0.074), (0.064, 0.080)], ST, seg=SEG, closed=True)   # anillo de cierre
+    for k in range(3):                                           # orejas del anillo
+        a = 2 * PI * k / 3 + 0.3
+        side(mb, [(0.078, 0.062), (0.104, 0.064), (0.104, 0.074), (0.078, 0.076)], [0.0, 0.004, 0.004, 0.0], 0.016, ST, re=0.0,
+             M=_Rz(math.degrees(a)))
+    for k in range(8):                                           # nervaduras radiales
+        a = 2 * PI * k / 8 + PI / 8
+        P = [(0.085, 0.050), (0.235, 0.020), (0.252, 0.022), (0.252, 0.030), (0.090, 0.068)]
+        side(mb, P, [0.0, 0.0, 0.003, 0.003, 0.004], 0.012, OD, re=0.0, n=2, M=_Rz(math.degrees(a)))
+    for sy in (-1, 1):                                           # asa abatible (atrás)
+        plan(mb, [(-0.02, -0.012), (0.02, -0.012), (0.02, 0.012), (-0.02, 0.012)], [0.004] * 4, 0.014, OD, z0=0.019, re=0.002,
+             ne=1, n=2, M=_T(-Rp + 0.03, sy * 0.10, 0))
+    wire(mb, [(-Rp + 0.03, -0.10, 0.028), (-Rp - 0.04, -0.10, 0.030), (-Rp - 0.04, 0.10, 0.030), (-Rp + 0.03, 0.10, 0.028)],
+         0.0065, ST, bend=0.02, nseg=4, seg=SEG_T)
+    # ---------------- tubo
+    prof = [(0.0, -0.034), (0.022, -0.033), (0.034, -0.026), (0.040, -0.014), (0.044, 0.000), (0.058, 0.000), (0.060, 0.010),
+            (0.060, 0.050), (0.052, 0.058)]
+    z = 0.058
+    for k in range(8):                                           # aletas de enfriamiento de la recámara
+        prof += [(0.050, z + 0.004), (0.062, z + 0.006), (0.062, z + 0.014), (0.050, z + 0.016)]
+        z += 0.024
+    prof += [(0.050, z + 0.006), (0.0505, z + 0.03), (0.0485, 1.17), (0.0485, 1.235), (0.056, 1.240), (0.056, 1.268),
+             (0.050, 1.272), (0.0415, 1.272), (0.0415, 1.240)]
+    mats = [ST] * 5 + [OD] * (len(prof) - 6) + ["cable"]
+    revolve(mb, prof, mats, seg=SEG, M=Mt, caps=False)
+    # ---------------- collarín, amortiguadores, horquilla, dirección, elevación, patas
+    sc = 0.90
+    C = B + d * sc
+    Mc = Mt @ _T(0, 0, sc)
+    revolve(mb, [(0.0482, -0.035), (0.062, -0.035), (0.064, -0.030), (0.064, 0.030), (0.062, 0.035), (0.0482, 0.035)], OD, seg=SEG,
+            M=Mc, closed=True)
+    for sy in (-1, 1):                                           # orejas atornilladas del collarín (2 mitades)
+        ya, yb = sorted((sy * 0.056, sy * 0.086))
+        board(mb, (-0.011, ya, -0.028), (0.011, yb, 0.028), OD, ch=0.002, M=Mc)
+        revolve(mb, [(0.006, -0.040), (0.006, 0.040)], ST, seg=SEG_T, M=Mc @ _T(0, sy * 0.074, 0))
+        for zz, rot in ((0.028, Matrix()), (-0.028, _Rx(180))):
+            hexnut(mb, Mc @ _T(0, sy * 0.074, zz) @ rot, s=0.017, h=0.008)
+    for sy in (-1, 1):                                           # amortiguadores paralelos al tubo
+        p0 = C + nb * 0.070 + Vector((0, sy * 0.045, 0)) + d * 0.02
+        p1 = p0 - d * 0.20
+        Ma, La = port.frame_on(p1, p0)
+        revolve(mb, [(0.0, -0.012), (0.022, -0.008), (0.022, 0.12), (0.010, 0.125), (0.010, La)], OD, seg=SEG, M=Ma @ _Ry(90),
+                caps=False)
+        revolve(mb, [(0.012, La - 0.012), (0.012, La + 0.012)], ST, seg=SEG, M=Ma @ _Ry(90))
+        mb.tube([tuple(C + nb * 0.045 + Vector((0, sy * 0.045, 0)) + d * 0.02), tuple(p0 + nb * 0.004)], 0.012, seg=SEG, mat=OD)
+    Y0 = C + nb * 0.070 - d * 0.20                               # extremo inferior de los amortiguadores: horquilla
+    plank(mb, (Y0.x - 0.035, -0.062, Y0.z - 0.035), (Y0.x + 0.035, 0.062, Y0.z + 0.025), OD, ch=0.006)
+    # mecanismo de dirección: caja horizontal (Y) con tornillo y volante a la derecha
+    Tz = Y0.z - 0.055
+    revolve(mb, [(0.026, -0.13), (0.028, -0.125), (0.028, 0.125), (0.026, 0.13)], OD, seg=SEG, M=_T(Y0.x, 0, Tz) @ _Rx(90))
+    revolve(mb, [(0.012, 0.13), (0.012, 0.175)], ST, seg=SEG, M=_T(Y0.x, 0, Tz) @ _Rx(-90))
+    _handwheel(mb, _T(Y0.x, 0.178, Tz) @ _Rx(-90), R=0.055)
+    plank(mb, (Y0.x - 0.018, -0.03, Tz + 0.010), (Y0.x + 0.018, 0.03, Y0.z - 0.030), OD, ch=0.004)
+    # columna de elevación y manivela
+    Az = 0.26
+    revolve(mb, [(0.030, Az - 0.04), (0.032, Az - 0.035), (0.032, Tz - 0.03), (0.026, Tz - 0.02)], OD, seg=SEG, M=_T(Y0.x, 0, 0))
+    revolve(mb, [(0.036, Az + 0.02), (0.036, Az + 0.08)], OD, seg=SEG, M=_T(Y0.x, 0, 0))         # collar de las patas
+    revolve(mb, [(0.010, Az - 0.10), (0.010, Az - 0.04)], ST, seg=SEG, M=_T(Y0.x, 0, 0))
+    wire(mb, [(Y0.x, 0.0, Az - 0.10), (Y0.x + 0.075, 0.0, Az - 0.10), (Y0.x + 0.075, 0.0, Az - 0.13)], 0.007, ST, bend=0.012, nseg=3,
+         seg=SEG_T)
+    revolve(mb, [(0.0, 0.0), (0.0095, 0.002), (0.0095, 0.038), (0.007, 0.042), (0.0, 0.043)], "polymer", seg=SEG_T,
+            M=_T(Y0.x + 0.075, 0.0, Az - 0.13) @ _Rx(180))
+    feet = []
+    for sy in (-1, 1):                                           # patas
+        top = Vector((Y0.x + 0.02, sy * 0.03, Az + 0.05))
+        foot = Vector((Y0.x + 0.17, sy * 0.36, 0.035))
+        feet.append(foot)
+        Ml, Ll = port.frame_on(top, foot)
+        revolve(mb, [(0.0, -0.01), (0.0175, -0.008), (0.0175, Ll)], OD, seg=SEG, M=Ml @ _Ry(90), caps=False)
+        revolve(mb, [(0.0, 0.0), (0.040, 0.0), (0.042, 0.006), (0.030, 0.012), (0.020, 0.040), (0.0175, 0.045)], OD, seg=SEG,
+                M=_T(foot.x, foot.y, 0.0), caps=False)                  # zapata
+        if sy < 0:                                                # mecanismo de nivelación en la pata izquierda
+            Pm = top + (foot - top) * 0.30
+            revolve(mb, [(0.026, -0.05), (0.026, 0.05)], OD, seg=SEG, M=Ml @ _T(Ll * 0.30, 0, 0) @ _Ry(90))
+            revolve(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.03), (0.0, 0.032)], "polymer", seg=SEG,
+                    M=_T(*Pm) @ _Rx(90) @ _T(0, 0, 0.024))
+    # cadena de abertura entre las patas
+    pa = Vector((Y0.x + 0.02, -0.03, Az + 0.05)) + (feet[0] - Vector((Y0.x + 0.02, -0.03, Az + 0.05))) * 0.55
+    pb = Vector((Y0.x + 0.02, 0.03, Az + 0.05)) + (feet[1] - Vector((Y0.x + 0.02, 0.03, Az + 0.05))) * 0.55
+    from kit.clinic_equipo import chain as _chain
+    mid = (pa + pb) / 2 - Vector((0, 0, 0.03))
+    _chain(mb, [tuple(pa), tuple(mid), tuple(pb)], link=0.028, wire=0.0032, mat=ST)
+    # ---------------- soporte del aparato de puntería (izquierda de la horquilla)
+    S0 = Vector((Y0.x, -0.062, Y0.z))
+    plank(mb, (S0.x - 0.02, -0.090, S0.z - 0.02), (S0.x + 0.02, -0.0615, S0.z + 0.06), OD, ch=0.004)
+    zs = S0.z + 0.06
+    xloft(mb, [(S0.x - 0.07, 0.045, 0.060, zs + 0.035, 0.008), (S0.x + 0.07, 0.045, 0.060, zs + 0.035, 0.008)], GM, n=4,
+          M=_T(0, -0.076, 0) @ _T(0, 0.0, 0))
+    revolve(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.012), (0.0, 0.012)], "cable", seg=SEG, M=_T(S0.x, -0.076, zs + 0.065))
+    Me = _T(S0.x - 0.07, -0.076, zs + 0.04) @ _Ry(-90)
+    revolve(mb, [(0.0, -0.002), (0.016, -0.002), (0.016, 0.03), (0.019, 0.034), (0.019, 0.050), (0.012, 0.052), (0.0, 0.052)],
+            ["polymer"] * 5 + ["cable"], seg=SEG, M=Me)
+    revolve(mb, [(0.0, -0.002), (0.016, -0.002), (0.016, 0.03), (0.012, 0.032), (0.0, 0.032)], GM, seg=SEG,
+            M=_T(S0.x + 0.03, -0.076, zs + 0.065) @ _T(0, 0, 0.0))
+    for xx in (S0.x - 0.03, S0.x + 0.03):                        # perillas de deflexión / elevación del aparato
+        revolve(mb, [(0.0, 0.0), (0.014, 0.0), (0.014, 0.012), (0.0115, 0.015), (0.0, 0.015)], "polymer", seg=SEG,
+                M=_T(xx, -0.0985, zs + 0.035) @ _Rx(90))
+    # ---------------- estarcido en el tubo y centrado de la huella
+    bb = [v.co for v in mb.bm.verts]
+    cx = (min(c.x for c in bb) + max(c.x for c in bb)) / 2
+    mb.transform(_T(-cx, 0, 0))
+    del r
+    return mb
+
+
+# ======================================================================================================== lanzacohetes desechable
+def launcher_tube(seed=0):
+    """Lanzacohetes desechable genérico (tubo de lanzamiento de fibra de vidrio pintado, ~ 1,02 m, Ø ~ 104 mm sobre las
+    bandas): tubo con bandas de refuerzo, tapa delantera de hule con lengüeta, tapa trasera / amortiguador de la tobera,
+    mecanismo de disparo superior (caja, palanca de armado, seguro y botón de disparo), alza y guion abatidos bajo sus
+    tapas corredizas, almohadilla de hombro y apoyo plegados al costado, correa de transporte con abrazaderas y hebilla,
+    estarcidos «FRONT» y «REAR». Pintado verde olivo (semilla par) o arena (impar). ORIGEN: piso bajo el centro del tubo
+    (reposa en las tapas); eje del tubo a lo largo de X, boca hacia +X, mecanismo arriba.
+    Fuentes: en.wikipedia.org/wiki/AT4 y man.fas.org/dod-101/sys/land/at4.htm (1020 mm, 6,7 kg, calibre 84 mm)."""
+    mb = MB()
+    P = "paint_od" if seed % 2 == 0 else "paint_tan"
+    L = 1.016
+    R = 0.0505
+    zc = 0.0585                                       # eje (las tapas de Ø 117 mm apoyan en el piso)
+    M = _T(-L / 2, 0, zc) @ _Ry(90)                    # z local = +X
+    prof = [(R - 0.004, 0.052), (R, 0.052)]
+    for (z0, z1) in ((0.080, 0.130), (0.330, 0.360), (0.650, 0.680), (0.880, 0.930)):
+        prof += [(R, z0 - 0.004), (R + 0.0028, z0), (R + 0.0028, z1), (R, z1 + 0.004)]
+    prof += [(R, 0.962), (R - 0.004, 0.962)]
+    revolve(mb, prof, P, seg=SEG_B, M=M, caps=False)
+    revolve(mb, [(R - 0.004, 0.052), (R - 0.004, 0.962)], "cable", seg=SEG_B, M=M, caps=False)          # interior oscuro
+    # tapa trasera (amortiguador de la tobera): copa de polímero con nervaduras
+    revolve(mb, [(R - 0.006, 0.075), (0.0545, 0.072), (0.0565, 0.060), (0.0565, 0.012), (0.0535, 0.0), (0.030, -0.004), (0.0, -0.005)],
+            "polymer", seg=SEG_B, M=M)
+    for k in range(8):                                 # nervaduras del amortiguador (apoyan en el piso)
+        a = 2 * PI * k / 8 + PI / 8
+        arc_solid(mb, 0.055, 0.0585, 0.016, 0.056, a - 0.07, a + 0.07, 2, "polymer", M=M)
+    # tapa delantera de hule con lengüeta
+    revolve(mb, [(R - 0.006, 0.940), (0.0565, 0.944), (0.0585, 0.956), (0.0585, 1.004), (0.0545, 1.014), (0.030, 1.018), (0.0, 1.019)],
+            "rubber", seg=SEG_B, M=M)
+    side(mb, [(L / 2 - 0.002, zc + 0.052), (L / 2 + 0.012, zc + 0.054), (L / 2 + 0.016, zc + 0.070), (L / 2 + 0.004, zc + 0.072)],
+         [0.0, 0.004, 0.006, 0.006], 0.020, "rubber", re=0.0)
+    # mecanismo de disparo (arriba, tercio delantero-medio)
+    xm0, xm1 = -0.02, 0.17
+    zt = zc + R
+    xloft(mb, [(xm0, 0.040, 0.030, zt + 0.006, (0.010, 0.010, 0.002, 0.002)), (xm0 + 0.010, 0.046, 0.036, zt + 0.008, (0.012, 0.012, 0.002, 0.002)),
+               (xm1 - 0.010, 0.046, 0.036, zt + 0.008, (0.012, 0.012, 0.002, 0.002)), (xm1, 0.040, 0.030, zt + 0.006, (0.010, 0.010, 0.002, 0.002))],
+          "polymer", n=4)
+    side(mb, [(xm0 + 0.03, zt + 0.024), (xm0 + 0.11, zt + 0.024), (xm0 + 0.11, zt + 0.033), (xm0 + 0.04, zt + 0.036)],
+         [0.0, 0.0, 0.004, 0.006], 0.014, P, y0=-0.016, re=0.0012, ne=1, n=2)        # palanca de armado
+    revolve(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.006), (0.0070, 0.009), (0.0, 0.009)], "sign_red", seg=SEG,
+            M=_T(xm1 - 0.030, 0.0, zt + 0.025))                                         # botón de disparo
+    side(mb, [(xm1 - 0.075, zt + 0.024), (xm1 - 0.050, zt + 0.024), (xm1 - 0.052, zt + 0.032), (xm1 - 0.073, zt + 0.032)],
+         [0.0, 0.0, 0.002, 0.002], 0.010, "polymer", y0=0.020, re=0.0)                # seguro
+    # alza (atrás) y guion (adelante) bajo tapas corredizas
+    for (x0, x1, h) in ((-0.30, -0.20, 0.026), (0.30, 0.37, 0.022)):
+        xloft(mb, [(x0, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.0, 0.0)),
+                   (x1, 0.030, h + 0.002, zt + h / 2 - 0.005, (0.006, 0.006, 0.0, 0.0))], "polymer", n=4)
+        plank(mb, (x0 + 0.008, -0.016, zt + h - 0.006), (x1 - 0.008, 0.016, zt + h - 0.0035), P, ch=0.001)
+        for k in range(4):                                                              # estrías de la tapa corrediza
+            xx = x0 + 0.015 + k * 0.006
+            plank(mb, (xx, -0.013, zt + h - 0.0040), (xx + 0.0025, 0.013, zt + h - 0.0018), P, ch=0.0006)
+    # almohadilla de hombro y apoyo delantero plegados contra el costado (-Y)
+    sh = MB()
+    slab2(sh, Matrix(), 0.13, 0.040, 0.012, 0.010, "rubber", re_t=0.004, ne_t=4, re_b=0.0, ne_b=0, nc=4)
+    mb.join(sh, _T(-0.13, -R + 0.002, zc) @ _Rx(90))
+    side(mb, [(0.06, zc - 0.012), (0.14, zc - 0.012), (0.14, zc + 0.012), (0.06, zc + 0.012)], [0.006] * 4, 0.010, "polymer",
+         y0=-R - 0.002, re=0.002, ne=1, n=2)
+    # abrazaderas de la correa y correa a lo largo del costado +Y
+    for x in (-0.38, 0.40):
+        revolve(mb, [(R + 0.0026, -0.011), (R + 0.0048, -0.010), (R + 0.0048, 0.010), (R + 0.0026, 0.011)], "steel", seg=SEG_B,
+                M=_ax(x, 0, zc), closed=True)
+        side(mb, [(x - 0.012, zc - 0.006), (x + 0.012, zc - 0.006), (x + 0.012, zc + 0.012), (x - 0.012, zc + 0.012)], [0.003] * 4,
+             0.010, "steel", y0=R + 0.008, re=0.0)
+        wire(mb, [(x - 0.008, R + 0.008, zc + 0.016), (x - 0.008, R + 0.016, zc + 0.016), (x + 0.008, R + 0.016, zc + 0.016),
+                  (x + 0.008, R + 0.008, zc + 0.016)], 0.0022, "steel", bend=0.004, nseg=2)
+    sl = spline([(-0.38, R + 0.016, zc + 0.020), (-0.30, R + 0.022, zc + 0.000), (0.0, R + 0.024, zc - 0.012), (0.30, R + 0.022, zc + 0.000),
+                 (0.40, R + 0.016, zc + 0.020)], 2)
+    strap(mb, sl, 0.030, 0.0022, "canvas", up=(0, 1, 0), r=0.0009)
+    plan(mb, [(-0.022, -0.020), (0.022, -0.020), (0.022, 0.020), (-0.022, 0.020)], [0.004] * 4, 0.0066, "plastic", z0=-0.0033,
+         re=0.001, ne=1, n=2, M=_T(0.10, R + 0.0242, zc - 0.009) @ _Rx(-90))
+    # estarcidos
+    stencil(mb, "FRONT", 0.020, _T(0.26, -R - 0.0002, zc - 0.008) @ _Rx(90), "paint_yellow")
+    stencil(mb, "REAR", 0.020, _T(-0.42, -R - 0.0002, zc - 0.008) @ _Rx(90), "paint_yellow")
+    return mb
+
+
+# ======================================================================================================== chaleco portaplacas
+def _pad(mb, M, P, R, T, crown_f, crown_b, mat="canvas", nin_f=3, nin_b=2, ne=8, n=4, inset=0.05, wrinkle=0.0, seed=0):
+    """Bolsa acolchada (portaplaca, almohadilla): contorno P (antihorario, plano XY local, x derecha, y arriba) con filetes R,
+    canto completamente redondeado (semicírculo de radio T/2 en ne pasos), cara frontal (+Z) abombada crown_f y trasera
+    crown_b en lazos concéntricos (malla subdividida, sombreado suave); wrinkle = amplitud de arrugas (ruido)."""
+    from mathutils import noise
+    re = T / 2
+    loops = []
+    for k in range(nin_b, 0, -1):                       # cara trasera, del centro hacia el canto
+        u = k / nin_b
+        loops.append((re + inset * u, -re - crown_b * u ** 0.5))
+    for j in range(ne + 1):                             # canto redondo
+        a = -PI / 2 + PI * j / ne
+        loops.append((re * (1 - math.cos(a)), re * math.sin(a)))
+    for k in range(1, nin_f + 1):                       # cara frontal, del canto hacia el centro
+        u = k / nin_f
+        loops.append((re + inset * u, re + crown_f * u ** 0.5))
+    rings = []
+    for li, (dl, z) in enumerate(loops):
+        ring = []
+        for (x, y) in rpoly_n(P, R, dl, n):
+            zz = z
+            if wrinkle and abs(z) >= re * 0.999 and 0 < li < len(loops) - 1:
+                zz += wrinkle * noise.noise(Vector((x * 18.0 + seed, y * 18.0, z * 5.0)))
+            ring.append((x, y, zz))
+        rings.append(ring)
+    skin(mb, rings, mat, M, cap0=True, cap1=True)
+
+
+def _surface_z(tree, x, y, z0=1.0):
+    """Altura de la cara frontal de un acolchado (rayo desde +Z en su marco local)."""
+    loc, nrm, idx, d = tree.ray_cast(Vector((x, y, z0)), Vector((0, 0, -1)), 5.0)
+    return loc.z if loc is not None else 0.0
+
+
+def vest(seed=0):
+    """Chaleco portaplacas colgado de un gancho de muro: bolsas de placa delantera y trasera acolchadas (malla subdividida,
+    canto redondo, abombado y arrugas leves; corte de hombro para placa de 9,5 × 12,5 in), hombreras acolchadas, faja
+    (cummerbund) elástica a los costados, 4 hileras de cinta PALS de 25 mm con presillas cada 38 mm (la cinta se abomba entre
+    costuras), triple portacargador abierto con cargadores, cordón elástico y tirador, panel de velcro, asa de arrastre de
+    cinta colgada del gancho y gancho de acero en J con placa y tapón de hule. ORIGEN: cara del muro (y = 0) en el centro del
+    gancho (z = 0); el chaleco cuelga hacia -Z y sobresale hacia -Y (frente del chaleco hacia -Y).
+    Fuentes: en.wikipedia.org/wiki/MOLLE (cinta de 1 in, hileras a 1 in, presillas cada 1,5 in); shellbacktactical.com
+    (placa SAPI mediana 9,5 × 12,5 in)."""
+    from mathutils.bvhtree import BVHTree
+    r = rng(seed)
+    mb = MB()
+    C = "canvas"
+    W, H, T = 0.275, 0.345, 0.030
+    cut = 0.05
+    P = [(-W / 2, -H / 2), (W / 2, -H / 2), (W / 2, H / 2 - cut), (W / 2 - cut, H / 2), (-W / 2 + cut, H / 2), (-W / 2, H / 2 - cut)]
+    R = [0.03, 0.03, 0.02, 0.02, 0.02, 0.02]
+    Mv = _Rx(90)                                        # local x -> X, y -> Z, z -> -Y (frente del chaleco)
+    zb_top, yb = -0.050, -0.024                         # placa trasera: borde superior y plano medio
+    zf_top, yf = -0.085, -0.122                         # placa delantera
+    Mb = _T(0, yb, zb_top - H / 2) @ Mv
+    Mf = _T(0, yf, zf_top - H / 2) @ Mv @ _Rz(float(r.uniform(-1.5, 1.5)))
+    _pad(mb, Mb, P, R, T, 0.005, 0.0, C, nin_f=1, nin_b=0, wrinkle=0.0012, seed=float(seed))
+    front = MB()
+    _pad(front, Matrix(), P, R, T, 0.007, 0.002, C, nin_f=3, nin_b=1, wrinkle=0.0016, seed=float(seed) + 7.0)
+    tree = BVHTree.FromBMesh(front.bm)
+    # cinta PALS: 3 hileras donde se teje el portacargadores
+    rows = [-0.146 + 0.0254 * k for k in range(3)]
+    x0, x1 = -W / 2 + 0.030, W / 2 - 0.030
+    for yr in rows:
+        pts = []
+        ntack = int(round((x1 - x0) / 0.0381))
+        for k in range(ntack * 2 + 1):
+            x = x0 + (x1 - x0) * k / (ntack * 2)
+            lift = 0.0022 if k % 2 else 0.0
+            pts.append((x, yr, _surface_z(tree, x, yr) + 0.0007 + lift))
+        strap(front, pts, 0.025, 0.0016, C, up=(0, 0, 1), r=0.0006)
+    zs = max(_surface_z(tree, 0.0, rows[0]), _surface_z(tree, 0.0, rows[2])) + 0.0038
+    for i in range(3):                                   # triple portacargador abierto (bolsas blandas)
+        xc = (i - 1) * 0.074
+        yp0 = -0.160
+        hp = 0.100
+        _pad(front, _T(xc, yp0 + hp / 2, zs + 0.0145), [(-0.034, -hp / 2), (0.034, -hp / 2), (0.034, hp / 2), (-0.034, hp / 2)],
+             [0.011, 0.011, 0.008, 0.008], 0.029, 0.0008, 0.0, C, nin_f=1, nin_b=0, inset=0.004, wrinkle=0.0, seed=float(seed + i))
+        # cargador invertido (base arriba) asomando por la boca
+        slab2(front, _T(xc, yp0 + hp - 0.010, zs + 0.0145) @ _Rx(-90), 0.060, 0.022, 0.040, 0.004, "polymer", re_t=0.0, nc=4)
+        slab2(front, _T(xc, yp0 + hp + 0.030, zs + 0.0145) @ _Rx(-90), 0.068, 0.027, 0.008, 0.006, "polymer", re_t=0.0022,
+              ne_t=1, nc=4)
+        cord = [(xc - 0.031, yp0 + hp - 0.006, zs + 0.0275), (xc - 0.018, yp0 + hp + 0.037, zs + 0.030), (xc, yp0 + hp + 0.040, zs + 0.030),
+                (xc + 0.018, yp0 + hp + 0.037, zs + 0.030), (xc + 0.031, yp0 + hp - 0.006, zs + 0.0275)]
+        front.tube(cord, 0.0022, seg=SEG_T, mat="cable", caps=False)     # los extremos entran en la bolsa
+        plan(front, [(-0.009, -0.006), (0.009, -0.006), (0.009, 0.006), (-0.009, 0.006)], [0.004] * 4, 0.003, "plastic", z0=-0.0015,
+             re=0.001, ne=1, n=2, M=_T(xc, yp0 + hp + 0.040, zs + 0.030))
+    # panel de velcro (parte alta)
+    zv = _surface_z(tree, 0.0, 0.085)
+    slab2(front, _T(0, 0.085, zv - 0.0015), 0.15, 0.06, 0.0035, 0.006, C, re_t=0.0015, ne_t=1, nc=4)
+    mb.join(front, Mf)
+    # hombreras: de las esquinas superiores de la trasera, sobre el gancho, a las de la delantera
+    for sx in (-1, 1):
+        x = sx * 0.085
+        path = spline([(x, yb - 0.004, zb_top - 0.012), (x, yb - 0.018, zb_top + 0.020), (x, (yb + yf) / 2, zb_top + 0.032),
+                       (x, yf + 0.020, zf_top + 0.010), (x, yf + 0.002, zf_top - 0.015)], 3)
+        strap(mb, path, 0.013, 0.058, C, up=(1, 0, 0), r=0.006, n=1)
+    # faja (cummerbund) elástica a los costados, con 2 hileras PALS
+    for sx in (-1, 1):
+        zc = zf_top - H * 0.70
+        path = spline([(sx * (W / 2 - 0.015), yf + 0.004, zc), (sx * (W / 2 + 0.018), yf + 0.030, zc + 0.004),
+                       (sx * (W / 2 + 0.026), (yb + yf) / 2, zc + 0.010), (sx * (W / 2 + 0.012), yb - 0.010, zc + 0.018),
+                       (sx * (W / 2 - 0.015), yb - 0.002, zc + 0.022)], 3)
+        strap(mb, path, 0.007, 0.125, C, up=(0, 0, 1), r=0.003, n=1)
+        Pp = [Vector(q) for q in path]
+        acc = [0.0]
+        for a_, b_ in zip(Pp[:-1], Pp[1:]):
+            acc.append(acc[-1] + (b_ - a_).length)
+        for dz in (-0.022, 0.004):
+            pts = []
+            s0, s1 = 0.02, acc[-1] - 0.02
+            nt = max(2, int(round((s1 - s0) / 0.019)))
+            for k in range(nt + 1):
+                sv = s0 + (s1 - s0) * k / nt
+                i = next(j for j in range(1, len(acc)) if acc[j] >= sv - 1e-9)
+                f = (sv - acc[i - 1]) / max(acc[i] - acc[i - 1], 1e-9)
+                q = Pp[i - 1].lerp(Pp[i], f)
+                tng = (Pp[i] - Pp[i - 1]).normalized()
+                nrm = Vector((tng.y, -tng.x, 0.0)).normalized()
+                if nrm.x * sx < 0:
+                    nrm = -nrm
+                lift = 0.0021 if k % 2 else 0.0
+                pts.append(tuple(q + nrm * (0.0035 + lift) + Vector((0, 0, dz))))
+            strap(mb, pts, 0.0016, 0.025, C, up=(0, 0, 1), r=0.0006)
+    # asa de arrastre (cinta) colgada del brazo del gancho
+    loop = spline([(-0.030, yb - 0.004, zb_top - 0.004), (-0.020, yb - 0.004, -0.012), (-0.0095, yb - 0.004, 0.004),
+                   (0.0, yb - 0.004, 0.0105), (0.0095, yb - 0.004, 0.004), (0.020, yb - 0.004, -0.012), (0.030, yb - 0.004, zb_top - 0.004)], 2)
+    strap(mb, loop, 0.0028, 0.026, C, up=(0, 1, 0), r=0.0012)
+    # gancho en J: placa al muro con 2 tornillos, brazo de varilla Ø 14 mm y tapón de hule
+    plan(mb, [(-0.022, -0.035), (0.022, -0.035), (0.022, 0.035), (-0.022, 0.035)], [0.006] * 4, 0.004, "steel", z0=0.0, re=0.0012,
+         ne=1, n=2, M=_T(0, 0, 0) @ _Rx(90))
+    for zz in (-0.024, 0.024):
+        rivet(mb, _T(0, -0.004, zz) @ _Rx(90), d=0.008, mat="steel")
+    wire(mb, [(0, -0.003, 0.0), (0, -0.060, 0.0), (0, -0.068, 0.030)], 0.007, "steel", bend=0.014, nseg=5, seg=SEG_T)
+    revolve(mb, [(0.0, -0.002), (0.0085, 0.0), (0.0095, 0.008), (0.0085, 0.014), (0.0, 0.016)], "rubber", seg=SEG,
+            M=_T(*port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].translation) @
+            port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].to_3x3().to_4x4() @ _Ry(90))
     return mb

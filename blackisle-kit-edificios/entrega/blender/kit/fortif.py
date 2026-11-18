@@ -194,9 +194,9 @@ def hesco_run(n=5, kind="MIL1", seed=0):
     pitch = vs[1] - vs[0]
     big = kind == "MIL7"
     # región acolchada (central) de cada cara: el borde queda plano y se triangula en abanico
-    qa = (ncol - (16 if big else 8)) // 2
+    qa = (ncol - (12 if big else 8)) // 2
     qb = ncol - qa
-    ja, jb = (3, nrow - 7) if big else (2, nrow - 4)
+    ja, jb = (4, nrow - 9) if big else (2, nrow - 4)
     L = n * c
     # paredes exteriores: frente (-Y), fondo (+Y) por celda; extremos en x = 0 y x = L
     walls = []
@@ -359,13 +359,17 @@ def _hesco_cell_liner(mb, i, c, W, H, us, vs, zf, quilt, r, ends=(False, False))
     cx, cy = x0 + c / 2, 0.0
     mound = float(r.uniform(0.03, 0.05)) * (c / 1.06) ** 0.5
     loops = []
-    for sc in (1.0, 0.86, 0.66, 0.44, 0.22):
+    for sc in (1.0, 0.88, 0.72, 0.54, 0.34, 0.15):
         L = []
         for p in ring:
-            x = cx + (p.x - cx) * sc
-            y = cy + (p.y - cy) * sc
-            z = zf + mound * (1 - sc ** 2) + 0.012 * noise.noise(Vector((x * 5, y * 5, ph))) * (1 - sc ** 4) \
-                + 0.004 * noise.noise(Vector((x * 17, y * 17, ph + 3)))
+            dx, dy = p.x - cx, p.y - cy
+            rr_ = math.hypot(dx, dy) or 1.0
+            rnd = (1 - sc) ** 0.7                          # curvas de nivel cada vez más redondas hacia la corona
+            k_ = (1 - rnd) + rnd * (c * 0.47) / rr_
+            x = cx + dx * sc * k_
+            y = cy + dy * sc * k_
+            z = zf + mound * (1 - sc ** 2) + 0.018 * noise.noise(Vector((x * 4, y * 4, ph))) * (1 - sc ** 4) \
+                + 0.006 * noise.noise(Vector((x * 13, y * 13, ph + 3))) * (1 - sc ** 2)
             if sc == 1.0:
                 z = zf + 0.004 * noise.noise(Vector((x * 6, y * 6, ph)))
             L.append((x, y, z))
@@ -422,6 +426,10 @@ def _bag_rings(r, ls=1.0, ws=1.0, hs=1.0, blunt=0.0, lod=0):
             z = cs * math.copysign(abs(sp) ** (2 / (et if sp > 0 else eb)), sp)
             if z > 0:                                      # carga: la tapa se aplana y se ladea
                 z *= 1 + tilt * y / max(bs, 1e-4) * 0.5
+            lump = 0.0035 * noise.noise(Vector((k * 0.55, x * 7.0, ph + 2.0))) * min(1.0, cs / max(c0, 1e-4)) \
+                * min(1.0, max(0.0, (sp + 0.45) / 0.45))      # la base apoyada no se despega del suelo
+            y += cp * lump                                 # terrones de arena y pliegues blandos de la tela
+            z += sp * lump
             if gth > 0:                                    # frunces que convergen hacia la boca amarrada
                 kk = 0.0045 * gth * (1 if k % 2 else -1) * (0.6 + 0.4 * noise.noise(Vector((k * 0.7, ph, x * 9))))
                 nrm = Vector((0, cp, sp)).normalized()
@@ -600,9 +608,9 @@ def sandbag_wall(L=3.0, rows=4, seed=0, thickness="single"):
             n = max(1, int(round(L / 0.315)))
             p = L / n
             for i in range(n):
-                row.append((p * (i + 0.5), 0.0, 90.0 + (180.0 if (i + k) % 2 else 0.0), 1.13, 0.97 * p / 0.315))
+                row.append((p * (i + 0.5), 0.0, 90.0 + (180.0 if (i + k) % 2 else 0.0), 1.2, 0.97 * p / 0.315))
         else:
-            ys = (-0.148, 0.148) if thickness == "double" else (0.0,)
+            ys = (-0.14, 0.14) if thickness == "double" else (0.0,)
             off = (k // (2 if thickness == "double" else 1)) % 2
             n = max(1, int(round(L / pitch)))
             p = L / n
@@ -613,7 +621,7 @@ def sandbag_wall(L=3.0, rows=4, seed=0, thickness="single"):
                 for (u0, u1) in segs:
                     ls = (u1 - u0) / pitch
                     flip = 180.0 if r.uniform() < 0.5 else 0.0
-                    row.append(((u0 + u1) / 2, y, flip, ls, 0.93 if thickness == "double" else 1.0))
+                    row.append(((u0 + u1) / 2, y, flip, ls, 0.9 if thickness == "double" else 1.0))
         courses.append(row)
     return _bag_stack(courses, seed, (-0.4, L + 0.4, -0.5, 0.5))
 
@@ -801,7 +809,6 @@ def jersey_barrier(L=3.0, seed=0):
             path = [(xe - sgn * 0.04, -w, z), (xe + sgn * 0.09, -w, z), (xe + sgn * 0.09, w, z), (xe - sgn * 0.04, w, z)]
             tube_path(mb, path, 0.0095, seg=SEG_T, mat="steel", bend=0.035, nseg=3, caps=False)
     # pasador (en el extremo +X, pasa por los lazos de este lado): barra de 25 mm con cabeza doblada
-    xp = L + 0.09 - 0.0095 - 0.0125 - 0.001 + 0.0
     xp = L + 0.055
     lathe(mb, [(0.0, 0.05), (0.0125, 0.05), (0.0125, 0.74), (0.02, 0.745), (0.02, 0.765), (0.0, 0.77)], seg=SEG, mat="steel",
           M=_T(xp, 0.0, 0.0))
@@ -1517,8 +1524,6 @@ def guard_tower(seed=0):
     xs = [-nw * pitch / 2 + pitch * k / 8 for k in range(nw * 8 + 1)]
     t = 0.0015
     slope = math.atan2(zr_b - zr_f, 2.44)
-    ny_ = (math.cos(slope), )
-    del ny_
 
     def sheet_pt(x, y, off):
         zc = zr(y) + 0.025 + A + A * math.sin(2 * PI * x / pitch - PI / 2)
@@ -1530,8 +1535,6 @@ def guard_tower(seed=0):
         A_, B_ = rows[i], rows[(i + 1) % 4]
         for k in range(len(xs) - 1):
             mb.face([A_[k], A_[k + 1], B_[k + 1], B_[k]], st).smooth = True
-    for rr_ in (rows[0], rows[1]):                         # cantos laterales
-        pass
     mb.face([rows[0][0], rows[3][0], rows[2][0], rows[1][0]], st)
     mb.face([rows[0][-1], rows[1][-1], rows[2][-1], rows[3][-1]], st)
     for y in (-1.22, -0.4, 0.4, 1.22):
@@ -1559,7 +1562,6 @@ def guard_tower(seed=0):
     Rc = 0.36
     cy = yl + 0.05
     for z in hoops:
-        path = [(-0.24, yl + 0.0, z)] + [(Rc * math.cos(a), cy + Rc * math.sin(a), z) for a in np.linspace(PI, 0, 15)][1:-1] + [(0.24, yl, z)]
         path = [(-0.24, yl, z), (-Rc, cy, z)] + [(Rc * math.cos(a), cy + Rc * math.sin(a), z) for a in np.linspace(PI, 0, 15)][1:-1] + \
                [(Rc, cy, z), (0.24, yl, z)]
         sweep_frame(mb, [(-0.003, -0.025), (0.003, -0.025), (0.003, 0.025), (-0.003, 0.025)], path, st, up=(0, 0, 1))
