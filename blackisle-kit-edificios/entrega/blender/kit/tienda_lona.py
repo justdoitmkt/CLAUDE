@@ -60,7 +60,7 @@ R_P = 0.0190      # larguero Ø 38 mm
 R_F = R_A + 0.0055            # cuerpo de los codos fundidos (pared de 5,5 mm)
 R_S = R_P + 0.0035            # casquillo de larguero
 O = R_A + 0.0075              # eje del tubo -> cara de la lona sobre los codos
-P_OFF = O - 0.001 - R_S       # eje del larguero de alero / cumbrera, desplazado hacia afuera del eje del arco
+P_OFF = O - 0.003 - R_S       # eje del larguero de alero / cumbrera, desplazado hacia afuera del eje del arco (labio 1,6 mm bajo la lona)
 RK, RR = 0.075, 0.11          # radio del eje en el codo de alero y en el de cumbrera (piezas fundidas)
 ARM = 0.13                    # largo de cada brazo de casquillo de los codos
 EAVE, RIDGE = 2.06, 3.20
@@ -726,7 +726,9 @@ class _Roof:
         A = -0.0065 * (1 - K)
         wa = 1 - _ss(0.11, 0.2, dxa)
         wp = sum(np.exp(-((S - sl) / 0.03) ** 2) for sl in (s_e, s_r, s_e1))
-        D = -0.0065 + (A + 0.0065) * wa + 0.003 * np.minimum(wp, 1.0) * (1 - wa)
+        D = -0.0065 + (A + 0.0065) * wa + 0.001 * np.minimum(wp, 1.0) * (1 - wa)
+        # sobre los arcos extremos la lona queda 9 mm sobre el tubo: por ahí pasa la lazada en espiral del testero
+        D += 0.0085 * (1 - K) * _ss(g["xa"] - 0.14, g["xa"] - 0.05, np.abs(X))
         inP = (S > s_e) & (S < s_e1)
         ds = np.minimum(np.minimum(np.abs(S - s_e), np.abs(S - s_r)), np.abs(S - s_e1))
         # caída de cada paño (seno en ambos sentidos, con sesgo), cresta marcada sobre arcos y largueros
@@ -980,7 +982,7 @@ def _sod_specs(r, a, b):
     x = a + _f(r.uniform(0.0, 0.12))
     while x < b:
         sp.append((x, SOD * _f(r.uniform(0.45, 0.65)), PI / 2 + _jit(r, 0.45), _f(r.uniform(0.16, 0.34)), _f(r.uniform(0.045, 0.075)),
-                   _f(r.uniform(0.008, 0.024))))
+                   _f(r.uniform(0.012, 0.032))))
         if r.uniform() < 0.35:
             sp.append((x + _jit(r, 0.05), SOD * 0.5, PI / 2 + _jit(r, 1.1), _f(r.uniform(0.1, 0.2)), 0.035, _f(r.uniform(0.004, 0.01))))
         x += _f(r.uniform(0.14, 0.32))
@@ -1114,6 +1116,8 @@ class _SideWall:
             _window(mb, S, xa, xb, za, zb, kind, side, self.seed + int(xa * 10))
         # lazada del remate: ojillos y gazas de cordón a lengüetas cosidas por dentro de la rodilla
         for x in self.lace[::3] + self.lace[1::3]:
+            if min(abs(x - xk) for xk in g["xs"]) < 0.12:
+                continue
             p, n = S.pt(x, self.zt - 0.026)
             _grommet(mb, p, n, ro=0.0095, ri=0.005)
             sk = g["s_ks"] + 0.03 if side < 0 else g["s_tot"] - g["s_ks"] - 0.03
@@ -1331,7 +1335,7 @@ def _roll(mb, M, L, R, seed, zc_fn, top=None, ties=(), dx=0.026, na=34, step=0.0
                     _f(r.uniform(0.007, 0.013)), _f(r.uniform(0.0025, 0.005))))
     for _ in range(max(3, int(L / 0.5))):                       # pliegues largos aplastados a lo largo del rollo
         hel.append((_f(r.uniform(0, L)), _f(r.uniform(0, 2 * PI * R)), _jit(r, 0.12), _f(r.uniform(0.4, 1.3)),
-                    _f(r.uniform(0.005, 0.009)), _f(r.uniform(0.002, 0.004)) * (1 if r.uniform() < 0.7 else -1)))
+                    _f(r.uniform(0.005, 0.009)), _f(r.uniform(0.003, 0.0055)) * (1 if r.uniform() < 0.7 else -1)))
     pinch = []
     for xt in ties:
         for sx in (-1, 1):
@@ -1363,7 +1367,7 @@ def _roll(mb, M, L, R, seed, zc_fn, top=None, ties=(), dx=0.026, na=34, step=0.0
     if top is not None:
         for f in np.linspace(0.0, 1.0, 5)[:-1]:
             zz = top + (zc - top) * f
-            yy = gap * f + 0.0004 * np.sin(xv * 9 + ph[4]) * f
+            yy = gap * f + (0.0012 * np.sin(xv * 9 + ph[4]) + 0.0009 * np.sin(xv * 23 + ph[5])) * math.sin(PI * f) * _f(_ss(0.2, 0.5, f))
             rows.append(np.stack([xv, yy, zz], -1))
     Xg, Tg = np.meshgrid(xv, th, indexing="ij")
     Rg = rad(Xg, Tg)
@@ -1424,8 +1428,8 @@ def _tie_wrap(mb, M, rad, xt, zc, top, w=0.025, seed=0, buckle=False, G=None):
     th = np.linspace(0.0, 2 * PI * 0.78, 22)
     rr = rad(np.full_like(th, xt), th) + 0.0015
     y0 = _f(rad(np.array([xt]), np.array([0.0]))[0]) + 0.0016
-    pts = [(xt, -0.0012, top)]
-    pts.append((xt, -0.0012, zc + 0.02))
+    pts = [(xt, -0.0019, top)]
+    pts.append((xt, -0.0019, zc + 0.02))
     for a, q in zip(th, rr):
         pts.append((xt, y0 - math.cos(a) * q, zc - math.sin(a) * q * 0.93))
     if G is not None:
@@ -1775,7 +1779,8 @@ class _EndWall:
         prof = [(-w, -E_EMB), (-w, 0.0008), (-0.0066, 0.0015), (-0.0042, 0.0016), (-0.0035, 0.001), (-0.0028, 0.0016),
                 (0.0028, 0.0016), (0.0035, 0.001), (0.0042, 0.0016), (0.0066, 0.0015), (w, 0.0008), (w, -E_EMB)]
         vh = self.v_of(0.0, DH)
-        _strip(mb, self.S.F, np.linspace(-DW - 0.045, DW + 0.045, 50), vh, [(a * 0.1, h) for (a, h) in prof])
+        kv = (self.v_of(0.0, DH + 0.02) - self.v_of(0.0, DH - 0.02)) / 0.04
+        _strip(mb, self.S.F, np.linspace(-DW - 0.045, DW + 0.045, 50), vh, [(a * kv, h) for (a, h) in prof])
         # parches en las esquinas del dintel
         for sx in (-1, 1):
             v0 = self.v_of(sx * (DW + 0.06), DH + 0.06)
@@ -1912,6 +1917,8 @@ def _rolled_wall(mb, g, roof, L, side, seed):
     # lazada del remate de la tira al alero (por dentro)
     f_est = 0.026 / max(zt - zc0, 0.05)
     for xw_ in np.arange(-xw + 0.07, xw - 0.05, 0.45):
+        if min(abs(xw_ - xk) for xk in g["xs"]) < 0.12:
+            continue
         p = Vector((xw_, side * (Yw + 0.0016 * f_est), zt - 0.026))
         n = Vector((0, side, 0))
         _grommet(mb, p, n, ro=0.0095, ri=0.005)
@@ -2036,9 +2043,11 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
       enrolladas cuelgan cerradas con dos ventanas (una con la solapa enrollada y la malla a la vista, otra con la solapa de
       oscurecimiento bajada y atada).
     - open_front: la puerta del testero -X (entrada) abierta con su hoja enrollada sobre el dintel; la del testero +X cerrada.
-    Huella: lona y armazón dentro de x ±(L/2 + 0,17), y ±(W/2 + 0,15) al piso (faldones); vientos y estacas hasta
-    y ±(W/2 + 1,45) y x ±(L/2 + 2,7). Interior libre a ras de piso: x ±(L/2 - 0,125), y ±(W/2 - 0,13) (cabe el piso de
-    triplay de 9,5 × 5,8 m, cara superior a 0,108 m)."""
+    Huella al piso (con las medidas por omisión): paredes, faldones tendidos y estacas de sus gazas dentro de x ±5,13
+    (L/2 + 0,25) e y -3,08 (frente enrollado) / +3,38 (fondo cerrado: faldón de 0,17 m + gazas a 0,25 m); armazón y placas
+    base dentro de x ±4,90, y ±3,07; vientos y estacas hasta y ±4,46 y x ±7,54 (como antes, ±4 cm). Interior libre a ras
+    de piso: x ±(L/2 - 0,125), y ±(W/2 - 0,13): cabe el piso de triplay de 9,5 × 5,8 m (z 0..0,108) sin tocar lona ni
+    placas."""
     mb = MB()
     g = _geo(L, W)
     xs = g["xs"]
@@ -2063,7 +2072,7 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
     # vientos: 10 en la rodilla (uno por arco y lado) y 2 de cumbrera
     for k, x in enumerate(xs):
         for sy in (-1, 1):
-            xp = x + (0.03 if k == 0 else -0.03 if k == 4 else 0.02)
+            xp = x + (0.1 if k == 0 else -0.1 if k == 4 else 0.02)
             pa, dd = _tieout(mb, rf, xp, sy, seed + 7 * k + (sy > 0))
             lean = Vector((0.25 * (-1 if k == 0 else 1 if k == 4 else 0), sy, 0)).normalized()
             base = Vector((x + lean.x * 1.45, sy * (W / 2 + 1.35), 0.0))
@@ -2080,49 +2089,4 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
             loop_tube(mb, ring, 0.0025, seg=12, mat="steel", normal=tuple(Vector((0, 1, 0)).cross(out)))
         pa = tab[-1] + out * 0.03
         _guy(mb, pa, out, Vector((end * (L / 2 + 2.6), 0.0, 0.0)), Vector((end, 0, 0)), seed + 40 + end)
-    return mb
-
-
-def _test_frame(L=9.75, W=6.1, seed=0):
-    mb = MB()
-    _frame(mb, _geo(L, W), seed)
-    return mb
-
-
-def _test_roof(L=9.75, W=6.1, seed=0, frame=True):
-    mb = MB()
-    g = _geo(L, W)
-    if frame:
-        _frame(mb, g, seed)
-    rf = _Roof(g, L, seed)
-    rf.build(mb)
-    rf.details(mb)
-    return mb
-
-
-def _test_back(L=9.75, W=6.1, seed=0):
-    mb = MB()
-    g = _geo(L, W)
-    _frame(mb, g, seed)
-    rf = _Roof(g, L, seed)
-    rf.build(mb)
-    xs = g["xs"]
-    wx = [(xs[1] + xs[2]) / 2, (xs[2] + xs[3]) / 2]
-    wins = [(wx[0] - 0.45, wx[0] + 0.45, 1.05, 1.6, "open"), (wx[1] - 0.45, wx[1] + 0.45, 1.05, 1.6, "closed")]
-    sw = _SideWall(g, L, 1, seed + 5, wins)
-    sw.build(mb)
-    sw.details(mb, rf)
-    return mb
-
-
-def _test_ends(L=9.75, W=6.1, seed=0):
-    mb = MB()
-    g = _geo(L, W)
-    _frame(mb, g, seed)
-    rf = _Roof(g, L, seed)
-    rf.build(mb)
-    for end in (-1, 1):
-        ew = _EndWall(g, rf, L, end, seed + 13 + end, end < 0)
-        ew.build(mb)
-        ew.details(mb)
     return mb

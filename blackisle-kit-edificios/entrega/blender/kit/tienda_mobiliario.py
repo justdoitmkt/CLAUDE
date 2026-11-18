@@ -492,7 +492,7 @@ def _floor_ramp(mb, xe, zt, r, wr=1.10, lr=0.60):
         ya_, yb_ = sorted((yo, yo + sy * 0.045))
         _board(mb, xe - 0.0016, xe, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
         ya_, yb_ = sorted((yo, yo + sy * 0.0016))
-        _board(mb, xe - 0.055, xe - 0.0004, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
+        _board(mb, xe - 0.055, xe - 0.0004, ya_, yb_, 0.0145, 0.0635, "galvanized", r=0.0006, step=1.0)
         for dz in (0.026, 0.052):
             _screw_cs(mb, _T(xe - 0.0016, yo + sy * 0.03, dz) @ _Ry(-90), d=0.006, seed=int(dz * 1000) + sy)
             _screw_cs(mb, _T(xe - 0.032, yo + sy * 0.0016, dz) @ _Rx(-90 * sy), d=0.006, seed=int(dz * 1000) + 3 * sy)
@@ -611,8 +611,8 @@ def _draw_latch(mb, M, z_keep, mat="steel"):
            M @ _T(0, -0.063, 0.0071), mat, seg=SEG)
     # arco de alambre: colas metidas en las alas de la palanca, dos piernas y travesaño asentado en la cuna de la uña
     zk = z_keep + 0.0012
-    bail = [(-0.0101, -0.008, 0.0066), (-0.0122, -0.008, 0.0066), (-0.0122, zk - 0.007, 0.0042), (-0.0122, zk, 0.0033),
-            (0.0122, zk, 0.0033), (0.0122, zk - 0.007, 0.0042), (0.0122, -0.008, 0.0066), (0.0101, -0.008, 0.0066)]
+    bail = [(-0.0082, -0.008, 0.0066), (-0.0122, -0.008, 0.0066), (-0.0122, zk - 0.007, 0.0042), (-0.0122, zk, 0.0033),
+            (0.0122, zk, 0.0033), (0.0122, zk - 0.007, 0.0042), (0.0122, -0.008, 0.0066), (0.0082, -0.008, 0.0066)]
     with mb.soft():
         _tube(mb, [tuple(M @ Vector(p)) for p in fillet(bail, 0.0026, 4)], 0.0015, seg=12, mat=mat)
     # contraplaco con uña en la tapa
@@ -809,13 +809,13 @@ def _clipboard(mb, M, seed=0):
                 if k == 2:
                     cu = max(0.0, (0.35 - math.hypot(1 - u, v * 0.8)) / 0.35)
                     lift = 0.011 * cu ** 2 + 0.0008 * math.sin(u * 5.0 + v * 3.0) * (1 - v)
-                P[i, j] = (x, y, z0 + 0.00045 * k + 0.0002 + lift + 0.0004 * (1 - v) ** 2 * (k == 2))
+                P[i, j] = (x, y, z0 + 0.0006 * k + 0.0002 + lift + 0.0004 * (1 - v) ** 2 * (k == 2))
         Mr = M @ _T(0, Db / 2 - 0.03, 0) @ _Rz(ang) @ _T(0, -(Db / 2 - 0.03), 0)
         PP = np.array([[tuple(Mr @ Vector(P[i, j])) for j in range(nv)] for i in range(nu)])
         N = np.zeros_like(PP)
         N[..., :] = tuple(M.to_3x3() @ Vector((0, 0, 1)))
         _slab_grid(mb, PP, N, 0.0, 0.00012, "paper")
-    zc = z0 + 0.0012
+    zc = z0 + 0.0022
     # clip: base remachada
     slab(mb, M @ _T(0, Db / 2 - 0.022, zc - 0.0004), 0.1, 0.03, 0.0009, rc=0.006, re=0.0004, mat="steel", nc=4, ne=1)
     for sx in (-1, 1):
@@ -843,7 +843,7 @@ def _clipboard(mb, M, seed=0):
     pm = M @ _T(0.075, -0.03, z0 + 0.0013 + 0.0045) @ _Rz(66) @ _Ry(90)
     _lathe(mb, [(0.0, -0.072), (0.0004, -0.0718), (0.0012, -0.069), (0.0026, -0.064), (0.0042, -0.054), (0.0045, -0.05),
                 (0.0045, 0.052), (0.0047, 0.053), (0.0047, 0.068), (0.0035, 0.071), (0.0, 0.072)], pm, "plastic", seg=SEG)
-    _board(mb, -0.0012, 0.0012, 0.0045, 0.0062, 0.02, 0.066, "steel", r=0.0004, M=pm, step=1.0)
+    _board(mb, -0.0012, 0.0012, 0.0042, 0.0062, 0.02, 0.0655, "steel", r=0.0004, M=pm, step=1.0)
 
 
 def _tape_roll(mb, M, seed=0):
@@ -1852,8 +1852,7 @@ def _peg_hook(mb, x, zl, zu, mat="galvanized"):
     z0 = zl - (PEG_HR - rw) * 0.9
     zt = zu - (PEG_HR - rw) * 0.9
     tip = (x, yf - HOOK_L * math.cos(a), z0 + HOOK_L * math.sin(a))
-    path = [tip, (x, yf - 0.006, z0 + 0.006 * math.sin(a)), (x, yf - rw - 0.0002, z0), (x, yf - rw - 0.0002, zt), (x, yb + 0.004, zt),
-            (x, yb + 0.004, zt - 0.014)]
+    path = [tip, (x, yf - rw - 0.0002, z0), (x, yf - rw - 0.0002, zt), (x, yb + 0.004, zt), (x, yb + 0.004, zt - 0.014)]
     with mb.soft():
         _tube(mb, fillet(path, 0.0042, 6), rw, seg=12, mat=mat, caps=True)
         _tube(mb, fillet([(x, yf - rw - 0.0002, z0 + 0.0047), (x, yf - rw - 0.0002, z0 + 0.0004), (x, yb - 0.001, z0 + 0.0004)], 0.003,

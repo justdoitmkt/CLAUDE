@@ -24,18 +24,25 @@ rack_blue (postes de rack).
 MEDIDAS (fuentes consultadas en la web, 2026-11-13):
 - Tienda TEMPER 20 × 32 ft (DLA, ficha NSN 8340-01-196-6272): 6,10 × 9,75 m, cumbrera 10'6" (3,20 m), alero 6'9" (2,06 m);
   arcos a 8 ft (2,44 m) con 5 largueros (cumbrera, 2 aleros, 2 bases) idénticos (TM 10-8340-224-13); sin postes centrales.
-- Rack selectivo: poste de 3" (76 mm) con perforación de gota, marco de 42" de fondo, largueros escalonados de 4" × 96" con
-  escalón de 1-5/8", parrilla de alambre 46 × 42" con caída tipo cascada y 3 canales, malla 2,5 × 4" (Uline H-10518,
-  Cisco-Eagle, Husky Rack, Ridg-U-Rak).
-- Malla de seguridad: poste tubular de 2" cal. 14 con placa base, marco de ángulo 1-1/4", malla soldada cal. 10 de 2 × 1"
-  a 2 × 2", altura 8'-2" con 2" libres al piso, bisagras de 4" y orejas para candado (WireCrafters 840, Cogan).
-- Montacargas de contrapeso 2,5 t gas LP (Yale GC050VX): ancho 1,07 m, protector 2,13 m, mástil abajo 3,28 m (ritchiespecs).
+- Rack selectivo: poste de 3" (76 mm) con perforación de gota a paso de 2" (ridgurak.com teardrop; damotech.com: "distance
+  between the centers of each teardrop hole is generally 2 inches"), conector de 3 pernos con seguro (containerexchanger,
+  globalindustrial Interlake 108"), marco de 42" de fondo, largueros escalonados de 4" con escalón de 1-5/8", parrilla de
+  alambre 46 × 42" en cascada con 3 canales, malla 2,5 × 4" (Uline H-10518, Cisco-Eagle, Husky Rack).
+- Malla de seguridad: malla soldada cal. 10 de 2 × 2" en marco de ángulo rolado 1-1/4" × 1-1/4" cal. 13, postes de PTR de
+  2" con placa base soldada y anclas, herrajes por dentro (wirecrafters.com "2x2 10 GA Welded Mesh Specs", RapidWire;
+  saferack.com), 2" libres al piso, bisagras de barril y portacandado.
+- Montacargas de contrapeso 5 000 lb gas LP (Yale GC050VX): ancho 1,067 m, protector 2,134 m, largo a la cara de la
+  horquilla 2,281 m (lectura-specs.com, codeready.org); llantas 21 × 7 × 15 / 16 × 6 × 10-1/2 (forklifttire.com); tanque
+  de 33,5 lb Ø 12,3" × 27-28" (worthington / flamekingproducts.com).
 - Anaquel sin tornillos 48 × 18 × 72" de 5 entrepaños, poste de ángulo ranurado (Hirsh / Global Industrial).
 - Mesa plegable 72 × 30 × 29" con bastidor de acero (Lifetime 2924); silla plegable de acero: asiento 17", total 30-32",
   tubo de 7/8" (Global Industrial / Virco).
 - Caja de munición M2A1: 11,75 × 6 × 7,5" exterior (Blackhawk / Lucky Gunner).
-- Lámpara LED high-bay UFO 150 W: Ø 11-12,6", altura 4,6-8", cuelgue de gancho (Sunco, eLEDlights).
-- Banco de trabajo 72 × 30" de acero, 34" de alto (Jamco / Butler Bros).
+- Lámpara LED high-bay UFO 150 W: Ø 11,6-12,6", altura 5-6", aluminio fundido, driver integrado, armella (Superia UHB 150W
+  TDS ikioledlighting.com, 1000bulbs PLT-12630, bulbamerica).
+- Banco de trabajo 72 × 30" de acero, 34" de alto (Jamco / Butler Bros); tornillo de banco de 4": abre 4-1/2", garganta
+  3-7/16", largo 15,6", alto 8,6" (Wilton 744, penntoolco.com).
+- Extintor ABC de 10 lb: Ø 5" × 20-21,6" (Potter Roemer 3010, Amerex, Oval 10J-ABC spec sheet).
 """
 import math
 
@@ -47,7 +54,7 @@ from mathutils import Matrix, Vector, noise
 from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rbox, rng, rr_profile, rtube  # noqa: F401
 from kit.clinic_equipo import arc_solid, loft_rings, loop_tube, revolve, rtube_lo, sweep_frame, weld  # noqa: F401
-from kit.clinic_equipo import extinguisher as _ce_extinguisher
+from kit.clinic_equipo import extinguisher as _ce_extinguisher  # noqa: F401  (ya no se usa aquí; se conserva por compatibilidad)
 from kit.clinic_equipo import text as etext
 from kit.clinic_servicios import holed, rr_pts, rrframe, skin, slab  # noqa: F401
 
@@ -2538,7 +2545,7 @@ def security_cage(w=4.0, d=3.0, h=2.6, seed=0):
     xbar = ph - 0.006
     _cyl(mb, (xbar, yp - 0.002, zl - 0.03), (xbar, yp - 0.002, zl + 0.03), 0.0062, "steel", seg=SEG, caps=False)
     for zz in (zl - 0.03, zl + 0.03):
-        _lathe(mb, [(0.0, 0.0), (0.0062, 0.0), (0.0055, 0.0012), (0.0, 0.0016)], _T(xbar, yp - 0.002, zz) @ (_Rx(180) if zz < zl else Matrix()),
+        _lathe(mb, [(0.0062, 0.0), (0.0055, 0.0012), (0.0, 0.0016)], _T(xbar, yp - 0.002, zz) @ (_Rx(180) if zz < zl else Matrix()),
                "steel", seg=SEG)
     bend = 7.0 + float(r.uniform(-2, 2))                                  # oreja doblada hacia afuera (saqueo)
     Le = xpost + 0.022 - xbar
@@ -2661,7 +2668,7 @@ def _leaf_chain(mb, p0, p1, side, pitch=0.015875):
             slab(mb, M, pitch + 0.0135, 0.0135, tp - 0.0001, rc=0.0067, re=0.0004, mat="steel", nc=3, ne=1)
     for k in range(n + 1):
         c = p0 + u * (pitch * k)
-        _cyl(mb, tuple(c - sd * 2.5 * tp), tuple(c + sd * 2.5 * tp), 0.0028, "steel", seg=12, caps=False)
+        _cyl(mb, tuple(c - sd * 2.5 * tp), tuple(c + sd * 2.5 * tp), 0.0028, "steel", seg=12)
         for sg in (-1, 1):
             Mp = _frame_z(c + sd * sg * 2.5 * tp, sd * sg)
             _lathe(mb, [(0.0, -0.0003), (0.0033, -0.0003), (0.0031, 0.0004), (0.0022, 0.0011), (0.0, 0.0013)], Mp, "steel", seg=12)
@@ -2739,7 +2746,7 @@ def forklift(seed=0):
         _fl_wheel(mb, _T(sx * xr, yra, Rr) @ _Ry(90 * sx), Rr, wr, 0.1334, n_lugs=6)
         _lathe(mb, [(0.0, -0.155), (0.11, -0.155), (0.11, 0.0), (0.13, 0.0), (0.13, 0.02), (0.095, 0.03), (0.095, 0.06), (0.0, 0.06)],
                _T(sx * (xf - wf / 2 - 0.0), yfa, Rf) @ _Ry(-90 * sx), "gunmetal", seg=SEG)                  # cubo planetario
-        _lathe(mb, [(0.0, -0.13), (0.06, -0.13), (0.06, 0.07), (0.045, 0.085), (0.0, 0.085)],
+        _lathe(mb, [(0.0, -0.152), (0.06, -0.152), (0.06, 0.07), (0.045, 0.085), (0.0, 0.085)],
                _T(sx * (xr - wr / 2), yra, Rr) @ _Ry(-90 * sx), "gunmetal", seg=SEG)                         # muñón
     _cyl(mb, (-0.36, yfa, Rf), (0.36, yfa, Rf), 0.085, "gunmetal", seg=SEG)                                 # carcasa del eje
     _lathe(mb, [(0.0, -0.13), (0.11, -0.12), (0.15, -0.06), (0.15, 0.04), (0.12, 0.1), (0.0, 0.12)], _T(0.0, yfa + 0.02, Rf) @ _Rx(90),
@@ -2796,7 +2803,7 @@ def forklift(seed=0):
             sweep_frame(mb, [(-0.0011, -0.0065), (0.0011, -0.0065), (0.0011, 0.0065), (-0.0011, 0.0065)],
                         [tuple(Mg @ Vector((-0.1355, z, 0.0062))), tuple(Mg @ Vector((0.1355, z, 0.0062)))], "cable",
                         up=tuple(Mg.to_3x3() @ Vector((0, 0.5, -0.866))))
-    slab(mb, _T(0, -0.0645, 0.92) @ _Rx(90), 0.12, 0.03, 0.006, rc=0.01, re=0.003, mat="cable", nc=3, ne=2)      # jaladera del cofre
+    slab(mb, _T(0, -0.058, 0.92) @ _Rx(90), 0.12, 0.03, 0.006, rc=0.01, re=0.003, mat="cable", nc=3, ne=2)        # jaladera del cofre
     # contrapeso: calaveras, enganche, ojos de izaje, alarma de reversa
     for sx in (-1, 1):
         Ml = _T(sx * 0.4, 1.181, 0.86) @ _Rx(-90)
@@ -2818,7 +2825,7 @@ def forklift(seed=0):
     slab(mb, Md @ _T(0, 0.012, 0.0445), 0.15, 0.065, 0.003, rc=0.006, re=0.001, mat="glass", nc=2, ne=1)
     for k in range(4):
         _lathe(mb, [(0.0, 0.0), (0.006, 0.0), (0.0055, 0.003), (0.0, 0.0035)], Md @ _T(-0.075 + k * 0.05, -0.037, 0.0445), "plastic", seg=SEG)
-    _lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.011, 0.006), (0.006, 0.01), (0.0, 0.01)], _T(0.12, -0.39, 0.95) @ _Rx(-80), "steel", seg=SEG)
+    _lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.011, 0.006), (0.006, 0.01), (0.0, 0.01)], _T(0.12, -0.381, 0.95) @ _Rx(-80), "steel", seg=SEG)
     pc = Vector((0.0, -0.44, 1.0))
     pw = Vector((0.0, -0.27, 1.21))
     ax = (pw - pc).normalized()
@@ -2827,8 +2834,8 @@ def forklift(seed=0):
     for k in range(8):
         bell += [(0.058 - k * 0.003, 0.012 + k * 0.022), (0.046 - k * 0.003, 0.023 + k * 0.022)]
     _lathe(mb, bell + [(0.034, 0.2)], Mc, "rubber", seg=SEG)                                                  # fuelle
-    _lathe(mb, [(0.034, 0.2), (0.038, 0.21), (0.038, 0.24), (0.03, 0.26)], Mc, "cable", seg=SEG)
-    _cyl(mb, tuple(pc + ax * 0.25), tuple(pw - ax * 0.03), 0.022, "cable", seg=SEG)
+    _lathe(mb, [(0.034, 0.2), (0.038, 0.21), (0.038, 0.24), (0.03, 0.26), (0.021, 0.265)], Mc, "cable", seg=SEG)
+    _cyl(mb, tuple(pc + ax * 0.2), tuple(pw - ax * 0.03), 0.022, "cable", seg=SEG)
     Mw = _frame_z(pw, ax)
     rim = [(0.165 + 0.0155 * math.cos(a), 0.0155 * math.sin(a)) for a in np.linspace(0, 2 * PI, 17)[:-1]]
     grips = lambda a: 1.0 - 0.006 * max(0.0, math.cos(36 * a)) ** 6                                       # noqa: E731
@@ -3048,7 +3055,7 @@ def forklift(seed=0):
         _board(mb, sx * 0.262 - 0.008, sx * 0.262 + 0.008, yb1 - 0.004, ym + 0.02, 0.07, 0.86, "gunmetal", r=0.004)
         for zr in (0.25, 0.78):
             Mr = _frame_z(Vector((sx * 0.27, ym, zr)), Vector((sx, 0, 0)))
-            _lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.016), (0.0, 0.016)], Mr, "steel", seg=SEG)
+            _lathe(mb, [(0.0, -0.004), (0.012, -0.004), (0.012, 0.016), (0.0, 0.016)], Mr, "steel", seg=SEG)
             _lathe(mb, [(0.011, 0.015), (0.031, 0.016), (0.032, 0.019), (0.032, 0.046), (0.031, 0.049), (0.011, 0.05)], Mr, "steel", seg=SEG,
                    closed=True)
         _board(mb, sx * 0.17 - 0.03, sx * 0.17 + 0.03, yb1 - 0.002, ym - 0.045, 0.48, 0.62, "gunmetal", r=0.004)    # orejas de cadena
@@ -3152,7 +3159,7 @@ def _vise(mb, M, seed=0):
         slab(mb, Ml @ _T(-0.01, 0, 0), 0.04, 0.034, 0.014, rc=0.012, re=0.003, mat="paint_od", nc=3, ne=2)
         _nv_bolt_head(mb, M @ _T(*p) @ _T(0, 0, 0.014), d=0.0127, mat="steel")
     for sx in (-1, 1):                                                    # palancas de freno de la base
-        p0 = M @ Vector((sx * 0.06, -0.05, 0.014))
+        p0 = M @ Vector((sx * 0.045, -0.05, 0.014))
         p1 = M @ Vector((sx * 0.1, -0.085, 0.02))
         _cyl(mb, tuple(p0), tuple(p1), 0.0045, "steel", seg=SEG)
         _lathe(mb, [(0.0, -0.006), (0.006, -0.005), (0.0075, 0.0), (0.006, 0.005), (0.0, 0.006)], _frame_z(p1, p1 - p0), "steel", seg=SEG)
@@ -3163,13 +3170,13 @@ def _vise(mb, M, seed=0):
     # cuerpo fijo (atrás) con yunque y garganta
     _rloft(mb, M @ _T(0, 0.035, 0.044), [(0.0, 0.11, 0.13, 0.0, 0.03), (0.04, 0.1, 0.12, 0.0, 0.028), (0.09, 0.085, 0.11, -0.005, 0.022),
                                          (0.13, 0.12, 0.09, -0.02, 0.012), (0.156, 0.124, 0.09, -0.02, 0.008)], "paint_od", n=4)
-    _rloft(mb, M @ _T(0, 0.105, 0.17), [(0.0, 0.06, 0.07, 0.0, 0.01), (0.03, 0.065, 0.08, 0.0, 0.006)], "paint_od", n=3)
-    slab(mb, M @ _T(0, 0.105, 0.2), 0.062, 0.076, 0.012, rc=0.008, re=0.003, mat="steel", nc=3, ne=2)          # yunque pulido
+    _rloft(mb, M @ _T(0, 0.075, 0.17), [(0.0, 0.06, 0.07, 0.0, 0.01), (0.03, 0.065, 0.08, 0.0, 0.006)], "paint_od", n=3)
+    slab(mb, M @ _T(0, 0.075, 0.199), 0.062, 0.076, 0.012, rc=0.008, re=0.003, mat="steel", nc=3, ne=2)        # yunque pulido
     # viga de deslizamiento y mordaza móvil (adelante): abierta 30 mm
     rtube(mb, tuple(M @ Vector((0, -0.125, 0.115))), tuple(M @ Vector((0, 0.05, 0.115))), 0.05, 0.042, "paint_od", r=0.006)
     _rloft(mb, M @ _T(0, -0.098, 0.09), [(0.0, 0.08, 0.06, 0.0, 0.016), (0.06, 0.1, 0.055, 0.003, 0.012), (0.11, 0.124, 0.052, 0.003, 0.008)],
            "paint_od", n=4)
-    yj_f, yj_m = -0.0255, -0.0555                                          # caras de los insertos (fija y móvil)
+    yj_f, yj_m = -0.025, -0.056                                            # caras de los insertos (fija y móvil)
     for (yy, sg) in ((yj_f, -1), (yj_m, 1)):
         Mi = M @ _T(0, yy, 0.183) @ _Rx(-90 * sg)
         _serrated(mb, Mi, 0.1, 0.032, mat="steel")
@@ -3199,7 +3206,7 @@ def _wrench(mb, M, L=0.2, seed=0):
     """Llave combinada acostada (boca abierta a 15° en +X, estría de 12 puntas en -X), caña en I con cantos redondeados."""
     s = L / 0.24
     w0, t0 = 0.016 * s, 0.0055 * s
-    sweep_frame(mb, rr_profile(w0, t0, t0 * 0.35, n=3), [tuple(M @ Vector((x, 0, t0 / 2 + 0.0004))) for x in (-L / 2 + 0.022 * s, L / 2 - 0.028 * s)],
+    sweep_frame(mb, rr_profile(w0, t0, t0 * 0.35, n=3), [tuple(M @ Vector((x, 0, t0 * 0.45))) for x in (-L / 2 + 0.022 * s, L / 2 - 0.028 * s)],
                 "steel", up=tuple(M.to_3x3() @ Vector((0, 0, 1))), scale=lambda t_: (1.0 - 0.18 * math.sin(PI * t_), 1.0 - 0.1 * math.sin(PI * t_)))
     # estría: anillo con 12 puntas por dentro
     Ro, Ri = 0.0155 * s, 0.0098 * s
@@ -3236,7 +3243,7 @@ def _hammer(mb, M, seed=0):
 
 def _screwdriver(mb, M, seed=0):
     """Desarmador de cruz acostado: mango de acetato con estrías, virola, vástago y punta (eje X local, z = 0 en la cubierta)."""
-    Ms = M @ _T(0, 0, 0.0158) @ _Ry(90)
+    Ms = M @ _T(0, 0, 0.0146) @ _Ry(90)
     from kit.clinic_servicios import lathe as slathe
     fl = lambda i, a, rr, z: rr * (1.0 - 0.07 * max(0.0, math.cos(6 * a)) ** 2) if 2 <= i <= 4 else rr   # noqa: E731
     slathe(mb, [(0.0, -0.11), (0.012, -0.109), (0.015, -0.1), (0.016, -0.09), (0.0155, -0.03), (0.0135, -0.015), (0.0085, -0.008),
@@ -3345,28 +3352,29 @@ def workbench(seed=0):
         slab(mb, Md @ _T(0, -0.0192, 0.035) @ _Rx(90), 0.066, 0.024, 0.0004, rc=0.001, re=0.0001, mat="paper", nc=1, ne=1)
         # caja del cajón (lados, fondo, trasera) y correderas de 3 miembros
         dd = cd - 0.03
+        xin = cw / 2 - 0.0012 - 0.0017 - 0.007 - 0.0023                   # cara media del lado del cajón
         for sx in (-1, 1):
-            xs_ = cx + sx * (cw / 2 - 0.016)
-            _board(mb, xs_ - 0.0006, xs_ + 0.0006, yf, yf + dd, za + 0.01, zb - 0.03, "paint_od", r=0.0004)
-            for (dxs, y_a, y_b, hz) in ((0.0045, -cd / 2, cd / 2 - 0.01, 0.034), (0.009, -cd / 2 - opn * 0.5, cd / 2 - 0.01 - opn * 0.5, 0.028),
-                                         (0.0125, yf, yf + dd - 0.02, 0.022)):
-                xr = cx + sx * (cw / 2 - 0.0012 - dxs + 0.0026)
+            xs_ = cx + sx * xin
+            _board(mb, xs_ - 0.0006, xs_ + 0.0006, yf - 0.001, yf + dd, za + 0.0085, zb - 0.03, "paint_od", r=0.0004)
+            for (dxs, y_a, y_b, hz) in ((0.0, -cd / 2, cd / 2 - 0.01, 0.034), (0.0035, -cd / 2 - opn * 0.5, cd / 2 - 0.01 - opn * 0.5, 0.028),
+                                         (0.007, yf, yf + dd - 0.02, 0.022)):
+                xr = cx + sx * (cw / 2 - 0.0012 - 0.0017 - dxs)
                 chn = [(-0.0018, -hz / 2), (0.0018, -hz / 2), (0.0018, -hz / 2 + 0.0008), (-0.001, -hz / 2 + 0.0008), (-0.001, hz / 2 - 0.0008),
                        (0.0018, hz / 2 - 0.0008), (0.0018, hz / 2), (-0.0018, hz / 2)]
                 sweep_frame(mb, [(sx * u, v) for (u, v) in chn][::(1 if sx > 0 else -1)], [(xr, y_a, za + 0.03), (xr, y_b, za + 0.03)],
                             "galvanized", up=(0, 0, 1))
-        _board(mb, cx - cw / 2 + 0.016, cx + cw / 2 - 0.016, yf, yf + dd, za + 0.008, za + 0.0092, "paint_od", r=0.0004)
-        _board(mb, cx - cw / 2 + 0.016, cx + cw / 2 - 0.016, yf + dd - 0.0012, yf + dd, za + 0.008, zb - 0.03, "paint_od", r=0.0004)
+        _board(mb, cx - xin - 0.0005, cx + xin + 0.0005, yf - 0.001, yf + dd, za + 0.008, za + 0.0092, "paint_od", r=0.0004)
+        _board(mb, cx - xin - 0.0005, cx + xin + 0.0005, yf + dd - 0.0012, yf + dd, za + 0.008, zb - 0.03, "paint_od", r=0.0004)
         if opn > 0:                                                       # llaves de dado en el cajón abierto
             for j in range(9):
-                d_ = 0.012 + j * 0.0016
-                p = (cx - 0.16 + j * 0.035, yf + 0.06, za + 0.0092)
+                d_ = 0.0085 + j * 0.0005                                  # dados de 3/8": Ø 17-25 mm
+                p = (cx - 0.15 + j * 0.033, yf + 0.04, za + 0.0092)
                 _lathe(mb, [(d_ * 0.55, 0.0), (d_, 0.0), (d_, 0.028), (d_ * 0.92, 0.031), (d_ * 0.62, 0.031), (d_ * 0.62, 0.012)],
                        _T(*p), "steel", seg=SEG, closed=True)
                 _lathe(mb, [(0.0, 0.0105), (d_ * 0.62, 0.0105), (0.0, 0.011)], _T(*p), "cable", seg=6)
     # ---- tornillo de banco y herramientas sobre la cubierta
     _vise(mb, _T(-L / 2 + 0.2, -D / 2 + 0.16, H), seed=seed)
-    _hammer(mb, _T(-0.3, 0.06, H - 0.0016) @ _Rz(-20 + _jit(r, 8)), seed=seed)
+    _hammer(mb, _T(-0.3, 0.06, H - 0.0021) @ _Rz(-20 + _jit(r, 8)), seed=seed)
     _wrench(mb, _T(0.05, -0.12, H) @ _Rz(12 + _jit(r, 10)), L=0.24)
     _wrench(mb, _T(0.12, -0.2, H) @ _Rz(-8 + _jit(r, 10)), L=0.19)
     _screwdriver(mb, _T(0.38, 0.05, H) @ _Rz(75 + _jit(r, 10)), seed=seed)
@@ -3383,7 +3391,7 @@ def workbench(seed=0):
     skin(mb, loops, "sign_red", M=Ml)
     _cyl(mb, tuple(Mtb @ Vector((-0.25, 0.113, 0.157))), tuple(Mtb @ Vector((0.25, 0.113, 0.157))), 0.0035, "steel", seg=SEG)   # bisagra
     for sx in (-1, 1):                                                    # broches
-        Mc = Mtb @ _T(sx * 0.2, -0.1115, 0.13) @ _Rx(90)
+        Mc = Mtb @ _T(sx * 0.2, -0.1098, 0.13) @ _Rx(90)
         slab(mb, Mc, 0.03, 0.04, 0.003, rc=0.004, re=0.001, mat="steel", nc=2, ne=1)
         slab(mb, Mc @ _T(0, 0.03, 0.002), 0.024, 0.03, 0.0025, rc=0.004, re=0.001, mat="steel", nc=2, ne=1)
     hp = [(-0.11, 0.0, 0.227), (-0.11, 0.0, 0.262), (0.11, 0.0, 0.262), (0.11, 0.0, 0.227)]
@@ -3552,12 +3560,12 @@ def _extinguisher10(mb, M, seed=0):
     _cyl(mb, tuple(Mg @ Vector((0, 0, -0.002))), tuple(Mg @ Vector((0, 0, 0.012))), 0.004, "brass", seg=SEG)
     _lathe(mb, [(0.0, 0.012), (0.0145, 0.012), (0.0155, 0.014), (0.0155, 0.022), (0.0165, 0.023), (0.0165, 0.025), (0.014, 0.0255)], Mg, "steel",
            seg=SEG)
-    _lathe(mb, [(0.0, 0.0225), (0.0138, 0.0225), (0.0, 0.0227)], Mg, "sign_white", seg=SEG)
+    _lathe(mb, [(0.0, 0.0221), (0.0156, 0.0221), (0.0156, 0.0225), (0.0, 0.0227)], Mg, "sign_white", seg=SEG)
     arc_solid(mb, 0.008, 0.012, 0.0224, 0.0229, math.radians(60), math.radians(120), 10, "sign_green", M=Mg)
     needle = math.radians(float(r.uniform(-8, 6)))
     slab(mb, Mg @ _T(0.0045 * math.cos(needle + PI / 2), 0.0045 * math.sin(needle + PI / 2), 0.02255) @ _Rz(math.degrees(needle) + 90), 0.0105,
          0.0008, 0.0006, rc=0.0003, re=0.0001, mat="cable", nc=1, ne=1)
-    _lathe(mb, [(0.0, 0.0255), (0.0146, 0.0255), (0.0125, 0.0262), (0.0, 0.0265)], Mg, "glass", seg=SEG)
+    _lathe(mb, [(0.0, 0.0251), (0.0152, 0.0251), (0.0125, 0.0262), (0.0, 0.0265)], Mg, "glass", seg=SEG)
     # salida, manguera y boquilla
     Mo = Mv @ _T(0.016, 0.0, 0.018) @ _Ry(90)
     _nv_nut(mb, Mo, 0.016, 0.009, "steel", hole=0.004)

@@ -27,6 +27,7 @@ from kit.armory import plan, side, xloft
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rng, rr_profile
 from kit.clinic_equipo import revolve, sweep_frame
 from kit.clinic_servicios import _edge_levels, rr_pts, skin
+from kit.clinic_servicios import slab as _slab
 from kit.fonts import text_font
 
 IN = 0.0254
@@ -538,9 +539,9 @@ def belt_layer(mb, M, n, cal="50", links=True, lite=False, seg=SEG):
             continue
         a0, a1 = PI / 2 + 0.75, PI / 2 + 2 * PI - 0.75       # abertura hacia abajo
         L = c["sh_z"]
-        for (zz, ww, da) in ((L * 0.42, L * 0.16, 0.0), (L * 0.12, L * 0.11, 0.2), (L * 0.74, L * 0.11, 0.2)):
+        for (zz, ww, da) in ((L * 0.40, L * 0.20, 0.0), (L * 0.10, L * 0.13, 0.2), (L * 0.74, L * 0.13, 0.2)):
             rl = max(_case_r(cal, zz), _case_r(cal, zz + ww)) - 0.0003
-            _link_loop(mb, Mi, rl, zz, ww, a0 + da, a1 - da)
+            _link_loop(mb, Mi, rl, zz, ww, a0 + da, a1 - da, t=0.0013)
         if i < n - 1:                                        # puente bajo los cartuchos
             mb.box((p * 0.15, L * 0.12, -rr - 0.0012), (p * 0.85, L * 0.86, -rr + 0.0012), "steel", bevel=0.0003, seg=1,
                    m=M @ _T(p * i, 0, 0))
@@ -768,7 +769,7 @@ def _ammo_can(size, seed, open_):
         belt_layer(mb, _T(x0, y0, zc1), n, cal)
         zc2 = zc1 - 2 * c["base"] + 0.0004
         belt_layer(mb, _T(x0, y0 + 0.0015, zc2), n, cal, links=False, lite=True, seg=16)
-        from kit.clinic_servicios import slab as _slab        # separador de cartón bajo la cinta (asienta en el piso)
+        # separador de cartón bajo la cinta (asienta en el piso)
         _slab(mb, _T(0, 0, 0.0047), Lb - 0.0050, Wb - 0.0050, zc2 - c["base"] + 0.0004 - 0.0047, rc=0.008, re=0.0015, mat="cardboard",
               nc=3, ne=2)
     return mb
@@ -829,7 +830,6 @@ def _cbox(seed):
     for sx in (-1, 1):
         x0 = sx * (L / 2 - 0.0005)
         Mf = _T(x0, 0, H / 2) @ _Ry(90 * sx)              # +Z local hacia afuera del extremo
-        from kit.clinic_servicios import slab as _slab
         _slab(mb, Mf @ _T(0, 0, -t), fh, fw, t, rc=0.0008, re=t * 0.45, re0=t * 0.45, mat="cardboard", nc=3, ne=1)
         _slab(mb, Mf @ _T(0, 0, -0.0045), H - 2 * t + 0.0003, W - 2 * t + 0.0003, t, rc=0.0008, re=0.0, re0=0.0, mat="cardboard",
               nc=2, ne=1)
@@ -1248,7 +1248,6 @@ def hex_nut(mb, M, s=0.024, h=0.014, washer=True, seg=24):
         revolve(mb, [(ri, 0.0), (ro - 0.0006, 0.0), (ro, 0.0006), (ro, t - 0.0006), (ro - 0.0006, t), (ri, t)], "steel", seg=32, M=M,
                 closed=True)
         z = t
-    rc = s / 2 / math.cos(PI / 6)
     lv = [(z, 0.0), (z + 0.0008, 0.0008), (z + 0.0016, 0.0016), (z + 0.0026, 0.0026), (z + h - 0.0026, 0.0026), (z + h - 0.0016, 0.0016),
           (z + h - 0.0008, 0.0008), (z + h, 0.0)]
     loops = []
@@ -1348,7 +1347,6 @@ def _shell_pallet(seed):
         x = -Lx / 2 + k * (dw + 0.012)
         wplank(mb, (x, -Ly / 2, hs), (x + dw, Ly / 2, hs + td), W, rs=rs)
     zb = hs + td
-    cols = [-Lx / 2 + 0.0045 + px * (i + 0.5) for i in range(4)]
     cols = [(-1.5 + i) * px for i in range(4)]
     rows = [-py / 2, py / 2]
     holed_slab(mb, _T(0, 0, zb - 0.0004), Lx, Ly, tbd, holes=[(x, y, 0.0766, 0.0766, 2) for x in cols for y in rows], ch=0.003,
@@ -1435,7 +1433,7 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
         w, t, mat = 0.019, 0.0008, "steel"
     else:
         w, t, mat = 0.025, 0.0018, "canvas"
-    zu = zp - 0.019 - 0.0006 - t / 2
+    zu = zp - 0.019 - 0.0011 - t / 2
     ztt = ztop - (tb if kind == "wood" else 0.0)              # sobre las tablas de la tapa (junto a los listones)
     xp = 0.6095 + t / 2 + 0.0009
     xc = xe + 0.0031 + t / 2                                   # cara de la carga + esquinero (el fleje lo aprieta)
@@ -1468,14 +1466,14 @@ def _ratchet(mb, x0, y, zr, w=0.05):
                 rmod=lambda a: 1.0 - 0.07 * (0.5 + 0.5 * math.cos(12 * a)) ** 4)
     revolve(mb, [(0.0, -w / 2 - 0.0115), (0.0055, -w / 2 - 0.0115), (0.0055, w / 2 + 0.0115), (0.0, w / 2 + 0.0115)], "steel", seg=SEG,
             M=_T(x0 + 0.016, y, zr) @ _Rx(90))
-    for k, rr in enumerate((0.0085, 0.0105, 0.0125)):          # vueltas de cincho sobre el carrete
+    for k, rr in enumerate((0.0062, 0.0079, 0.0096)):          # vueltas de cincho sobre el carrete (una sobre otra)
         revolve(mb, [(rr - 0.0009, -w / 2 + 0.0004), (rr + 0.0009, -w / 2 + 0.0004), (rr + 0.0009, w / 2 - 0.0004),
                      (rr - 0.0009, w / 2 - 0.0004)], "canvas", seg=SEG, M=_T(x0 + 0.016, y, zr) @ _Rx(90), closed=True)
     for sy in (-1, 1):                                         # palanca
-        side(mb, [(x0 + 0.026, zr - 0.108), (x0 + 0.034, zr - 0.108), (x0 + 0.040, zr + 0.010), (x0 + 0.028, zr + 0.016)],
-             [0.004, 0.004, 0.005, 0.003], 0.0025, "steel", y0=y + sy * (w / 2 + 0.0015), re=0.0006, n=3, ne=1)
-    slab_ = __import__("kit.clinic_servicios", fromlist=["slab"]).slab
-    slab_(mb, _T(x0 + 0.034, y, zr - 0.098) @ _Ry(90), 0.034, w + 0.012, 0.010, rc=0.004, re=0.003, mat="rubber", nc=3, ne=3)
+        side(mb, [(x0 + 0.026, zr - 0.108), (x0 + 0.034, zr - 0.108), (x0 + 0.040, zr + 0.010), (x0 + 0.024, zr + 0.013),
+                  (x0 + 0.0095, zr + 0.005), (x0 + 0.011, zr - 0.010)],
+             [0.004, 0.004, 0.005, 0.004, 0.005, 0.004], 0.0025, "steel", y0=y + sy * (w / 2 + 0.0015), re=0.0006, n=3, ne=1)
+    _slab(mb, _T(x0 + 0.034, y, zr - 0.098) @ _Ry(90), 0.034, w + 0.012, 0.010, rc=0.004, re=0.003, mat="rubber", nc=3, ne=3)
     revolve(mb, [(0.0, -w / 2 - 0.004), (0.003, -w / 2 - 0.004), (0.003, w / 2 + 0.004), (0.0, w / 2 + 0.004)], "steel", seg=16,
             M=_T(x0 + 0.031, y, zr - 0.086) @ _Rx(90))
     revolve(mb, [(0.0, -w / 2 - 0.0060), (0.0026, -w / 2 - 0.0060), (0.0026, w / 2 + 0.0060), (0.0, w / 2 + 0.0060)], "steel", seg=16,
