@@ -1317,14 +1317,15 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(1.2, TENT_W / 2 + 1.7, 0.0) @ _Rz(180))   # entre dos vientos
     for k in range(3):
         put(_fn("jerry_can", ft)(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
-    put(_fn("floodlight_tripod", ft)(seed=7), _T(5.2, -8.0, 0.0) @ _Rz(-134))     # apunta al mostrador
-    LIGHTS.append([5.2, -8.0, 1.98])
+    put(_fn("floodlight_tripod", ft)(seed=7), _T(5.6, -7.6, 0.0) @ _Rz(-128))     # apunta al mostrador, libre de los vientos
+    LIGHTS.append([5.6, -7.6, 1.98])
     for k in range(4):
         put(_fn("jerry_can", ft)(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
     if hasattr(ft, "camo_net"):
-        # red: orilla de atrás a 0,45 m del alero, sin vientos hacia la tienda; corrida a -X para que ningún poste quede
-        # frente al mostrador (postes en x -7, -3 y +1)
-        put(ft.camo_net(w=8.0, l=4.5, seed=8, poles=True, back_ties=False, front_ties=False), _T(-3.0, -TENT_W / 2 - 2.7, 0.0), mb=det, solid=False)
+        # red centrada en el mostrador: orilla de atrás a 0,45 m del alero, sin vientos hacia la tienda ni amarres al frente, y
+        # sin postes a media orilla (solo esquinas, medios costados y los dos separadores, que flanquean el paso de clientes)
+        put(ft.camo_net(w=8.0, l=4.5, seed=8, poles=True, back_ties=False, front_ties=False, mid_edge_poles=False),
+            _T(-1.2, -TENT_W / 2 - 2.7, 0.0), mb=det, solid=False)
 
 
 def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
