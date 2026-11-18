@@ -611,3 +611,83 @@ b4b4ee1c, 22fdd350, 69a1fda1, 2235e7c1, f420198d, d7c6dd1b). Revisadas con mis o
   largueros de muro a ~1,5 m ([steelcalculator](https://steelcalculator.pages.dev/reference/steel-industrial-building/),
   [Nucor](https://www.nucorbuildingsystems.com/wp-content/uploads/2019/01/03_00.pdf)). Las de cada pieza se anotan en el modelado.
 - **Textos en el modelo:** esténciles genéricos en inglés; sin banderas, insignias, unidades reales ni marcas.
+
+## MIL_1_almacen + MIL_2_avanzada · modelado (2026-11-18)
+- **Nave** (`blender/mil_builder.py`): nave preingeniería de 30 × 18 m en 4 crujías de 7,5 m, piso a altura de andén (1,2 m),
+  6 m libres al alero, pendiente 1:12. Muro de concreto hasta 2,4 m y lámina R (PBR) color arena de geometría real (costilla
+  trapecial de 1 1/4" a 12" con microcostillas); techo de junta alzada galvanizado (charolas de 24", costuras engargoladas,
+  estrías), caballete ventilado, remates de hastial y canalón de caja con ganchos y bajadas, 8 ventiladores de turbina con
+  álabes; marcos rígidos de alma variable con rodillas atornilladas, marcos de hastial, placas base con anclas y grout,
+  largueros Z de techo y de muro, puntal de alero, contraventeo de varilla con tensores, aislante de cara blanca con comba
+  entre largueros, rociadores (troncal, ramales, rociadores colgantes, montante con válvula y manómetro), pararrayos de
+  cobre con bajadas a registros. Frente: andén con ángulo de canto, defensas de hule laminado, niveladores, franjas
+  amarillas y bolardos; 2 cortinas de 14 × 14 ft (capota, guías, duelas curvas, barra con astrágalo, cerrojos con candado,
+  cadena de operación); puerta de personal abierta con marco, bisagras, barra de pánico, cierrapuertas, teclado y marquesina
+  con tornapuntas; rampa con barandal amarillo; arbotantes LED, cámaras, gabinete de extintor, medidor y esténciles
+  AUTHORIZED PERSONNEL ONLY / NO SMOKING / EXPLOSIVES / NO OPEN FLAMES en el muro de concreto.
+- **Huellas de saqueo (sin deterioro):** cortina oriente abollada en las 4 duelas bajas con marcas de palanca junto al
+  cerrojo; rayones de barreta en la placa de patada y el canto de la puerta de personal; portacandado de la jaula con
+  rayones y la oreja doblada; dos impactos de bala con la pintura saltada en la lámina y uno en el muro. Sin grafiti.
+- **Recinto:** muros T de 3,66 m (84 segmentos) al poniente, fondo y oriente; malla ciclónica (modo ligero) con rollo de
+  navaja sobre los brazos y portón doble de 6 m al frente; pluma de acceso y chicana de 4 barreras Jersey afuera; torre de
+  vigilancia con costales y techo; 2 torres de luz de remolque; HESCO MIL7 tras la malla; puesto de tirador de costales;
+  losas de maniobra en paños con junta, grava ondulada con piedras sueltas, guarnición.
+- **Interior:** 3 filas de racks selectivos (6 racks de 3 claros × 3 niveles) con tarimas de cajas flejadas, tarimas de
+  proyectiles de 155 mm y tarimas de cajas largas (huecos al azar de lo que ya salió); jaula de malla de 5,5 × 4,5 m con
+  armero y 8 fusiles, 2 ametralladoras en trípode, mortero, caja larga abierta con 2 lanzadores, cajas, latas y estuche;
+  zona de recibo con 4 tarimas y montacargas; banco de trabajo; 3 estaciones de extintor; 12 luminarias de nave; líneas
+  amarillas de pasillo.
+- **MIL_2_avanzada (pieza suelta):** tienda de marco TEMPER 6,1 × 9,75 m con lona caída entre arcos, costado del frente
+  enrollado y puerta de testero abierta, vientos y estacas; tarima de triplay; mostrador de 6 cajas OD con caja de dinero;
+  mesa con cargadores, cajas de cartuchos y latas; 2 armeros con 14 fusiles (dos huecos vendidos); 3 anaqueles de latas y
+  cajas; tablero perforado en postes con 2 chalecos y 2 fundas con pistola; cajas y latas en el piso; serie de 8 focos;
+  letrero SUPPLY colgado del alero; red de camuflaje con postes y separadores al frente; HESCO MIL1 en las esquinas; costales
+  al fondo y en los testeros; generador táctico de 10 kW, 7 bidones y reflector en trípode. Junto al almacén va en
+  (16,0; 6,5; 0) del pivote de MIL_1.
+- **Piezas de los agentes** (`kit/armory.py`, `kit/fortif.py`, `kit/campaign.py`), revisadas por mí en arcilla a < 2 m:
+  fusiles genéricos (carabina / asalto / tirador, 7,3–8,0 k), pistola y funda, cargador, latas M2A1/M19A1, cajas de madera
+  (normal / larga / chica), tarimas de proyectiles y de cajas, ametralladora pesada en trípode, mortero, lanzador
+  desechable, chaleco con MOLLE, estuche rígido; HESCO MIL1/MIL7/MIL8 de malla real, muro T, barrera Jersey, saco y muros de
+  sacos, concertina (sola, triple y sobre malla), torre de vigilancia, torre de luz, reflector en trípode, pluma, red de
+  camuflaje, generador táctico, bidón; tienda TEMPER, tarima, mostrador, anaquel, armero, tablero, mesa y silla plegables,
+  serie de focos, letrero, rack selectivo, jaula, montacargas, banco, luminaria de nave y estación de extintor.
+- **Fuentes web de las proporciones (R-AAA punto 7)**, además de las de la sección de referencias:
+  - Armas y munición: [M4A1](https://en.wikipedia.org/wiki/M4A1), [M16A4](https://americanspecialops.com/special-ops-weapons/m16a4-rifle.php),
+    [riel Picatinny](https://en.wikipedia.org/wiki/Picatinny_rail), [STANAG](https://en.wikipedia.org/wiki/STANAG_magazine),
+    [M2](https://navweaps.com/Weapons/WNUS_50cal-M2_MG.php), [M252](https://en.wikipedia.org/wiki/M252_mortar),
+    [AT4](https://en.wikipedia.org/wiki/AT4), [latas M2A1/M19A1](https://www.bulkammo.com/m19a1-30-cal-m2a1-50-cal-ammo-cans-green-brand-new-2),
+    [MIL-S-23389](https://everyspec.com/MIL-SPECS/MIL-SPECS-MIL-S/MIL-S-23389B_14382/),
+    [tarima de 155 mm](https://www.msm.sk/en/produkt/155-mm-he-m107-en/), [tarima GMA](https://www.interlakemecalux.com/blog/gma-pallet),
+    [MOLLE](https://en.wikipedia.org/wiki/MOLLE), [estuche](https://www.planooutdoors.com/products/all-weather-2-42-long-gun-case).
+    Las armas son diseños genéricos con proporciones de esas fichas, no réplicas.
+  - Fortificación: [HESCO](https://www.scribd.com/document/465814625/HESCO-Wall), [muro T](https://www.globalsecurity.org/military/library/news/2007/07/mil-070705-afpn03.htm),
+    [Jersey](https://rosap.ntl.bts.gov/view/dot/17534/dot_17534_DS1.pdf), [sacos](https://www.webstaurantstore.com/14x26-white-50-lb-heat-cut-standard/466SBW142610X.html),
+    [concertina](https://firstfence.co.uk/concertina-razor-wire-730-mm), [torre de vigilancia](https://www.panelbuilt.com/products/guard-towers/),
+    [torre de luz](https://manelservice.com/en/lighting-systems/lighting-towers/mosa-tf-ni9-l-4x240-led-tower-light),
+    [pluma](https://www.broxap.com/counterbalance-barrier.html), [red de camuflaje](https://www.globalsecurity.org/military/library/policy/army/fm/20-3/appc.htm),
+    [generador AMMPS](https://mart.cummins.com/imagelibrary/data/assetfiles/0058353.pdf),
+    [bidón OTAN](https://www.armysurplusworld.com/20-liter-nato-style-jerry-can).
+  - Tienda y almacén: [TEMPER](https://www.dla.mil/Portals/104/Documents/TroopSupport/CloTex/shelters/MilSpec/4green.pdf),
+    [rack de gota](https://ridgurak.com/products/pallet-rack/teardrop-pallet-rack/), [malla de jaula](https://www.wirecrafters.com/wp-content/uploads/2x2-10-GA-Welded-Mesh-Specs.pdf),
+    [montacargas](https://www.ritchiespecs.com/model/yale-gc050vx-forklift), [anaquel](https://www.globalindustrial.com/p/shelving-48x18x72-with-5-shelves-no-deck),
+    [mesa plegable](https://www.lifetime.com/lifetime-2924g-6-foot-folding-table), [luminaria de nave](https://www.eledlights.com/collections/best-sellers/products/eco160-series-led-high-bays).
+- **Revisión en arcilla a < 2 m** (`render_qa/MIL_1_almacen_r1_*`, `MIL_2_avanzada_r1_*`, más primeros planos con
+  luminarias del interior): acceso, andén, cortina abollada, torre, perímetro, racks, jaula, recibo, frente, mostrador y
+  trasera de la tienda. Arreglado en la revisión y en la **segunda pasada (R-AAA punto 7)**: duelas de las cortinas de 5 a
+  11 puntos por perfil (se veían facetadas), tornapuntas de la marquesina (eran placas triangulares enormes), aletas del
+  arbotante sobre la carcasa, malla del frente rematada contra el alma de los muros T (la esquina quedaba abierta), muros T
+  con el frente hacia afuera en los tres lados, perímetro y carga de racks en mallas propias para no pasar de 100 MB por
+  GLB. Las tomas de interior de `render_clay` salen negras (nave cerrada sin luz); se revisaron con luminarias propias.
+- **Horneado y kit UE5** (atlas de muros a 4K, sin grafiti): exportación validada en los dos (todas las comprobaciones OK).
+  SM_MIL_1_almacen: Estructura 132 978 · Detalle 364 501 · Mobiliario 446 934 · **Perímetro 957 549** · **Carga 867 368** ·
+  Vidrio 2 680 · Colision 60 403 + cajas; 181,6 MiB de GLB (el mayor, 71,6 MB). SM_MIL_2_avanzada: Detalle 105 468 ·
+  Mobiliario 312 492 · Vidrio 1 362 · Colision 396 + 33 cajas; 21,4 MiB. Partes nuevas del kit: Perimetro y Carga (manifiesto,
+  importador y LEEME §3.5); el importador toma el Detalle como raíz cuando no hay Estructura (MIL_2). Texturas nuevas T15–T20
+  y materiales canvas, sandbag, geotextile, wood_od, net, plywood, paint_od, paint_tan, rack_orange, rack_blue (repetibles) y
+  brass, gunmetal, polymer (color); la lámina arena usa la capa de pintura sobre óxido con desgaste bajo (umbral por wear).
+- **Por debajo del estándar, dicho con honestidad**: alambres de la malla HESCO de 4 lados y su bobina de 3, y alambre de la
+  malla ciclónica de 3 (presupuesto: se notan a < 1 m); las navajas de la concertina son un fleje dentado, no hojas sueltas;
+  la lona de la tienda tiene arrugas anchas (sin pliegues finos) y la red de camuflaje cae por cálculo aproximado, sin la red
+  base de cordel; agujeros del tablero y gotas del rack son pastillas oscuras; carrocería del montacargas simplificada;
+  cargadores sin nervaduras; puertas del generador lisas; esténciles con la fuente de Blender; tornillería chica de 12–20
+  lados. Las armas son genéricas (proporciones de fichas reales, no réplicas).
