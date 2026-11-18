@@ -303,7 +303,7 @@ def main():
         for i, p in enumerate(d.get("focos_m_blender", [])):
             gra = bid.startswith("GRA_")
             Lf = bpy.data.lights.new(f"foco{i}", "POINT" if gra else "AREA")   # granero: foco desnudo de 100 W
-            Lf.energy = 140.0 if gra else 30.0
+            Lf.energy = 140.0 if gra else (320.0 if bid.startswith("MIL_1") else 30.0)    # almacén: luminarias de nave a 7 m
             if gra:
                 Lf.shadow_soft_size = 0.05
             else:
