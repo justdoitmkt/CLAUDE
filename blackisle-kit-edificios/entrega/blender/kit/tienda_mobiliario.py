@@ -1428,15 +1428,15 @@ def shelving(w=1.2, seed=0, stock="mixed"):
                             opn = False
                         else:
                             tback = max(tb_min, 4.0) + 2.0
+                            # solapas de los testeros: inclinadas hacia adentro de la caja (no invaden a las vecinas)
                             ts = math.degrees(math.acos(max(-1.0, min(1.0, up_room / (bd / 2 - 0.004)))))
-                            room = min(x - (xl - 0.008), (xr + 0.008) - (x + bw))
-                            ts_max = math.degrees(math.asin(max(0.0, min(1.0, room / (bd / 2 - 0.004)))))
-                            if ts > ts_max:
+                            if 2 * (bd / 2 - 0.004) * math.sin(math.radians(max(ts, 8.0) + 2.0)) > bw - 0.02:
                                 opn = False
                             else:
                                 dmax = bh - 0.006                        # solapa del frente colgando sobre la cara de la caja
                                 tf = 180.0 - (math.degrees(math.acos(min(1.0, dmax / ln))) if ln > dmax else _f(r.uniform(6, 12)))
-                                tl = [tf, tback, min(max(ts, 12.0) + 3.0, ts_max), min(max(ts, 12.0) + 3.0, ts_max)]
+                                tsi = -(max(ts, 8.0) + 2.0)
+                                tl = [tf, tback, tsi, tsi]
                     opened_done = opened_done or opn
                     st = (words[int(r.integers(0, 4))], 0.02) if r.uniform() < 0.6 else None
                     _carton(mb, _T(x + bw / 2, yfront + bd / 2 + abs(_jit(r, 0.008)), z) @ _Rz(_jit(r, 1.0)), bw - 0.008, bd, bh,

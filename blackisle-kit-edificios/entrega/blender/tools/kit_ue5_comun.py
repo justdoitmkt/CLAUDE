@@ -139,12 +139,12 @@ def manifest(kit, tiles):
                             nota="mobiliario, equipo y luminarias interiores (solo modelos que lo traen aparte, p. ej. el hospital); "
                                  "su colisión son cajas simples dentro de la malla Colision"),
             Perimetro=dict(nanite=True, colision="ninguna",
-                           nota="perímetro (MIL_1): malla con navaja, portón, muros T, HESCO y barreras; su colisión son cajas "
-                                "dentro de la malla Colision"),
+                           nota="perímetro: muros T, HESCO, torres, pluma y barreras (MIL_1); HESCO y muros de costales (MIL_2); "
+                                "su colisión son cajas dentro de la malla Colision"),
             Malla=dict(nanite=True, colision="ninguna",
                        nota="malla ciclónica del frente, portón y rollo de concertina (MIL_1); colisión en cajas dentro de Colision"),
             Carga=dict(nanite=True, colision="ninguna",
-                       nota="carga de los racks (MIL_1): tarimas de cajas y proyectiles; colisión en cajas dentro de Colision"),
+                       nota="carga: tarimas de los racks (MIL_1); armas, munición y cajas de la tienda (MIL_2); colisión en cajas dentro de Colision"),
             Escombro=dict(nanite=False, colision="compleja como simple",
                           nota="escombro exterior suelto (sin terreno): se puede mover o borrar sin afectar al edificio"),
             Vidrio=dict(nanite=False, colision="ninguna", sombra=False, nota="todo el vidrio; material translúcido"),

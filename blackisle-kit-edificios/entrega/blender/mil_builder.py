@@ -1223,7 +1223,7 @@ def cfg_mil2(bid="MIL_2_avanzada"):
                 lookdev=dict(base_z=0.0, graffiti_mats=(), wear=0.12, band=None))
 
 
-def outpost(furn, det, r, standalone=True):
+def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     """Puesto de avanzada: tienda de marco (frente largo enrollado al -y) sobre tarima de triplay, mostrador de cajas con la
     caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con fundas y chalecos, mesa con cargadores y
     cajas de cartuchos, serie de focos, letrero SUPPLY colgado del alero, red de camuflaje al frente, HESCO en las esquinas
@@ -1231,6 +1231,8 @@ def outpost(furn, det, r, standalone=True):
     cp, ft, ar = _mod("campaign"), _mod("fortif"), _mod("armory")
     if cp is None:
         return
+    per = per if per is not None else furn                 # fortificación (HESCO, costales)
+    cargo = cargo if cargo is not None else furn           # mercancía: armas, munición, cajas
 
     def put(piece, M, mb=None, solid=True):
         if solid:
@@ -1248,15 +1250,15 @@ def outpost(furn, det, r, standalone=True):
     put(_fn("crate_counter", cp)(L=2.4, seed=int(r.integers(1e6))), _T(-0.6, -2.35, zf))
     put(_fn("folding_table", cp)(L=1.83, seed=int(r.integers(1e6))), _T(1.95, -2.30, zf))
     if ar is not None:
-        tz = zf + 0.74
+        tz = zf + getattr(_mod("tienda_mobiliario"), "TABLE_TOP", 0.737)
         for k in range(6):
-            put(ar.magazine(seed=k, lite=True), _T(1.35 + k * 0.055, -2.45, tz) @ _Rz(90), solid=False)
+            put(ar.magazine(seed=k, lite=True), _T(1.35 + k * 0.055, -2.45, tz) @ _Rz(90), mb=cargo, solid=False)
         for k in range(8):
             i, j = k % 4, k // 4
-            put(_fn("cardboard_ammo_box", ar)(seed=k), _T(1.75 + i * 0.12, -2.25 + j * 0.08, tz) @ _Rz(r.uniform(-6, 6)), solid=False)
+            put(_fn("cardboard_ammo_box", ar)(seed=k), _T(1.75 + i * 0.12, -2.25 + j * 0.08, tz) @ _Rz(r.uniform(-6, 6)), mb=cargo, solid=False)
         for k in range(2):
-            put(_fn("ammo_can", ar)("small", seed=40 + k), _T(2.45, -2.42 + k * 0.17, tz), solid=False)
-        put(_fn("ammo_can", ar)("large", seed=42, open=True), _T(0.2, -2.25, zf + 0.909), solid=False)
+            put(_fn("ammo_can", ar)("small", seed=40 + k), _T(2.45, -2.42 + k * 0.17, tz), mb=cargo, solid=False)
+        put(_fn("ammo_can", ar)("large", seed=42, open=True), _T(0.2, -2.25, zf + 0.909), mb=cargo, solid=False)
     # anaqueles, armeros y tablero al fondo (+y)
     yb = TENT_W / 2 - 0.42
     for k, (x, stock) in enumerate(((-4.0, "cans"), (-2.7, "boxes"), (-1.4, "mixed"))):
@@ -1269,44 +1271,44 @@ def outpost(furn, det, r, standalone=True):
                 if (j + k) % 5 == 3:
                     continue                                    # un hueco: ya se vendió
                 kind = ("assault", "carbine", "assault", "dmr")[(j + k) % 4]
-                put(ar.rifle(seed=100 + 10 * k + j, kind=kind), Mr @ Ms, solid=False)
+                put(ar.rifle(seed=100 + 10 * k + j, kind=kind), Mr @ Ms, mb=cargo, solid=False)
     # tablero perforado sobre dos postes de 2×4 con fundas (y chalecos cuando existan)
     xp = 3.05
     for dx in (-0.62, 0.62):
         cl.rbox(furn, (xp + dx - 0.019, yb + 0.02, zf), (xp + dx + 0.019, yb + 0.109, zf + 1.95), "wood", r=0.003)
         cl.rbox(furn, (xp + dx - 0.20, yb - 0.10, zf), (xp + dx + 0.20, yb + 0.25, zf + 0.038), "wood", r=0.003)
     Mp = _T(xp, yb + 0.02, zf + 0.75)
-    put(_fn("pegboard", cp)(1.2, 1.0, seed=80), Mp, solid=False)
+    put(_fn("pegboard", cp)(1.2, 1.0, seed=80, posts=0.62), Mp, solid=False)
     hooks = _fn("pegboard_hooks", cp)(1.2, 1.0)
     for k, Mh in enumerate(hooks):
         P = (Mp @ Mh).translation
         if ar is not None and hasattr(ar, "vest") and k in (0, 1):
-            put(ar.vest(seed=90 + k), _T(P.x, P.y, P.z), solid=False)
+            put(ar.vest(seed=90 + k), _T(P.x, P.y, P.z), mb=cargo, solid=False)
         elif ar is not None:
-            put(ar.holster(seed=95 + k), _T(P.x, P.y + 0.02, P.z - 0.215), solid=False)
+            put(ar.holster(seed=95 + k), _T(P.x, P.y + 0.02, P.z - 0.215), mb=cargo, solid=False)
     # cajas y latas en el piso
     if ar is not None:
-        put(_fn("ammo_crate", ar)("wood", seed=110), _T(-3.2, -1.2, zf) @ _Rz(8))
-        put(_fn("ammo_crate", ar)("wood", seed=111), _T(-3.2, -1.2, zf + 0.30) @ _Rz(4))
-        put(_fn("ammo_crate", ar)("long", seed=112), _T(-1.8, 0.6, zf) @ _Rz(90))
+        put(_fn("ammo_crate", ar)("wood", seed=110), _T(-3.2, -1.2, zf) @ _Rz(8), mb=cargo)
+        put(_fn("ammo_crate", ar)("wood", seed=111), _T(-3.2, -1.2, zf + 0.30) @ _Rz(4), mb=cargo)
+        put(_fn("ammo_crate", ar)("long", seed=112), _T(-1.8, 0.6, zf) @ _Rz(90), mb=cargo)
         for k in range(5):
-            put(_fn("ammo_can", ar)("large", seed=120 + k), _T(3.6 + (k % 3) * 0.32, 0.2 + (k // 3) * 0.17, zf + (0.0 if k < 3 else 0.0)))
-        put(ar.hard_case(seed=130, L=1.0), _T(2.4, 0.9, zf)) if hasattr(ar, "hard_case") else None
+            put(_fn("ammo_can", ar)("large", seed=120 + k), _T(3.6 + (k % 3) * 0.32, 0.2 + (k // 3) * 0.17, zf + (0.0 if k < 3 else 0.0)), mb=cargo)
+        put(ar.hard_case(seed=130, L=1.0), _T(2.4, 0.9, zf), mb=cargo) if hasattr(ar, "hard_case") else None
     # luz: serie de focos bajo la cumbrera
-    put(_fn("string_lights", cp)(points=((-4.2, 0.0, 2.95), (-1.4, 0.0, 3.12), (1.4, 0.0, 3.12), (4.2, 0.0, 2.95)), n=8, seed=5), Matrix(),
+    put(_fn("string_lights", cp)(points=((-4.2, 0.0, 2.95), (-1.4, 0.0, 3.12), (1.4, 0.0, 3.12), (4.2, 0.0, 2.95)), n=8, seed=5, hook_z=3.175 - 0.019), Matrix(),
         solid=False)
     for x in np.linspace(-3.8, 3.8, 8):
         LIGHTS.append([round(float(x), 3), 0.0, 2.85])
     # letrero SUPPLY del alero del frente
-    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6), _T(-0.6, -TENT_W / 2 - 0.02, 2.06), solid=False)
+    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6), _T(-1.21, -3.06, 1.83 - 0.005), solid=False)   # del ojillo del faldón
     if ft is None:
         return
     # HESCO en las esquinas del frente y costales al fondo y en los testeros
     for x0 in (-TENT_L / 2 - 0.3, TENT_L / 2 + 0.3 - 2 * 1.06):
-        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 1.6, 0.0))
-    put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0))
+        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 1.6, 0.0), mb=per)
+    put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0), mb=per)
     for xs, sg in ((-TENT_L / 2 - 0.55, -1), (TENT_L / 2 + 0.55, 1)):
-        put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90))
+        put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90), mb=per)
     # generador táctico con bidones, reflector en trípode
     put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(2.4, TENT_W / 2 + 1.65, 0.0) @ _Rz(180))
     for k in range(3):
@@ -1325,13 +1327,13 @@ def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
     LIGHTS.clear()
     PROXIES.clear()
     root = collection_root or get_collection(cid)
-    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")
+    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture", "Fence", "Cargo")
     cols = {k: get_collection(f"{cid}_{k}", root) for k in keys}
     out = {k: [] for k in cols}
-    det, furn = MB(), MB()
+    det, furn, per, cargo = MB(), MB(), MB(), MB()
     r = rng(cfg["seed"])
-    outpost(furn, det, r)
-    for nm, mb in (("Details", det), ("Furniture", furn)):
+    outpost(furn, det, r, per=per, cargo=cargo)
+    for nm, mb in (("Details", det), ("Furniture", furn), ("Fence", per), ("Cargo", cargo)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
     out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), proxies=list(PROXIES))
@@ -1409,7 +1411,7 @@ def warehouse_interior(furn, r, cargo=None):
                     piece = cl.MB()
                     _fn("pallet_gma", ar)(piece)
                     for j in range(2):
-                        piece.join(_fn("ammo_crate", ar)("long", seed=int(r.integers(1e6))), _T(0, (j - 0.5) * 0.43, 0.135) @ _Rz(0))
+                        piece.join(_fn("ammo_crate", ar)("long", seed=int(r.integers(1e6))), _T(0, (j - 0.5) * 0.47, 0.135) @ _Rz(0))
                 (cargo or furn).join(piece, Mx)
     # líneas amarillas de pasillo frente a cada cara de rack y la de la zona de recibo
     for y in (15.66, 12.57, 9.43, 6.20):

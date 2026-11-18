@@ -2413,7 +2413,7 @@ def _cg_padlock(mb, M, seed=0):
     zt = -0.042
     for k in range(7):
         z1 = zt - k * 0.0071
-        slab(mb, M @ _T(0, 0, z1 - 0.0071), 0.051, 0.026, 0.0071, rc=0.0065, re=0.0011, mat="steel", nc=3, ne=2)
+        slab(mb, M @ _T(0, 0, z1 - 0.0073), 0.051, 0.026, 0.0073, rc=0.0065, re=0.0011, mat="steel", nc=3, ne=2)
     zb = zt - 7 * 0.0071
     _lathe(mb, [(0.0, 0.0), (0.0079, 0.0), (0.0079, 0.0008), (0.0072, 0.0012), (0.0, 0.0012)], M @ _T(0, 0, zb) @ _Rx(180), "brass",
            seg=SEG)
@@ -2543,9 +2543,10 @@ def security_cage(w=4.0, d=3.0, h=2.6, seed=0):
             _lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0036, 0.0012), (0.002, 0.0021), (0.0, 0.0024)],
                    _T(ph - 0.03 + sx * 0.02, yb0 - 0.0039, zl + sz * 0.025) @ _Rx(90), "steel", seg=SEG)
     xbar = ph - 0.006
-    _cyl(mb, (xbar, yp - 0.002, zl - 0.03), (xbar, yp - 0.002, zl + 0.03), 0.0062, "steel", seg=SEG, caps=False)
+    _cyl(mb, (xbar, yp - 0.002, zl - 0.03), (xbar, yp - 0.002, zl + 0.03), 0.0062, "steel", seg=SEG)
     for zz in (zl - 0.03, zl + 0.03):
-        _lathe(mb, [(0.0062, 0.0), (0.0055, 0.0012), (0.0, 0.0016)], _T(xbar, yp - 0.002, zz) @ (_Rx(180) if zz < zl else Matrix()),
+        _lathe(mb, [(0.0, -0.0005), (0.0063, -0.0005), (0.0063, 0.0002), (0.0055, 0.0012), (0.0, 0.0016)],
+               _T(xbar, yp - 0.002, zz) @ (_Rx(180) if zz < zl else Matrix()),
                "steel", seg=SEG)
     bend = 7.0 + float(r.uniform(-2, 2))                                  # oreja doblada hacia afuera (saqueo)
     Le = xpost + 0.022 - xbar
@@ -2792,7 +2793,7 @@ def forklift(seed=0):
                     continue
                 p = (xs0 - 0.064 + i * 0.032, -0.25 + j * 0.03, 0.35)
                 _lathe(mb, [(0.0034, 0.0), (0.0075, 0.0), (0.0062, 0.0022), (0.0034, 0.0026)], _T(*p), "steel", seg=16, closed=True)
-                _lathe(mb, [(0.0, 0.0002), (0.0035, 0.0002), (0.0, 0.0003)], _T(*p), "cable", seg=16)
+                _lathe(mb, [(0.0, -0.0003), (0.0036, -0.0003), (0.0036, 0.0005), (0.0, 0.0005)], _T(*p), "cable", seg=16)
     # rejillas del cofre (persianas reales) y chapa
     for sx in (-1, 1):
         Mg = _T(sx * 0.5048, 0.18, 0.75) @ _Rz(90 * sx) @ _Rx(90)
@@ -2833,8 +2834,8 @@ def forklift(seed=0):
     bell = [(0.06, 0.0)]
     for k in range(8):
         bell += [(0.058 - k * 0.003, 0.012 + k * 0.022), (0.046 - k * 0.003, 0.023 + k * 0.022)]
-    _lathe(mb, bell + [(0.034, 0.2)], Mc, "rubber", seg=SEG)                                                  # fuelle
-    _lathe(mb, [(0.034, 0.2), (0.038, 0.21), (0.038, 0.24), (0.03, 0.26), (0.021, 0.265)], Mc, "cable", seg=SEG)
+    revolve(mb, bell + [(0.034, 0.2), (0.038, 0.21), (0.038, 0.24), (0.03, 0.26), (0.021, 0.265)], ["rubber"] * len(bell) + ["cable"] * 4,
+            seg=SEG, M=Mc)                                                                                     # fuelle y collarín
     _cyl(mb, tuple(pc + ax * 0.2), tuple(pw - ax * 0.03), 0.022, "cable", seg=SEG)
     Mw = _frame_z(pw, ax)
     rim = [(0.165 + 0.0155 * math.cos(a), 0.0155 * math.sin(a)) for a in np.linspace(0, 2 * PI, 17)[:-1]]
@@ -3141,8 +3142,19 @@ def _serrated(mb, M, w, h, pitch=0.0021, depth=0.0011, mat="steel"):
         for j in range(nv):
             a, b, c, d = i * (nv + 1) + j, (i + 1) * (nv + 1) + j, (i + 1) * (nv + 1) + j + 1, i * (nv + 1) + j + 1
             F.append((a, b, c, d))
+    # costados y fondo: el inserto es un sólido cerrado de 4 mm (sin bordes abiertos)
+    ring = [i * (nv + 1) for i in range(nu + 1)] + [nu * (nv + 1) + j for j in range(1, nv + 1)] + \
+        [i * (nv + 1) + nv for i in range(nu - 1, -1, -1)] + [j for j in range(nv - 1, 0, -1)]
+    nb = len(V)
+    Vb = V[ring].copy()
+    Vb[:, 2] = -0.004
+    V = np.vstack([V, Vb])
+    m = len(ring)
+    for k in range(m):
+        kk = (k + 1) % m
+        F.append((ring[kk], ring[k], nb + k, nb + kk))
+    F.append(tuple(nb + k for k in range(m - 1, -1, -1)))
     _nv_add(mb, V, F, mat, M=M)
-    slab(mb, M @ _T(0, 0, -0.004), w, h, 0.004, rc=0.0006, re=0.0003, mat=mat, nc=1, ne=1, cap1=False)
 
 
 def _vise(mb, M, seed=0):
@@ -3182,8 +3194,8 @@ def _vise(mb, M, seed=0):
         _serrated(mb, Mi, 0.1, 0.032, mat="steel")
         for sx in (-1, 1):
             _lathe(mb, [(0.0, -0.0005), (0.004, -0.0005), (0.004, 0.0002), (0.0, 0.0002)], Mi @ _T(sx * 0.035, 0, 0.0004), "cable", seg=SEG)
-    slab(mb, M @ _T(0, -0.0105, 0.167), 0.1, 0.03, 0.032, rc=0.004, re=0.002, mat="paint_od", nc=2, ne=1)   # asiento del inserto fijo
-    slab(mb, M @ _T(0, -0.0705, 0.167), 0.1, 0.03, 0.032, rc=0.004, re=0.002, mat="paint_od", nc=2, ne=1)
+    slab(mb, M @ _T(0, 0.0222, 0.17), 0.104, 0.0955, 0.026, rc=0.004, re=0.002, mat="paint_od", nc=2, ne=1)  # asiento del inserto fijo
+    slab(mb, M @ _T(0, -0.0705, 0.17), 0.104, 0.03, 0.026, rc=0.004, re=0.002, mat="paint_od", nc=2, ne=1)
     # husillo, collarín, buje y maneral
     yh = -0.165
     _lathe(mb, [(0.0, 0.0), (0.026, 0.0), (0.028, 0.004), (0.028, 0.022), (0.022, 0.028), (0.0, 0.03)],
@@ -3213,7 +3225,7 @@ def _wrench(mb, M, L=0.2, seed=0):
     ring = [(Ri, -0.0002), (Ro - 0.0015, -0.0002), (Ro, 0.0013), (Ro, t0 * 1.2 - 0.0012), (Ro - 0.0015, t0 * 1.2), (Ri, t0 * 1.2)]
     pts12 = lambda a: 1.0 + 0.1 * (0.5 + 0.5 * math.cos(12 * a))                           # noqa: E731
     revolve(mb, ring, "steel", seg=48, M=M @ _T(-L / 2 + 0.006 * s, 0, 0), closed=True)
-    revolve(mb, [(Ri * 1.1, 0.0004), (Ri * 1.1, t0 * 1.2 - 0.0001)], "cable", seg=48, M=M @ _T(-L / 2 + 0.006 * s, 0, 0), rmod=pts12,
+    revolve(mb, [(Ri * 0.92, 0.0004), (Ri * 0.92, t0 * 1.2 - 0.0003)], "cable", seg=48, M=M @ _T(-L / 2 + 0.006 * s, 0, 0), rmod=pts12,
             caps=False)
     # boca abierta: mordaza en C (perfil redondeado barrido por un arco de 230°) girada 15° respecto a la caña
     Mo = M @ _T(L / 2 - 0.012 * s, 0, 0) @ _Rz(15)
@@ -3280,7 +3292,7 @@ def workbench(seed=0):
     for k in range(n):
         y0 = -D / 2 + k * wst
         rr_ = 0.004 if k in (0, n - 1) else 0.0012
-        _board(mb, -L / 2, L / 2, y0 + 0.0001, y0 + wst - 0.0001, zt, H, "wood", r=rr_)
+        _board(mb, -L / 2, L / 2, y0 + 0.0001, y0 + wst - 0.0001, zt - 0.0005, H, "wood", r=rr_)
     # ---- bastidor de ángulo de 2" × 3/16" (perímetro bajo la cubierta) con esquinas a inglete
     a, t = 0.0508, 0.0048
     Lf, Df = L - 0.04, D - 0.04
@@ -3331,9 +3343,9 @@ def workbench(seed=0):
                r=0.0005)
         for zb in (z0 + 0.03, z1 - 0.03):
             _nv_bolt_head(mb, _T(cx + sx * cw / 2, -0.2, zb) @ _Ry(90 * sx), d=0.0064, mat="steel")
-    _board(mb, cx - cw / 2, cx + cw / 2, -cd / 2, cd / 2, z0, z0 + 0.0012, "paint_od", r=0.0005)
-    _board(mb, cx - cw / 2, cx + cw / 2, cd / 2 - 0.0012, cd / 2, z0, z1, "paint_od", r=0.0005)
-    _board(mb, cx - cw / 2, cx + cw / 2, -cd / 2, -cd / 2 + 0.018, z1 - 0.012, z1, "paint_od", r=0.0008)
+    _board(mb, cx - cw / 2 + 0.0009, cx + cw / 2 - 0.0009, -cd / 2 + 0.0004, cd / 2 - 0.0004, z0, z0 + 0.0012, "paint_od", r=0.0005)
+    _board(mb, cx - cw / 2 + 0.0009, cx + cw / 2 - 0.0009, cd / 2 - 0.0012, cd / 2 - 0.0003, z0 + 0.0009, z1 - 0.0004, "paint_od", r=0.0005)
+    _board(mb, cx - cw / 2 + 0.0009, cx + cw / 2 - 0.0009, -cd / 2 + 0.0004, -cd / 2 + 0.018, z1 - 0.012, z1 - 0.0004, "paint_od", r=0.0008)
     hd = (ch - 0.016) / 2
     for k in range(2):
         za = z0 + 0.004 + k * (hd + 0.004)
@@ -3348,8 +3360,8 @@ def workbench(seed=0):
         hprof = [tuple(q) for q in (hp + Nh * 0.0006)] + [tuple(q) for q in (hp - Nh * 0.0006)[::-1]]
         sweep_frame(mb, [(-u, v) for (u, v) in hprof], [tuple(Md @ Vector((-cw / 2 + 0.003, 0, 0))), tuple(Md @ Vector((cw / 2 - 0.003, 0, 0)))],
                     "paint_od", up=(0, 0, 1))
-        slab(mb, Md @ _T(0, -0.0182, 0.035) @ _Rx(90), 0.08, 0.035, 0.0012, rc=0.003, re=0.0004, mat="aluminium", nc=2, ne=1)
-        slab(mb, Md @ _T(0, -0.0192, 0.035) @ _Rx(90), 0.066, 0.024, 0.0004, rc=0.001, re=0.0001, mat="paper", nc=1, ne=1)
+        slab(mb, Md @ _T(0, -0.0178, 0.035) @ _Rx(90), 0.08, 0.035, 0.0012, rc=0.003, re=0.0004, mat="aluminium", nc=2, ne=1)
+        slab(mb, Md @ _T(0, -0.0188, 0.035) @ _Rx(90), 0.066, 0.024, 0.0006, rc=0.001, re=0.0001, mat="paper", nc=1, ne=1)
         # caja del cajón (lados, fondo, trasera) y correderas de 3 miembros
         dd = cd - 0.03
         xin = cw / 2 - 0.0012 - 0.0017 - 0.007 - 0.0023                   # cara media del lado del cajón
@@ -3363,8 +3375,8 @@ def workbench(seed=0):
                        (0.0018, hz / 2 - 0.0008), (0.0018, hz / 2), (-0.0018, hz / 2)]
                 sweep_frame(mb, [(sx * u, v) for (u, v) in chn][::(1 if sx > 0 else -1)], [(xr, y_a, za + 0.03), (xr, y_b, za + 0.03)],
                             "galvanized", up=(0, 0, 1))
-        _board(mb, cx - xin - 0.0005, cx + xin + 0.0005, yf - 0.001, yf + dd, za + 0.008, za + 0.0092, "paint_od", r=0.0004)
-        _board(mb, cx - xin - 0.0005, cx + xin + 0.0005, yf + dd - 0.0012, yf + dd, za + 0.008, zb - 0.03, "paint_od", r=0.0004)
+        _board(mb, cx - xin + 0.0004, cx + xin - 0.0004, yf - 0.001, yf + dd - 0.0003, za + 0.008, za + 0.0092, "paint_od", r=0.0004)
+        _board(mb, cx - xin + 0.0004, cx + xin - 0.0004, yf + dd - 0.0015, yf + dd - 0.0003, za + 0.0089, zb - 0.0303, "paint_od", r=0.0004)
         if opn > 0:                                                       # llaves de dado en el cajón abierto
             for j in range(9):
                 d_ = 0.0085 + j * 0.0005                                  # dados de 3/8": Ø 17-25 mm
