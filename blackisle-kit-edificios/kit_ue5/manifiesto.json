@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "5479c0f",
+ "version_repo": "d4b7958",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -4266,7 +4266,7 @@
     "Detalle": {
      "nombre": "SM_MIL_2_avanzada_Detalle",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Detalle.glb",
-     "triangulos": 1106247,
+     "triangulos": 1103509,
      "ranuras": [
       "BLK_aluminium",
       "BLK_steel",
@@ -4281,12 +4281,12 @@
       "BLK_rubber",
       "BLK_plastic"
      ],
-     "mib": 47.5
+     "mib": 47.37
     },
     "Mobiliario": {
      "nombre": "SM_MIL_2_avanzada_Mobiliario",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Mobiliario.glb",
-     "triangulos": 1737395,
+     "triangulos": 1737378,
      "ranuras": [
       "BLK_wood",
       "BLK_steel",
@@ -4310,7 +4310,7 @@
       "BLK_metal_rust",
       "BLK_paint_tan"
      ],
-     "mib": 76.99
+     "mib": 76.98
     },
     "Perimetro": {
      "nombre": "SM_MIL_2_avanzada_Perimetro",
@@ -4413,24 +4413,24 @@
      2.85
     ],
     [
-     5.2,
-     -8.0,
+     5.6,
+     -7.6,
      1.98
     ]
    ],
    "medidas_m": {
-    "x": 16.142,
+    "x": 15.073,
     "y": 16.17,
-    "z": 3.549,
+    "z": 3.556,
     "min": [
-     -8.606,
+     -7.536,
      -10.974,
      -0.12
     ],
     "max": [
      7.536,
      5.195,
-     3.429
+     3.436
     ],
     "escombro_min": null,
     "escombro_max": null,
@@ -4479,7 +4479,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 209.73,
+   "mib_total": 209.59,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "costado largo de la tienda enrollado con el mostrador y la red de camuflaje; generador al fondo (+y)"
