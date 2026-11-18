@@ -385,7 +385,7 @@ def plywood_floor(L=9.5, W=5.8, seed=0, ramp=True):
                 _nail(mb, _T(x + _jit(r, 0.004), yf, z + _jit(r, 0.003)) @ _Rx(-90 * sy), r=0.0036)
     # ---- hojas de triplay en hiladas trabadas
     wear = _floor_wear(L, W)
-    pw, pl = 1.2192, 2.4384
+    pw = 1.2192                                     # hoja de 4 ft (las juntas de extremo caen cada 8 ft sobre un durmiente)
     yb = [y0]
     while yb[-1] + pw < y1 - 0.05:
         yb.append(yb[-1] + pw)
