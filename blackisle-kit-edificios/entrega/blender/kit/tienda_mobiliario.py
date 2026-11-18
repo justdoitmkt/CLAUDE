@@ -2127,23 +2127,19 @@ def _catenary_pts(p0, p1, sag, n=24):
 
 
 def _s_hook(mb, M, rw=0.0018, r_up=0.011, r_lo=0.008, span=0.05, mat="galvanized"):
-    """Gancho S de alambre: gancho superior abierto (su punto interior más alto en el origen de M) y gancho inferior con el
-    punto de apoyo interior a -span. Plano XZ local."""
-    pts = []
-    cu = Vector((0, 0, -(r_up + rw)))
-    for k in range(0, 15):
-        a = math.radians(-30 + 210 * k / 14)
-        pts.append(cu + Vector((r_up + rw, 0, 0)) * math.cos(a) * -1 + Vector((0, 0, r_up + rw)) * math.sin(a) * -1 * -1)
-    pts = [Vector((-(r_up + rw) * math.cos(math.radians(a)), 0, -(r_up + rw) + (r_up + rw) * math.sin(math.radians(a))))
-           for a in np.linspace(-40, 180, 16)]
-    pts = pts[::-1]
-    cl = Vector((0, 0, -span + (r_lo + rw)))
-    for a in np.linspace(180, -40, 16):
-        pts.append(cl + Vector((-(r_lo + rw) * math.cos(math.radians(a)) * -1, 0, (r_lo + rw) * math.sin(math.radians(a)) * -1)))
+    """Gancho S de alambre en el plano XZ local: gancho superior abierto hacia abajo-izquierda (su punto interior más alto en el
+    origen de M), vástago recto y gancho inferior abierto hacia arriba-derecha cuyo punto interior más bajo queda a -span."""
+    Ru, Rl = r_up + rw, r_lo + rw
+    cu = Vector((0, 0, rw - Ru))
+    cl = Vector((0, 0, -span - rw + Rl))
+    pts = [cu + Vector((math.cos(math.radians(a_)), 0, math.sin(math.radians(a_)))) * Ru for a_ in np.linspace(215, -90, 22)]
+    pts += [cl + Vector((math.cos(math.radians(a_)), 0, math.sin(math.radians(a_)))) * Rl for a_ in np.linspace(90, 395, 22)]
     with mb.soft():
         _tube(mb, [tuple(M @ p) for p in pts], rw, seg=12, mat=mat)
-        for p in (pts[0], pts[-1]):
-            _lathe(mb, [(0.0, -rw), (rw * 0.9, -rw * 0.5), (rw, 0.0), (rw * 0.9, rw * 0.5), (0.0, rw)], M @ _T(*p), mat, seg=12)
+        for (p, q) in ((pts[0], pts[1]), (pts[-1], pts[-2])):
+            d = (p - q).normalized()
+            _lathe(mb, [(rw, 0.0), (rw * 0.85, rw * 0.5), (rw * 0.5, rw * 0.85), (0.0, rw)], _frame_z(M @ p, M.to_3x3() @ d), mat,
+                   seg=12)
 
 
 def _bulb(mb, M, seed=0):
