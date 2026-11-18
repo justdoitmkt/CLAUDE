@@ -226,6 +226,17 @@ def _curl(P, N, axis, end, r=0.0012, ret=0.013):
     return np.moveaxis(out, 0, axis)
 
 
+def _corner_cut(mask, shape, n=6, corners=((0, 0), (0, -1), (-1, 0), (-1, -1))):
+    """Quita las celdas donde se cruzan dos dobladillos enrollados (esquina de 2 × 13 mm que quedaría torcida)."""
+    nu, nv = shape[0] - 1, shape[1] - 1
+    m = np.ones((nu, nv), bool) if mask is None else mask.copy()
+    for (a, b) in corners:
+        ia = slice(0, n) if a == 0 else slice(nu - n, nu)
+        jb = slice(0, n) if b == 0 else slice(nv - n, nv)
+        m[ia, jb] = False
+    return m
+
+
 def _grow_mask(mask, axis, end, n):
     """Amplía la máscara de celdas al agregar n filas/columnas de dobladillo en un borde."""
     if mask is None:
@@ -826,7 +837,7 @@ class _Roof:
         P2 = _curl(P2, _grid_normals(P2), 1, 0)
         P3 = _curl(P2, _grid_normals(P2), 0, -1)
         P3 = _curl(P3, _grid_normals(P3), 0, 0)
-        _grid(mb, P3, "canvas")
+        _grid(mb, P3, "canvas", _corner_cut(None, P3.shape))
         self.P_grid = P
 
     # ------------------------------------------------------------------ capas cosidas, ojillos y amarres
@@ -1020,7 +1031,7 @@ class _SideWall:
         self.wind = -0.02 if side > 0 else 0.008
 
     def D(self, X, Z):
-        g, xs = self.g, self.g["xs"]
+        xs = self.g["xs"]
         X, Z = np.broadcast_arrays(np.asarray(X, float), np.asarray(Z, float))
         zt = self.zt
         legs = [-self.xw] + xs[1:-1] + [self.xw]
@@ -1092,7 +1103,7 @@ class _SideWall:
         m3 = _grow_mask(m2, 0, -1, 6)
         P3 = _curl(P3, _grid_normals(P3) * (-side), 0, 0)
         m3 = _grow_mask(m3, 0, 0, 6)
-        _grid(mb, P3, "canvas", m3)
+        _grid(mb, P3, "canvas", _corner_cut(m3, P3.shape))
 
     def details(self, mb, roof):
         g, side = self.g, self.side
@@ -1131,7 +1142,7 @@ def _inner_tab(mb, roof, x, sk, side):
     return pts[-1] - n_ * 0.001, n_
 
 
-def _stake_loop(mb, S, u, side, seed=0, axis="y", end=1):
+def _stake_loop(mb, S, u, side, seed=0, axis="y", end=1, dist=0.25):
     """Gaza de estacado: ojillo en el pie de la pared (z 0,075), cordón doble que pasa sobre el faldón y abraza una estaca
     forjada hincada a 0,3 m (cabeza de hongo)."""
     r = rng(seed)
@@ -1139,7 +1150,7 @@ def _stake_loop(mb, S, u, side, seed=0, axis="y", end=1):
     _grommet(mb, p, n, ro=0.0095, ri=0.005)
     out = Vector((0, side, 0)) if axis == "y" else Vector((end, 0, 0))
     lat = Vector((1, 0, 0)) if axis == "y" else Vector((0, 1, 0))
-    sb = p + out * (0.25 + _jit(r, 0.03)) + lat * _jit(r, 0.03)
+    sb = p + out * (dist + _jit(r, 0.02)) + lat * _jit(r, 0.03)
     sb.z = 0.0
     top, ax = _stake_pin(mb, sb, lean=tuple(out * 0.28), h=0.075, seed=int(r.integers(1e6)))
     rr = 0.0024
@@ -1164,7 +1175,6 @@ def _strap(mb, path, w=0.025, t=0.0016, up=(1, 0, 0), side=None, mat="fabric"):
 def _window(mb, S, xa, xb, za, zb, kind, side, seed):
     """Ventana TEMPER: vano con ribete que envuelve la orilla, malla mosquitera, y solapa de oscurecimiento cosida arriba:
     enrollada y atada con dos cintas (open) o bajada y atada a los lados (closed)."""
-    r = rng(seed)
     rc = 0.022
     # ribete (cinta doblada sobre la orilla del vano), con esquinas redondeadas
     path = []
@@ -1205,10 +1215,7 @@ def _window(mb, S, xa, xb, za, zb, kind, side, seed):
         p0, n0 = S.pt(xa - 0.035, zs)
         p1, n1 = S.pt(xb + 0.035, zs)
         Lr = (p1 - p0).length
-        M = _frame_x(p0 - Vector((0, 0, R + 0.012)), p1 - p0, up=(0, 0, 1))
-        M = M @ Matrix(((1, 0, 0, 0), (0, -side, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))) if False else M
-        y_out = Vector((0, side, 0))
-        Mloc = _roll_frame(p0, (p1 - p0).normalized(), y_out)
+        Mloc = _roll_frame(p0, (p1 - p0).normalized(), Vector((0, side, 0)))
         rad = _roll(mb, Mloc, Lr, R, seed, lambda x: -(R + 0.012) - 0.005 * math.sin(PI * x / Lr), top=0.0,
                     ties=(0.12, Lr - 0.12), dx=0.03, na=26, nst_cap=18)
         for xt in (0.12, Lr - 0.12):
@@ -1224,11 +1231,11 @@ def _window(mb, S, xa, xb, za, zb, kind, side, seed):
         off = 0.006 + 0.004 * np.sin(PI * fu) * np.sin(PI * fv) ** 0.7 + 0.0025 * np.sin(fu * 2 * PI * 3.3 + 1.1) * (1 - fv) ** 2
         off = off * _ss(1.0, 0.92, fv) + 0.0016 * _ss(0.92, 1.0, fv)
         Pf = Pw + Nw * off[..., None]
-        Nf = _grid_normals(Pf) * (-side) * (1 if True else -1)
+        Nf = _grid_normals(Pf) * (-side)
         Pf2 = _curl(Pf, Nf, 1, 0)
         Pf2 = _curl(Pf2, _grid_normals(Pf2) * (-side), 0, 0)
         Pf2 = _curl(Pf2, _grid_normals(Pf2) * (-side), 0, -1)
-        _grid(mb, Pf2, "canvas")
+        _grid(mb, Pf2, "canvas", _corner_cut(None, Pf2.shape, corners=((0, 0), (-1, 0))))
         # costura de arriba (cordón de puntada) y lazos atados en las esquinas de abajo
         pts = [S.pt(u, zs - 0.004)[0] + S.pt(u, zs - 0.004)[1] * 0.0018 for u in np.linspace(xa - 0.045, xb + 0.045, 14)]
         _tube(mb, pts, 0.0009, mat="canvas", seg=8, soft=True)
@@ -1414,9 +1421,8 @@ def _roll(mb, M, L, R, seed, zc_fn, top=None, ties=(), dx=0.026, na=34, step=0.0
 def _tie_wrap(mb, M, rad, xt, zc, top, w=0.025, seed=0, buckle=False, G=None):
     """Cinta que abraza un rollo (local del rollo): baja por el lado del muro, da la vuelta por abajo, sube por fuera y termina
     arriba (en G si se da, con hebilla de escalera y chicote colgando; si no, se amarra en un moño arriba del rollo)."""
-    r = rng(seed)
     th = np.linspace(0.0, 2 * PI * 0.78, 22)
-    rr = rad(np.full_like(th, xt), th) + 0.0011
+    rr = rad(np.full_like(th, xt), th) + 0.0015
     y0 = _f(rad(np.array([xt]), np.array([0.0]))[0]) + 0.0016
     pts = [(xt, -0.0012, top)]
     pts.append((xt, -0.0012, zc + 0.02))
@@ -1569,7 +1575,7 @@ class _EndWall:
         m3 = _grow_mask(m2, 0, -1, 6)
         P3 = _curl(P3, _grid_normals(P3) * sg, 0, 0)
         m3 = _grow_mask(m3, 0, 0, 6)
-        _grid(mb, P3, "canvas", m3)
+        _grid(mb, P3, "canvas", _corner_cut(m3, P3.shape))
 
     def v_of(self, y, z):
         """Parámetro v de la altura z en la columna y (interpolando la rejilla de alturas)."""
@@ -1583,7 +1589,7 @@ class _EndWall:
         return self.S.pt(y, self.v_of(y, z))
 
     def details(self, mb):
-        g, end, S = self.g, self.end, self.S
+        end, S = self.end, self.S
         r = rng(self.seed + 3)
         # ventila de gablete: ribete, malla y solapa sostenida por dos varillas
         self._vent(mb)
@@ -1594,7 +1600,7 @@ class _EndWall:
             self._door_closed(mb)
         # gazas de estacado al pie (fuera de la puerta)
         for y in (-2.6, -1.6, 1.6, 2.6):
-            _stake_loop(mb, S, y, 0, seed=int(r.integers(1e6)), axis="x", end=end)
+            _stake_loop(mb, S, y, 0, seed=int(r.integers(1e6)), axis="x", end=end, dist=0.18)
         # lazada en espiral al tubo del arco extremo (bajo la campana)
         self._lacing(mb)
 
@@ -1667,7 +1673,7 @@ class _EndWall:
             sgn = -1
         P2 = _curl(P2, Nf2 * sgn, 0, 0)
         P2 = _curl(P2, _grid_normals(P2) * sgn, 0, -1)
-        _grid(mb, P2, "canvas")
+        _grid(mb, P2, "canvas", _corner_cut(None, P2.shape, corners=((0, -1), (-1, -1))))
         # fuelles laterales (triángulos de lona entre el muro y la orilla de la solapa)
         for j in (0, -1):
             rows = []
@@ -1693,9 +1699,6 @@ class _EndWall:
         dintel y atada con dos cintas."""
         end = self.end
         rc = 0.03
-        pts, outs = [], []
-        for z in np.linspace(V_G - SOD + 0.002, V_B, 6)[:-1]:
-            pts.append((-DW, None, z))
         # costado izquierdo, dintel y costado derecho (en u, z reales)
         P_ = [(-DW, z) for z in np.arange(0.02, DH - rc, 0.03)]
         P_ += [(-DW + rc - rc * math.cos(a), DH - rc + rc * math.sin(a)) for a in np.linspace(0, PI / 2, 5)]
@@ -1754,9 +1757,7 @@ class _EndWall:
             V = np.array([self.v_of(sx * DW, z) for z in np.linspace(0.02, DH - 0.02, 60)])
             for side_ in (-1, 1):
                 pr = [(side_ * a, h) for (a, h) in prof]
-                if side_ < 0:
-                    pr = pr[::-1]
-                _strip(mb, self.S.FT, V, sx * DW, [(a, h) for (a, h) in (pr if side_ > 0 else pr[::-1])][::-1] if False else pr)
+                _strip(mb, self.S.FT, V, sx * DW, pr[::-1] if side_ < 0 else pr)
             # corredera con jalador (abajo: cerrada hacia abajo)
             p, n = self.pt(sx * DW, 0.05)
             _zip_slider(mb, p + n * 0.0025, n, Vector((0, 0, 1)), seed=self.seed + sx)
@@ -1843,14 +1844,11 @@ def _zip_slider(mb, p, n, along, seed=0):
 # ======================================================================================================== costado enrollado
 def _buckle(mb, p, along, nrm, mat="polymer"):
     """Hebilla de escalera (ladder-lock) de polímero: marco redondeado de 34 × 30 mm con dos barras."""
-    M = _frame_x(p, along, up=nrm)
-    Mf = M @ _Rx(90) if False else M
     Mz = _frame_z(p - Vector(nrm) * 0.0016, nrm, tuple(along))
     rrframe(mb, Mz, (0.0, 0.0, 0.03, 0.036, 0.005), (0.0, 0.0, 0.022, 0.028, 0.0025), 0.0034, re_o=0.0012, re_i=0.0008, n=3, ne=1,
             mat=mat)
     for dx in (-0.004, 0.0045):
         slab(mb, Mz @ _T(dx, 0.0, 0.0002), 0.0034, 0.029, 0.0028, rc=0.0012, re=0.0008, mat=mat, nc=2, ne=1)
-    del Mf
 
 
 def _rolled_wall(mb, g, roof, L, side, seed):
@@ -1912,8 +1910,9 @@ def _rolled_wall(mb, g, roof, L, side, seed):
         # punta de la cinta (dobladillo con remate) en el chicote
         # gaza del faldón: la cinta entra al ojillo
     # lazada del remate de la tira al alero (por dentro)
+    f_est = 0.026 / max(zt - zc0, 0.05)
     for xw_ in np.arange(-xw + 0.07, xw - 0.05, 0.45):
-        p = Vector((xw_, side * (Yw - 0.0003), zt - 0.026))
+        p = Vector((xw_, side * (Yw + 0.0016 * f_est), zt - 0.026))
         n = Vector((0, side, 0))
         _grommet(mb, p, n, ro=0.0095, ri=0.005)
         sk = g["s_ks"] + 0.03 if side < 0 else g["s_tot"] - g["s_ks"] - 0.03
@@ -2014,12 +2013,12 @@ def _guy(mb, pa, dd, stake_base, lean, seed, tensioner=True):
     hA, hB, hC = holes[0], holes[1], holes[2]
     std = cat[:-1] + [hA + up * 0.008, hA, hA - up * 0.008]
     ring_c = top + ax * 0.0
-    s1 = [hA - up * 0.008, hA - up * 0.012 + u * 0.06, ring_c - u * 0.012 + side * 0.004]
+    s1 = [hA - up * 0.008, hA - up * 0.012 + u * 0.06 + side * 0.006, ring_c - u * 0.012 + side * 0.005]
     _tube(mb, [tuple(v) for v in fillet([tuple(v) for v in std[-4:] + s1[1:]], 0.02, 2)], rr, mat="fabric", seg=SEG_T)
     _tube(mb, [tuple(v) for v in std[:-3]], rr, mat="fabric", seg=SEG_T, caps=False)
     ring = [top + (side * math.cos(2 * PI * k / 12) + u * math.sin(2 * PI * k / 12)) * 0.0125 for k in range(12)]
     loop_tube(mb, ring, rr, seg=SEG_T, mat="fabric", normal=tuple(ax))
-    s2 = [ring_c - u * 0.012 - side * 0.004, hC - up * 0.012 + u * 0.03, hC - up * 0.008, hC, hC + up * 0.008, hB + up * 0.008,
+    s2 = [ring_c - u * 0.012 - side * 0.005, hC - up * 0.012 + u * 0.03 - side * 0.006, hC - up * 0.008, hC, hC + up * 0.008, hB + up * 0.008,
           hB, hB - up * 0.008, hB - up * 0.02 - u * 0.01, hB - up * 0.05 - u * 0.004 - Vector((0, 0, 0.03 + _jit(r, 0.01)))]
     _tube(mb, [tuple(v) for v in fillet([tuple(v) for v in s2], 0.01, 2)], rr, mat="fabric", seg=SEG_T)
     tk = s2[-1]
@@ -2070,7 +2069,6 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
             base = Vector((x + lean.x * 1.45, sy * (W / 2 + 1.35), 0.0))
             _guy(mb, pa, dd, base, lean, seed + k * 3 + (sy > 0))
     for end in (-1, 1):
-        x_c = end * (rf.x_hb + rf.r_h * 0.6)
         P, N = rf.F(np.array([end * (rf.x_hb + rf.e_r * 0.5)]), np.array([g["s_r"]]))
         c, n = Vector(P[0]), Vector(N[0])
         out = Vector((end, 0, -0.35)).normalized()
@@ -2082,7 +2080,6 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
             loop_tube(mb, ring, 0.0025, seg=12, mat="steel", normal=tuple(Vector((0, 1, 0)).cross(out)))
         pa = tab[-1] + out * 0.03
         _guy(mb, pa, out, Vector((end * (L / 2 + 2.6), 0.0, 0.0)), Vector((end, 0, 0)), seed + 40 + end)
-        del x_c
     return mb
 
 

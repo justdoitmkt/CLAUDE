@@ -2637,7 +2637,7 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
         d = np.array((math.cos(ang), math.sin(ang)))
         ln = float(r.uniform(0.04, 0.07))
         wd = float(r.uniform(0.028, 0.045))
-        lobes.append((cx - d[0] * ln / 2, cy - d[1] * ln / 2, d, ln, wd, int(r.uniform() < 0.5), -float(r.uniform(0.1, 0.38)),
+        lobes.append((cx - d[0] * ln / 2, cy - d[1] * ln / 2, d, ln, wd, int(r.uniform() < 0.5), -float(r.uniform(0.08, 0.3)),
                       float(r.uniform(-0.6, 0.6))))
 
     def hwf(t, wd, kind):
@@ -2734,7 +2734,7 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True):
         dd /= np.linalg.norm(dd)
         sd = np.cross(nz, dd)
         aa = np.concatenate([[-0.008], np.linspace(0.0, ln, nla - 1)])
-        phi = phi0 * np.clip(aa / 0.014, 0, 1) ** 0.8 + (0.25 if phi0 > 0 else -0.5) * (np.clip(aa, 0, None) / ln) ** 1.5
+        phi = phi0 * np.clip(aa / 0.014, 0, 1) ** 0.8 + (0.25 if phi0 > 0 else -0.15) * (np.clip(aa, 0, None) / ln) ** 1.5
         phi = np.where(aa < 0, 0.0, phi)
         stepv = np.stack([np.cos(phi)[:, None] * dd + 0 * nz, -np.sin(phi)[:, None] * nz], 0).sum(0)
         da = np.diff(aa, prepend=0.0)

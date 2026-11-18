@@ -1451,7 +1451,8 @@ def leaf_spring(mb, x0, x1, y, z_bot, n=4, arch=0.045, mat="steel"):
         ze = z_bot + 0.008 * (n - 1) + 0.004 + arch
         torus(mb, _T(xe + e * 0.004, y, ze + 0.0125) @ _Rx(90), 0.0125, 0.0045, mat=mat, n=20, seg=SEG_T, a0=(PI * 1.5 if e > 0 else -PI * 0.5),
               a1=(PI * 1.5 if e > 0 else -PI * 0.5) + 2 * PI * 0.92)
-    rbox(mb, (xc + L * 0.3 - 0.012, y - 0.036, z_bot - 0.002), (xc + L * 0.3 + 0.012, y + 0.036, z_bot + 0.008 * n + 0.012), mat, r=0.002)
+    ztop_ = z_bot + 0.008 * (n - 1) + 0.004 + arch * 0.36 + 0.00425
+    rbox(mb, (xc + L * 0.3 - 0.012, y - 0.036, z_bot - 0.002), (xc + L * 0.3 + 0.012, y + 0.036, ztop_ + 0.004), mat, r=0.002)   # grapa
 
 
 def screw_jack(mb, x, y, z_top, crank_dir=(1, 0, 0), foot=True, mat="paint_tan"):
@@ -1510,7 +1511,7 @@ def light_tower(seed=0):
     for x in (-1.0, -0.3, 0.45, 1.375):
         rtube(mb, (x, -0.45, zc), (x, 0.45, zc), 0.05, 0.08, paint, up=(0, 0, 1), r=0.005)
     slab(mb, _T(-2.02, 0, zc - 0.045), 0.16, 0.13, 0.09, rc=0.012, re=0.005, mat=paint, nc=4, ne=2)        # cabeza de la lanza
-    rtube(mb, (-2.26, 0, zc), (-1.94, 0, zc), 0.07, 0.07, paint, up=(0, 0, 1), r=0.006)
+    rtube(mb, (-2.26, 0, zc), (-1.955, 0, zc), 0.07, 0.07, paint, up=(0, 0, 1), r=0.006)
     slab(mb, _T(-2.24, 0, zc) @ _Ry(90) @ _T(0, 0, -0.008), 0.11, 0.11, 0.016, rc=0.012, re=0.003, mat=paint, nc=4, ne=2)
     for (u, v) in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
         bolt(mb, face_M((-2.255, u * 0.038, zc + v * 0.038), (-1, 0, 0)), d=0.012, washer=True, mat="steel")

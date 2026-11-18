@@ -1725,6 +1725,18 @@ def _nv_add(mb, V, F, mat, M=None, mirror_y=False, soft=False, mats=None):
             face[sl] = 1
 
 
+def _miter_path(pts, d=0.001):
+    """Lazo cerrado para MB.sweep con inglete exacto: agrega puntos a 1 mm de cada esquina (MB.sweep toma como tangente la
+    cuerda entre vecinos; sin esto, en marcos no cuadrados el anillo de la esquina queda sesgado y las alas se corren)."""
+    P = [Vector(p) for p in pts]
+    n = len(P)
+    out = []
+    for i in range(n):
+        a, b, c = P[i - 1], P[i], P[(i + 1) % n]
+        out += [tuple(b + (a - b).normalized() * d), tuple(b), tuple(b + (c - b).normalized() * d)]
+    return out
+
+
 def _fillet_closed(pts, radii, nseg):
     """Polígono cerrado 2D con todas las esquinas redondeadas (arcos reales); radii escalar o por esquina."""
     P = [np.array(p, float) for p in pts]
@@ -2205,7 +2217,7 @@ def _rk_plaque(mb, x, yf, z, seed=0):
     for (s, sz, b) in lines:
         text_font(mb, s, sz, 0.0004, "cable", Mp @ _T(0, zl, t), font="sign", bold=b, res=2)
         zl -= sz * 1.75
-    for zz in (h / 2 - 0.009, -h / 2 + 0.009):               # tornillos a las gotas del poste
+    for zz in (h / 2 - 0.041, -h / 2 + 0.01):                # tornillos a las gotas del poste (fuera del texto)
         _nv_bolt_head(mb, Mp @ _T(-0.0168, zz, t), d=0.0064)
 
 
@@ -2330,7 +2342,7 @@ def _cg_panel(mb, M, w, h, mesh=True, stiff=True, mat="steel"):
     a, t = CG_A, CG_AT
     prof = [(px, py + CG_Y0) for (px, py) in _cg_angle_prof()]
     path = [(0, 0, 0), (w, 0, 0), (w, 0, h), (0, 0, h)]
-    mb.sweep(prof, [tuple(M @ Vector(p)) for p in path], mat, closed_path=True, normal=tuple(M.to_3x3() @ Vector((0, 1, 0))))
+    mb.sweep(prof, _miter_path([tuple(M @ Vector(p)) for p in path]), mat, closed_path=True, normal=tuple(M.to_3x3() @ Vector((0, 1, 0))))
     yv = CG_Y0 + t + CG_WIRE - 0.0002
     yh = yv + 2 * CG_WIRE - 0.0005
     if stiff:
@@ -2524,7 +2536,7 @@ def security_cage(w=4.0, d=3.0, h=2.6, seed=0):
             _lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0036, 0.0012), (0.002, 0.0021), (0.0, 0.0024)],
                    _T(ph - 0.03 + sx * 0.02, yb0 - 0.0039, zl + sz * 0.025) @ _Rx(90), "steel", seg=SEG)
     xbar = ph - 0.006
-    _cyl(mb, (xbar, yp - 0.002, zl - 0.03), (xbar, yp - 0.002, zl + 0.03), 0.0062, "steel", seg=SEG)
+    _cyl(mb, (xbar, yp - 0.002, zl - 0.03), (xbar, yp - 0.002, zl + 0.03), 0.0062, "steel", seg=SEG, caps=False)
     for zz in (zl - 0.03, zl + 0.03):
         _lathe(mb, [(0.0, 0.0), (0.0062, 0.0), (0.0055, 0.0012), (0.0, 0.0016)], _T(xbar, yp - 0.002, zz) @ (_Rx(180) if zz < zl else Matrix()),
                "steel", seg=SEG)
@@ -3265,7 +3277,7 @@ def workbench(seed=0):
     Nn = _normals2d(cl)
     prof = [tuple(q) for q in (cl + Nn * t / 2)] + [tuple(q) for q in (cl - Nn * t / 2)[::-1]]
     rect = [(-Lf / 2, -Df / 2, zt), (Lf / 2, -Df / 2, zt), (Lf / 2, Df / 2, zt), (-Lf / 2, Df / 2, zt)]
-    mb.sweep([(-px, -py) for (px, py) in prof], rect, "paint_od", closed_path=True, normal=(0, 0, 1))
+    mb.sweep([(-px, -py) for (px, py) in prof], _miter_path(rect), "paint_od", closed_path=True, normal=(0, 0, 1))
     # ---- patas de ángulo, placas de pie, niveladores
     for sx in (-1, 1):
         for sy in (-1, 1):

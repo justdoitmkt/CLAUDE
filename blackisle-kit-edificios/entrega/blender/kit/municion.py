@@ -504,6 +504,18 @@ def cartridge(mb, M, cal="50", seg=SEG, lite=False):
     revolve(mb, bp, "copper", seg=seg, M=M, caps=True)
 
 
+def _case_r(cal, z):
+    """Radio de la vaina (perfil de cartridge) a la altura z: cuerpo cónico entre el culote y el hombro."""
+    c = CAL[cal]
+    z1, z2 = c["rim_t"] * 2.9, c["sh_z"] * 0.55
+    rm = c["sh"] + (c["base"] - c["sh"]) * 0.5
+    if z <= z1:
+        return c["base"]
+    if z <= z2:
+        return c["base"] + (rm - c["base"]) * (z - z1) / (z2 - z1)
+    return rm + (c["sh"] - rm) * min((z - z2) / (c["sh_z"] - z2), 1.0)
+
+
 def _link_loop(mb, M, r, z0, w, a0, a1, t=0.0007, seg=16, mat="steel"):
     """Abrazadera en C de eslabón de cinta (lámina t × w) alrededor del eje Z de M, de a0 a a1 (rad), con cabezas cerradas."""
     rings = revolve(mb, [(r, z0), (r + t, z0 + 0.0003), (r + t, z0 + w - 0.0003), (r, z0 + w)], mat, seg=seg, M=M, a0=a0,
@@ -526,9 +538,9 @@ def belt_layer(mb, M, n, cal="50", links=True, lite=False, seg=SEG):
             continue
         a0, a1 = PI / 2 + 0.75, PI / 2 + 2 * PI - 0.75       # abertura hacia abajo
         L = c["sh_z"]
-        _link_loop(mb, Mi, rr + 0.0002, L * 0.42, L * 0.16, a0, a1)
-        for zz in (L * 0.12, L * 0.74):
-            _link_loop(mb, Mi, rr + 0.0002, zz, L * 0.11, a0 + 0.2, a1 - 0.2)
+        for (zz, ww, da) in ((L * 0.42, L * 0.16, 0.0), (L * 0.12, L * 0.11, 0.2), (L * 0.74, L * 0.11, 0.2)):
+            rl = max(_case_r(cal, zz), _case_r(cal, zz + ww)) - 0.0003
+            _link_loop(mb, Mi, rl, zz, ww, a0 + da, a1 - da)
         if i < n - 1:                                        # puente bajo los cartuchos
             mb.box((p * 0.15, L * 0.12, -rr - 0.0012), (p * 0.85, L * 0.86, -rr + 0.0012), "steel", bevel=0.0003, seg=1,
                    m=M @ _T(p * i, 0, 0))
@@ -732,7 +744,7 @@ def _ammo_can(size, seed, open_):
     side(lev, [(xp, zp - 0.003), (xo - 0.0004, zp - 0.012), (xo - 0.0004, zp + 0.004), (xp, zp + 0.003)], [0.0, 0.0, 0.0, 0.0],
          lw - 0.004, "paint_od", re=0.0005, n=2, ne=1)
     if open_:
-        lev.transform(_T(xp, 0, zp) @ _Ry(-22) @ _T(-xp, 0, -zp))
+        lev.transform(_T(xp, 0, zp) @ _Ry(-15) @ _T(-xp, 0, -zp))
     mb.join(lev)
     if open_:
         lid.transform(_T(xh, 0, zh) @ _Ry(-105) @ _T(-xh, 0, -zh))
@@ -861,8 +873,8 @@ def _crate_hinge(body, lid, x, D, zt, tb):
     cara superior), tres nudillos alternados, pasador remachado y remaches de cabeza de gota."""
     ya, za = D / 2 + 0.0042, zt
     Mb = _basis((x, D / 2, 0), (1, 0, 0), (0, 0, 1), (0, 1, 0))
-    plan(body, [(-0.0157, za - 0.003), (-0.0157, za - 0.074), (-0.009, za - 0.094), (0.009, za - 0.094), (0.0157, za - 0.074),
-                (0.0157, za - 0.003)], [0.0, 0.004, 0.007, 0.007, 0.004, 0.0], 0.002, "steel", z0=-0.0004, re=0.0007, n=3, ne=1, M=Mb)
+    plan(body, [(-0.0157, za - 0.0012), (-0.0157, za - 0.074), (-0.009, za - 0.094), (0.009, za - 0.094), (0.0157, za - 0.074),
+                (0.0157, za - 0.0012)], [0.0, 0.004, 0.007, 0.007, 0.004, 0.0], 0.002, "steel", z0=-0.0004, re=0.0007, n=3, ne=1, M=Mb)
     for z in (za - 0.022, za - 0.050, za - 0.078):
         rivet(body, Mb @ _T(0, z, 0.0016))
     for (a, b) in ((-0.016, -0.0056), (0.0056, 0.016)):
@@ -1016,7 +1028,7 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, band
     nb = 2 if (zt - z0) < 0.26 else 3
     bh = ((zt - z0) - (nb - 1) * g) / nb
     if kind == "wood":
-        xh, xb, nbat = (-0.12, 0.12), 0.19, 2
+        xh, xb, nbat = (-0.10, 0.10), 0.165, 2
     elif kind == "long":
         xh, xb, nbat = (-0.52, 0.52), 0.36, 3
     else:
@@ -1307,7 +1319,7 @@ def _projectile(seed=0):
 
 def shell_pallet(seed=0):
     """Tarima de 8 proyectiles de artillería clase 155 mm (2 × 4, de pie con su tapón de izaje) como se embarcan:
-    689 × 346 × ~ 800 mm. Base: 2 patines de 70 × 64 mm, 5 tablas de cubierta y tablero de cunas de 36 mm con 8 barrenos que
+    689 × 346 × ~ 800 mm. Base: 2 patines de 4 × 4 in (75 × 89 mm), 5 tablas de cubierta y tablero de cunas de 36 mm con 8 barrenos que
     abrazan la cola de bote; marco superior de 32 mm con 8 barrenos que asientan en la ojiva (donde su radio es ~ 55 mm);
     4 varillas roscadas de 16 mm en las esquinas con rondana y tuerca hexagonal arriba y abajo (rosca helicoidal visible junto
     a las tuercas); 2 flejes horizontales que ciñen los cuerpos y 1 longitudinal sobre el marco y bajo la cubierta, con sellos
@@ -1327,9 +1339,9 @@ def _shell_pallet(seed):
     Lx, Ly = 0.689, 0.346
     px, py = 0.170, 0.172
     W = WOOD
-    hs, td, tbd = 0.064, 0.019, 0.036
-    for y in (-0.115, 0.115):                                  # patines
-        wplank(mb, (-Lx / 2 + 0.002, y - 0.035, 0.0), (Lx / 2 - 0.002, y + 0.035, hs + 0.0005), W, rs=rs)
+    hs, td, tbd = 0.089, 0.019, 0.036
+    for y in (-0.095, 0.095):                                  # patines de 4 × 4 in (las varillas bajan por fuera)
+        wplank(mb, (-Lx / 2 + 0.002, y - 0.0375, 0.0), (Lx / 2 - 0.002, y + 0.0375, hs + 0.0005), W, rs=rs, kw=1)
     nd = 5
     dw = (Lx - (nd - 1) * 0.012) / nd
     for k in range(nd):                                        # cubierta
@@ -1344,7 +1356,7 @@ def _shell_pallet(seed):
     src = [_cached(("proj", k), lambda k=k: _projectile(k)) for k in range(3)]
     for i, x in enumerate(cols):
         for j, y in enumerate(rows):
-            mb.join(src[(i + 2 * j + seed) % 3], _T(x, y, zb - 0.0005) @ _Rz(float(rs.uniform(-60, 60)) + (180 if j else 0) - 0.0))
+            mb.join(src[(i + 2 * j + seed) % 3], _T(x, y, zb - 0.0012) @ _Rz(float(rs.uniform(-60, 60)) + (180 if j else 0) - 0.0))
     # marco superior asentado en las ojivas
     zfc = zb + 0.509
     tf = 0.032
@@ -1364,16 +1376,17 @@ def _shell_pallet(seed):
     # flejes horizontales que ciñen los cuerpos
     R = M107["R"]
     t, w = 0.0008, 0.019
-    o = 0.0                                                    # fleje tenso de 0,8 mm: medio espesor hundido en lo que ciñe
+    o = 0.0001                                                 # fleje tenso de 0,8 mm: medio espesor hundido en lo que ciñe
     wx, wy = 2 * (cols[-1] + R + o), 2 * (rows[-1] + R + o)
     for k, zh in enumerate((zb + 0.170, zb + 0.300)):
-        loop = [(x, y, zh) for (x, y) in rr_pts(wx, wy, R + o, 8)]
+        loop = [(x, y, zh) for (x, y) in rr_pts(wx, wy, R + o, 16)]
         band(mb, loop, w=w, t=t, normal=(0, 0, 1))
         xs_ = float(rs.uniform(-0.05, 0.05)) + (-px / 2 if k else px / 2)
         band_seal(mb, _T(xs_, -wy / 2 - t / 2 + 0.0001, zh) @ _Rx(90), w=w)
     # fleje longitudinal sobre el marco, por los extremos y bajo la cubierta (entre patines)
     xe = Lx / 2 + o
-    path = fillet([(-xe, 0.0, hs - o), (xe, 0.0, hs - o), (xe, 0.0, ztop + o), (-xe, 0.0, ztop + o)], 0.004, 4)
+    zu = hs - 0.0009                                           # bajo las tablas de cubierta (que no son planas): 0,5 mm libre
+    path = fillet([(-xe, 0.0, zu), (xe, 0.0, zu), (xe, 0.0, ztop + o), (-xe, 0.0, ztop + o)], 0.004, 4)
     band(mb, path, w=w, t=t, normal=(0, 1, 0))
     band_seal(mb, _T(float(rs.uniform(-0.12, 0.12)), 0.0, ztop + o + t / 2 - 0.0002), w=w)
     # estarcidos del tablero de cunas (frente -Y)
@@ -1400,10 +1413,10 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
     tb = 0.016 if kind == "small" else 0.019
     if kind == "wood":
         slots = [(-0.41, 0.0, 90.0), (0.0, 0.0, 90.0), (0.41, 0.0, 90.0)]
-        ys, xe = 0.22, 0.41 + D / 2
+        ys, xe = 0.205, 0.41 + D / 2                           # entre el fleje propio de la caja y el listón de la tapa
     else:
         slots = [(sx * 0.29, (j - 1) * 0.335, 0.0) for sx in (-1, 1) for j in range(3)]
-        ys, xe = 0.22, 0.29 + L / 2 + 0.034
+        ys, xe = 0.205, 0.29 + L / 2 + 0.034
     per = len(slots)
     nl = max(1, -(-n // per))
     k = 0
@@ -1419,29 +1432,27 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
     ztop = zp + (nl if full_top else max(nl - 1, 1)) * H
     kind_s = straps or ("steel" if seed % 2 == 0 else "ratchet")
     if kind_s == "steel":
-        w, t, mat = 0.019, 0.0006, "steel"
+        w, t, mat = 0.019, 0.0008, "steel"
     else:
-        w, t, mat = 0.050, 0.0018, "canvas"
+        w, t, mat = 0.025, 0.0018, "canvas"
     zu = zp - 0.019 - 0.0006 - t / 2
     ztt = ztop - (tb if kind == "wood" else 0.0)              # sobre las tablas de la tapa (junto a los listones)
-    xp = 0.6095 + t / 2 + 0.0003
-    xc = xe + 0.0035 + t / 2 + 0.0004                          # cara de la carga + esquinero
-    zt_ = ztt + 0.0035 + t / 2 + 0.0004
+    xp = 0.6095 + t / 2 + 0.0009
+    xc = xe + 0.0031 + t / 2                                   # cara de la carga + esquinero (el fleje lo aprieta)
+    zt_ = ztt + 0.0031 + t / 2
     for yy in (-ys, ys):
         path = fillet([(-xp, yy, zu), (xp, yy, zu), (xp, yy, zp + 0.003), (xc, yy, zp + 0.045), (xc, yy, zt_), (-xc, yy, zt_),
                        (-xc, yy, zp + 0.045), (-xp, yy, zp + 0.003)], 0.008, 4)
         band(mb, path, w=w, t=t, normal=(0, 1, 0), mat=mat)
         for sx in (-1, 1):                                     # esquineros de cartón doblado (L de 50 mm, 3,5 mm)
-            x0 = sx * (xe + 0.0004)
-            P = [(0.0, 0.0), (0.0, -0.05), (0.0035, -0.05), (0.0035, -0.0035), (0.05, -0.0035), (0.05, 0.0)]
-            P = [(x0 + sx * px_, ztt + 0.0035 + pz) for (px_, pz) in [(-a, b) for (a, b) in [(0.0, 0.0), (0.05, 0.0)]]]
-            Q = [(0.0035, 0.0035), (0.0035, -0.05), (0.0, -0.05), (0.0, 0.0), (-0.05, 0.0), (-0.05, 0.0035)]
+            x0 = sx * (xe - 0.0003)
+            Q = [(0.0035, 0.0032), (0.0035, -0.05), (0.0, -0.05), (0.0, -0.0003), (-0.05, -0.0003), (-0.05, 0.0032)]
             Q = [(x0 + sx * qx, ztt + qz) for (qx, qz) in Q]
-            side(mb, Q, [0.0035, 0.0006, 0.0006, 0.0005, 0.0006, 0.0006], 0.08, "cardboard", y0=yy, re=0.0008, n=3, ne=1)
+            side(mb, Q, [0.0035, 0.0006, 0.0006, 0.0005, 0.0006, 0.0006], 0.05, "cardboard", y0=yy, re=0.0008, n=3, ne=1)
         if kind_s == "steel":
             band_seal(mb, _T(float(r.uniform(-0.25, 0.25)), yy, zt_ + t / 2 - 0.0002), w=w)
         else:
-            _ratchet(mb, xc + t / 2, yy, zp + 0.26, w)
+            _ratchet(mb, xc + t / 2, yy, zp + min(0.26, (ztt - zp) * 0.55), w)
     return mb
 
 
@@ -1467,3 +1478,5 @@ def _ratchet(mb, x0, y, zr, w=0.05):
     slab_(mb, _T(x0 + 0.034, y, zr - 0.098) @ _Ry(90), 0.034, w + 0.012, 0.010, rc=0.004, re=0.003, mat="rubber", nc=3, ne=3)
     revolve(mb, [(0.0, -w / 2 - 0.004), (0.003, -w / 2 - 0.004), (0.003, w / 2 + 0.004), (0.0, w / 2 + 0.004)], "steel", seg=16,
             M=_T(x0 + 0.031, y, zr - 0.086) @ _Rx(90))
+    revolve(mb, [(0.0, -w / 2 - 0.0060), (0.0026, -w / 2 - 0.0060), (0.0026, w / 2 + 0.0060), (0.0, w / 2 + 0.0060)], "steel", seg=16,
+            M=_T(x0 + 0.0021, y, zr - 0.052) @ _Rx(90))             # travesaño de la base: el cincho pasa debajo

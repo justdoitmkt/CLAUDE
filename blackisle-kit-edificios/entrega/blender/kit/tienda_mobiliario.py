@@ -197,6 +197,8 @@ def _screw_cs(mb, M, d=0.0082, seed=0, proud=0.0004, mat="steel"):
     Cx = ring(lambda a: R * (0.17 + 0.42 * max(0.0, math.cos(2 * (a - rot))) ** 4), proud)
     pole = mb.bm.verts.new(M @ Vector((0, 0, proud - 0.0013)))
     mi = mb.mi(mat)
+    fc = mb.bm.faces.new(list(reversed(A)))
+    fc.material_index = mi
     for k in range(seg):
         kk = (k + 1) % seg
         for q in ((A[k], A[kk], B[kk], B[k]), (B[k], B[kk], Cx[kk], Cx[k]), (Cx[k], Cx[kk], pole)):
@@ -209,7 +211,7 @@ def _nail(mb, M, r=0.0035, mat="steel", seg=12):
     """Cabeza de clavo común (abombada 0,9 mm, hundida 0,4 mm), sombreado suave."""
     with mb.soft():
         revolve(mb, [(r * 1.02, -0.0004), (r, 0.0003), (r * 0.75, 0.0008), (r * 0.35, 0.0011), (0.0, 0.0012)], mat, seg=seg, M=M,
-                caps=False)
+                caps=True)
 
 
 def _hexbolt(mb, M, d=0.008, h=None, washer=True, mat="steel", stub=0.0):
@@ -250,7 +252,7 @@ def _rivet(mb, M, r=0.0035, mat="steel"):
     """Remache de cabeza redonda (domo), hundido 0,3 mm."""
     with mb.soft():
         revolve(mb, [(r * 1.02, -0.0003), (r, 0.0004), (r * 0.82, 0.0013), (r * 0.45, 0.0019), (0.0, 0.0021)], mat, seg=12, M=M,
-                caps=False)
+                caps=True)
 
 
 def _noise2(x, y, f, seed):
@@ -503,7 +505,7 @@ CR_LIFT = 0.0018               # las cajas de arriba descansan sobre las hojas d
 COUNTER_TOP = 2 * CR_H + CR_LIFT + CR_BAT + PLY_T      # 0,909
 
 
-def _plank(mb, x0, x1, y0, y1, z0, z1, mat, rs, r=0.0028, M=None, bow=0.0006, step=0.15, ngon=()):
+def _plank(mb, x0, x1, y0, y1, z0, z1, mat, rs, r=0.0028, M=None, bow=0.0004, step=0.15, ngon=(), flat=False):
     """Tabla de madera aserrada: cantos redondeados reales, combeo leve a lo largo (bow), alabeo en el ancho y espesor que
     varía medio milímetro (tablas distintas entre sí)."""
     dims = (x1 - x0, y1 - y0, z1 - z0)
@@ -512,8 +514,10 @@ def _plank(mb, x0, x1, y0, y1, z0, z1, mat, rs, r=0.0028, M=None, bow=0.0006, st
     wd = 3 - th - lg
     lo = (x0, y0, z0)
     b = bow * _f(rs.uniform(-1, 1))
-    cup = 0.0004 * _f(rs.uniform(-1, 1))
-    tw = 0.0005 * _f(rs.uniform(-1, 1))
+    cup = 0.00025 * _f(rs.uniform(-1, 1))
+    tw = 0.0003 * _f(rs.uniform(-1, 1))
+    if flat:                                                             # tabla con esténcil: solo cantos, sin combeo
+        b = cup = tw = 0.0
 
     def disp(Q, N, P):
         D = np.zeros_like(Q)
@@ -593,7 +597,7 @@ def _draw_latch(mb, M, z_keep, mat="steel"):
         x = sx * 0.0135
         _lathe(mb, [(0.0018, 0.0), (0.0038, 0.0), (0.0038, 0.006), (0.0018, 0.006)], M @ _T(x - 0.003, 0.0, 0.0055) @ _Ry(90),
                mat, seg=SEG, closed=True)
-        _board(mb, x - 0.003, x + 0.003, -0.006, 0.0, t - 0.0002, 0.0058, mat, r=0.0006, M=M, step=1.0)
+        _board(mb, x - 0.0026, x + 0.0026, -0.006, -0.0006, t - 0.0002, 0.0052, mat, r=0.0006, M=M, step=1.0)
     _cyl(mb, tuple(M @ Vector((-0.0185, 0.0, 0.0055))), tuple(M @ Vector((0.0185, 0.0, 0.0055))), 0.0016, mat, seg=16)
     for sx in (-1, 1):                                                                                     # remaches
         for y in (-0.034, -0.006):
@@ -635,8 +639,8 @@ def _od_crate(mb, M, w=0.8, d=0.55, h=CR_H, seed=0, ends=(True, True), lid_batte
     wb = w - 2 * tc
     xb = wb / 2
     g = 0.003
-    T = lambda x0, x1, y0, y1, z0, z1, mat="wood_od", rr=0.0028, ngon=(): _plank(mb, x0, x1, y0, y1, z0, z1, mat, r, r=rr, M=M,  # noqa
-                                                                                  ngon=ngon)
+    T = lambda x0, x1, y0, y1, z0, z1, mat="wood_od", rr=0.0028, ngon=(), flat=False: _plank(  # noqa
+        mb, x0, x1, y0, y1, z0, z1, mat, r, r=rr, M=M, ngon=ngon, flat=flat)
     for sy in (-1, 1):                                                   # patines
         yc = sy * (d / 2 - 0.065)
         T(-xb + 0.012, xb - 0.012, yc - 0.019, yc + 0.019, 0.0, hs, ngon=(4,))
@@ -646,10 +650,10 @@ def _od_crate(mb, M, w=0.8, d=0.55, h=CR_H, seed=0, ends=(True, True), lid_batte
         T(-xb + tb, xb - tb, ya, yb_, hs, hs + tb)
     hb = (h - tb - hs - g) / 2
     zs_b = [(hs, hs + hb), (hs + hb + g, h - tb)]
-    for sy in (-1, 1):                                                   # costados
+    for sy in (-1, 1):                                                   # costados (los del frente llevan esténcil: planos)
         ya, yb_ = sorted((sy * d / 2, sy * (d / 2 - tb)))
         for (za, zb) in zs_b:
-            T(-xb, xb, ya, yb_, za, zb)
+            T(-xb, xb, ya, yb_, za, zb, flat=(sy < 0 and stencil is not None))
     for sx in (-1, 1):                                                   # testeros (entre los costados)
         xa, xb_ = sorted((sx * xb, sx * (xb - tb)))
         for (za, zb) in zs_b:
@@ -719,12 +723,12 @@ def _od_crate(mb, M, w=0.8, d=0.55, h=CR_H, seed=0, ends=(True, True), lid_batte
             for zz in (-0.008, 0.008):
                 _board(mb, -0.0105, 0.0105, zz - 0.0012, zz + 0.0012, 0.0016, 0.0022, "steel", r=0.0005, M=Ms, step=1.0)
     if stencil:
-        Ms = M @ _T(0.0, -d / 2 + 0.0002, zs_b[1][0] + (zs_b[1][1] - zs_b[1][0]) * 0.32) @ _Rx(90)
+        Ms = M @ _T(0.0, -d / 2, zs_b[1][0] + (zs_b[1][1] - zs_b[1][0]) * 0.32) @ _Rx(90)
         text_font(mb, stencil, 0.072, 0.0005, "paint_yellow" if stencil == "AMMO" else "sign_white", Ms, font="stencil", res=3)
         lot = lot or "LOT 7-%02d" % (seed % 90 + 10)
-        Ml = M @ _T(-0.22, -d / 2 + 0.0002, zs_b[0][0] + hb * 0.62) @ _Rx(90)
+        Ml = M @ _T(-0.22, -d / 2, zs_b[0][0] + hb * 0.62) @ _Rx(90)
         text_font(mb, lot, 0.024, 0.0004, "sign_white", Ml, font="stencil2", res=2, align="LEFT")
-        Ml = M @ _T(-0.22, -d / 2 + 0.0002, zs_b[0][0] + hb * 0.3) @ _Rx(90)
+        Ml = M @ _T(-0.22, -d / 2, zs_b[0][0] + hb * 0.3) @ _Rx(90)
         text_font(mb, "NET WT %d LB" % (40 + seed % 30), 0.02, 0.0004, "sign_white", Ml, font="stencil2", res=2, align="LEFT")
 
 
@@ -1117,6 +1121,11 @@ def _leveler(mb, M, mat="steel"):
     _hexbolt(mb, M @ _T(0, 0, SH_LEV - 0.0075), d=0.0095, h=0.0075, washer=False, mat=mat)
 
 
+def _ammo_can(mb, M, seed=0):
+    """Compatibilidad con kit.campaign._ammo_can: une la lata M2A1 en M (origen: centro de la base, largo en X)."""
+    mb.join(_ammo_can_mb(seed=seed), M)
+
+
 def _ammo_can_mb(seed=0, stencil=True):
     """Lata de munición de acero tipo M2A1 (11-3/4 × 6 × 7-1/2"; 298 × 152 × 191 mm) cerrada: cuerpo de lámina de esquinas
     redondeadas con costura rolada abajo, tapa con faldón, panel estampado y canto redondeado, bisagra de nudillos con perno
@@ -1127,7 +1136,7 @@ def _ammo_can_mb(seed=0, stencil=True):
     lid_h = 0.042
     zl = H - lid_h
     Lb, Wb = L - 0.008, W - 0.006
-    slab(mb, _T(0, 0, 0.0055), Lb, Wb, zl + 0.022 - 0.0055, rc=0.009, re=0.002, re0=0.0, mat="paint_od", nc=4, ne=1, cap0=False)
+    slab(mb, _T(0, 0, 0.0055), Lb, Wb, zl + 0.022 - 0.0055, rc=0.009, re=0.002, re0=0.0, mat="paint_od", nc=4, ne=1)
     slab(mb, Matrix(), Lb + 0.0035, Wb + 0.0035, 0.0062, rc=0.0105, re=0.0022, re0=0.0016, mat="paint_od", nc=4, ne=2)
     # tapa: faldón y panel estampado
     rc = 0.011
@@ -1201,7 +1210,7 @@ def _carton(mb, M, w, d, h, seed=0, opened=False, stamp=None, tape=True, content
     r = rng(seed)
     rc = 0.003
     tw = 0.004
-    xs = _axis_samples(-w / 2, w / 2, rc, 2, 0.05, forced=[-0.0015, 0.0, 0.0015] if False else [])
+    xs = _axis_samples(-w / 2, w / 2, rc, 2, 0.05)
     ys = _axis_samples(-d / 2, d / 2, rc, 2, 0.05, forced=[-0.0018, 0.0, 0.0018])
     zs = _axis_samples(0.0, h, rc, 2, 0.05, forced=[h - 0.008, h - 0.004])
     bul = min(0.0035, 0.012 * min(w, d, h)) * _f(r.uniform(0.6, 1.0))
@@ -1339,10 +1348,10 @@ def shelving(w=1.2, seed=0, stock="mixed"):
         _leveler(mb, _T(x + sx * 0.022, y + sy * 0.022, 0.0))
     holes = [zf + z for z in hz]
     targets = [0.15 + (H - 0.035 - 0.15) * i / 4 for i in range(5)]
-    lv = []
+    lvi = []
     for tz in targets:
-        k = min(range(len(holes)), key=lambda i: abs(holes[i] + 0.019 - tz))
-        lv.append(holes[k] + 0.019)
+        lvi.append(min(range(len(holes)), key=lambda i: abs(holes[i] + 0.019 - tz)))
+    lv = [holes[k] + 0.019 for k in lvi]
     lv[-1] = min(lv[-1], H - 0.001)
     ws, ds = w - 2 * t - 0.0006, SH_D - 2 * t - 0.0006
     yc = (yF + yB) / 2
@@ -1356,7 +1365,8 @@ def shelving(w=1.2, seed=0, stock="mixed"):
             _post_bolt(mb, _T(xo, yy, zb) @ _Ry(-90 * sx), _T(xi_, yy, zb) @ _Ry(90 * sx))
     # contravientos en X (atrás y costados), pernos en las perforaciones
     tb_ = 0.0015
-    for (za, zb_) in ((holes[2], holes[len(holes) // 2]), (holes[len(holes) // 2], holes[-3])):
+    for (ka, kb) in ((lvi[0] + 2, lvi[2] - 2), (lvi[2] + 2, lvi[4] - 2)):   # perforaciones libres (no las de los entrepaños)
+        za, zb_ = holes[ka], holes[kb]
         # atrás: por fuera de las alas traseras (entre el anaquel y el muro)
         pA, pB = Vector((-w / 2 + uc, yB, za)), Vector((w / 2 - uc, yB, zb_))
         pC, pD = Vector((w / 2 - uc, yB + tb_, za)), Vector((-w / 2 + uc, yB + tb_, zb_))
@@ -1407,7 +1417,7 @@ def shelving(w=1.2, seed=0, stock="mixed"):
                 bd = _f(r.uniform(0.28, 0.38))
                 bh = min(_f(r.uniform(0.18, 0.3)), gapz)
                 if r.uniform() < 0.88:
-                    opn = (not opened_done) and r.uniform() < 0.4 and bh > 0.14
+                    opn = (not opened_done) and r.uniform() < 0.4 and bh > 0.14 and x > -w / 2 + 0.045 and x + bw < w / 2 - 0.045
                     tl = None
                     if opn:                                              # solapas abiertas que no topen arriba ni atrás
                         ln = bd / 2
@@ -1424,10 +1434,12 @@ def shelving(w=1.2, seed=0, stock="mixed"):
                             if ts > ts_max:
                                 opn = False
                             else:
-                                tl = [_f(r.uniform(95, 115)), tback, min(max(ts, 12.0) + 3.0, ts_max), min(max(ts, 12.0) + 3.0, ts_max)]
+                                dmax = bh - 0.006                        # solapa del frente colgando sobre la cara de la caja
+                                tf = 180.0 - (math.degrees(math.acos(min(1.0, dmax / ln))) if ln > dmax else _f(r.uniform(6, 12)))
+                                tl = [tf, tback, min(max(ts, 12.0) + 3.0, ts_max), min(max(ts, 12.0) + 3.0, ts_max)]
                     opened_done = opened_done or opn
                     st = (words[int(r.integers(0, 4))], 0.02) if r.uniform() < 0.6 else None
-                    _carton(mb, _T(x + bw / 2, yfront + bd / 2 + _jit(r, 0.008), z) @ _Rz(_jit(r, 1.5)), bw - 0.008, bd, bh,
+                    _carton(mb, _T(x + bw / 2, yfront + bd / 2 + abs(_jit(r, 0.008)), z) @ _Rz(_jit(r, 1.0)), bw - 0.008, bd, bh,
                             seed=int(r.integers(0, 999)), opened=opn, stamp=st, tilts=tl)
                     if not opn and bh < gapz * 0.5 and r.uniform() < 0.5:   # una caja chica encima
                         bh2 = min(_f(r.uniform(0.12, 0.2)), gapz - bh - 0.01)
@@ -1520,7 +1532,7 @@ def _weld_around(mb, M, w, h, rc=0.004, rb=0.0024, mat="paint_od"):
     _bead(mb, pts, rb, closed=True, mat=mat)
 
 
-def _padlock(mb, M, seed=0):
+def _padlock(mb, M, seed=0, scratched=False):
     """Candado laminado de 40 mm: cuerpo de 10 láminas de acero con juntas visibles y cantos matados, 4 remaches arriba y abajo,
     cilindro de latón con bocallave abajo y defensa, arco de acero de Ø 7 mm (16 lados) con claro interior de 19 × 16 mm,
     pata larga y pata corta. M: origen en el punto interior más alto del arco (donde apoya en la grapa), cuelga hacia -Z,
@@ -1612,9 +1624,8 @@ def weapon_rack(n=8, seed=0):
     sec = outer + inner[::-1]
     loops = [[(x, y, z) for (y, z) in sec] for x in (xa, xb)]
     skin(mb, loops, P)
-    for x in (xa, xb):                                                   # tapas de la charola soldadas a los postes
+    for x in (xa, xb):                                                   # charola soldada a los postes por sus extremos
         sx = 1 if x > 0 else -1
-        _board(mb, min(x, x - sx * 0.002), max(x, x - sx * 0.002), yf, yb, zt - t, zt + 0.06, P, r=0.0008, step=1.0)
         _bead(mb, [(x - sx * 0.0035, yf + 0.004, zt + 0.0025), (x - sx * 0.0035, yb - 0.004, zt + 0.0025)], 0.0016, mat=P)
     zr = zt + 0.0015
     for i in range(n + 1):                                               # divisiones y tapetes estriados
@@ -1845,8 +1856,8 @@ def _peg_hook(mb, x, zl, zu, mat="galvanized"):
             (x, yb + 0.004, zt - 0.014)]
     with mb.soft():
         _tube(mb, fillet(path, 0.0042, 6), rw, seg=12, mat=mat, caps=True)
-        _tube(mb, fillet([(x, yf - rw - 0.0002, z0 + 0.004), (x, yf - rw - 0.0002, z0), (x, yb - 0.001, z0)], 0.003, 4), rw * 0.98,
-              seg=12, mat=mat)
+        _tube(mb, fillet([(x, yf - rw - 0.0002, z0 + 0.0052), (x, yf - rw - 0.0002, z0 + 0.0003), (x, yb - 0.001, z0 + 0.0003)], 0.003,
+                         4), rw * 0.96, seg=12, mat=mat)
         _lathe(mb, [(0.0, -rw * 1.1), (rw * 0.8, -rw * 0.8), (rw * 1.15, 0.0), (rw * 0.8, rw * 0.8), (0.0, rw * 1.1)],
                _frame_z(Vector(tip), Vector((0, -math.cos(a), math.sin(a)))), mat, seg=12)
 
@@ -1955,7 +1966,7 @@ def folding_table(L=1.83, seed=0):
         for (xa, xb) in ((-xr_ + 0.07, -L / 2 + 0.45), (-L / 2 + 0.47, L / 2 - 0.47), (L / 2 - 0.45, xr_ - 0.07)):
             _board(mb, xa, xb, y - 0.004, y + 0.004, zu - 0.011, zu + 0.001, "plastic", r=0.003, step=0.3, ngon=(5,))
     for x in np.linspace(-L / 2 + 0.6, L / 2 - 0.6, 4):
-        _board(mb, x - 0.004, x + 0.004, -0.3, 0.3, zu - 0.011, zu + 0.001, "plastic", r=0.003, step=0.2, ngon=(5,))
+        _board(mb, x - 0.004, x + 0.004, -0.3, 0.3, zu - 0.0125, zu + 0.001, "plastic", r=0.003, step=0.2, ngon=(5,))
     # bastidor de canal C atornillado
     yr = D / 2 - 0.05
     for sy in (-1, 1):
@@ -1979,7 +1990,7 @@ def folding_table(L=1.83, seed=0):
                         (R - 0.0004, 0.031), (R - 0.0004, 0.026)], _T(xl, sy * yl, 0.0), "rubber", seg=SEG)
             _lathe(mb, [(0.0152, 0.0062), (0.0158, 0.007), (0.0152, 0.0078)], _T(xl, sy * yl, 0.0), "rubber", seg=SEG, closed=True)
         zc = 0.13
-        _cyl(mb, (xl, -yl + R * 0.6, zc), (xl, yl - R * 0.6, zc), 0.0095, "steel", seg=SEG, caps=False)
+        _cyl(mb, (xl, -yl + R * 0.6, zc), (xl, yl - R * 0.6, zc), 0.0095, "steel", seg=SEG, caps=True)
         for sy in (-1, 1):
             _weld_around(mb, _T(xl, sy * (yl - R * 0.9), zc) @ _Rx(90 * sy), 0.019, 0.019, rc=0.0094, rb=0.0016, mat="steel")
         # abrazaderas del eje (lámina en U atornillada al bajo cara)
@@ -2045,7 +2056,7 @@ def folding_chair(seed=0):
     for sx in (-1, 1):                                                   # patas traseras
         x = sx * wr / 2
         _tube(mb, [(x, ybot, 0.028), (x, ytp, ztp)], R * 0.95, seg=SEG, mat=P)
-        _lathe(mb, [(R * 0.95, 0.0), (R * 0.97, 0.0004), (R * 0.6, 0.0016), (0.0, 0.002)], _frame_z(Vector((x, ytp, ztp)), dvec), P,
+        _lathe(mb, [(R * 0.93, -0.0006), (R * 0.97, 0.0004), (R * 0.6, 0.0016), (0.0, 0.002)], _frame_z(Vector((x, ytp, ztp)), dvec), P,
                seg=SEG)
     for (zz, xw, rr_, yy) in ((0.1, wr, R * 0.82, None), (0.25, wr, R * 0.7, None), (0.065, wf, R * 0.82, -0.195)):
         y_ = rear_y(zz) if yy is None else yy
@@ -2095,7 +2106,7 @@ def folding_chair(seed=0):
     from kit.clinic import shell_strip
     shell_strip(mb, prof, wf - 2 * R - 0.004, 0.0012, P, smooth_n=3, edge_seg=4)
     for (y, z) in (prof[0], prof[-1]):                                   # orillas enrolladas arriba y abajo
-        _cyl(mb, (-(wf / 2 - R - 0.004), y + 0.001, z), ((wf / 2 - R - 0.004), y + 0.001, z), 0.0032, P, seg=SEG)
+        _cyl(mb, (-(wf / 2 - R - 0.0055), y + 0.001, z), ((wf / 2 - R - 0.0055), y + 0.001, z), 0.0032, P, seg=SEG)
     for sx in (-1, 1):
         for k in (1, 7):
             y, z = prof[k]
@@ -2138,17 +2149,20 @@ def _s_hook(mb, M, rw=0.0018, r_up=0.011, r_lo=0.008, span=0.05, mat="galvanized
         _tube(mb, [tuple(M @ p) for p in pts], rw, seg=12, mat=mat)
         for (p, q) in ((pts[0], pts[1]), (pts[-1], pts[-2])):
             d = (p - q).normalized()
-            _lathe(mb, [(rw, 0.0), (rw * 0.85, rw * 0.5), (rw * 0.5, rw * 0.85), (0.0, rw)], _frame_z(M @ p, M.to_3x3() @ d), mat,
-                   seg=12)
+            _lathe(mb, [(rw * 0.97, -0.0004), (rw * 0.85, rw * 0.5), (rw * 0.5, rw * 0.85), (0.0, rw)], _frame_z(M @ p, M.to_3x3() @ d),
+                   mat, seg=12)
 
 
 def _bulb(mb, M, seed=0):
     """Portalámparas E26 de hule moldeado (Ø 43 × 53 mm) con anillos de sello, rosca de latón a la vista y foco A19 (Ø 60 ×
     108 mm) de vidrio con vástago y cuatro filamentos LED. M: origen en la boca superior del portalámparas, cuelga a -Z."""
-    sp = [(0.0, 0.0), (0.0058, 0.0), (0.0078, -0.0015), (0.0105, -0.0045), (0.0142, -0.0085), (0.0175, -0.0125), (0.0196, -0.0165),
-          (0.0208, -0.0205)]
+    sp = [(0.0, 0.0), (0.0058, 0.0)]
+    for k in range(1, 11):                                               # hombro abombado del portalámparas
+        a = PI / 2 * k / 10
+        sp.append((0.0058 + 0.015 * math.sin(a), -0.0205 * (1 - math.cos(a)) * 1.0))
     for z in (-0.024, -0.029, -0.034):                                   # anillos de agarre moldeados
-        sp += [(0.0211, z + 0.0016), (0.0221, z + 0.0007), (0.0221, z - 0.0007), (0.0211, z - 0.0016)]
+        sp += [(0.0211, z + 0.0016), (0.0217, z + 0.0009), (0.022, z + 0.0003), (0.022, z - 0.0003), (0.0217, z - 0.0009),
+               (0.0211, z - 0.0016)]
     sp += [(0.0212, -0.046), (0.0222, -0.047), (0.0222, -0.050), (0.0212, -0.051), (0.0208, -0.053), (0.0168, -0.0535), (0.0168, -0.05)]
     _lathe(mb, sp, M, "rubber", seg=32)
     prof = [(0.0128, -0.05)]
@@ -2159,10 +2173,19 @@ def _bulb(mb, M, seed=0):
     prof += [(0.0124, z - 0.001), (0.0135, z - 0.0016)]
     _lathe(mb, prof, M, "brass", seg=32)
     zg = z - 0.0016
-    g = [(0.0135, zg), (0.016, zg - 0.006), (0.022, zg - 0.016), (0.0285, zg - 0.03), (0.0302, zg - 0.045), (0.0295, zg - 0.058),
-         (0.025, zg - 0.071), (0.016, zg - 0.08), (0.006, zg - 0.0835), (0.0, zg - 0.084)]
+    zc = zg - 0.054                                                      # centro del domo (A19: Ø 60 mm, 108 mm de largo)
+    g = [(0.0128, zg + 0.0012)]
+    for k in range(13):                                                  # cuello en S del casquillo al ecuador
+        t = k / 12
+        sm = t * t * (3 - 2 * t)
+        g.append((0.0135 + 0.0165 * sm ** 0.75, zg - 0.054 * t))
+    for k in range(1, 17):                                               # domo
+        a = -PI / 2 * k / 16
+        g.append((max(0.030 * math.cos(a), 0.0), zc + 0.030 * math.sin(a)))
+    g[-1] = (0.0, g[-1][1])
     _lathe(mb, g, M, "glass", seg=48)
-    _lathe(mb, [(0.0, zg), (0.0035, zg), (0.0026, zg - 0.02), (0.0018, zg - 0.028), (0.0, zg - 0.029)], M, "glass", seg=16)
+    _lathe(mb, [(0.0, zg - 0.0012), (0.0035, zg - 0.0012), (0.0026, zg - 0.02), (0.0018, zg - 0.028), (0.0, zg - 0.029)], M, "glass",
+           seg=16)
     with mb.soft():
         for k in range(4):
             a = PI / 2 * k + PI / 4
@@ -2227,7 +2250,7 @@ def string_lights(points=((-3.0, 0.0, 2.6), (0.0, 0.0, 2.75), (3.0, 0.0, 2.6)), 
         _lathe(mb, [(0.0, -0.001), (0.0052, -0.001), (0.0042, -0.012), (0.0032, -0.016)], Matrix.Translation(top), "rubber", seg=16)
         sw = Vector((_jit(r, 0.006), _jit(r, 0.006), 0))
         bend = [top - Vector((0, 0, 0.014)), top - Vector((0, 0, drop * 0.5)) + sw * 0.4, top - Vector((0, 0, drop)) + sw]
-        _tube(mb, [tuple(q) for q in bend], 0.0032, seg=SEG_T, mat="cable", caps=False)
+        _tube(mb, [tuple(q) for q in bend], 0.0032, seg=SEG_T, mat="cable", caps=True)
         Ms = Matrix.Translation(bend[-1]) @ _Rx(_jit(r, 3)) @ _Ry(_jit(r, 3))
         _bulb(mb, Ms, seed=k)
     return mb
@@ -2314,7 +2337,7 @@ def hanging_sign(text="SUPPLY", w=0.9, seed=0):
         for (kx, kz) in knots:
             dk = np.hypot((x - kx) / 0.022, (Q[:, 2] - kz) / 0.014)
             g += 0.8 * np.exp(-dk ** 2) + 0.5 * np.cos(dk * 5.0) * np.exp(-dk ** 2 / 4)
-        amp = 0.0007 * g * face
+        amp = 0.0005 * g * face
         D[:, 1] += N[:, 1] * amp
         # cantos gastados con mellas
         edge = ~face
@@ -2338,24 +2361,21 @@ def hanging_sign(text="SUPPLY", w=0.9, seed=0):
             continue
         x = cx + _jit(r, 0.003)
         Ml = _T(x, yfc, zb + hgt * 0.36 + _jit(r, 0.004)) @ _Rx(90) @ _Rz(_jit(r, 2.5))
-        text_font(mb, ch, size * (1 + _jit(r, 0.035)), 0.0006, "paint_od", Ml, font="stencil", res=3)
-    text_font(mb, "AMMO  -  GEAR  -  PARTS", 0.022, 0.0005, "paint_od", _T(_jit(r, 0.004), yfc, zb + hgt * 0.13) @ _Rx(90) @ _Rz(_jit(r, 1.0)),
+        text_font(mb, ch, size * (1 + _jit(r, 0.035)), 0.0009, "paint_od", Ml, font="stencil", res=3)
+    text_font(mb, "AMMO  -  GEAR  -  PARTS", 0.022, 0.0009, "paint_od", _T(_jit(r, 0.004), yfc, zb + hgt * 0.13) @ _Rx(90) @ _Rz(_jit(r, 1.0)),
               font="stencil2", res=2)
-    # filete pintado a 12 mm del canto
+    # filete pintado a 14 mm del canto (marco de una pieza)
+    from kit.clinic_servicios import rrframe
     m_ = 0.014
-    fr_path = [(-w / 2 + m_, yfc, zb + m_), (w / 2 - m_, yfc, zb + m_), (w / 2 - m_, yfc, zb + hgt - m_), (-w / 2 + m_, yfc, zb + hgt - m_)]
-    for k in range(4):
-        a_, b_ = Vector(fr_path[k]), Vector(fr_path[(k + 1) % 4])
-        d = (b_ - a_).normalized()
-        Mx_, Lx_ = port.frame_on(tuple(a_ - d * 0.0025), tuple(b_ + d * 0.0025), up=(0, -1, 0))
-        _board(mb, 0.0, Lx_, -0.0025, 0.0025, -0.0003, 0.0004, "paint_od", r=0.0002, M=Mx_, step=1.0)
+    rrframe(mb, _T(0, yfc + 0.0003, zb + hgt / 2) @ _Rx(90), (0.0, 0.0, w - 2 * m_ + 0.005, hgt - 2 * m_ + 0.005, 0.003),
+            (0.0, 0.0, w - 2 * m_ - 0.005, hgt - 2 * m_ - 0.005, 0.001), 0.0012, re_o=0.0003, re_i=0.0003, n=2, ne=1, mat="paint_od")
     # armellas, cadena y gancho S
     ze = zb + hgt
     for sx in (-1, 1):
         x = sx * (w / 2 - 0.08)
         _screw_eye(mb, _T(x, 0.0, ze) @ _Rz(90))
         eye_top = Vector((x, 0.0, ze + 2 * 0.009 + 2 * 0.0022))
-        top = Vector((sx * 0.012, 0.0, -0.05 + 0.008 + 0.0018 * 2 - 0.001))
-        _chain(mb, [eye_top - Vector((0, 0, 0.004)), top], seed=seed + sx)
-    _s_hook(mb, _T(0, 0, 0) @ _Rz(90), r_up=0.022, r_lo=0.009, span=0.05, rw=0.0028)
+        top = Vector((sx * 0.0035, 0.0, -0.05 - 0.0028 + 0.0028 + 0.0024 + 0.0005))
+        _chain(mb, [eye_top - Vector((0, 0, 0.0035)), top], seed=seed + sx)
+    _s_hook(mb, Matrix(), r_up=0.022, r_lo=0.009, span=0.05, rw=0.0028)
     return mb
