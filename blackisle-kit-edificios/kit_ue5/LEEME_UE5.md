@@ -5,7 +5,7 @@ Léelo completo antes de tocar el proyecto. La especificación exacta de materia
 `manifiesto.json`; `importar_blackisle.py` la aplica desde el editor.
 
 ## 1. Qué hay que lograr
-Importar los 11 modelos (7 edificios, el muelle de carga, el hospital, el granero con tienda y el sitio de antena) y **reemplazar con ellos los edificios, cabañas,
+Importar los 13 modelos (7 edificios, el muelle de carga, el hospital, el granero con tienda, el sitio de antena, el almacén militar y el puesto de avanzada) y **reemplazar con ellos los edificios, cabañas,
 muelle y hospital provisionales que ya existen en el nivel**.
 El resultado tiene que verse como un edificio real y abandonado:
 - **Vidrio que se ve como vidrio:** translúcido, con reflejos y suciedad, y con las roturas que trae el modelo.
@@ -28,9 +28,11 @@ El resultado tiene que verse como un edificio real y abandonado:
 | HOS_1_pueblo | Hospital rural de una planta EN USO: urgencias, consultorios, farmacia, rayos X, encamados, patio y cochera de ambulancias | pórtico de 4 columnas con "COMMUNITY HOSPITAL" en el pretil (cochera al oriente, +X) |
 | GRA_1_tienda | Granero en uso con tienda comunitaria al lado (medicinas, comida, munición, cerveza) | hastial del granero con el portón corredizo (la tienda queda al oriente, +X) |
 | COM_1_antena | Sitio celular actual EN USO: torre de 42 m con antenas 5G, caseta de equipos, generador, malla con púas | portón doble del compound y puerta de la caseta (la torre queda al fondo, +X +Y) |
+| MIL_1_almacen | Almacén militar de armamento pesado EN USO: nave de acero de 30 × 18 m con andén, racks con munición, jaula de armas; recinto de muros T, malla con navaja y torre | portón vehicular de la malla y el andén con las dos cortinas (muros T al fondo y a los lados) |
+| MIL_2_avanzada | Puesto de avanzada (PIEZA SUELTA): tienda militar que vende munición y armas, con red de camuflaje, HESCO y costales | costado largo enrollado con el mostrador y la red de camuflaje (generador al fondo, +Y) |
 
 Los edificios tienen **interior completo**: cuartos, puertas, escaleras dentro, escombro, basura y focos colgando. En los
-departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1, el hospital en §3.2, el granero con tienda en §3.3 y el sitio de antena en §3.4.
+departamentos hay entrada delantera y trasera en PB. El muelle se describe aparte en §3.1, el hospital en §3.2, el granero con tienda en §3.3, el sitio de antena en §3.4 y la base militar en §3.5.
 
 ## 2. Contenido
 ```
@@ -42,13 +44,14 @@ kit_ue5/
                           + T_BLK_vidrio_suciedad
   comun/geometria/        SM_BLK_Ejes.glb (marcador para medir la conversión de ejes)
   modelos/<ID>/           SM_<ID>_Estructura / _Detalle / _Escombro / _Vidrio / _Colision .glb
-                          (+ SM_<ID>_Mobiliario.glb en el hospital, el granero y el sitio de antena)
+                          (+ SM_<ID>_Mobiliario.glb en el hospital, el granero, el sitio de antena y la base militar;
+                          SM_MIL_1_almacen_Perimetro y _Carga en el almacén militar)
                           texturas/T_<ID>_walls_main|walls_rest _BC.jpg / _N.png / _ORM.png
                           <ID>.json (ficha: triángulos, ranuras, medidas, focos)
 ```
 Las texturas de muros están horneadas sin la arena, así que la base de los muros queda bien al quitar el terreno.
 
-## 3. Las piezas de cada modelo (5; el hospital, el granero y el sitio de antena traen una sexta, Mobiliario)
+## 3. Las piezas de cada modelo (5; algunos traen Mobiliario y el almacén militar además Perímetro y Carga)
 Todas comparten el pivote: centro de la planta a nivel del suelo (en el muelle, ver §3.1). Colócalas en el mismo
 punto y con el mismo giro.
 
@@ -58,6 +61,8 @@ punto y con el mismo giro.
 | Detalle | ventanas, barandales, servicios (A/C, medidores, cables, tinacos), ropa, daño | sí | ninguna | los barandales no bloquean (§7) |
 | Escombro | escombro exterior suelto (montones, trozos, varillas) | no | compleja como simple | opcional: se puede mover o borrar |
 | Mobiliario | hospital, granero y sitio de antena: mobiliario, equipo, utilería, malla y luminarias | sí | ninguna | su colisión son cajas dentro de Colision; se puede ocultar en bloque |
+| Perímetro | almacén militar: malla con navaja, portón, muros T, HESCO, pluma y barreras Jersey | sí | ninguna | malla propia por tamaño; su colisión son cajas dentro de Colision |
+| Carga | almacén militar: tarimas de cajas de munición y de proyectiles de los racks | sí | ninguna | malla propia por tamaño; se puede ocultar para vaciar los racks |
 | Vidrio | todo el vidrio (ventanas, puertas, esquirlas) | **no** (translúcido) | ninguna | sin proyectar sombra |
 | Colision | carcasa + interior con caras coplanares fundidas (misma forma, pocos triángulos) | no | compleja como simple | **invisible**; da la colisión de muros, pisos y escaleras |
 
@@ -142,6 +147,23 @@ losas) sí viene en el modelo.
   patas de la torre, equipo y racks dentro de Colision. Luces en `focos_m_blender`: 3 luminarias de la caseta, arbotante y
   2 reflectores.
 
+### 3.5 La base militar: almacén (MIL_1_almacen) y puesto de avanzada (MIL_2_avanzada)
+Base militar de la costa seca, EN USO, limpia y poco gastada, con huellas de intentos de saqueo que no pasaron (una cortina
+abollada y palanqueada junto al candado, rayones en la puerta de personal y en el portacandado de la jaula, un par de
+impactos de bala). Sin grafiti ni placas. Textos en inglés (esténciles genéricos), sin banderas ni insignias.
+- **MIL_1_almacen** (pivote al centro del recinto, z = 0 terreno): nave de acero preingeniería de 30 × 18 m (x -20..10,
+  y 0..18), piso a altura de andén (z 1,2), alero a 7,2 m, lámina R color arena sobre muro de concreto, techo de junta alzada
+  con ventiladores de turbina, pararrayos y rociadores. Andén con 2 cortinas de 14 × 14 ft y rampa con puerta de personal
+  (abierta). Dentro: 3 filas de racks selectivos con tarimas, jaula de armas (armero con fusiles, ametralladoras en
+  trípode, mortero, lanzadores), zona de recibo con montacargas, banco y extintores. Recinto x -24..22, y -20..21: muros T
+  de 3,66 m al poniente, al fondo y al oriente; malla con rollo de navaja y portón de 6 m al frente, pluma y chicana Jersey
+  afuera; torre de vigilancia, 2 torres de luz, HESCO MIL7 y puesto de costales.
+- **MIL_2_avanzada** (pieza suelta, pivote al centro de la tienda): tienda militar de marco 6,1 × 9,75 m sobre tarima de
+  triplay, mostrador de cajas de munición con caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con
+  chalecos y fundas, mesa con cargadores, serie de focos, letrero SUPPLY, red de camuflaje al frente, HESCO, costales,
+  generador táctico, bidones y reflector. **Para ponerla junto al almacén** colócala en (16,0; 6,5; 0) del pivote de MIL_1,
+  sin giro: queda en la plataforma de grava del oriente, entre la nave y el muro T.
+
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).
 2. Plugins activos: **Python Editor Script Plugin** e importador glTF (Interchange, activo por defecto en UE 5.1+).
@@ -150,7 +172,7 @@ losas) sí viene en el modelo.
    ```python
    import sys; sys.path.append(r"RUTA/A/kit_ue5")
    import importar_blackisle as ib
-   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 11 modelos, en /Game/BlackIsle
+   ib.importar_todo()        # texturas, 4 materiales maestros, instancias y mallas de los 13 modelos, en /Game/BlackIsle
    ib.verificar()            # medidas en cm contra el manifiesto, ranuras con material del kit, ejes
    ```
 4. **Reemplaza los provisionales.** Identifica en el nivel qué actor provisional corresponde a cada modelo; si no es

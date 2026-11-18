@@ -7,7 +7,7 @@ el manifiesto es la especificación y el script es una forma de cumplirla (ver L
 Uso (consola Python del editor: Output Log -> "Python"):
     import sys; sys.path.append(r"RUTA/A/kit_ue5")          # la carpeta que contiene este archivo
     import importar_blackisle as ib
-    ib.importar_todo()                                      # texturas + materiales + mallas de los 11 modelos (unos minutos)
+    ib.importar_todo()                                      # texturas + materiales + mallas de los 13 modelos (unos minutos)
     ib.verificar()                                          # medidas, ranuras de material y ejes, modelo por modelo
     ib.colocar("APT_A_5p", unreal.Vector(0, 0, 0), yaw=0)   # pone un edificio (5 actores enganchados al de Estructura)
     ib.reemplazar("Edificio_Placeholder_01", "APT_A_5p")    # lo pone donde está un actor existente y oculta ese actor
@@ -460,8 +460,10 @@ def verificar():
 
 # ----------------------------------------------------------------------------------------------------------- colocación
 def colocar(bid, ubicacion=None, yaw=0.0, con_escombro=True, etiqueta=None):
-    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario (si lo trae), Vidrio, Escombro y Colision
-    enganchados a él."""
+    """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario, Perimetro, Carga (si los trae), Vidrio,
+    Escombro y Colision enganchados a él. Sin Estructura (MIL_2_avanzada) la raíz es el Detalle. Para poner el puesto de
+    avanzada junto al almacén: colocar("MIL_2_avanzada", ubicacion_del_almacen + (1600, -650, 0) cm en ejes de Unreal
+    (Y de Unreal = -Y de Blender), mismo yaw que el almacén."""
     sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     loc = ubicacion or unreal.Vector(0, 0, 0)
     rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=float(yaw))
@@ -491,6 +493,8 @@ def colocar(bid, ubicacion=None, yaw=0.0, con_escombro=True, etiqueta=None):
         actors[parte] = a
         if parte == "Estructura":
             root = a
+    if root is None:                     # piezas sueltas sin Estructura (MIL_2_avanzada): la raíz es el Detalle
+        root = actors.get("Detalle") or next((a for p_, a in actors.items() if p_ != "Colision"), None)
     for parte, a in actors.items():
         if a is not root and root is not None:
             a.attach_to_actor(root, "", unreal.AttachmentRule.KEEP_WORLD, unreal.AttachmentRule.KEEP_WORLD,
