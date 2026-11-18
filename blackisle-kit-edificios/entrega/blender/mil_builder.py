@@ -263,7 +263,9 @@ def roof(rf, det):
             xk = x0 + 0.5 + k * (x1 - x0 - 1.0) / 13
             ya_, yb_ = sorted((yg, yg + sg * 0.15))
             det.box((xk - 0.012, ya_, zg + 0.02), (xk + 0.012, yb_, zg + 0.026), "paint_tan", bevel=0.002)
-        for xd in (x0 + 0.6, (x0 + x1) / 2 + 0.6, x1 - 0.6):
+        # bajadas: en el frente solo en las esquinas (el centro del frente es andén, cortinas, puerta de personal y rampa: una
+        # bajada ahí caía dentro del vano de la puerta); atrás, tres. La del poniente del frente va fuera del costado del andén.
+        for xd in ((x0 + 0.45, x1 - 0.6) if sg < 0 else (x0 + 0.6, (x0 + x1) / 2 + 0.6, x1 - 0.6)):
             downspout(det, xd, WY0 if sg < 0 else WY1, sg, zg - 0.16, yg + sg * 0.075)
     # ventiladores de turbina en el caballete
     for xv in (-15.0, -7.5, 0.0, 7.5):
@@ -1369,7 +1371,8 @@ def perimeter(det, towers, r):
     for k, (x, y) in enumerate(((-17.8, -24.0), (-14.6, -24.0), (-9.6, -27.0), (-6.4, -27.0))):
         put(ft.jersey_barrier(3.0, seed=10 + k), _T(x, y, 0.0))
     put(ft.hesco_run(3, "MIL7", seed=7), _T(-23.0, -18.6, 0.0))
-    put(ft.sandbag_ring(radius=1.1, rows=4, seed=8, opening_deg=60.0), _T(-6.0, -17.6, Z_GRAVEL), solid=True)
+    # puesto de tirador: la cara cerrada mira al frente (la malla y el acceso de afuera); la entrada, hacia el almacén
+    put(ft.sandbag_ring(radius=1.1, rows=4, seed=8, opening_deg=60.0), _T(-6.0, -17.6, Z_GRAVEL) @ _Rz(180), solid=True)
     put(ft.sandbag_wall(3.0, rows=3, seed=9), _T(-23.2, -15.2, Z_GRAVEL) @ _Rz(0))
 
 
