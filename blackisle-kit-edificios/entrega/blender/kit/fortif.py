@@ -2511,7 +2511,7 @@ def _bilerp(xs, ys, Z, x, y):
     return (Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty) + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty)
 
 
-def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True):
+def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True, front_ties=True):
     """Toldo de red de camuflaje de w (X) × l (Y) m centrado en el origen, como el sistema LCSS / ULCANS:
     - red de soporte de cordel de poliéster de 3 mm en rombos de 12 cm, con un nudo en cada cruce (12 lados, sombreado
       continuo), que sigue la caída de la red;
@@ -2523,7 +2523,8 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True):
       postes de orilla de 2,3 m; la red forma picos en los separadores y cae por gravedad entre apoyos (membrana con peso);
       vientos de cuerda con estacas de varilla.
     poles=False: solo la red, la guarnición y la relinga (la misma forma, para colgarla sobre otra pieza).
-    back_ties=False: sin vientos ni amarres hacia +Y (la orilla de atrás queda junto a una tienda o un muro: solo postes)."""
+    back_ties=False: sin vientos ni amarres hacia +Y (la orilla de atrás queda junto a una tienda o un muro: solo postes).
+    front_ties=False: sin los amarres intermedios de la orilla del frente (-Y): paso libre hacia un mostrador."""
     r = rng(seed)
     mb = MB()
     ph = float(r.uniform(0, 100))
@@ -2818,6 +2819,8 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True):
     for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (-w / 2, l / 2, w / 2, l / 2), (-w / 2, -l / 2, -w / 2, l / 2),
                              (w / 2, -l / 2, w / 2, l / 2)):
         if not back_ties and abs(y0 - y1) < 1e-6 and y0 > 0:
+            continue
+        if not front_ties and abs(y0 - y1) < 1e-6 and y0 < 0:
             continue
         for t in (0.25, 0.75):
             x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
