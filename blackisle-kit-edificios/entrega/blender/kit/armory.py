@@ -1254,7 +1254,7 @@ def holster(seed=0):
     # capuchón de retención: arco en U sobre la corredera, pivotes en la concha
     arc = [(0.024, 0.0215 * math.cos(t), 0.115 + 0.026 * math.sin(t)) for t in [PI * k / 10 for k in range(11)]]
     path = [(0.052, 0.0215, 0.106), (0.034, 0.0215, 0.112)] + arc + [(0.034, -0.0215, 0.112), (0.052, -0.0215, 0.106)]
-    strap(mb, spline(path, 1), 0.012, 0.0035, F, up=(1, 0, 0), r=0.0012)
+    strap(mb, spline(path, 1), 0.0035, 0.012, F, up=(1, 0, 0), r=0.0012)
     for sy in (-1, 1):
         revolve(mb, [(0.0065, -0.002), (0.0065, 0.0035), (0.0055, 0.0045), (0.0, 0.0047)], F, seg=SEG,
                 M=_T(0.052, sy * 0.017, 0.106) @ _Rx(-90 * sy), caps=False)
@@ -1273,3 +1273,200 @@ def holster(seed=0):
     cy = (min(c.y for c in bb) + max(c.y for c in bb)) / 2
     mb.transform(_T(-cx, -cy, 0))
     return _drop(mb)
+
+
+# ======================================================================================================== ametralladora
+def _belt_round(mb, M, link=True, k=0):
+    """Cartucho clase 12,7 mm (vaina de latón ~ 99 mm, proyectil ~ 40 mm) con su eslabón de acero, a lo largo de Z local."""
+    revolve(mb, [(0.0, 0.0), (0.0103, 0.0), (0.0103, 0.003), (0.0086, 0.004), (0.0086, 0.006), (0.0104, 0.0075), (0.0100, 0.078),
+                 (0.0075, 0.090), (0.0072, 0.099)], "brass", seg=16, M=M, caps=False)
+    revolve(mb, [(0.0065, 0.098), (0.0065, 0.112), (0.0050, 0.128), (0.0, 0.140)], "brass", seg=16, M=M, caps=False)
+    if link:                                    # eslabón: dos abrazaderas de fleje y lengüeta
+        for zc in (0.030, 0.064):
+            revolve(mb, [(0.0106, zc - 0.006), (0.0118, zc - 0.006), (0.0118, zc + 0.006), (0.0106, zc + 0.006)], "steel", seg=16,
+                    M=M, closed=True)
+        z0 = 0.026 if k % 2 == 0 else 0.046                       # lengüetas alternadas (no se encimen)
+        plan(mb, [(0.0105, -0.006), (0.024, -0.006), (0.024, 0.006), (0.0105, 0.006)], [0.0, 0.003, 0.003, 0.0], 0.018, "steel",
+             z0=z0, re=0.0, M=M @ _Rz(90))
+
+
+def machine_gun_tripod(seed=0):
+    """Ametralladora pesada genérica de cajón remachado (~ 1,69 m, cañón pesado de ~ 1,14 m) sobre trípode bajo con
+    mecanismo de puntería en dirección y elevación (T&E). Arma: cajón de lámina con placas laterales remachadas, tapa de
+    alimentación abisagrada con su cerrojo, placa trasera con dos empuñaduras de pala de hule y gatillo de mariposa, alza
+    de hoja plegada, guion, palanca de carga a la derecha, manguito portacañón con ventilas, cañón con asa de transporte y
+    apagallamas; bandeja de alimentación a la izquierda con 7 cartuchos eslabonados que suben de una lata de munición abierta
+    sujeta a la cuna. Montaje: cuna en U con perno, pivote en la cabeza del trípode, T&E (tornillo de elevación con volante y
+    corredera de dirección con volante) sobre la barra de puntería en arco graduado; trípode de 3 patas tubulares (delantera
+    y 2 traseras) con charnelas, seguros y zapatas. ORIGEN: piso bajo el pivote de la cabeza del trípode; cañón hacia +X.
+    Fuentes: navweaps.com/Weapons/WNUS_50cal-M2_MG.php e imfdb.org/wiki/Browning_M2 (1654 mm, cañón 1143 mm, 38 kg);
+    inetres.com/gp/military/infantry/mg/M2.html (trípode M3 con T&E ~ 20 kg, arma a ~ 0,3 m del suelo)."""
+    r = rng(seed)
+    mb = MB()
+    GM, OD = "gunmetal", "paint_od"
+    zh = 0.330                                   # cabeza del trípode (asiento del pivote)
+    zr0, zr1 = 0.385, 0.545                      # cajón: fondo / tapa
+    BZ = 0.475                                   # eje del cañón
+    xr0, xr1 = -0.40, 0.16
+    # ---------------- cajón
+    xloft(mb, [(xr0, 0.104, zr1 - zr0, (zr0 + zr1) / 2, 0.006), (xr1, 0.104, zr1 - zr0, (zr0 + zr1) / 2, 0.006)], GM, n=4)
+    for sy in (-1, 1):                           # placas laterales y filas de remaches
+        side(mb, [(xr0 + 0.02, zr0 + 0.012), (xr1 - 0.02, zr0 + 0.012), (xr1 - 0.02, zr1 - 0.04), (xr0 + 0.02, zr1 - 0.04)],
+             [0.004] * 4, 0.003, GM, y0=sy * 0.0525, re=0.0008, ne=1, n=2)
+        for xx in [xr0 + 0.04 + k * 0.055 for k in range(10)]:
+            for zz in (zr0 + 0.022, zr1 - 0.052):
+                rivet(mb, _T(xx, sy * 0.054, zz) @ _Rx(-90 * sy), d=0.009)
+    # tapa de alimentación con bisagra delantera y cerrojo trasero
+    xloft(mb, [(-0.21, 0.098, 0.022, zr1 + 0.008, (0.006, 0.006, 0.0, 0.0)), (-0.20, 0.104, 0.026, zr1 + 0.010, (0.008, 0.008, 0.0, 0.0)),
+               (0.10, 0.104, 0.026, zr1 + 0.010, (0.008, 0.008, 0.0, 0.0)), (0.11, 0.098, 0.022, zr1 + 0.008, (0.006, 0.006, 0.0, 0.0))],
+          GM, n=4)
+    revolve(mb, [(0.008, -0.056), (0.008, 0.056)], GM, seg=SEG, M=_T(0.112, 0, zr1 + 0.006) @ _Rx(90))
+    side(mb, [(-0.235, zr1 + 0.002), (-0.205, zr1 + 0.002), (-0.205, zr1 + 0.026), (-0.228, zr1 + 0.020)], [0.0, 0.0, 0.003, 0.004],
+         0.03, GM, re=0.0015, ne=1, n=2)                        # cerrojo de la tapa
+    for xx in (-0.15, -0.08, -0.01, 0.06):                    # nervaduras de la tapa
+        plank(mb, (xx - 0.004, -0.045, zr1 + 0.022), (xx + 0.004, 0.045, zr1 + 0.0255), GM, ch=0.0015)
+    # alza de hoja plegada (atrás) y guion (manguito)
+    side(mb, [(-0.40, zr1 - 0.001), (-0.33, zr1 - 0.001), (-0.33, zr1 + 0.012), (-0.40, zr1 + 0.012)], [0.0, 0.0, 0.004, 0.004],
+         0.034, GM, re=0.0015, ne=1, n=2)
+    side(mb, [(-0.395, zr1 + 0.011), (-0.30, zr1 + 0.014), (-0.30, zr1 + 0.019), (-0.395, zr1 + 0.017)], [0.002] * 4, 0.022, GM,
+         re=0.0)
+    # placa trasera, empuñaduras de pala y gatillo de mariposa
+    xloft(mb, [(xr0 - 0.035, 0.10, 0.15, (zr0 + zr1) / 2, 0.012), (xr0 + 0.002, 0.11, 0.165, (zr0 + zr1) / 2, 0.012)], GM, n=4)
+    for sy in (-1, 1):
+        p0 = Vector((xr0 - 0.02, sy * 0.040, zr0 + 0.030))
+        p1 = Vector((xr0 - 0.145, sy * 0.050, zr0 + 0.010))
+        wire(mb, [tuple(p0), (xr0 - 0.06, sy * 0.044, zr0 + 0.025), tuple(p1)], 0.010, GM, bend=0.02, nseg=4, seg=SEG)
+        Mg, L = port.frame_on(Vector((xr0 - 0.065, sy * 0.045, zr0 + 0.022)), p1)
+        revolve(mb, [(0.0128, 0.0), (0.0145, 0.006), (0.0145, L - 0.012), (0.0125, L - 0.002), (0.0, L + 0.002)], "rubber", seg=SEG,
+                M=Mg @ _Ry(90))
+    side(mb, [(xr0 - 0.050, zr0 + 0.055), (xr0 - 0.035, zr0 + 0.055), (xr0 - 0.035, zr0 + 0.075), (xr0 - 0.054, zr0 + 0.072)],
+         [0.003] * 4, 0.050, GM, re=0.0015, ne=1, n=2)              # gatillo de mariposa
+    # palanca de carga (derecha) con corredera
+    plank(mb, (-0.30, 0.0535, BZ - 0.014), (-0.05, 0.0575, BZ - 0.004), GM, ch=0.0012)
+    side(mb, [(-0.105, BZ - 0.016), (-0.075, BZ - 0.016), (-0.075, BZ + 0.002), (-0.105, BZ + 0.002)], [0.003] * 4, 0.018, GM,
+         y0=0.064, re=0.0015, ne=1, n=2)
+    revolve(mb, [(0.0, 0.0), (0.0125, 0.0), (0.0135, 0.008), (0.0125, 0.030), (0.0, 0.034)], GM, seg=SEG,
+            M=_T(-0.09, 0.073, BZ - 0.007) @ _Rx(-90))
+    # bandeja de alimentación (izquierda) y cartuchos eslabonados que suben de la lata
+    side(mb, [(-0.10, BZ - 0.020), (0.02, BZ - 0.020), (0.02, BZ + 0.035), (-0.10, BZ + 0.035)], [0.003] * 4, 0.040, GM,
+         y0=-0.072, re=0.0015, ne=1, n=2)
+    # ---------------- manguito portacañón con ventilas, cañón, asa, apagallamas, guion
+    Mb = _ax(xr1 - 0.004, 0, BZ)
+    revolve(mb, [(0.030, 0.0), (0.036, 0.004), (0.036, 0.030)], GM, seg=SEG, M=Mb, caps=False)
+    zz = [0.030, 0.062, 0.074, 0.106, 0.118, 0.150, 0.162, 0.200]
+    for i in range(len(zz) - 1):
+        if i % 2 == 0:                           # tramos con 6 ventilas
+            for k in range(6):
+                a0 = 2 * PI * k / 6 + 0.2
+                arc_solid(mb, 0.031, 0.0358, zz[i] - 0.0005, zz[i + 1] + 0.0005, a0, a0 + 2 * PI / 6 - 0.4, 3, GM, M=Mb)
+        else:
+            revolve(mb, [(0.031, zz[i]), (0.036, zz[i]), (0.036, zz[i + 1]), (0.031, zz[i + 1])], GM, seg=SEG, M=Mb, closed=True)
+    revolve(mb, [(0.031, 0.200), (0.036, 0.200), (0.036, 0.212), (0.031, 0.212)], GM, seg=SEG, M=Mb, closed=True)
+    side(mb, [(xr1 + 0.17, BZ + 0.034), (xr1 + 0.20, BZ + 0.034), (xr1 + 0.195, BZ + 0.072), (xr1 + 0.183, BZ + 0.072)],
+         [0.0, 0.0, 0.002, 0.002], 0.006, GM, re=0.0)                 # guion
+    xm = xr1 + 0.880
+    revolve(mb, [(0.0225, xr1 + 0.15), (0.0225, xm - 0.15), (0.0205, xm - 0.14), (0.0205, xm)], GM, seg=SEG, M=_T(0, 0, BZ) @ _Ry(90),
+            caps=False)
+    revolve(mb, [(0.0205, -0.004), (0.0255, -0.002), (0.0255, 0.070), (0.0215, 0.074), (0.0, 0.074)], GM, seg=SEG,
+            M=_ax(xm - 0.004, 0, BZ))                                # apagallamas cónico
+    revolve(mb, [(0.0, 0.0738), (0.010, 0.0738), (0.010, 0.0745)], "cable", seg=SEG, M=_ax(xm - 0.004, 0, BZ), caps=False)
+    xa = xr1 + 0.30                                                  # asa de transporte con abrazadera
+    revolve(mb, [(0.0225, -0.018), (0.031, -0.016), (0.031, 0.016), (0.0225, 0.018)], GM, seg=SEG, M=_ax(xa, 0, BZ), closed=True)
+    hp = [(xa, 0.0, BZ + 0.028), (xa, 0.0, BZ + 0.075), (xa - 0.10, 0.0, BZ + 0.085), (xa - 0.12, 0.0, BZ + 0.040)]
+    wire(mb, hp, 0.007, GM, bend=0.025, nseg=4, seg=SEG_T)
+    Mh, Lh = port.frame_on(Vector((xa - 0.012, 0, BZ + 0.0785)), Vector((xa - 0.088, 0, BZ + 0.0835)))
+    revolve(mb, [(0.0115, 0.0), (0.0125, 0.004), (0.0125, Lh - 0.004), (0.0115, Lh)], "polymer", seg=SEG, M=Mh @ _Ry(90))
+    # ---------------- cuna, pivote, mecanismo T&E
+    for sy in (-1, 1):
+        side(mb, [(xr1 - 0.10, zr0 - 0.045), (xr1 - 0.01, zr0 - 0.045), (xr1 - 0.01, zr0 + 0.05), (xr1 - 0.06, zr0 + 0.05),
+                  (xr1 - 0.10, zr0 - 0.01)], [0.006, 0.006, 0.006, 0.006, 0.01], 0.010, OD, y0=sy * 0.058, re=0.002, ne=1, n=2)
+    plank(mb, (xr1 - 0.10, -0.063, zr0 - 0.052), (xr1 - 0.01, 0.063, zr0 - 0.036), OD, ch=0.003)
+    revolve(mb, [(0.0, -0.071), (0.010, -0.071), (0.010, 0.071), (0.0, 0.071)], "steel", seg=SEG, M=_T(xr1 - 0.035, 0, zr0 + 0.025) @ _Rx(90))
+    revolve(mb, [(0.0185, zh - 0.06), (0.0185, zr0 - 0.050), (0.026, zr0 - 0.048)], "steel", seg=SEG, M=_T(xr1 - 0.055, 0, 0) @ _Rz(0),
+            caps=False)                                              # pivote
+    xp = xr1 - 0.055
+    # T&E: abrazadera trasera del cajón, tornillo de elevación, volantes y corredera en la barra
+    xt = xr0 + 0.04
+    plank(mb, (xt - 0.025, -0.035, zr0 - 0.022), (xt + 0.025, 0.035, zr0 + 0.0005), OD, ch=0.003)
+    zb = 0.200                                                        # barra de puntería
+    revolve(mb, [(0.0145, zb + 0.02), (0.0145, zr0 - 0.040)], OD, seg=SEG, M=_T(xt, 0, 0), caps=False)
+    revolve(mb, [(0.0095, zr0 - 0.045), (0.0095, zr0 - 0.018)], "steel", seg=SEG, M=_T(xt, 0, 0), caps=False)
+    def handwheel(M, R=0.045, rr=0.006, spokes=3, knob=True):
+        revolve(mb, [(R - rr, -rr), (R + rr, -rr), (R + rr, rr), (R - rr, rr)], OD, seg=32, M=M, closed=True)
+        revolve(mb, [(0.0, -0.012), (0.013, -0.012), (0.013, 0.010), (0.0, 0.010)], OD, seg=SEG, M=M)
+        for k in range(spokes):
+            a = 2 * PI * k / spokes
+            pa, pb = M @ Vector((0.012 * math.cos(a), 0.012 * math.sin(a), 0)), M @ Vector(((R - rr) * math.cos(a), (R - rr) * math.sin(a), 0))
+            mb.tube([tuple(pa), tuple(pb)], 0.0045, seg=SEG_T, mat=OD)
+        if knob:
+            a = 0.5
+            revolve(mb, [(0.0065, 0.0), (0.0075, 0.004), (0.0075, 0.030), (0.0055, 0.035), (0.0, 0.036)], "polymer", seg=SEG_T,
+                    M=M @ _T(R * math.cos(a), R * math.sin(a), rr * 0.6))
+    handwheel(_T(xt, 0.0, zb + 0.105) @ _Rx(90) @ _T(0, 0, -0.035), R=0.048)
+    plank(mb, (xt - 0.035, -0.03, zb - 0.012), (xt + 0.035, 0.03, zb + 0.022), OD, ch=0.004)        # corredera de dirección
+    handwheel(_T(xt, 0.045, zb + 0.005) @ _Rx(-90), R=0.038, spokes=3)
+    # ---------------- trípode
+    # cabeza
+    revolve(mb, [(0.0, zh - 0.075), (0.040, zh - 0.075), (0.048, zh - 0.060), (0.048, zh - 0.010), (0.034, zh), (0.0215, zh),
+                 (0.0215, zh + 0.002)], OD, seg=SEG, M=_T(xp, 0, 0), caps=False)
+    feet = [(xp + 0.78, 0.0), (xp - 0.62, -0.52), (xp - 0.62, 0.52)]
+    for k, (fx, fy) in enumerate(feet):
+        top = Vector((xp, 0, zh - 0.045))
+        d = Vector((fx - xp, fy, 0.0)).normalized()
+        hinge = top + d * 0.058 + Vector((0, 0, -0.005))
+        foot = Vector((fx, fy, 0.03))
+        # charnela: orejas y perno
+        side(mb, [(-0.012, -0.022), (0.040, -0.022), (0.040, 0.022), (-0.012, 0.022)], [0.004, 0.012, 0.012, 0.004], 0.036, OD,
+             re=0.002, ne=1, n=2, M=_T(*(top + d * 0.025)) @ _Rz(math.degrees(math.atan2(d.y, d.x))) @ _T(0, 0, 0))
+        revolve(mb, [(0.0065, -0.024), (0.0065, 0.024)], "steel", seg=SEG_T,
+                M=_T(*hinge) @ _Rz(math.degrees(math.atan2(d.y, d.x))) @ _Rx(90))
+        Ml, Ll = port.frame_on(hinge, foot)
+        revolve(mb, [(0.0, -0.010), (0.0195, -0.008), (0.0195, Ll - 0.08), (0.0165, Ll - 0.07), (0.0165, Ll)], OD, seg=SEG,
+                M=Ml @ _Ry(90), caps=False)
+        revolve(mb, [(0.023, Ll * 0.45 - 0.02), (0.023, Ll * 0.45 + 0.02)], OD, seg=SEG, M=Ml @ _Ry(90))     # manguito de seguro
+        revolve(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.035), (0.0, 0.036)], "polymer", seg=SEG_T,
+                M=Ml @ _T(Ll * 0.45, 0, 0.022))
+        # zapata: placa con espolón
+        ang = math.degrees(math.atan2(d.y, d.x))
+        plan(mb, [(-0.05, -0.04), (0.06, -0.04), (0.08, 0.0), (0.06, 0.04), (-0.05, 0.04)], [0.01, 0.012, 0.02, 0.012, 0.01], 0.008,
+             OD, z0=0.0, re=0.002, ne=1, n=2, M=_T(fx, fy, 0) @ _Rz(ang))
+        revolve(mb, [(0.0225, 0.004), (0.0225, 0.040), (0.0175, 0.050)], OD, seg=SEG, M=_T(fx, fy, 0), caps=False)
+        if k > 0:
+            side(mb, [(-0.045, 0.006), (0.0, 0.006), (0.0, 0.070), (-0.02, 0.060)], [0.0, 0.0, 0.004, 0.008], 0.008, OD, re=0.0,
+                 M=_T(fx, fy, 0) @ _Rz(ang))
+    # barra de puntería en arco graduado entre las patas traseras
+    Rb = xp - xt
+    arc = []
+    a0, a1 = math.radians(152), math.radians(208)
+    for k in range(13):
+        a = a0 + (a1 - a0) * k / 12
+        arc.append((xp + Rb * math.cos(a), Rb * math.sin(a), zb))
+    for end, sy in ((arc[0], 1), (arc[-1], -1)):
+        pass
+    sweep_frame(mb, rr_profile(0.008, 0.030, 0.002, n=2), arc, OD, up=(0, 0, 1))
+    for i in range(1, 12):                                            # graduación
+        x, y, z = arc[i]
+        plan(mb, [(-0.001, -0.004), (0.001, -0.004), (0.001, 0.004), (-0.001, 0.004)], 0.0, 0.0008, "sign_white", z0=z + 0.0147,
+             re=0.0, M=_T(x, y, 0) @ _Rz(math.degrees(math.atan2(y, x - xp))))
+    for (fx, fy) in feet[1:]:                                         # tirantes de la barra a las patas traseras
+        sgn = 1 if fy > 0 else -1
+        e = arc[0] if sgn > 0 else arc[-1]
+        top = Vector((xp, 0, zh - 0.045))
+        dd = Vector((fx - xp, fy, 0.03 - (zh - 0.045)))
+        tleg = (zb - (zh - 0.045)) / dd.z
+        pleg = top + dd * tleg
+        wire(mb, [e, tuple(pleg)], 0.010, OD, seg=SEG_T)
+    # ---------------- lata de munición abierta en la cuna (izquierda) y cinta
+    can = ammo_can("large", seed=seed, open=True)
+    can.transform(_T(-0.03, -0.155, zh - 0.12) @ _Rz(0))
+    mb.join(can)
+    plank(mb, (-0.10, -0.085, zh - 0.125), (0.04, -0.06, zh - 0.10), OD, ch=0.003)
+    plank(mb, (-0.098, -0.0835, zh - 0.127), (-0.084, -0.0615, zr0 - 0.01), OD, ch=0.003)
+    belt = spline([(-0.04, -0.155, zh + 0.03), (-0.04, -0.140, zh + 0.10), (-0.04, -0.110, BZ - 0.01), (-0.04, -0.080, BZ + 0.012)], 2)
+    for i in range(len(belt) - 1):
+        p, q = Vector(belt[i]), Vector(belt[i + 1])
+        t = (q - p).normalized()
+        Mr, _ = port.frame_on(p - Vector((0.07, 0, 0)), p + Vector((0.07, 0, 0)), up=tuple(t.cross(Vector((1, 0, 0))) * -1))
+        _belt_round(mb, Mr @ _Ry(90), link=True, k=i)
+    del r
+    return mb

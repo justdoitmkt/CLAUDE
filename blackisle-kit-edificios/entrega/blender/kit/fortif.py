@@ -1717,3 +1717,228 @@ def light_tower(seed=0):
     rbox(mb, (xm + 0.05, -0.08, zt - 0.25), (xm + 0.13, 0.08, zt - 0.02), "plastic", r=0.008)
     del r
     return mb
+
+
+# ======================================================================================================== red de camuflaje
+# ULCANS (Ultra Lightweight Camouflage Net System): módulo hexagonal ~32,2 × 27,9 ft (673 ft²) + rómbico 27,9 × 16,1 ft,
+# postes seccionales de aluminio, separadores ("spreaders"), estacas y bolsa (armynavyoutdoors.com, Darley; TM 5-1080-250-12&P).
+# La guarnición (garnish) es una lámina cortada con huecos y solapas: aquí es geometría (material "net" de DOS CARAS);
+# rejilla de 7,2 cm recortada por isolíneas (marching triangles) de un ruido de 3 octavas.
+def _drape(w, l, supports, ties, k_in=0.13, k_edge=0.1, h=0.2, iters=2500):
+    """Campo de alturas de la red sobre una rejilla gruesa: membrana con peso (Poisson) fijada en los separadores (discos) y en
+    los amarres de orilla; las orillas libres cuelgan como cadena entre amarres. Devuelve (xs, ys, Z)."""
+    xs = np.linspace(-w / 2, w / 2, int(round(w / h)) + 1)
+    ys = np.linspace(-l / 2, l / 2, int(round(l / h)) + 1)
+    X, Y = np.meshgrid(xs, ys)
+    Z = np.full(X.shape, 2.0)
+    fixed = np.zeros(X.shape, bool)
+    val = np.zeros(X.shape)
+    for (px, py, ztop, rad) in supports:
+        d = np.hypot(X - px, Y - py)
+        m = d <= max(rad, h * 0.75)
+        fixed |= m
+        val = np.where(m, ztop + 0.04 * np.clip(1 - (d / max(rad, 1e-3)) ** 2, 0, 1), val)
+    for (px, py, zz) in ties:
+        i = int(np.argmin(np.abs(xs - px)))
+        j = int(np.argmin(np.abs(ys - py)))
+        fixed[j, i] = True
+        val[j, i] = zz
+    Z = np.where(fixed, val, Z)
+    edge = np.zeros(X.shape, bool)
+    edge[0, :] = edge[-1, :] = edge[:, 0] = edge[:, -1] = True
+    for _ in range(iters):
+        P = np.pad(Z, 1, mode="edge")
+        avg = (P[:-2, 1:-1] + P[2:, 1:-1] + P[1:-1, :-2] + P[1:-1, 2:]) / 4.0
+        Zn = avg - k_in * h * h / 4.0
+        # orillas: cadena a lo largo de la orilla (más tensa por la relinga)
+        Ze = Z.copy()
+        Ze[0, 1:-1] = (Z[0, :-2] + Z[0, 2:]) / 2 - k_edge * h * h / 2
+        Ze[-1, 1:-1] = (Z[-1, :-2] + Z[-1, 2:]) / 2 - k_edge * h * h / 2
+        Ze[1:-1, 0] = (Z[:-2, 0] + Z[2:, 0]) / 2 - k_edge * h * h / 2
+        Ze[1:-1, -1] = (Z[:-2, -1] + Z[2:, -1]) / 2 - k_edge * h * h / 2
+        Zn = np.where(edge, 0.7 * Ze + 0.3 * Zn, Zn)
+        Z = np.where(fixed, val, Zn)
+    return xs, ys, Z
+
+
+def _bilerp(xs, ys, Z, x, y):
+    fx = (x - xs[0]) / (xs[1] - xs[0])
+    fy = (y - ys[0]) / (ys[1] - ys[0])
+    i = np.clip(np.floor(fx).astype(int), 0, len(xs) - 2)
+    j = np.clip(np.floor(fy).astype(int), 0, len(ys) - 2)
+    tx, ty = fx - i, fy - j
+    return (Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty) + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty)
+
+
+def camo_net(w=8.0, l=10.0, seed=0, poles=True):
+    """Toldo de red de camuflaje de w (X) × l (Y) m centrado en el origen: guarnición cortada con huecos orgánicos y orillas
+    deshilachadas (geometría real, material 'net' de dos caras), colgada sobre postes seccionales de aluminio Ø 38 mm con
+    separador (disco abovedado) en los postes interiores de ~3,4 m y postes de orilla de 2,3 m en esquinas y medios lados; la
+    red forma picos en los separadores y cuelga entre apoyos; las orillas libres hacen catenaria; relinga perimetral, vientos
+    con estacas de acero. poles=False: solo la red con su relinga (la misma forma, para colgarla sobre otra pieza)."""
+    r = rng(seed)
+    mb = MB()
+    ph = float(r.uniform(0, 100))
+    # ---- apoyos
+    nxp = max(1, int(round(w / 4.5)))
+    nyp = max(1, int(round(l / 4.5)))
+    inner = [(-w / 2 + w * (i + 0.5) / nxp, -l / 2 + l * (j + 0.5) / nyp) for i in range(nxp) for j in range(nyp)]
+    inner = [(x + float(r.uniform(-0.15, 0.15)), y + float(r.uniform(-0.15, 0.15))) for (x, y) in inner]
+    zi = [3.35 + float(r.uniform(-0.12, 0.12)) for _ in inner]
+    edge_p = []
+    for sx in (-1, 0, 1):
+        for sy in (-1, 0, 1):
+            if sx == 0 and sy == 0:
+                continue
+            edge_p.append((sx * w / 2, sy * l / 2))
+    ze = [2.25 + float(r.uniform(-0.08, 0.08)) for _ in edge_p]
+    supports = [(x, y, z + 0.06, 0.34) for (x, y), z in zip(inner, zi)]
+    ties = [(x, y, z + 0.03) for (x, y), z in zip(edge_p, ze)]
+    xs, ys, Z = _drape(w, l, supports, ties)
+    # ---- red: rejilla de 6,5 cm recortada por un campo de ruido (huecos de la guarnición) con contornos interpolados
+    a = 0.072
+    nx = int(round(w / a))
+    ny = int(round(l / a))
+    gx = np.linspace(-w / 2, w / 2, nx + 1)
+    gy = np.linspace(-l / 2, l / 2, ny + 1)
+    GX, GY = np.meshgrid(gx, gy)
+
+    def field(x, y):
+        f = np.array([0.6 * noise.noise(Vector((float(u) * 2.2, float(v) * 2.2, ph))) + noise.noise(Vector((float(u) * 6.0, float(v) * 6.0,
+                      ph + 7.0))) + 0.45 * noise.noise(Vector((float(u) * 14.0, float(v) * 14.0, ph + 13.0)))
+                      for u, v in zip(np.ravel(x), np.ravel(y))]).reshape(np.shape(x))
+        f = f + 0.12
+        border = np.minimum(np.minimum(x + w / 2, w / 2 - x), np.minimum(y + l / 2, l / 2 - y))
+        f = f + np.clip((0.16 - border) / 0.06, 0, 3)          # orilla continua donde corre la relinga
+        for (px, py, _, _) in supports:
+            f = f + 2.5 * np.clip(1 - np.hypot(x - px, y - py) / 0.45, 0, 1)
+        return f
+    F = field(GX, GY)
+
+    def zat(x, y):
+        z = _bilerp(xs, ys, Z, x, y)
+        wr = 0.035 * noise.noise(Vector((x * 0.9, y * 0.9, ph + 3))) + 0.016 * noise.noise(Vector((x * 3.5, y * 3.5, ph + 5))) \
+            + 0.008 * noise.noise(Vector((x * 9.0, y * 9.0, ph + 6)))
+        near = min([math.hypot(x - px, y - py) for (px, py, _, _) in supports] + [9.0])
+        if near < 0.5:
+            wr = abs(wr) * (near / 0.5)
+        return float(z) + wr
+    vid = {}
+
+    def V(i, j):
+        if (i, j) not in vid:
+            x, y = gx[i], gy[j]
+            vid[(i, j)] = mb.bm.verts.new(Vector((x, y, zat(x, y))))
+        return vid[(i, j)]
+    eid = {}
+
+    def E(p, q):
+        key = (min(p, q), max(p, q))
+        if key not in eid:
+            (i0, j0), (i1, j1) = key
+            f0, f1 = F[j0, i0], F[j1, i1]
+            t = min(max(f0 / (f0 - f1), 0.04), 0.96)          # nunca encima de un vértice: sin caras de área cero
+            x = gx[i0] + (gx[i1] - gx[i0]) * t
+            y = gy[j0] + (gy[j1] - gy[j0]) * t
+            # deshilachado: el corte no es limpio; la solapa se levanta o cae un poco
+            jx = 0.009 * noise.noise(Vector((x * 40, y * 40, ph + 9)))
+            jy = 0.009 * noise.noise(Vector((x * 40, y * 40, ph + 11)))
+            dz = 0.024 * noise.noise(Vector((x * 9, y * 9, ph + 17)))
+            eid[key] = mb.bm.verts.new(Vector((x + jx, y + jy, zat(x, y) + dz)))
+        return eid[key]
+
+    def tri(ids):
+        vals = [F[j, i] for (i, j) in ids]
+        if all(v >= 0 for v in vals):
+            mb.face([V(*p) for p in ids], "net").smooth = True
+            return
+        if all(v < 0 for v in vals):
+            return
+        poly = []
+        for k in range(3):
+            p, q = ids[k], ids[(k + 1) % 3]
+            fp, fq = vals[k], vals[(k + 1) % 3]
+            if fp >= 0:
+                poly.append(V(*p))
+            if (fp >= 0) != (fq >= 0):
+                poly.append(E(p, q))
+        for k in range(1, len(poly) - 1):
+            try:
+                mb.face([poly[0], poly[k], poly[k + 1]], "net").smooth = True
+            except ValueError:
+                pass
+    for j in range(ny):
+        for i in range(nx):
+            A_, B_, C_, D_ = (i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)
+            if (i + j) % 2:
+                tri((A_, B_, C_))
+                tri((A_, C_, D_))
+            else:
+                tri((A_, B_, D_))
+                tri((B_, C_, D_))
+    # ---- relinga perimetral (cuerda de 12 mm cosida a la orilla)
+    per = []
+    for i in range(0, nx + 1, 4):
+        per.append((i, 0))
+    for j in range(0, ny + 1, 4):
+        per.append((nx, j))
+    for i in range(nx, -1, -4):
+        per.append((i, ny))
+    for j in range(ny, -1, -4):
+        per.append((0, j))
+    pts = []
+    for (i, j) in per:
+        p = Vector((gx[i], gy[j], zat(gx[i], gy[j]) - 0.007))
+        if not pts or (p - Vector(pts[-1])).length > 1e-4:
+            pts.append(tuple(p))
+    pts.append(pts[0])
+    pts.append(pts[1])
+    mb.tube(pts, 0.006, seg=SEG_T, mat="canvas", caps=False)
+    if not poles:
+        return mb
+    # ---- postes seccionales con separador (interiores) y postes de orilla con vientos y estacas
+    def pole(x, y, ztop, spreader):
+        lathe(mb, [(0.06, 0.0), (0.06, 0.008), (0.025, 0.02), (0.0, 0.022)], seg=SEG, mat="steel", M=_T(x, y, 0))
+        z = 0.02
+        while z < ztop - 0.05:
+            z1 = min(z + 1.07, ztop)
+            lathe(mb, [(0.019, z), (0.019, z1)], seg=SEG, mat="aluminium", M=_T(x, y, 0), caps=False)
+            if z1 < ztop - 0.01:
+                lathe(mb, [(0.0185, z1 - 0.04), (0.0215, z1 - 0.035), (0.0215, z1 + 0.035), (0.0185, z1 + 0.04)], seg=SEG,
+                      mat="aluminium", M=_T(x, y, 0), caps=False)
+            z = z1
+        lathe(mb, [(0.019, ztop), (0.012, ztop + 0.006), (0.006, ztop + 0.01), (0.006, ztop + 0.075), (0.0, ztop + 0.08)], seg=SEG,
+              mat="steel", M=_T(x, y, 0))
+        if spreader:                                   # separador: domo de plástico de 0,48 m con nervios y cubo
+            Ms = _T(x, y, ztop + 0.012)
+            lathe(mb, [(0.0, 0.0), (0.03, 0.0), (0.06, 0.02), (0.24, 0.035), (0.245, 0.042), (0.06, 0.05), (0.03, 0.06), (0.0, 0.062)],
+                  seg=32, mat="plastic", M=Ms, rmod=lambda i, a_, rr, z: rr * (1 + 0.02 * math.cos(8 * a_)) if i in (3, 4) else rr)
+            for k in range(8):
+                ang = math.radians(22.5 + 45 * k)
+                mb.box((0.04, -0.004, 0.0), (0.22, 0.004, 0.028), "plastic", bevel=0.002, seg=1,
+                       m=Ms @ _Rz(math.degrees(ang)) @ _T(0, 0, 0.004))
+    for (x, y), z in zip(inner, zi):
+        pole(x, y, z, True)
+    stakes = []
+    for (x, y), z in zip(edge_p, ze):
+        pole(x, y, z, False)
+        out = Vector((math.copysign(1, x) if abs(x) > 1e-3 else 0.0, math.copysign(1, y) if abs(y) > 1e-3 else 0.0, 0.0))
+        dirs = [out.normalized()] if (out.x == 0 or out.y == 0) else [Vector((out.x, 0.0, 0)), Vector((0.0, out.y, 0))]
+        for d in dirs:
+            g = Vector((x, y, 0)) + d * 1.6 + Vector((d.y, -d.x, 0)) * float(r.uniform(-0.2, 0.2))
+            stakes.append(g)
+            tube_path(mb, catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=8), 0.005, seg=SEG_T, mat="canvas", caps=True)
+    # amarres intermedios de la orilla a estacas
+    for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (-w / 2, l / 2, w / 2, l / 2), (-w / 2, -l / 2, -w / 2, l / 2),
+                             (w / 2, -l / 2, w / 2, l / 2)):
+        for t in (0.25, 0.75):
+            x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+            zz = float(_bilerp(xs, ys, Z, np.array(x), np.array(y)))
+            d = Vector((math.copysign(1, x) if abs(x0 - x1) < 1e-6 else 0.0, math.copysign(1, y) if abs(y0 - y1) < 1e-6 else 0.0, 0))
+            g = Vector((x, y, 0)) + d * 1.1
+            stakes.append(g)
+            tube_path(mb, catenary((x, y, zz - 0.01), (g.x, g.y, 0.07), 0.02, n=7), 0.0045, seg=SEG_T, mat="canvas", caps=True)
+    for g in stakes:                                       # estaca de varilla con gancho, hincada
+        tube_path(mb, [(g.x, g.y, -0.12), (g.x, g.y, 0.08), (g.x + 0.03, g.y, 0.1), (g.x + 0.05, g.y, 0.07)], 0.006, seg=SEG_T,
+                  mat="steel", bend=0.015, nseg=2, caps=True)
+    return mb

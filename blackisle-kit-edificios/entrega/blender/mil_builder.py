@@ -902,6 +902,7 @@ def exterior_services(det, r):
 # ------------------------------------------------------------------------------------------------------------ recinto
 Z_GRAVEL = 0.06
 CURB_W, CURB_TOP = 0.30, 0.18
+FENCE_INSET = 0.17                # la malla del frente remata contra el alma de los muros T de los costados
 
 
 def _rect_in(x, y, rects, pad=0.0):
@@ -920,8 +921,8 @@ def site_ground(det, r):
         for k in range(n):
             u0, u1 = a + (b - a) * k / n + 0.004, a + (b - a) * (k + 1) / n - 0.004
             cl.rbox(det, (u0, CY0 - h, -0.05), (u1, CY0 + h, CURB_TOP), "concrete", r=0.012)
-    curb_run(x0 - h, GATE[0] + h)
-    curb_run(GATE[1] - h, x1 + h)
+    curb_run(x0 + FENCE_INSET - h, GATE[0] + h)
+    curb_run(GATE[1] - h, x1 - FENCE_INSET + h)
     slabs = []
 
     def slab(a, b, c, d, top, panel=4.0):
@@ -1002,11 +1003,174 @@ def front_fence(furn, r):
     w = GATE[1] - GATE[0] - 2 * 0.0508
     furn.join(tel.fence_gate(w=w, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite", base="curb",
                              fence_lift=CURB_TOP - zg), _T(gx, CY0, zg))
-    for (o, L, ends) in (((CX0, CY0), GATE[0] - CX0, (True, None)), ((GATE[1], CY0), CX1 - GATE[1], (None, True))):
+    ft = _mod("fortif")
+    for (o, L, ends) in (((CX0 + FENCE_INSET, CY0), GATE[0] - CX0 - FENCE_INSET, (True, None)),
+                         ((GATE[1], CY0), CX1 - FENCE_INSET - GATE[1], (None, True))):
         furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite", base="curb"),
                   _T(o[0], o[1], CURB_TOP))
+        if ft is not None:                                   # rollo de navajas sobre los brazos de la malla
+            furn.join(ft.concertina_fence_top(L, d=0.6, seed=int(r.integers(1e6))), _T(o[0], o[1], CURB_TOP))
     _proxy_box((CX0 - 0.1, CY0 - 0.35, 0.0), (GATE[0] + 0.1, CY0 + 0.3, 2.9))
     _proxy_box((GATE[1] - 0.1, CY0 - 0.35, 0.0), (CX1 + 0.1, CY0 + 0.3, 2.9))
+
+
+# ------------------------------------------------------------------------------------------------------------ MIL_2
+TENT_L, TENT_W = 9.75, 6.1
+FLOOR_TOP = 0.108
+
+
+def cfg_mil2(bid="MIL_2_avanzada"):
+    return dict(id=bid, seed=151, xs=[-7.0, 7.0], ys=[-8.5, 5.5], h=[0.0], band_top=2.0,
+                graffiti_bounds=(-7.0, 7.0, -8.5, 5.5), graffiti_px_per_m=150.0, exterior_footprint=[],
+                lookdev=dict(base_z=0.0, graffiti_mats=(), wear=0.12, band=None))
+
+
+def outpost(furn, det, r, standalone=True):
+    """Puesto de avanzada: tienda de marco (frente largo enrollado al -y) sobre tarima de triplay, mostrador de cajas con la
+    caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con fundas y chalecos, mesa con cargadores y
+    cajas de cartuchos, serie de focos, letrero SUPPLY colgado del alero, red de camuflaje al frente, HESCO en las esquinas
+    del frente, costales al fondo y en los testeros, generador táctico con bidones y reflector en trípode."""
+    cp, ft, ar = _mod("campaign"), _mod("fortif"), _mod("armory")
+    if cp is None:
+        return
+
+    def put(piece, M, mb=None, solid=True):
+        if solid:
+            _proxy(piece, M)
+        (mb or furn).join(piece, M)
+    put(cp.frame_tent(L=TENT_L, W=TENT_W, seed=int(r.integers(1e6)), open_front=True, rolled_sides=("front",)), Matrix(), mb=det,
+        solid=False)
+    for (a, b) in (((-TENT_L / 2 - 0.1, TENT_W / 2 - 0.05), (TENT_L / 2 + 0.1, TENT_W / 2 + 0.25)),
+                   ((-TENT_L / 2 - 0.25, -TENT_W / 2), (-TENT_L / 2 + 0.05, TENT_W / 2)),
+                   ((TENT_L / 2 - 0.05, -TENT_W / 2), (TENT_L / 2 + 0.25, TENT_W / 2))):
+        _proxy_box((a[0], a[1], 0.0), (b[0], b[1], 2.2))
+    put(cp.plywood_floor(L=9.6, W=5.9, seed=int(r.integers(1e6))), Matrix(), solid=False)
+    zf = FLOOR_TOP
+    # mostrador y mesa de exhibición al frente
+    put(cp.crate_counter(L=2.4, seed=int(r.integers(1e6))), _T(-0.6, -2.35, zf))
+    put(cp.folding_table(L=1.83, seed=int(r.integers(1e6))), _T(1.95, -2.30, zf))
+    if ar is not None:
+        tz = zf + 0.74
+        for k in range(6):
+            put(ar.magazine(seed=k, lite=True), _T(1.35 + k * 0.055, -2.45, tz) @ _Rz(90), solid=False)
+        for k in range(8):
+            i, j = k % 4, k // 4
+            put(ar.cardboard_ammo_box(seed=k), _T(1.75 + i * 0.12, -2.25 + j * 0.08, tz) @ _Rz(r.uniform(-6, 6)), solid=False)
+        for k in range(2):
+            put(ar.ammo_can("small", seed=40 + k), _T(2.45, -2.42 + k * 0.17, tz), solid=False)
+        put(ar.ammo_can("large", seed=42, open=True), _T(0.2, -2.25, zf + 0.909), solid=False)
+    # anaqueles, armeros y tablero al fondo (+y)
+    yb = TENT_W / 2 - 0.42
+    for k, (x, stock) in enumerate(((-4.0, "cans"), (-2.7, "boxes"), (-1.4, "mixed"))):
+        put(cp.shelving(1.2, seed=60 + k, stock=stock), _T(x, yb + 0.22, zf) @ _Rz(0) @ _T(0, 0, 0) @ face_to("-y"))
+    for k, x in enumerate((0.15, 1.45)):
+        Mr = _T(x, yb, zf)
+        put(cp.weapon_rack(8, seed=70 + k), Mr)
+        if ar is not None:
+            for j, Ms in enumerate(cp.weapon_rack_slots(8)):
+                if (j + k) % 5 == 3:
+                    continue                                    # un hueco: ya se vendió
+                kind = ("assault", "carbine", "assault", "dmr")[(j + k) % 4]
+                put(ar.rifle(seed=100 + 10 * k + j, kind=kind), Mr @ Ms, solid=False)
+    # tablero perforado sobre dos postes de 2×4 con fundas (y chalecos cuando existan)
+    xp = 3.05
+    for dx in (-0.62, 0.62):
+        cl.rbox(furn, (xp + dx - 0.019, yb + 0.02, zf), (xp + dx + 0.019, yb + 0.109, zf + 1.95), "wood", r=0.003)
+        cl.rbox(furn, (xp + dx - 0.20, yb - 0.10, zf), (xp + dx + 0.20, yb + 0.25, zf + 0.038), "wood", r=0.003)
+    Mp = _T(xp, yb + 0.02, zf + 0.75)
+    put(cp.pegboard(1.2, 1.0, seed=80), Mp, solid=False)
+    hooks = cp.pegboard_hooks(1.2, 1.0)
+    for k, Mh in enumerate(hooks):
+        P = (Mp @ Mh).translation
+        if ar is not None and hasattr(ar, "vest") and k in (0, 1):
+            put(ar.vest(seed=90 + k), _T(P.x, P.y, P.z), solid=False)
+        elif ar is not None:
+            put(ar.holster(seed=95 + k), _T(P.x, P.y + 0.02, P.z - 0.215), solid=False)
+    # cajas y latas en el piso
+    if ar is not None:
+        put(ar.ammo_crate("wood", seed=110), _T(-3.2, -1.2, zf) @ _Rz(8))
+        put(ar.ammo_crate("wood", seed=111), _T(-3.2, -1.2, zf + 0.30) @ _Rz(4))
+        put(ar.ammo_crate("long", seed=112), _T(-1.8, 0.6, zf) @ _Rz(90))
+        for k in range(5):
+            put(ar.ammo_can("large", seed=120 + k), _T(3.6 + (k % 3) * 0.32, 0.2 + (k // 3) * 0.17, zf + (0.0 if k < 3 else 0.0)))
+        put(ar.hard_case(seed=130, L=1.0), _T(2.4, 0.9, zf)) if hasattr(ar, "hard_case") else None
+    # luz: serie de focos bajo la cumbrera
+    put(cp.string_lights(points=((-4.2, 0.0, 2.95), (-1.4, 0.0, 3.12), (1.4, 0.0, 3.12), (4.2, 0.0, 2.95)), n=8, seed=5), Matrix(),
+        solid=False)
+    for x in np.linspace(-3.8, 3.8, 8):
+        LIGHTS.append([round(float(x), 3), 0.0, 2.85])
+    # letrero SUPPLY del alero del frente
+    put(cp.hanging_sign("SUPPLY", 0.9, seed=6), _T(-0.6, -TENT_W / 2 - 0.02, 2.06), solid=False)
+    if ft is None:
+        return
+    # HESCO en las esquinas del frente y costales al fondo y en los testeros
+    for x0 in (-TENT_L / 2 - 0.3, TENT_L / 2 + 0.3 - 2 * 1.06):
+        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 1.6, 0.0))
+    put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0))
+    for xs, sg in ((-TENT_L / 2 - 0.55, -1), (TENT_L / 2 + 0.55, 1)):
+        put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90))
+    # generador táctico con bidones, reflector en trípode
+    put(ft.tactical_generator(seed=int(r.integers(1e6))), _T(2.4, TENT_W / 2 + 1.65, 0.0) @ _Rz(180))
+    for k in range(3):
+        put(ft.jerry_can(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
+    put(ft.floodlight_tripod(seed=7), _T(-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 0.0))
+    LIGHTS.append([-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 1.86])
+    for k in range(4):
+        put(ft.jerry_can(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
+    if hasattr(ft, "camo_net"):
+        put(ft.camo_net(w=8.0, l=4.5, seed=8, poles=True), _T(0.0, -TENT_W / 2 - 2.4, 0.0), mb=det, solid=False)
+
+
+def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
+    cfg = cfg_mil2(bid)
+    cid = cfg["id"]
+    LIGHTS.clear()
+    PROXIES.clear()
+    root = collection_root or get_collection(cid)
+    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")
+    cols = {k: get_collection(f"{cid}_{k}", root) for k in keys}
+    out = {k: [] for k in cols}
+    det, furn = MB(), MB()
+    r = rng(cfg["seed"])
+    outpost(furn, det, r)
+    for nm, mb in (("Details", det), ("Furniture", furn)):
+        if len(mb.bm.faces):
+            out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
+    out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), proxies=list(PROXIES))
+    out["cfg"] = cfg
+    return out
+
+
+def perimeter(det, furn, r):
+    """Muros T de concreto (3,66 m) al poniente, al fondo y al oriente; torre de vigilancia en la esquina del frente poniente;
+    torres de luz; pluma de acceso y chicana de barreras Jersey afuera del portón; HESCO MIL7 tras la malla del frente y un
+    puesto de tirador de costales junto al portón."""
+    ft = _mod("fortif")
+    if ft is None:
+        return
+    seg = 1.52
+    tw = [ft.t_wall(seed=k) for k in range(4)]
+    # (origen del primer segmento, giro, paso, n): el frente de cada muro T (-y local) mira hacia afuera del recinto
+    runs = [((CX0, CY1), -90, Vector((0, -seg, 0)), 27),             # poniente, de la esquina del fondo hacia el frente
+            ((CX1, CY1), 180, Vector((-seg, 0, 0)), 30),             # fondo, de oriente a poniente
+            ((CX1, CY1 - 27 * seg), 90, Vector((0, seg, 0)), 27)]    # oriente, del frente hacia el fondo
+    for (o, rot, step, n) in runs:
+        for k in range(n):
+            P = Vector((o[0], o[1], 0.0)) + step * k
+            det.join(tw[(k * 7 + n) % 4], _T(P.x, P.y, 0.0) @ _Rz(rot))
+    for (a, b) in (((CX0 - 0.7, CY0), (CX0 + 0.7, CY1)), ((CX0, CY1 - 0.7), (CX1, CY1 + 0.7)), ((CX1 - 0.7, CY0), (CX1 + 0.7, CY1))):
+        _proxy_box((a[0], a[1], 0.0), (b[0], b[1], 3.66))
+    put = lambda piece, M, solid=True, mb=None: (_proxy(piece, M) if solid else None, (mb or det).join(piece, M))  # noqa: E731
+    put(ft.guard_tower(seed=3), _T(-21.6, -17.2, 0.0))
+    put(ft.light_tower(seed=4), _T(-21.8, -6.5, 0.0) @ _Rz(90))
+    put(ft.light_tower(seed=5), _T(19.8, -16.5, 0.0) @ _Rz(-90))
+    LIGHTS.extend([[-21.8, -6.5, 9.0], [19.8, -16.5, 9.0]])
+    put(ft.drop_arm_barrier(L=6.4, seed=6), _T(GATE[0] - 0.35, CY0 - 1.6, 0.0))
+    for k, (x, y) in enumerate(((-17.8, -24.0), (-14.6, -24.0), (-9.6, -27.0), (-6.4, -27.0))):
+        put(ft.jersey_barrier(3.0, seed=10 + k), _T(x, y, 0.0))
+    put(ft.hesco_run(3, "MIL7", seed=7), _T(-23.0, -18.6, 0.0))
+    put(ft.sandbag_ring(radius=1.1, rows=4, seed=8, opening_deg=60.0), _T(-6.0, -17.6, Z_GRAVEL), solid=True)
+    put(ft.sandbag_wall(3.0, rows=3, seed=9), _T(-23.2, -15.2, Z_GRAVEL) @ _Rz(0))
 
 
 def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
@@ -1035,6 +1199,7 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     site_ground(det, r)
     if dress_on and kw.get("dress", True):
         front_fence(furn, r)
+        perimeter(det, furn, r)
     for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", rf), ("Furniture", furn)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
