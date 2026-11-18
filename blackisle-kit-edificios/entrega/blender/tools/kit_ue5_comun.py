@@ -25,7 +25,7 @@ import texture_tools as tt  # noqa: E402
 
 ENT = os.path.abspath(os.path.join(BL, ".."))
 IDS = ["APT_A_5p", "APT_B_4p", "APT_C_3p", "APT_D_4p", "CAB_1_tablones", "CAB_2_pilotes", "CAB_3_ladrillo", "MUE_1_carga",
-       "HOS_1_pueblo", "GRA_1_tienda", "COM_1_antena"]
+       "HOS_1_pueblo", "GRA_1_tienda", "COM_1_antena", "MIL_1_almacen", "MIL_2_avanzada"]
 # relieve por material para el normal derivado del albedo (madera y ladrillo marcados; aplanado y metal suaves)
 NORMAL_STRENGTH = {"wood_red": 6.0, "block": 5.0, "tile_clay": 4.0, "concrete": 4.0, "plaster": 3.0, "wood": 6.0, "wood_dark": 6.0, "wood_grey": 6.0, "brick": 7.0, "tile": 5.0,
                    "metal_rust": 3.5, "metal_paint": 3.0, "roof_metal": 3.5, "roof_metal_light": 3.0,
@@ -47,6 +47,8 @@ FRONT = {   # rasgo que identifica la fachada principal (-y de Blender) para ori
     "HOS_1_pueblo": "pórtico de 4 columnas con COMMUNITY HOSPITAL en el pretil; la cochera de ambulancias queda al oriente (+x)",
     "GRA_1_tienda": "hastial del granero con el portón corredizo; la tienda COMMUNITY STORE queda al oriente (+x), su pórtico también hacia -y",
     "COM_1_antena": "portón doble del compound y la puerta de la caseta; la torre queda al fondo a la derecha (+x, +y)",
+    "MIL_1_almacen": "portón vehicular de la malla del frente y el andén con las dos cortinas; muros T al fondo y a los lados",
+    "MIL_2_avanzada": "costado largo de la tienda enrollado con el mostrador y la red de camuflaje; generador al fondo (+y)",
 }
 
 

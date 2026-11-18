@@ -15,11 +15,14 @@ Materiales: steel, aluminium, rubber, cable, plastic, paint_yellow, sign_white, 
 fosfatado oscuro), polymer (polímero gris oscuro), wood_od (madera de caja pintada verde olivo), paint_od (acero pintado verde
 olivo), paint_tan (acero pintado arena), brass, canvas (lona / cinta verde olivo).
 
+Piezas: rifle (carbine / assault / dmr), pistol, holster, magazine, machine_gun_tripod, mortar, launcher_tube, ammo_can
+(large / small, open), ammo_crate (wood / long / small, open), cardboard_ammo_box, shell_pallet, crate_pallet, vest, hard_case.
+Utilidades reutilizables: side / plan (siluetas con filete por esquina), xloft, slab2 / shell, rail (MIL-STD-1913),
+slotted_tube (guardamanos ranurado), plank / board, holed_board, pallet_gma, strap / wire / spline, stencil, rivet.
 Fuentes de medidas (consultadas 2026-11): ver docstring de cada función.
 """
 import math
 
-import bmesh
 import bpy  # noqa: F401  (bpy antes que mathutils)
 from mathutils import Matrix, Vector
 
@@ -27,7 +30,7 @@ from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rng, rr_profile
 from kit.clinic_equipo import arc_solid, loft_rings, revolve, sweep_frame
 from kit.clinic_equipo import text as _ce_text
-from kit.clinic_servicios import _edge_levels, cup, hexnut, label, lathe, pslab, rpoly_pts, rr_pts, screw, skin, slab
+from kit.clinic_servicios import _edge_levels, hexnut, rr_pts, skin, slab
 
 IN = 0.0254
 SEG = 24          # lados de todo cilindro visible
@@ -37,7 +40,7 @@ SEG_T = 14        # tubos delgados, alambres, cuerdas
 # ---------------------------------------------------------------------------------------- datos para armeros (otro agente)
 # rifle(kind): x = 0 cantonera, z = 0 talón inferior de la culata; ánima a lo largo de +X a la altura BORE_Z.
 RIFLE_BORE_Z = 0.102
-RIFLE_LEN = {"carbine": 0.858, "assault": 0.918, "dmr": 1.012}
+RIFLE_LEN = {"carbine": 0.846, "assault": 0.898, "dmr": 1.000}
 
 
 # ======================================================================================================== utilidades
@@ -426,7 +429,7 @@ def cardboard_ammo_box(seed=0):
     slab(mb, Matrix(), L * s, W, H, rc=0.0025, re=0.0018, re0=0.0016, mat="cardboard", nc=3, ne=2)
     # solapa del extremo +X: tapa doblada con su pestaña metida (leve abombado)
     side(mb, [(L * s / 2 - 0.0006, 0.002), (L * s / 2 + 0.0014, 0.0025), (L * s / 2 + 0.0016, H - 0.0035),
-              (L * s / 2 - 0.0006, H - 0.002)], [0.0, 0.0008, 0.0008, 0.0], W - 0.004, "cardboard", re=0.0004, n=1, ne=1)
+              (L * s / 2 - 0.0006, H - 0.002)], 0.0, W - 0.004, "cardboard", re=0.0004, n=1, ne=1)
     # pestaña de la tapa superior que dobla sobre el extremo (cara superior)
     plan(mb, [(L * s / 2 - 0.022, -W / 2 + 0.003), (L * s / 2 - 0.0008, -W / 2 + 0.003), (L * s / 2 - 0.0008, W / 2 - 0.003),
               (L * s / 2 - 0.022, W / 2 - 0.003)], [0.0, 0.0006, 0.0006, 0.0], 0.0009, "cardboard", z0=H - 0.0004, re=0.0003, n=1,
@@ -555,7 +558,7 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True):
         zs = z0 + (zt - z0) * 0.5
         stencil(mb, "AMMO", h, _T(0.0, yf, zs - h * 0.15) @ _Rx(90), "paint_yellow")
         if not open:
-            lot = ("LOT 2705", "LOT 2209", "LOT 3102", "LOT 0926")[int(r.integers(0, 4))]
+            lot = ("LOT 275", "LOT 229", "LOT 312", "LOT 926")[int(r.integers(0, 4))]
             stencil(mb, lot, 0.017, _T(0.0, yf, zs - h * 0.15 - 0.028) @ _Rx(90), "paint_yellow")
     if open and contents:
         if kind == "long":                       # cunas de madera para el tubo
@@ -1033,8 +1036,6 @@ def rifle(seed=0, kind="assault", sling=False, mag=True):
     (hasta ~ -0,10 m con cargador). Para un armero: la cantonera apoya en x = 0 y el cañón se sujeta a ~ 0,6-0,8 m.
     Fuentes: en.wikipedia.org/wiki/M4_carbine y americanspecialops.com (largo 838 / 1003 mm, cañones 368 / 508 mm);
     en.wikipedia.org/wiki/Picatinny_rail (ranura 5,23 mm a paso 10,01 mm, 3 mm de profundidad)."""
-    r = rng(seed)
-    del r
     mb = MB()
     kind = kind if kind in RIFLE_LEN else "assault"
     BZ = RIFLE_BORE_Z
@@ -1391,20 +1392,9 @@ def machine_gun_tripod(seed=0):
     zb = 0.200                                                        # barra de puntería
     revolve(mb, [(0.0145, zb + 0.02), (0.0145, zr0 - 0.040)], OD, seg=SEG, M=_T(xt, 0, 0), caps=False)
     revolve(mb, [(0.0095, zr0 - 0.045), (0.0095, zr0 - 0.018)], "steel", seg=SEG, M=_T(xt, 0, 0), caps=False)
-    def handwheel(M, R=0.045, rr=0.006, spokes=3, knob=True):
-        revolve(mb, [(R - rr, -rr), (R + rr, -rr), (R + rr, rr), (R - rr, rr)], OD, seg=32, M=M, closed=True)
-        revolve(mb, [(0.0, -0.012), (0.013, -0.012), (0.013, 0.010), (0.0, 0.010)], OD, seg=SEG, M=M)
-        for k in range(spokes):
-            a = 2 * PI * k / spokes
-            pa, pb = M @ Vector((0.012 * math.cos(a), 0.012 * math.sin(a), 0)), M @ Vector(((R - rr) * math.cos(a), (R - rr) * math.sin(a), 0))
-            mb.tube([tuple(pa), tuple(pb)], 0.0045, seg=SEG_T, mat=OD)
-        if knob:
-            a = 0.5
-            revolve(mb, [(0.0065, 0.0), (0.0075, 0.004), (0.0075, 0.030), (0.0055, 0.035), (0.0, 0.036)], "polymer", seg=SEG_T,
-                    M=M @ _T(R * math.cos(a), R * math.sin(a), rr * 0.6))
-    handwheel(_T(xt, 0.0, zb + 0.105) @ _Rx(90) @ _T(0, 0, -0.035), R=0.048)
+    _handwheel(mb, _T(xt, 0.0, zb + 0.105) @ _Rx(90) @ _T(0, 0, -0.035), R=0.048, mat=OD)
     plank(mb, (xt - 0.035, -0.03, zb - 0.012), (xt + 0.035, 0.03, zb + 0.022), OD, ch=0.004)        # corredera de dirección
-    handwheel(_T(xt, 0.045, zb + 0.005) @ _Rx(-90), R=0.038, spokes=3)
+    _handwheel(mb, _T(xt, 0.045, zb + 0.005) @ _Rx(-90), R=0.038, spokes=3, mat=OD)
     # ---------------- trípode
     # cabeza
     revolve(mb, [(0.0, zh - 0.075), (0.040, zh - 0.075), (0.048, zh - 0.060), (0.048, zh - 0.010), (0.034, zh), (0.0215, zh),
@@ -1441,8 +1431,6 @@ def machine_gun_tripod(seed=0):
     for k in range(13):
         a = a0 + (a1 - a0) * k / 12
         arc.append((xp + Rb * math.cos(a), Rb * math.sin(a), zb))
-    for end, sy in ((arc[0], 1), (arc[-1], -1)):
-        pass
     sweep_frame(mb, rr_profile(0.008, 0.030, 0.002, n=2), arc, OD, up=(0, 0, 1))
     for i in range(1, 12):                                            # graduación
         x, y, z = arc[i]
@@ -1841,4 +1829,73 @@ def vest(seed=0):
     revolve(mb, [(0.0, -0.002), (0.0085, 0.0), (0.0095, 0.008), (0.0085, 0.014), (0.0, 0.016)], "rubber", seg=SEG,
             M=_T(*port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].translation) @
             port.frame_on(Vector((0, -0.066, 0.024)), Vector((0, -0.069, 0.032)))[0].to_3x3().to_4x4() @ _Ry(90))
+    return mb
+
+
+# ======================================================================================================== maleta rígida
+def hard_case(seed=0, L=1.0):
+    """Maleta rígida de polímero para arma larga (L × 0,37 × 0,14 m; L = 1,0 por omisión, clase «42 in»): casco inferior y
+    tapa moldeados con esquinas redondeadas, labios engrosados en la línea de cierre (junta visible), panel superior con
+    nervaduras transversales, patines inferiores, 4 cierres de palanca al frente (caja + palanca con uña), 2 bisagras de
+    nudillo atrás, asa central abatible con empuñadura de hule, asa de cinta en el extremo +X, 2 ruedas en el extremo -X
+    con su eje y orejas, patas de hule y válvula de presión. ORIGEN: centro de la base en el piso; largo en X, frente
+    (cierres, asa) hacia -Y.
+    Fuentes: planooutdoors.com (All Weather 2 42": 44,4 × 16,8 × 6,4 in, cierres, ruedas); 511tactical.com (Hard Case 42:
+    42,5 × 14,5 × 5,5 in)."""
+    mb = MB()
+    PL = "polymer" if seed % 2 == 0 else "paint_tan"
+    D, H = 0.37, 0.14
+    zp = 0.084                                           # línea de cierre
+    rc = 0.032
+    slab2(mb, _T(0, 0, 0.006), L, D, zp - 0.006, rc, PL, re_b=0.008, ne_b=1, nc=4)          # casco inferior
+    slab2(mb, _T(0, 0, zp), L, D, H - zp, rc, PL, re_t=0.016, ne_t=4, nc=4)                 # tapa
+    slab2(mb, _T(0, 0, zp - 0.015), L + 0.008, D + 0.008, 0.0135, rc + 0.004, PL, re_t=0.002, ne_t=1, re_b=0.003, ne_b=1, nc=4)
+    slab2(mb, _T(0, 0, zp + 0.0015), L + 0.008, D + 0.008, 0.0135, rc + 0.004, PL, re_t=0.003, ne_t=1, re_b=0.002, ne_b=1, nc=4)
+    slab2(mb, _T(0, 0, H - 0.0015), L - 0.17, D - 0.11, 0.0045, 0.02, PL, re_t=0.003, ne_t=1, nc=4)   # panel superior
+    for k in range(3):                                   # nervaduras transversales del panel
+        x = -(L - 0.17) / 2 + 0.10 + (L - 0.37) * k / 2
+        plank(mb, (x - 0.006, -(D - 0.11) / 2 + 0.01, H + 0.0025), (x + 0.006, (D - 0.11) / 2 - 0.01, H + 0.0062), PL, ch=0.002)
+    for y in (-0.10, 0.10):                              # patines inferiores
+        plank(mb, (-L / 2 + 0.09, y - 0.012, 0.0045), (L / 2 - 0.05, y + 0.012, 0.0105), PL, ch=0.003)
+    for (x, y) in ((L / 2 - 0.07, -0.13), (L / 2 - 0.07, 0.13), (-L / 2 + 0.16, -0.13), (-L / 2 + 0.16, 0.13)):
+        revolve(mb, [(0.013, 0.0), (0.015, 0.008)], "rubber", seg=16, M=_T(x, y, 0), caps=False)          # patas
+    # cierres de palanca (frente -Y)
+    yf = -D / 2 - 0.004
+    for x in [-L / 2 + 0.10 + (L - 0.20) * k / 3 for k in range(4)]:
+        Mf = _T(x, yf + 0.001, zp) @ _Rx(90)              # z local hacia -Y, y local hacia +Z
+        plan(mb, [(-0.022, -0.030), (0.022, -0.030), (0.022, 0.026), (-0.022, 0.026)], [0.005, 0.005, 0.004, 0.004], 0.010, PL,
+             z0=-0.001, re=0.0, n=2, M=Mf)                                             # caja
+        plan(mb, [(-0.019, -0.024), (0.019, -0.024), (0.019, 0.020), (-0.012, 0.020), (-0.019, 0.013)],
+             [0.004, 0.004, 0.003, 0.0, 0.003], 0.005, PL, z0=0.0085, re=0.0, n=2, M=Mf)   # palanca con uña
+    # bisagras de nudillo (atrás +Y)
+    yb = D / 2 + 0.0065
+    for x in (-L / 2 + 0.20, L / 2 - 0.20):
+        for (x0, x1, za, zb_) in ((x - 0.040, x - 0.002, zp + 0.002, zp + 0.020), (x + 0.002, x + 0.040, zp - 0.020, zp - 0.002)):
+            side(mb, [(x0, za), (x1, za), (x1, zb_), (x0, zb_)], 0.0, 0.008, PL, y0=D / 2 + 0.002, re=0.0)
+            revolve(mb, [(0.0058, x0), (0.0058, x1)], PL, seg=16, M=_T(0, yb, zp) @ _Ry(90))
+    # asa central abatible (frente) con empuñadura de hule
+    for sx in (-1, 1):
+        plan(mb, [(-0.012, -0.016), (0.012, -0.016), (0.012, 0.016), (-0.012, 0.016)], [0.004] * 4, 0.012, PL, z0=-0.001, re=0.0,
+             n=2, M=_T(sx * 0.075, yf + 0.001, zp - 0.032) @ _Rx(90))
+    hp = [(-0.075, yf - 0.010, zp - 0.034), (-0.068, yf - 0.012, zp - 0.062), (0.068, yf - 0.012, zp - 0.062), (0.075, yf - 0.010, zp - 0.034)]
+    wire(mb, hp, 0.0055, PL, bend=0.010, nseg=2, seg=SEG_T, caps=False)
+    revolve(mb, [(0.0105, -0.052), (0.0105, 0.052)], "rubber", seg=SEG, M=_T(0.0, yf - 0.012, zp - 0.062) @ _Ry(90))
+    # asa de cinta en el extremo +X
+    xe = L / 2 + 0.004
+    for sy in (-1, 1):
+        side(mb, [(xe - 0.006, zp - 0.030), (xe + 0.008, zp - 0.030), (xe + 0.008, zp - 0.008), (xe - 0.006, zp - 0.008)], 0.0, 0.020, PL,
+             y0=sy * 0.06, re=0.0)
+    strap(mb, spline([(xe + 0.004, -0.06, zp - 0.019), (xe + 0.022, -0.045, zp - 0.022), (xe + 0.026, 0.0, zp - 0.023),
+                      (xe + 0.022, 0.045, zp - 0.022), (xe + 0.004, 0.06, zp - 0.019)], 1), 0.0035, 0.024, "canvas", up=(0, 0, 1), r=0.001)
+    # ruedas en el extremo -X
+    xw, zw = -L / 2 + 0.010, 0.030
+    for sy in (-1, 1):
+        revolve(mb, [(0.0125, -0.0115), (0.030, -0.0115), (0.030, 0.0115), (0.0125, 0.0115)], "rubber", seg=SEG,
+                M=_T(xw, sy * 0.12, zw) @ _Rx(90), closed=True)
+        revolve(mb, [(0.0128, -0.010), (0.0128, 0.010)], "plastic", seg=SEG, M=_T(xw, sy * 0.12, zw) @ _Rx(90))
+        side(mb, [(xw - 0.004, zw - 0.006), (xw + 0.06, zw - 0.006), (xw + 0.06, zw + 0.03), (xw - 0.004, zw + 0.03)], 0.0, 0.006, PL,
+             y0=sy * 0.12 + sy * 0.016, re=0.0)
+    revolve(mb, [(0.004, -0.14), (0.004, 0.14)], "steel", seg=SEG_T, M=_T(xw, 0, zw) @ _Rx(90), caps=False)
+    revolve(mb, [(0.012, -0.002), (0.012, 0.004), (0.0, 0.007)], "plastic", seg=20,
+            M=_T(-L / 2 + 0.24, -D / 2 - 0.0035, H - 0.030) @ _Rx(90), caps=False)   # válvula de presión
     return mb

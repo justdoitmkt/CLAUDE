@@ -19,7 +19,8 @@ from mathutils import Matrix, Vector  # noqa: E402
 ENT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "CAB_1_tablones": "CAB_1",
           "CAB_2_pilotes": "CAB_2", "CAB_3_ladrillo": "CAB_3", "MUE_1_carga": "MUE_1",
-          "HOS_1_pueblo": "HOS_1", "GRA_1_tienda": "GRA_1", "COM_1_antena": "COM_1"}
+          "HOS_1_pueblo": "HOS_1", "GRA_1_tienda": "GRA_1", "COM_1_antena": "COM_1",
+          "MIL_1_almacen": "MIL_1", "MIL_2_avanzada": "MIL_2"}
 
 
 COMPANIONS = {   # modelo -> [(pieza suelta, posición en el pivote del modelo, giro en z)] que se renderiza junto a él
@@ -38,6 +39,12 @@ EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
                      ("caseta", (-1.6, -3.2, 1.6), (-4.2, 2.4, 1.7), 22), ("equipo", (0.0, -4.2, 1.7), (4.2, -3.6, 0.9), 22),
                      ("trasera", (-6.5, 13.0, 1.8), (-3.5, 5.6, 1.5), 28), ("interior", (-5.6, 2.9, 1.65), (-1.6, 4.9, 1.3), 14),
                      ("sectores", (9.5, -8.0, 30.0), (4.0, 4.3, 40.8), 40)],
+    "MIL_1_almacen": [("acceso", (-11.0, -34.0, 1.7), (-6.0, 0.0, 3.5), 24), ("anden", (-3.0, -9.5, 1.7), (-12.0, 0.0, 2.6), 22),
+                      ("puerta", (-2.6, -4.0, 1.7), (-5.4, 0.0, 2.2), 24), ("interior", (-10.0, 2.4, 2.9), (-10.0, 12.0, 2.6), 16),
+                      ("jaula", (6.5, 9.0, 2.9), (6.5, 14.0, 1.8), 18), ("perimetro", (-27.0, -27.0, 2.5), (-18.0, -10.0, 3.0), 28),
+                      ("avanzada", (12.0, -9.0, 1.7), (16.0, 3.0, 1.6), 24)],
+    "MIL_2_avanzada": [("frente", (-2.5, -13.0, 1.7), (0.0, -2.0, 1.5), 24), ("mostrador", (0.6, -5.8, 1.6), (-0.4, -1.5, 1.1), 22),
+                       ("dentro", (-4.2, -1.8, 1.6), (2.0, 1.8, 1.2), 16), ("lado", (9.0, 4.0, 1.7), (0.0, 0.5, 1.5), 24)],
 }
 
 
@@ -292,7 +299,7 @@ def main():
     if solo is None or "exterior" in solo:
         bpy.ops.render.render(write_still=True)
         print("[preview] exterior", sc.render.filepath, flush=True)
-    if bid.startswith(("HOS_", "GRA_", "COM_")):        # en uso: luminarias encendidas (focos de la ficha)
+    if bid.startswith(("HOS_", "GRA_", "COM_", "MIL_")):        # en uso: luminarias encendidas (focos de la ficha)
         for i, p in enumerate(d.get("focos_m_blender", [])):
             gra = bid.startswith("GRA_")
             Lf = bpy.data.lights.new(f"foco{i}", "POINT" if gra else "AREA")   # granero: foco desnudo de 100 W

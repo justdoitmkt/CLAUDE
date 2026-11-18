@@ -77,6 +77,21 @@ SHOTS_EXTRA = {
         "microondas": dict(azim=150, elev=8, dist=5.0, target=Vector((4.0, 4.3, 33.0)), fov=55),
         "interior": dict(azim=150, elev=5, dist=1.0, target=Vector((-4.5, 3.4, 1.5)), fov=85, ground=False),
     },
+    "MIL_1_almacen": {
+        "acceso": dict(azim=-15, elev=4, dist=30.0, target=Vector((-6.0, -6.0, 3.0)), fov=60),
+        "anden": dict(azim=-40, elev=6, dist=11.0, target=Vector((-12.0, -1.0, 1.8)), fov=60),
+        "cortina": dict(azim=-25, elev=8, dist=3.0, target=Vector((-8.2, -0.3, 1.8)), fov=55),
+        "interior": dict(azim=0, elev=15, dist=6.0, target=Vector((-10.0, 8.0, 2.5)), fov=80, ground=False),
+        "jaula": dict(azim=-10, elev=15, dist=6.0, target=Vector((6.5, 12.0, 2.0)), fov=70, ground=False),
+        "perimetro": dict(azim=-45, elev=10, dist=9.0, target=Vector((-23.0, -19.0, 2.0)), fov=55),
+        "torre": dict(azim=-35, elev=8, dist=10.0, target=Vector((-21.6, -17.2, 3.5)), fov=55),
+    },
+    "MIL_2_avanzada": {
+        "frente": dict(azim=-12, elev=4, dist=7.0, target=Vector((0.0, -3.5, 1.4)), fov=60),
+        "general": dict(azim=-30, elev=22, dist=19.0, target=Vector((0.0, -2.0, 1.5)), fov=45),
+        "mostrador": dict(azim=-20, elev=10, dist=2.6, target=Vector((-0.6, -2.4, 1.0)), fov=55),
+        "trasera": dict(azim=160, elev=8, dist=10.0, target=Vector((0.0, 3.0, 1.2)), fov=55),
+    },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
         "testero_oeste": dict(azim=-80, elev=10, dist=16.0, target=Vector((-8.2, 0.0, 6.0)), fov=55),
