@@ -492,7 +492,7 @@ def _floor_ramp(mb, xe, zt, r, wr=1.10, lr=0.60):
         ya_, yb_ = sorted((yo, yo + sy * 0.045))
         _board(mb, xe - 0.0016, xe, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
         ya_, yb_ = sorted((yo, yo + sy * 0.0016))
-        _board(mb, xe - 0.055, xe, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
+        _board(mb, xe - 0.055, xe - 0.0004, ya_, yb_, 0.014, 0.064, "galvanized", r=0.0006, step=1.0)
         for dz in (0.026, 0.052):
             _screw_cs(mb, _T(xe - 0.0016, yo + sy * 0.03, dz) @ _Ry(-90), d=0.006, seed=int(dz * 1000) + sy)
             _screw_cs(mb, _T(xe - 0.032, yo + sy * 0.0016, dz) @ _Rx(-90 * sy), d=0.006, seed=int(dz * 1000) + 3 * sy)
@@ -653,7 +653,7 @@ def _od_crate(mb, M, w=0.8, d=0.55, h=CR_H, seed=0, ends=(True, True), lid_batte
     for sy in (-1, 1):                                                   # costados (los del frente llevan esténcil: planos)
         ya, yb_ = sorted((sy * d / 2, sy * (d / 2 - tb)))
         for (za, zb) in zs_b:
-            T(-xb, xb, ya, yb_, za, zb, flat=(sy < 0 and stencil is not None))
+            T(-xb + 0.0002, xb - 0.0002, ya, yb_, za, zb, flat=(sy < 0 and stencil is not None))
     for sx in (-1, 1):                                                   # testeros (entre los costados)
         xa, xb_ = sorted((sx * xb, sx * (xb - tb)))
         for (za, zb) in zs_b:
@@ -661,7 +661,7 @@ def _od_crate(mb, M, w=0.8, d=0.55, h=CR_H, seed=0, ends=(True, True), lid_batte
     for k in range(2):                                                   # tapa
         ya = -d / 2 + d * k / 2 + (g / 2 if k else 0.0)
         yb_ = -d / 2 + d * (k + 1) / 2 - (0.0 if k else g / 2)
-        T(-xb, xb, ya, yb_, h - tb, h - 0.0003 * k)
+        T(-xb, xb, ya, yb_, h - tb + 0.0002, h - 0.0003 * k)
     nails = []
     for sy in (-1, 1):                                                   # clavos de costados y tapa a los testeros
         for sx in (-1, 1):
@@ -809,7 +809,7 @@ def _clipboard(mb, M, seed=0):
                 if k == 2:
                     cu = max(0.0, (0.35 - math.hypot(1 - u, v * 0.8)) / 0.35)
                     lift = 0.011 * cu ** 2 + 0.0008 * math.sin(u * 5.0 + v * 3.0) * (1 - v)
-                P[i, j] = (x, y, z0 + 0.0003 * k + 0.0002 + lift + 0.0004 * (1 - v) ** 2 * (k == 2))
+                P[i, j] = (x, y, z0 + 0.00045 * k + 0.0002 + lift + 0.0004 * (1 - v) ** 2 * (k == 2))
         Mr = M @ _T(0, Db / 2 - 0.03, 0) @ _Rz(ang) @ _T(0, -(Db / 2 - 0.03), 0)
         PP = np.array([[tuple(Mr @ Vector(P[i, j])) for j in range(nv)] for i in range(nu)])
         N = np.zeros_like(PP)
@@ -1404,7 +1404,7 @@ def shelving(w=1.2, seed=0, stock="mixed"):
             x = xl + 0.003
             while x + 0.152 <= xr:
                 if r.uniform() < 0.86:
-                    Mc = _T(x + 0.076 + _jit(r, 0.003), yfront + 0.03 + 0.149 + _jit(r, 0.01), z) @ _Rz(90 + _jit(r, 2.0))
+                    Mc = _T(x + 0.076 + _jit(r, 0.0015), yfront + 0.03 + 0.149 + _jit(r, 0.01), z) @ _Rz(90 + _jit(r, 0.8))
                     mb.join(can, Mc)
                 x += 0.152 + 0.006
         else:
@@ -1856,7 +1856,7 @@ def _peg_hook(mb, x, zl, zu, mat="galvanized"):
             (x, yb + 0.004, zt - 0.014)]
     with mb.soft():
         _tube(mb, fillet(path, 0.0042, 6), rw, seg=12, mat=mat, caps=True)
-        _tube(mb, fillet([(x, yf - rw - 0.0002, z0 + 0.0052), (x, yf - rw - 0.0002, z0 + 0.0003), (x, yb - 0.001, z0 + 0.0003)], 0.003,
+        _tube(mb, fillet([(x, yf - rw - 0.0002, z0 + 0.0047), (x, yf - rw - 0.0002, z0 + 0.0004), (x, yb - 0.001, z0 + 0.0004)], 0.003,
                          4), rw * 0.96, seg=12, mat=mat)
         _lathe(mb, [(0.0, -rw * 1.1), (rw * 0.8, -rw * 0.8), (rw * 1.15, 0.0), (rw * 0.8, rw * 0.8), (0.0, rw * 1.1)],
                _frame_z(Vector(tip), Vector((0, -math.cos(a), math.sin(a)))), mat, seg=12)
@@ -2041,7 +2041,8 @@ def folding_chair(seed=0):
         x = sx * wf / 2
         pth = [(x, yfa, 0.028), (x, 0.075, hs + 0.03), (x, 0.13, 0.62), (x, ytop, ztop - 0.03)]
         _tube(mb, fillet(pth, 0.12, 12), R, seg=SEG, mat=P)
-    top = [(-wf / 2, ytop, ztop - 0.03), (-wf / 2, ytop + 0.004, ztop), (wf / 2, ytop + 0.004, ztop), (wf / 2, ytop, ztop - 0.03)]
+    top = [(-wf / 2, ytop - 0.0006, ztop - 0.034), (-wf / 2, ytop + 0.004, ztop), (wf / 2, ytop + 0.004, ztop),
+           (wf / 2, ytop - 0.0006, ztop - 0.034)]
     _tube(mb, fillet(top, 0.035, 10), R, seg=SEG, mat=P)
     wr = 0.37
     # pivote de las patas traseras SOBRE el marco delantero (cruce de la X)
