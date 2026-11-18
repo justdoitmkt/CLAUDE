@@ -91,6 +91,12 @@ SHOTS_EXTRA = {
         "general": dict(azim=-30, elev=22, dist=19.0, target=Vector((0.0, -2.0, 1.5)), fov=45),
         "mostrador": dict(azim=-20, elev=10, dist=2.6, target=Vector((-0.6, -2.4, 1.0)), fov=55),
         "trasera": dict(azim=160, elev=8, dist=10.0, target=Vector((0.0, 3.0, 1.2)), fov=55),
+        "letrero": dict(azim=-15, elev=6, dist=1.8, target=Vector((-1.21, -3.1, 1.55)), fov=55),
+        "mesa": dict(azim=-25, elev=30, dist=1.6, target=Vector((1.95, -2.35, 0.85)), fov=55),
+        "armeros": dict(azim=10, elev=8, dist=2.2, target=Vector((0.8, 2.3, 1.0)), fov=60, ground=False),
+        "tablero": dict(azim=15, elev=5, dist=2.0, target=Vector((3.05, 2.4, 1.3)), fov=60, ground=False),
+        "focos": dict(azim=-20, elev=-10, dist=2.0, target=Vector((-1.4, 0.0, 2.95)), fov=60, ground=False),
+        "costales": dict(azim=150, elev=12, dist=2.2, target=Vector((-2.0, 3.7, 0.4)), fov=55),
     },
     "APT_D_4p": {
         "ojo_frente": dict(azim=-15, elev=-12, dist=20.0, target=Vector((0.0, -4.2, 5.4)), fov=60),
