@@ -2072,6 +2072,8 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
     # vientos: 10 en la rodilla (uno por arco y lado) y 2 de cumbrera
     for k, x in enumerate(xs):
         for sy in (-1, 1):
+            if sy < 0 and "front" in rolled_sides and 0 < k < len(xs) - 1:
+                continue                  # frente enrollado (mostrador): sin vientos intermedios que crucen el paso
             xp = x + (0.1 if k == 0 else -0.1 if k == 4 else 0.02)
             pa, dd = _tieout(mb, rf, xp, sy, seed + 7 * k + (sy > 0))
             lean = Vector((0.25 * (-1 if k == 0 else 1 if k == 4 else 0), sy, 0)).normalized()

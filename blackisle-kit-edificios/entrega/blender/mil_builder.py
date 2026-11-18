@@ -46,7 +46,7 @@ RAMP = (-3.0, 6.4, -2.0, 0.0)    # rampa de la puerta de personal, baja hacia +x
 CX0, CX1, CY0, CY1 = -24.0, 22.0, -20.0, 21.0
 GATE = (-14.0, -8.0)             # portón vehicular (x de los postes) en la malla del frente
 APRON = (-20.0, -3.0, -16.0, -3.6)
-MIL_OUTPOST = (16.0, 6.5, 0.0)   # dónde va MIL_2_avanzada respecto del pivote de MIL_1 (x, y, giro en z)
+MIL_OUTPOST = (9.5, -11.4, -90.0)   # dónde va MIL_2_avanzada respecto del pivote de MIL_1 (x, y, giro en z)
 
 
 def _T(x=0.0, y=0.0, z=0.0):
@@ -456,7 +456,7 @@ def zsection(mb, p0, p1, d=0.20, f=0.065, t=0.0025, up=(0, 0, 1), side=(1, 0, 0)
 def steel_frame(inter):
     """Marcos rígidos de alma variable en x -12,5 / -5 / 2,5 y marcos de hastial (columnas cada 6 m + viga C) en x -20 y 10;
     placas base con anclas, cartelas de rodilla y de cumbrera atornilladas, largueros Z de techo a 1,5 m, largueros de muro a
-    1,5 m sobre el muro de concreto, puntal de alero, contraventeo de varilla con tensores en la crujía 1."""
+    1,5 m sobre el muro de concreto, puntal de alero, contraventeo de varilla con tensores en la crujía 4 (sin vanos)."""
     ym = (WY0 + WY1) / 2
     for x in FRAMES:
         end = x in (WX0, WX1)
@@ -508,7 +508,7 @@ def steel_frame(inter):
                 zsection(inter, tuple(M @ Vector((ua, 0.10, z))), tuple(M @ Vector((ub, 0.10, z))), d=0.20,
                          up=tuple((M.to_3x3() @ Vector((0, 1, 0)))), side=(0, 0, 1))
     # contraventeo de varilla en X (techo y muros laterales) en la primera crujía, con tensores
-    for (xa, xb) in ((FRAMES[0] + 0.15, FRAMES[1] - 0.15),):
+    for (xa, xb) in ((FRAMES[3] + 0.15, FRAMES[4] - 0.15),):   # crujía 4: el muro del frente no tiene vanos ahí
         for s in (-1, 1):
             ya, yb = (WY0 + 0.4, ym - 0.4) if s < 0 else (ym + 0.4, WY1 - 0.4)
             for (p, q) in (((xa, ya), (xb, yb)), ((xa, yb), (xb, ya))):
@@ -1306,8 +1306,8 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     if ft is None:
         return
     # HESCO en las esquinas del frente y costales al fondo y en los testeros
-    for x0 in (-TENT_L / 2 - 0.3, TENT_L / 2 + 0.3 - 2 * 1.06):
-        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 1.6, 0.0), mb=per)
+    for x0 in (-TENT_L / 2 - 1.3, TENT_L / 2 + 1.3 - 2 * 1.06):    # fuera de la red de camuflaje (x ±4) y de las estacas
+        put(ft.hesco_run(2, "MIL1", seed=int(r.integers(1e6))), _T(x0, -TENT_W / 2 - 2.2, 0.0), mb=per)
     put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0), mb=per)
     for xs, sg in ((-TENT_L / 2 - 0.55, -1), (TENT_L / 2 + 0.55, 1)):
         put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90), mb=per)
@@ -1315,8 +1315,8 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(2.4, TENT_W / 2 + 1.65, 0.0) @ _Rz(180))
     for k in range(3):
         put(_fn("jerry_can", ft)(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
-    put(_fn("floodlight_tripod", ft)(seed=7), _T(-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 0.0))
-    LIGHTS.append([-TENT_L / 2 + 0.3, -TENT_W / 2 - 2.6, 1.98])
+    put(_fn("floodlight_tripod", ft)(seed=7), _T(-4.9, -7.2, 0.0))
+    LIGHTS.append([-4.9, -7.2, 1.98])
     for k in range(4):
         put(_fn("jerry_can", ft)(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
     if hasattr(ft, "camo_net"):
@@ -1363,21 +1363,21 @@ def perimeter(det, towers, r):
     for (a, b) in (((CX0 - 0.7, CY0), (CX0 + 0.7, CY1)), ((CX0, CY1 - 0.7), (CX1, CY1 + 0.7)), ((CX1 - 0.7, CY0), (CX1 + 0.7, CY1))):
         _proxy_box((a[0], a[1], 0.0), (b[0], b[1], 3.66))
     put = lambda piece, M, solid=True, mb=None: (_proxy(piece, M) if solid else None, (mb or det).join(piece, M))  # noqa: E731
-    put(ft.guard_tower(seed=3), _T(-21.6, -17.2, 0.0), mb=towers)
-    put(_fn("light_tower", ft)(seed=4), _T(-21.8, -6.5, 0.0) @ _Rz(90), mb=towers)
+    put(ft.guard_tower(seed=3), _T(-21.6, -15.4, 0.0), mb=towers)
+    put(_fn("light_tower", ft)(seed=4), _T(18.5, 8.0, 0.0) @ _Rz(-90), mb=towers)    # patio oriente, reflectores hacia la nave
     put(_fn("light_tower", ft)(seed=5), _T(19.8, -16.5, 0.0) @ _Rz(-90), mb=towers)
-    LIGHTS.extend([[-21.8, -6.5, 9.0], [19.8, -16.5, 9.0]])
+    LIGHTS.extend([[18.5, 8.0, 9.0], [19.8, -16.5, 9.0]])
     put(_fn("drop_arm_barrier", ft)(L=6.4, seed=6), _T(GATE[0] - 0.35, CY0 - 1.6, 0.0))
     for k, (x, y) in enumerate(((-17.8, -24.0), (-14.6, -24.0), (-9.6, -27.0), (-6.4, -27.0))):
         put(ft.jersey_barrier(3.0, seed=10 + k), _T(x, y, 0.0))
     put(ft.hesco_run(3, "MIL7", seed=7), _T(-23.0, -18.6, 0.0))
     # puesto de tirador: la cara cerrada mira al frente (la malla y el acceso de afuera); la entrada, hacia el almacén
     put(ft.sandbag_ring(radius=1.1, rows=4, seed=8, opening_deg=60.0), _T(-6.0, -17.6, Z_GRAVEL) @ _Rz(180), solid=True)
-    put(ft.sandbag_wall(3.0, rows=3, seed=9), _T(-23.2, -15.2, Z_GRAVEL) @ _Rz(0))
 
 
 LOD_RACK = {}                     # se llena con lod=1 si kit.municion lo acepta (carga de racks ligera: ~2 M en vez de 12 M)
-RACK_ROWS = [(16.30, 0), (11.94, 180), (10.07, 0)]       # (y del origen, giro): fila del fondo y doble fila al centro
+RACK_ROWS = [(16.75, 0), (11.79, 180), (9.92, 0)]        # (y del origen, giro): fila del fondo y doble fila al centro;
+                                                          # pasillo del fondo de 3,78 m (montacargas de 5000 lb a 90° con tarima)
 RACK_XS = (-15.20, -6.80)                                 # dos racks de 3 claros por fila
 
 
@@ -1421,10 +1421,10 @@ def warehouse_interior(furn, r, cargo=None):
                     _fn("pallet_gma", ar)(piece, **LOD_RACK)
                     for j in range(2):
                         piece.join(_fn("ammo_crate", ar)("long", seed=int(r.integers(1e6)), **LOD_RACK),
-                                   _T(0, (j - 0.5) * 0.47, 0.135) @ _Rz(0))
+                                   _T(0, (j - 0.5) * 0.50, 0.135) @ _Rz(0))
                 (cargo or furn).join(piece, Mx)
     # líneas amarillas de pasillo frente a cada cara de rack y la de la zona de recibo
-    for y in (15.66, 12.57, 9.43, 6.20):
+    for y in (16.11, 12.42, 9.28, 6.20):
         furn.box((-19.4, y - 0.05, zf), (-2.6 if y > 6.3 else 9.4, y + 0.05, zf + 0.0015), "paint_yellow", bevel=0.0)
     # jaula de armas con su contenido
     cxg, cyg, cw, cd = 6.55, 14.75, 5.5, 4.5
@@ -1461,8 +1461,8 @@ def warehouse_interior(furn, r, cargo=None):
     put(cp.forklift(seed=31), _T(-3.4, 4.2, zf) @ _Rz(-70))
     # banco de trabajo y estaciones de extintor contra el muro del frente (por dentro)
     yi = WY0 - RIB_T + WT
-    put(cp.workbench(seed=32), _T(4.4, yi + 0.40, zf) @ _Rz(180))
-    for x in (-12.5, -1.0, 8.2):
+    put(cp.workbench(seed=32), _T(5.6, yi + 0.40, zf) @ _Rz(180))
+    for x in (-12.5, -1.0, 7.0):
         put(cp.extinguisher_station(seed=33), _T(x, yi, zf) @ _Rz(180), solid=False)
     # luminarias de nave colgadas de los largueros
     for x in (-16.0, -9.0, -2.0, 5.0):

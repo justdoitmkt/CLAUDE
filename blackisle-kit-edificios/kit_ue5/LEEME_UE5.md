@@ -167,8 +167,9 @@ impactos de bala). Sin grafiti ni placas. Textos en inglés (esténciles genéri
 - **MIL_2_avanzada** (pieza suelta, pivote al centro de la tienda): tienda militar de marco 6,1 × 9,75 m sobre tarima de
   triplay, mostrador de cajas de munición con caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con
   chalecos y fundas, mesa con cargadores, serie de focos, letrero SUPPLY, red de camuflaje al frente, HESCO, costales,
-  generador táctico, bidones y reflector. **Para ponerla junto al almacén** colócala en (16,0; 6,5; 0) del pivote de MIL_1,
-  sin giro: queda en la plataforma de grava del oriente, entre la nave y el muro T.
+  generador táctico, bidones y reflector. **Para ponerla junto al almacén** colócala en (9,5; −11,4; 0) del pivote de MIL_1
+  (ejes de Blender) girada −90° en z: queda en el patio del frente oriente, con el mostrador mirando al portón y al patio de
+  maniobras, fuera del frente del andén y de la rampa, sin tocar la malla ni la torre de luz (vientos y estacas incluidos).
 
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).

@@ -643,7 +643,7 @@ b4b4ee1c, 22fdd350, 69a1fda1, 2235e7c1, f420198d, d7c6dd1b). Revisadas con mis o
   cajas; tablero perforado en postes con 2 chalecos y 2 fundas con pistola; cajas y latas en el piso; serie de 8 focos;
   letrero SUPPLY colgado del alero; red de camuflaje con postes y separadores al frente; HESCO MIL1 en las esquinas; costales
   al fondo y en los testeros; generador táctico de 10 kW, 7 bidones y reflector en trípode. Junto al almacén va en
-  (16,0; 6,5; 0) del pivote de MIL_1.
+  (16,0; 6,5; 0) del pivote de MIL_1 (reubicada el 2026-11-19: ver auditoría de coherencia).
 - **Piezas de los agentes** (`kit/armory.py`, `kit/fortif.py`, `kit/campaign.py`), revisadas por mí en arcilla a < 2 m:
   fusiles genéricos (carabina / asalto / tirador, 7,3–8,0 k), pistola y funda, cargador, latas M2A1/M19A1, cajas de madera
   (normal / larga / chica), tarimas de proyectiles y de cajas, ametralladora pesada en trípode, mortero, lanzador

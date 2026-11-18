@@ -24,7 +24,7 @@ PREFIX = {"APT_A_5p": "A", "APT_B_4p": "B", "APT_C_3p": "C", "APT_D_4p": "D", "C
 
 
 COMPANIONS = {   # modelo -> [(pieza suelta, posición en el pivote del modelo, giro en z)] que se renderiza junto a él
-    "MIL_1_almacen": [("MIL_2_avanzada", (16.0, 6.5, 0.0), 0.0)],
+    "MIL_1_almacen": [("MIL_2_avanzada", (9.5, -11.4, 0.0), -90.0)],
 }
 EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
     "MUE_1_carga": [("playa", (-12.0, -38.0, 2.6), (3.0, 8.0, 4.0), 26), ("mar", (38.0, 90.0, 3.0), (10.0, 30.0, 3.0), 32),
@@ -42,7 +42,7 @@ EXTRA_VIEWS = {   # (nombre, cámara, objetivo, lente mm) en ejes de Blender
     "MIL_1_almacen": [("acceso", (-11.0, -34.0, 1.7), (-6.0, 0.0, 3.5), 24), ("anden", (-3.0, -9.5, 1.7), (-12.0, 0.0, 2.6), 22),
                       ("puerta", (-2.6, -4.0, 1.7), (-5.4, 0.0, 2.2), 24), ("racks", (-10.0, 2.4, 2.9), (-10.0, 12.0, 2.6), 16),
                       ("jaula", (6.5, 9.0, 2.9), (6.5, 14.0, 1.8), 18), ("perimetro", (-27.0, -27.0, 2.5), (-18.0, -10.0, 3.0), 28),
-                      ("avanzada", (12.0, -9.0, 1.7), (16.0, 3.0, 1.6), 24)],
+                      ("avanzada", (-4.5, -16.0, 1.7), (6.0, -10.5, 1.6), 22)],
     "MIL_2_avanzada": [("frente", (-2.5, -13.0, 1.7), (0.0, -2.0, 1.5), 24), ("mostrador", (0.6, -5.8, 1.6), (-0.4, -1.5, 1.1), 22),
                        ("dentro", (-4.2, -1.8, 1.6), (2.0, 1.8, 1.2), 16), ("lado", (9.0, 4.0, 1.7), (0.0, 0.5, 1.5), 24)],
 }
