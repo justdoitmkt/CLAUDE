@@ -138,6 +138,11 @@ def manifest(kit, tiles):
             Mobiliario=dict(nanite=True, colision="ninguna",
                             nota="mobiliario, equipo y luminarias interiores (solo modelos que lo traen aparte, p. ej. el hospital); "
                                  "su colisión son cajas simples dentro de la malla Colision"),
+            Perimetro=dict(nanite=True, colision="ninguna",
+                           nota="perímetro (MIL_1): malla con navaja, portón, muros T, HESCO y barreras; su colisión son cajas "
+                                "dentro de la malla Colision"),
+            Carga=dict(nanite=True, colision="ninguna",
+                       nota="carga de los racks (MIL_1): tarimas de cajas y proyectiles; colisión en cajas dentro de Colision"),
             Escombro=dict(nanite=False, colision="compleja como simple",
                           nota="escombro exterior suelto (sin terreno): se puede mover o borrar sin afectar al edificio"),
             Vidrio=dict(nanite=False, colision="ninguna", sombra=False, nota="todo el vidrio; material translúcido"),

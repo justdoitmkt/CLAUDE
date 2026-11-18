@@ -29,6 +29,8 @@ GROUPS = {   # malla del kit -> sufijos de los objetos de <ID>_ue.blend
     "Estructura": ("_WallsMain", "_WallsRest", "_Interior", "_Roof"),
     "Detalle": ("_Details",),
     "Mobiliario": ("_Furniture",),        # solo el hospital: camas, sillas, escritorios, equipo y luminarias interiores
+    "Perimetro": ("_Fence",),             # MIL_1: malla, navaja, portón, muros T y HESCO (malla propia por tamaño)
+    "Carga": ("_Cargo",),                 # MIL_1: tarimas y cajas de los racks (malla propia por tamaño)
     "Escombro": ("_SkirtLoose",),
 }
 COLLISION_FROM = ("_WallsMain", "_WallsRest", "_Interior")

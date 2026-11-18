@@ -1139,7 +1139,7 @@ def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
     return out
 
 
-def perimeter(det, furn, r):
+def perimeter(det, towers, r):
     """Muros T de concreto (3,66 m) al poniente, al fondo y al oriente; torre de vigilancia en la esquina del frente poniente;
     torres de luz; pluma de acceso y chicana de barreras Jersey afuera del portón; HESCO MIL7 tras la malla del frente y un
     puesto de tirador de costales junto al portón."""
@@ -1159,9 +1159,9 @@ def perimeter(det, furn, r):
     for (a, b) in (((CX0 - 0.7, CY0), (CX0 + 0.7, CY1)), ((CX0, CY1 - 0.7), (CX1, CY1 + 0.7)), ((CX1 - 0.7, CY0), (CX1 + 0.7, CY1))):
         _proxy_box((a[0], a[1], 0.0), (b[0], b[1], 3.66))
     put = lambda piece, M, solid=True, mb=None: (_proxy(piece, M) if solid else None, (mb or det).join(piece, M))  # noqa: E731
-    put(ft.guard_tower(seed=3), _T(-21.6, -17.2, 0.0))
-    put(ft.light_tower(seed=4), _T(-21.8, -6.5, 0.0) @ _Rz(90))
-    put(ft.light_tower(seed=5), _T(19.8, -16.5, 0.0) @ _Rz(-90))
+    put(ft.guard_tower(seed=3), _T(-21.6, -17.2, 0.0), mb=towers)
+    put(ft.light_tower(seed=4), _T(-21.8, -6.5, 0.0) @ _Rz(90), mb=towers)
+    put(ft.light_tower(seed=5), _T(19.8, -16.5, 0.0) @ _Rz(-90), mb=towers)
     LIGHTS.extend([[-21.8, -6.5, 9.0], [19.8, -16.5, 9.0]])
     put(ft.drop_arm_barrier(L=6.4, seed=6), _T(GATE[0] - 0.35, CY0 - 1.6, 0.0))
     for k, (x, y) in enumerate(((-17.8, -24.0), (-14.6, -24.0), (-9.6, -27.0), (-6.4, -27.0))):
@@ -1175,7 +1175,7 @@ RACK_ROWS = [(16.30, 0), (11.94, 180), (10.07, 0)]       # (y del origen, giro):
 RACK_XS = (-15.20, -6.80)                                 # dos racks de 3 claros por fila
 
 
-def warehouse_interior(furn, r):
+def warehouse_interior(furn, r, cargo=None):
     """Almacén: 3 filas de racks selectivos (fondo y doble fila central) con tarimas de cajas de munición flejadas, tarimas de
     proyectiles y cajas largas; jaula de seguridad con armero, fusiles, ametralladoras y morteros; montacargas estacionado
     en la zona de recibo con tarimas en espera; banco de trabajo, estaciones de extintor y luminarias de nave."""
@@ -1210,7 +1210,7 @@ def warehouse_interior(furn, r):
                     ar.pallet_gma(piece)
                     for j in range(2):
                         piece.join(ar.ammo_crate("long", seed=int(r.integers(1e6))), _T(0, (j - 0.5) * 0.43, 0.135) @ _Rz(0))
-                furn.join(piece, Mx)
+                (cargo or furn).join(piece, Mx)
     # líneas amarillas de pasillo frente a cada cara de rack y la de la zona de recibo
     for y in (15.66, 12.57, 9.43, 6.20):
         furn.box((-19.4, y - 0.05, zf), (-2.6 if y > 6.3 else 9.4, y + 0.05, zf + 0.0015), "paint_yellow", bevel=0.0)
@@ -1236,6 +1236,11 @@ def warehouse_interior(furn, r):
             put(ar.ammo_can("large", seed=240 + k), _T(cxg + 0.2 + (k % 2) * 0.32, cyg - 1.4 + (k // 2) * 0.17, zf))
         if hasattr(ar, "hard_case"):
             put(ar.hard_case(seed=250, L=1.2), _T(cxg - 0.2, cyg + 0.2, zf) @ _Rz(90))
+        if hasattr(ar, "launcher_tube"):                     # caja larga abierta con dos lanzadores desechables
+            Mc = _T(cxg + 1.9, cyg - 1.55, zf)
+            put(ar.ammo_crate("long", seed=260, open=True), Mc)
+            for k in range(2):
+                put(ar.launcher_tube(seed=261 + k), Mc @ _T(0.0, (k - 0.5) * 0.17, 0.07), solid=False)
     # zona de recibo: tarimas en espera y montacargas
     if ar is not None:
         for k, (x, y) in enumerate(((-17.2, 3.4), (-15.6, 3.4), (-10.2, 3.6), (-8.4, 2.9))):
@@ -1260,10 +1265,10 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     LIGHTS.clear()
     PROXIES.clear()
     root = collection_root or get_collection(cid)
-    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")
+    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture", "Fence", "Cargo")
     cols = {k: get_collection(f"{cid}_{k}", root) for k in keys}
     out = {k: [] for k in cols}
-    shell, det, inter, rf, furn = MB(), MB(), MB(), MB(), MB()
+    shell, det, inter, rf, furn, per, cargo = MB(), MB(), MB(), MB(), MB(), MB(), MB()
     r = rng(cfg["seed"])
     shell_walls(shell)
     roof(rf, det)
@@ -1279,10 +1284,11 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     lightning(det)
     site_ground(det, r)
     if dress_on and kw.get("dress", True):
-        front_fence(det, r)
-        perimeter(det, furn, r)
-        warehouse_interior(furn, r)
-    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", rf), ("Furniture", furn)):
+        front_fence(per, r)
+        perimeter(per, det, r)
+        warehouse_interior(furn, r, cargo)
+    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", rf), ("Furniture", furn), ("Fence", per),
+                   ("Cargo", cargo)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
     out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), proxies=list(PROXIES))
