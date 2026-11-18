@@ -1228,7 +1228,7 @@ def cfg_mil2(bid="MIL_2_avanzada"):
 def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     """Puesto de avanzada: tienda de marco (frente largo enrollado al -y) sobre tarima de triplay, mostrador de cajas con la
     caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con fundas y chalecos, mesa con cargadores y
-    cajas de cartuchos, serie de focos, letrero SUPPLY colgado del alero, red de camuflaje al frente, HESCO en las esquinas
+    cajas de cartuchos, serie de focos, letrero SUPPLY colgado del frente del mostrador, red de camuflaje al frente, HESCO en las esquinas
     del frente, costales al fondo y en los testeros, generador táctico con bidones y reflector en trípode."""
     cp, ft, ar = _mod("campaign"), _mod("fortif"), _mod("armory")
     if cp is None:
@@ -1249,7 +1249,7 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     put(_fn("plywood_floor", cp)(L=9.5, W=5.8, seed=int(r.integers(1e6))), Matrix(), solid=False)
     zf = FLOOR_TOP
     # mostrador y mesa de exhibición al frente
-    put(_fn("crate_counter", cp)(L=2.4, seed=int(r.integers(1e6))), _T(-0.6, -2.35, zf))
+    put(_fn("crate_counter", cp)(L=2.4, seed=int(r.integers(1e6))), _T(-1.2, -2.35, zf))   # entre las patas de los arcos (x -2,41 y 0)
     put(_fn("folding_table", cp)(L=1.83, seed=int(r.integers(1e6))), _T(1.95, -2.30, zf))
     if ar is not None:
         tz = zf + getattr(_mod("tienda_mobiliario"), "TABLE_TOP", 0.737)
@@ -1260,7 +1260,7 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
             put(_fn("cardboard_ammo_box", ar)(seed=k), _T(1.75 + i * 0.12, -2.25 + j * 0.08, tz) @ _Rz(r.uniform(-6, 6)), mb=cargo, solid=False)
         for k in range(2):
             put(_fn("ammo_can", ar)("small", seed=40 + k), _T(2.45, -2.42 + k * 0.17, tz), mb=cargo, solid=False)
-        put(_fn("ammo_can", ar)("large", seed=42, open=True), _T(0.2, -2.25, zf + 0.909), mb=cargo, solid=False)
+        put(_fn("ammo_can", ar)("large", seed=42, open=True), _T(-0.4, -2.25, zf + 0.909), mb=cargo, solid=False)
     # anaqueles, armeros y tablero al fondo (+y)
     yb = TENT_W / 2 - 0.42
     for k, (x, stock) in enumerate(((-4.0, "cans"), (-2.7, "boxes"), (-1.4, "mixed"))):
@@ -1302,9 +1302,9 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
         solid=False)
     for x in np.linspace(-3.8, 3.8, 8):
         LIGHTS.append([round(float(x), 3), 0.0, 2.85])
-    # letrero SUPPLY del alero del frente
+    # letrero SUPPLY
     # letrero colgado de la orilla del mostrador, al frente de las cajas: se lee desde el paso y no queda a la altura de la cabeza
-    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6), _T(-0.6, -2.755, zf + 0.909), solid=False)
+    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6), _T(-1.2, -2.755, zf + 0.909), solid=False)
     if ft is None:
         return
     # HESCO en las esquinas del frente y costales al fondo y en los testeros
