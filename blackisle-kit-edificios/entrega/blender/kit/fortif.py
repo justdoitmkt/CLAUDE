@@ -714,7 +714,7 @@ class _HField:
         iy = np.clip(np.floor((P[:, 1] - self.y0) / self.h + 0.5).astype(int), 0, self.ny - 1)
         np.maximum.at(self.H, (iy, ix), P[:, 2])
 
-    def filtered(self, rmax=3, sigma=6):
+    def filtered(self, rmax=2, sigma=6):
         """(S1, S2): máximo local (radio rmax celdas, cubre los huecos entre vértices) desenfocado y nunca debajo de H; y su
         versión muy desenfocada (gaussiana sigma celdas) para la tapa."""
         H = self.H
@@ -764,8 +764,8 @@ def _bag_stack(courses, seed, bounds, hs_course=None, lod=0):
     for ci, course in enumerate(courses):
         S1, S2 = hf.filtered()
         if ci:
-            S1 = S1 + 0.0025
-            S2 = S2 + 0.0025
+            S1 = S1 + 0.001
+            S2 = S2 + 0.001
         placed = []
         for item in course:
             x, y, ang, ls, ws = item[:5]
