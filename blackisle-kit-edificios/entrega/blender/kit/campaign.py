@@ -2620,7 +2620,7 @@ def _fl_wheel(mb, M, R, w, rim_r, n_lugs=8):
     prof = [(rim_r + 0.004, -w / 2), (R - 0.016, -w / 2), (R - 0.006, -w / 2 + 0.004), (R - 0.0012, -w / 2 + 0.011), (R, -w / 2 + 0.02),
             (R, -w / 4), (R, -0.006), (R, 0.0), (R, 0.006), (R, w / 4), (R, w / 2 - 0.02), (R - 0.0012, w / 2 - 0.011),
             (R - 0.006, w / 2 - 0.004), (R - 0.016, w / 2), (rim_r + 0.004, w / 2)]
-    slathe(mb, prof, seg=seg, mat="rubber", M=M, rmod=rmod, caps=False)
+    slathe(mb, prof, seg=seg, mat="rubber", M=M, rmod=rmod, closed=True)
     # banda de acero prensada (asoma 4 mm en ambos costados) y disco
     _lathe(mb, [(rim_r - 0.012, -w / 2 - 0.004), (rim_r + 0.006, -w / 2 - 0.004), (rim_r + 0.0075, -w / 2 - 0.0025),
                 (rim_r + 0.0075, w / 2 + 0.0025), (rim_r + 0.006, w / 2 + 0.004), (rim_r - 0.012, w / 2 + 0.004)], M, "steel", seg=72,
@@ -2661,6 +2661,7 @@ def _leaf_chain(mb, p0, p1, side, pitch=0.015875):
             slab(mb, M, pitch + 0.0135, 0.0135, tp - 0.0001, rc=0.0067, re=0.0004, mat="steel", nc=3, ne=1)
     for k in range(n + 1):
         c = p0 + u * (pitch * k)
+        _cyl(mb, tuple(c - sd * 2.5 * tp), tuple(c + sd * 2.5 * tp), 0.0028, "steel", seg=12, caps=False)
         for sg in (-1, 1):
             Mp = _frame_z(c + sd * sg * 2.5 * tp, sd * sg)
             _lathe(mb, [(0.0, -0.0003), (0.0033, -0.0003), (0.0031, 0.0004), (0.0022, 0.0011), (0.0, 0.0013)], Mp, "steel", seg=12)
@@ -2736,14 +2737,16 @@ def forklift(seed=0):
     for sx in (-1, 1):
         _fl_wheel(mb, _T(sx * xf, yfa, Rf) @ _Ry(90 * sx), Rf, wf, 0.1905, n_lugs=10)
         _fl_wheel(mb, _T(sx * xr, yra, Rr) @ _Ry(90 * sx), Rr, wr, 0.1334, n_lugs=6)
-        _lathe(mb, [(0.0, 0.0), (0.13, 0.0), (0.13, 0.02), (0.095, 0.03), (0.095, 0.06), (0.0, 0.06)],
+        _lathe(mb, [(0.0, -0.155), (0.11, -0.155), (0.11, 0.0), (0.13, 0.0), (0.13, 0.02), (0.095, 0.03), (0.095, 0.06), (0.0, 0.06)],
                _T(sx * (xf - wf / 2 - 0.0), yfa, Rf) @ _Ry(-90 * sx), "gunmetal", seg=SEG)                  # cubo planetario
-        _lathe(mb, [(0.0, 0.0), (0.06, 0.0), (0.06, 0.07), (0.045, 0.085), (0.0, 0.085)],
+        _lathe(mb, [(0.0, -0.13), (0.06, -0.13), (0.06, 0.07), (0.045, 0.085), (0.0, 0.085)],
                _T(sx * (xr - wr / 2), yra, Rr) @ _Ry(-90 * sx), "gunmetal", seg=SEG)                         # muñón
     _cyl(mb, (-0.36, yfa, Rf), (0.36, yfa, Rf), 0.085, "gunmetal", seg=SEG)                                 # carcasa del eje
     _lathe(mb, [(0.0, -0.13), (0.11, -0.12), (0.15, -0.06), (0.15, 0.04), (0.12, 0.1), (0.0, 0.12)], _T(0.0, yfa + 0.02, Rf) @ _Rx(90),
            "gunmetal", seg=SEG)                                                                              # diferencial
     rtube(mb, (-0.33, yra, Rr), (0.33, yra, Rr), 0.12, 0.1, "gunmetal", r=0.012, up=(0, 0, 1))              # eje de dirección
+    _board(mb, -0.08, 0.08, yra - 0.07, yra + 0.07, Rr + 0.04, 0.47, "gunmetal", r=0.01)                    # soporte de pivote al chasis
+    _cyl(mb, (0.0, yra - 0.1, Rr + 0.03), (0.0, yra + 0.1, Rr + 0.03), 0.035, "steel", seg=SEG)
     for sx in (-1, 1):
         _cyl(mb, (sx * 0.1, yra - 0.08, Rr + 0.02), (sx * 0.3, yra - 0.07, Rr + 0.02), 0.012, "steel", seg=SEG)  # barras de liga
     # ---------------- chasis (acero negro), carrocería (amarillo)
@@ -2860,7 +2863,7 @@ def forklift(seed=0):
             slab(mb, Mp @ _T(0, -0.04 + k * 0.02, 0.0175), w_ - 0.02, 0.005, 0.0025, rc=0.002, re=0.001, mat="rubber", nc=1, ne=1, re0=0.0)
         _cyl(mb, tuple(Mp @ Vector((0, 0.04, -0.002))), (x, -0.36, 0.565), 0.009, "steel", seg=SEG)
     # placa de capacidad (aluminio remachado, cara al operador)
-    Mpl = _T(-0.16, -0.3598, 0.82) @ _Rx(-90) @ _Rz(180)
+    Mpl = _T(-0.16, -0.3602, 0.82) @ _Rx(-90) @ _Rz(180)
     slab(mb, Mpl, 0.15, 0.1, 0.0012, rc=0.004, re=0.0003, mat="aluminium", nc=2, ne=1)
     zz = 0.034
     for (s_, sz, b) in (("CAPACITY", 0.011, True), ("5000 LB  @  24 IN LOAD CENTER", 0.0058, True), ("MAX FORK HEIGHT 130 IN", 0.0058, False),
@@ -2940,7 +2943,7 @@ def forklift(seed=0):
         t_ = PI / 2 * k / 9
         tank.append((Rt * math.sin(t_), hs + 0.078 * math.cos(t_)))
     _lathe(mb, tank, Mt, "aluminium", seg=48)
-    _lathe(mb, [(0.112, -0.33), (0.118, -0.33), (0.118, -0.39), (0.112, -0.392)], Mt, "aluminium", seg=48, closed=True)  # aro de pie
+    _lathe(mb, [(0.112, -0.30), (0.118, -0.30), (0.118, -0.39), (0.112, -0.392)], Mt, "aluminium", seg=48, closed=True)  # aro de pie
     for (z0, z1, a0, a1) in ((0.31, 0.37, 0.0, 2 * PI), (0.37, 0.43, 0.25, PI - 0.25), (0.37, 0.43, PI + 0.6, 2 * PI - 0.6)):
         arc_solid(mb, 0.106, 0.11, z0, z1, a0, a1, 40 if a1 - a0 > 4 else 18, "aluminium", M=Mt)                # collar con asas
     _lathe(mb, [(0.0, 0.33), (0.022, 0.33), (0.022, 0.355), (0.016, 0.36), (0.016, 0.38), (0.0, 0.38)], Mt, "brass", seg=SEG)
@@ -3046,17 +3049,18 @@ def forklift(seed=0):
         for zr in (0.25, 0.78):
             Mr = _frame_z(Vector((sx * 0.27, ym, zr)), Vector((sx, 0, 0)))
             _lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.016), (0.0, 0.016)], Mr, "steel", seg=SEG)
-            _lathe(mb, [(0.012, 0.016), (0.031, 0.017), (0.032, 0.02), (0.032, 0.046), (0.031, 0.049), (0.012, 0.05)], Mr, "steel", seg=SEG)
+            _lathe(mb, [(0.011, 0.015), (0.031, 0.016), (0.032, 0.019), (0.032, 0.046), (0.031, 0.049), (0.011, 0.05)], Mr, "steel", seg=SEG,
+                   closed=True)
         _board(mb, sx * 0.17 - 0.03, sx * 0.17 + 0.03, yb1 - 0.002, ym - 0.045, 0.48, 0.62, "gunmetal", r=0.004)    # orejas de cadena
     # respaldo de carga
     yr_ = (yb0 + yb1) / 2
     for sx in (-1, 1):
-        rtube(mb, (sx * 0.5, yr_, 0.48), (sx * 0.5, yr_, 1.27), 0.04, 0.025, "gunmetal", r=0.004, up=(0, 1, 0))
+        rtube(mb, (sx * 0.5, yr_, 0.478), (sx * 0.5, yr_, 1.27), 0.04, 0.025, "gunmetal", r=0.004, up=(0, 1, 0))
     rtube(mb, (-0.52, yr_, 1.27), (0.52, yr_, 1.27), 0.025, 0.04, "gunmetal", r=0.004, up=(0, 0, 1))
     rtube(mb, (-0.48, yr_, 0.87), (0.48, yr_, 0.87), 0.025, 0.03, "gunmetal", r=0.004, up=(0, 0, 1))
     for k in range(8):
         x = -0.42 + 0.12 * k
-        rtube(mb, (x, yr_, 0.48), (x, yr_, 1.25), 0.012, 0.04, "gunmetal", r=0.003, up=(0, 1, 0))
+        rtube(mb, (x, yr_, 0.478), (x, yr_, 1.252), 0.012, 0.04, "gunmetal", r=0.003, up=(0, 1, 0))
         for zw in (0.484, 1.252):
             _bead(mb, [(x - 0.007, yr_ - 0.021, zw), (x + 0.007, yr_ - 0.021, zw)], r=0.0022, mat="gunmetal")
     # horquillas: caña, talón doblado, cuchilla con punta cónica y biselada, ganchos y seguro de posición
@@ -3098,8 +3102,8 @@ def forklift(seed=0):
             _bead(mb, [(x - 0.048, yf0 - 0.0015, zb + (0.0015 if zb > 0.3 else -0.0015)), (x + 0.048, yf0 - 0.0015, zb + (0.0015 if zb > 0.3 else -0.0015))],
                   r=0.0028, mat="gunmetal")
         _lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.05), (0.0, 0.05)], _T(x, (yf0 + yb1) / 2, 0.47), "steel", seg=SEG)   # pasador
-        lever = [(x - 0.03, (yf0 + yb1) / 2, 0.528), (x - 0.03, (yf0 + yb1) / 2, 0.55), (x + 0.03, (yf0 + yb1) / 2, 0.55),
-                 (x + 0.03, (yf0 + yb1) / 2, 0.528)]
+        lever = [(x - 0.006, (yf0 + yb1) / 2, 0.524), (x - 0.006, (yf0 + yb1) / 2, 0.55), (x + 0.03, (yf0 + yb1) / 2, 0.55),
+                 (x + 0.03, (yf0 + yb1) / 2, 0.519)]
         _tube(mb, fillet(lever, 0.01, 5), 0.0045, seg=SEG_T + 2, mat="steel")
         _lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.006), (0.0, 0.006)], _T(x, (yf0 + yb1) / 2, 0.52), "steel", seg=SEG)
     # placa de capacidad del carro (estarcido)
@@ -3195,11 +3199,11 @@ def _wrench(mb, M, L=0.2, seed=0):
     """Llave combinada acostada (boca abierta a 15° en +X, estría de 12 puntas en -X), caña en I con cantos redondeados."""
     s = L / 0.24
     w0, t0 = 0.016 * s, 0.0055 * s
-    sweep_frame(mb, rr_profile(w0, t0, t0 * 0.35, n=3), [tuple(M @ Vector((x, 0, t0 / 2 + 0.0003))) for x in (-L / 2 + 0.022 * s, L / 2 - 0.028 * s)],
-                "steel", up=tuple(M.to_3x3() @ Vector((0, 0, 1))), scale=lambda t_: (1.0 - 0.18 * math.sin(PI * t_), 1.0 - 0.15 * math.sin(PI * t_)))
+    sweep_frame(mb, rr_profile(w0, t0, t0 * 0.35, n=3), [tuple(M @ Vector((x, 0, t0 / 2 + 0.0004))) for x in (-L / 2 + 0.022 * s, L / 2 - 0.028 * s)],
+                "steel", up=tuple(M.to_3x3() @ Vector((0, 0, 1))), scale=lambda t_: (1.0 - 0.18 * math.sin(PI * t_), 1.0 - 0.1 * math.sin(PI * t_)))
     # estría: anillo con 12 puntas por dentro
     Ro, Ri = 0.0155 * s, 0.0098 * s
-    ring = [(Ri, 0.0003), (Ro - 0.0015, 0.0003), (Ro, 0.0018), (Ro, t0 * 1.2 - 0.0012), (Ro - 0.0015, t0 * 1.2), (Ri, t0 * 1.2)]
+    ring = [(Ri, -0.0002), (Ro - 0.0015, -0.0002), (Ro, 0.0013), (Ro, t0 * 1.2 - 0.0012), (Ro - 0.0015, t0 * 1.2), (Ri, t0 * 1.2)]
     pts12 = lambda a: 1.0 + 0.1 * (0.5 + 0.5 * math.cos(12 * a))                           # noqa: E731
     revolve(mb, ring, "steel", seg=48, M=M @ _T(-L / 2 + 0.006 * s, 0, 0), closed=True)
     revolve(mb, [(Ri * 1.1, 0.0004), (Ri * 1.1, t0 * 1.2 - 0.0001)], "cable", seg=48, M=M @ _T(-L / 2 + 0.006 * s, 0, 0), rmod=pts12,
@@ -3207,7 +3211,7 @@ def _wrench(mb, M, L=0.2, seed=0):
     # boca abierta: mordaza en C (perfil redondeado barrido por un arco de 230°) girada 15° respecto a la caña
     Mo = M @ _T(L / 2 - 0.012 * s, 0, 0) @ _Rz(15)
     Rj, wj = 0.0136 * s, 0.0076 * s
-    arc = [tuple(Mo @ Vector((Rj * math.cos(a), Rj * math.sin(a), t0 * 0.56))) for a in np.linspace(math.radians(62), math.radians(298), 33)]
+    arc = [tuple(Mo @ Vector((Rj * math.cos(a), Rj * math.sin(a), t0 * 0.52))) for a in np.linspace(math.radians(62), math.radians(298), 33)]
     sweep_frame(mb, rr_profile(wj, t0 * 1.05, t0 * 0.3, n=3), arc, "steel", up=tuple(M.to_3x3() @ Vector((0, 0, 1))),
                 scale=lambda t_: (1.0 - 0.25 * max(0.0, abs(2 * t_ - 1) - 0.8) / 0.2, 1.0))
 
@@ -3232,7 +3236,7 @@ def _hammer(mb, M, seed=0):
 
 def _screwdriver(mb, M, seed=0):
     """Desarmador de cruz acostado: mango de acetato con estrías, virola, vástago y punta (eje X local, z = 0 en la cubierta)."""
-    Ms = M @ _T(0, 0, 0.016) @ _Ry(90)
+    Ms = M @ _T(0, 0, 0.0158) @ _Ry(90)
     from kit.clinic_servicios import lathe as slathe
     fl = lambda i, a, rr, z: rr * (1.0 - 0.07 * max(0.0, math.cos(6 * a)) ** 2) if 2 <= i <= 4 else rr   # noqa: E731
     slathe(mb, [(0.0, -0.11), (0.012, -0.109), (0.015, -0.1), (0.016, -0.09), (0.0155, -0.03), (0.0135, -0.015), (0.0085, -0.008),
@@ -3269,7 +3273,7 @@ def workbench(seed=0):
     for k in range(n):
         y0 = -D / 2 + k * wst
         rr_ = 0.004 if k in (0, n - 1) else 0.0012
-        _board(mb, -L / 2, L / 2, y0, y0 + wst, zt, H, "wood", r=rr_)
+        _board(mb, -L / 2, L / 2, y0 + 0.0001, y0 + wst - 0.0001, zt, H, "wood", r=rr_)
     # ---- bastidor de ángulo de 2" × 3/16" (perímetro bajo la cubierta) con esquinas a inglete
     a, t = 0.0508, 0.0048
     Lf, Df = L - 0.04, D - 0.04
@@ -3319,7 +3323,7 @@ def workbench(seed=0):
         _board(mb, cx + sx * cw / 2 - (0.0012 if sx > 0 else 0.0), cx + sx * cw / 2 + (0.0 if sx > 0 else 0.0012), -cd / 2, cd / 2, z0, z1, "paint_od",
                r=0.0005)
         for zb in (z0 + 0.03, z1 - 0.03):
-            _nv_bolt_head(mb, _T(cx + sx * (cw / 2 + 0.0012), -0.2, zb) @ _Ry(90 * sx), d=0.0064, mat="steel")
+            _nv_bolt_head(mb, _T(cx + sx * cw / 2, -0.2, zb) @ _Ry(90 * sx), d=0.0064, mat="steel")
     _board(mb, cx - cw / 2, cx + cw / 2, -cd / 2, cd / 2, z0, z0 + 0.0012, "paint_od", r=0.0005)
     _board(mb, cx - cw / 2, cx + cw / 2, cd / 2 - 0.0012, cd / 2, z0, z1, "paint_od", r=0.0005)
     _board(mb, cx - cw / 2, cx + cw / 2, -cd / 2, -cd / 2 + 0.018, z1 - 0.012, z1, "paint_od", r=0.0008)
@@ -3362,7 +3366,7 @@ def workbench(seed=0):
                 _lathe(mb, [(0.0, 0.0105), (d_ * 0.62, 0.0105), (0.0, 0.011)], _T(*p), "cable", seg=6)
     # ---- tornillo de banco y herramientas sobre la cubierta
     _vise(mb, _T(-L / 2 + 0.2, -D / 2 + 0.16, H), seed=seed)
-    _hammer(mb, _T(-0.3, 0.06, H) @ _Rz(-20 + _jit(r, 8)), seed=seed)
+    _hammer(mb, _T(-0.3, 0.06, H - 0.0016) @ _Rz(-20 + _jit(r, 8)), seed=seed)
     _wrench(mb, _T(0.05, -0.12, H) @ _Rz(12 + _jit(r, 10)), L=0.24)
     _wrench(mb, _T(0.12, -0.2, H) @ _Rz(-8 + _jit(r, 10)), L=0.19)
     _screwdriver(mb, _T(0.38, 0.05, H) @ _Rz(75 + _jit(r, 10)), seed=seed)
@@ -3542,17 +3546,18 @@ def _extinguisher10(mb, M, seed=0):
                   0.0013, seg=12, mat="steel", normal=tuple(M.to_3x3() @ Vector((0, 1, 0))))
         seal = [(-0.042, 0.022, zp + 0.008), (-0.038, 0.03, zp + 0.024), (-0.02, 0.04, zp + 0.03), (0.0, 0.042, zp + 0.024), (0.006, 0.036, zp + 0.012)]
         mb.tube([tuple(Mv @ Vector(p)) for p in fillet(seal, 0.007, 5)], 0.0009, seg=12, mat="paint_yellow")
-    slab(mb, Mv @ _T(-0.04, 0.034, zp + 0.03), 0.009, 0.006, 0.006, rc=0.002, re=0.001, mat="paint_yellow", nc=2, ne=1)
+    slab(mb, Mv @ _T(-0.02, 0.04, zp + 0.027), 0.009, 0.006, 0.006, rc=0.002, re=0.001, mat="paint_yellow", nc=2, ne=1)
     # manómetro al frente
     Mg = Mv @ _T(0, -0.0135, 0.024) @ _Rx(90)
     _cyl(mb, tuple(Mg @ Vector((0, 0, -0.002))), tuple(Mg @ Vector((0, 0, 0.012))), 0.004, "brass", seg=SEG)
     _lathe(mb, [(0.0, 0.012), (0.0145, 0.012), (0.0155, 0.014), (0.0155, 0.022), (0.0165, 0.023), (0.0165, 0.025), (0.014, 0.0255)], Mg, "steel",
            seg=SEG)
     _lathe(mb, [(0.0, 0.0225), (0.0138, 0.0225), (0.0, 0.0227)], Mg, "sign_white", seg=SEG)
-    arc_solid(mb, 0.008, 0.012, 0.0226, 0.0229, math.radians(60), math.radians(120), 8, "sign_green", M=Mg)
+    arc_solid(mb, 0.008, 0.012, 0.0224, 0.0229, math.radians(60), math.radians(120), 10, "sign_green", M=Mg)
     needle = math.radians(float(r.uniform(-8, 6)))
-    slab(mb, Mg @ _T(0, 0, 0.0229) @ _Rz(math.degrees(needle) + 90), 0.0105, 0.0008, 0.0004, rc=0.0003, re=0.0001, mat="cable", nc=1, ne=1)
-    _lathe(mb, [(0.0, 0.0255), (0.014, 0.0255), (0.012, 0.0262), (0.0, 0.0265)], Mg, "glass", seg=SEG)
+    slab(mb, Mg @ _T(0.0045 * math.cos(needle + PI / 2), 0.0045 * math.sin(needle + PI / 2), 0.02255) @ _Rz(math.degrees(needle) + 90), 0.0105,
+         0.0008, 0.0006, rc=0.0003, re=0.0001, mat="cable", nc=1, ne=1)
+    _lathe(mb, [(0.0, 0.0255), (0.0146, 0.0255), (0.0125, 0.0262), (0.0, 0.0265)], Mg, "glass", seg=SEG)
     # salida, manguera y boquilla
     Mo = Mv @ _T(0.016, 0.0, 0.018) @ _Ry(90)
     _nv_nut(mb, Mo, 0.016, 0.009, "steel", hole=0.004)
@@ -3591,12 +3596,12 @@ def extinguisher_station(seed=0):
     t = 0.004
     W_, z0, z1 = 0.6, 0.85, 2.15
     slab(mb, _T(0, -t / 2, z0) @ _Rx(0), W_, t, z1 - z0, rc=0.004, re=0.0015, mat="sign_white", nc=2, ne=1)
-    for (xa, xb, za, zb) in ((-W_ / 2 + 0.012, W_ / 2 - 0.012, z0 + 0.012, z0 + 0.04), (-W_ / 2 + 0.012, -W_ / 2 + 0.04, z0 + 0.04, z1 - 0.2),
-                             (W_ / 2 - 0.04, W_ / 2 - 0.012, z0 + 0.04, z1 - 0.2)):
+    for (xa, xb, za, zb) in ((-W_ / 2 + 0.012, W_ / 2 - 0.012, z0 + 0.012, z0 + 0.04), (-W_ / 2 + 0.012, -W_ / 2 + 0.04, z0 + 0.0405, z1 - 0.2005),
+                             (W_ / 2 - 0.04, W_ / 2 - 0.012, z0 + 0.0405, z1 - 0.2005)):
         _board(mb, xa, xb, -t - 0.0006, -t + 0.0003, za, zb, "sign_red", r=0.0003)
     _board(mb, -W_ / 2 + 0.012, W_ / 2 - 0.012, -t - 0.0006, -t + 0.0003, z1 - 0.2, z1 - 0.012, "sign_red", r=0.0003)
     text_font(mb, "FIRE POINT", 0.072, 0.0008, "sign_white", _T(0, -t - 0.0006, z1 - 0.135) @ _Rx(90), font="sign", bold=True, res=3)
-    Mi = _T(0, -t - 0.0006, z1 - 0.37) @ _Rx(90)
+    Mi = _T(0, -t + 0.0002, z1 - 0.37) @ _Rx(90)
     slab(mb, Mi, 0.36, 0.2, 0.0012, rc=0.008, re=0.0004, mat="sign_red", nc=3, ne=1)
     slab(mb, Mi @ _T(0, 0, 0.0012), 0.344, 0.184, 0.0005, rc=0.006, re=0.0002, mat="sign_white", nc=3, ne=1)
     zz = 0.06
@@ -3631,11 +3636,11 @@ def extinguisher_station(seed=0):
     with mb.soft():
         loop_tube(mb, [(0.021 * math.cos(a), yc + 0.021 * math.sin(a), ztn) for a in np.linspace(0, 2 * PI, 25)[:-1]], 0.0008, seg=12, mat="cable",
                   normal=(0, 0, 1))
-        dome = [(0.021, ztn), (0.032, ztn - 0.005), (0.045, ztn - 0.014), (0.056, ztn - 0.026), (0.063, ztn - 0.042), (0.065, ztn - 0.07)]
+        dome = [(0.021, ztn), (0.032, ztn - 0.005), (0.045, ztn - 0.014), (0.056, ztn - 0.026), (0.063, ztn - 0.042), (0.065, ztn - 0.075)]
         mb.tube([(r_ * math.sin(phi), yc - r_ * math.cos(phi), z_) for (r_, z_) in dome], 0.0008, seg=12, mat="cable")
     Mt = _T(0.0655 * math.sin(phi), yc - 0.0655 * math.cos(phi), ztn - 0.07) @ _Rz(math.degrees(phi)) @ _Rx(90)
-    slab(mb, Mt @ _T(0, -0.05, -0.0003), 0.05, 0.09, 0.0006, rc=0.006, re=0.0002, mat="paper", nc=2, ne=1)
-    _lathe(mb, [(0.0025, 0.0), (0.005, 0.0), (0.005, 0.0011), (0.0025, 0.0011)], Mt @ _T(0, -0.012, -0.0003), "brass", seg=16, closed=True)
+    slab(mb, Mt @ _T(0, -0.0445, -0.0003), 0.05, 0.09, 0.0006, rc=0.006, re=0.0002, mat="paper", nc=2, ne=1)
+    _lathe(mb, [(0.0018, -0.0001), (0.0042, -0.0001), (0.0042, 0.0011), (0.0018, 0.0011)], Mt @ _T(0, -0.005, -0.0003), "brass", seg=SEG, closed=True)
     text_font(mb, "INSPECTED", 0.0062, 0.0002, "cable", Mt @ _T(0, -0.03, 0.0003), font="sign", bold=True, res=2)
     for k in range(4):
         slab(mb, Mt @ _T(0, -0.045 - k * 0.009, 0.0003), 0.036, 0.0008, 0.0002, rc=0.0002, re=0.0, mat="cable", nc=1, ne=1, re0=0.0)
