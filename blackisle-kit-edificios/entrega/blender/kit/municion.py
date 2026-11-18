@@ -21,6 +21,7 @@ Fuentes de medidas (consultadas 2026-11): ver el docstring de cada función.
 import math
 
 import bpy  # noqa: F401  (bpy antes que mathutils / bmesh)
+import bmesh
 from mathutils import Matrix, Vector
 
 from kit.armory import plan, side, xloft
@@ -39,6 +40,21 @@ WOOD = "wood_od"
 CRATE_DIMS = {"wood": (0.66, 0.36, 0.30), "long": (1.65, 0.42, 0.27), "small": (0.46, 0.30, 0.24)}
 
 _CACHE = {}
+_LOD = [0]          # nivel de detalle activo mientras se arma una pieza (0 = completo; 1 = racks: ver crate_pallet)
+
+
+def _lo():
+    return _LOD[0] >= 1
+
+
+def _at_lod(lod, fn, *a, **k):
+    """Arma fn(*a, **k) con el nivel de detalle `lod` activo (los ayudantes lo consultan con _lo())."""
+    prev = _LOD[0]
+    _LOD[0] = int(lod)
+    try:
+        return fn(*a, **k)
+    finally:
+        _LOD[0] = prev
 
 
 # ======================================================================================================== utilidades
@@ -117,23 +133,29 @@ def stencil(mb, s, size, M, mat="paint_yellow", depth=0.00045, font="stencil", a
     """Estarcido de pintura con tipografía de plantilla real (kit.fonts), centrado en el origen de M (plano XY, +Z hacia
     afuera; la altura de mayúsculas queda centrada en y = 0). Sobresale `depth` y se hunde `sink` (más en madera, que no
     es plana)."""
-    key = ("txt", s, round(size, 5), round(depth, 6), mat, font, align, spacing, round(sink, 6))
+    lo = _lo()
+    key = ("txt", s, round(size, 5), round(depth, 6), mat, font, align, spacing, round(sink, 6), lo)
 
     def build():
         t = MB()
-        text_font(t, s, size, depth, mat, None, font=font, align=align, res=3 if size >= 0.025 else (2 if size >= 0.012 else 1),
-                  spacing=spacing, sink=sink)
+        res = (2 if size >= 0.025 else 1) if lo else (3 if size >= 0.025 else (2 if size >= 0.012 else 1))
+        text_font(t, s, size, depth, mat, None, font=font, align=align, res=res, spacing=spacing, sink=sink)
+        if lo:
+            _drop_back(t, -sink * 0.5)
         return t
     mb.join(_cached(key, build), M @ _T(0, -size * 0.355, 0))
 
 
-def stencil_cyl(mb, s, size, R, M, ang=-PI / 2, mat="paint_yellow", depth=0.0005, font="stencil"):
+def stencil_cyl(mb, s, size, R, M, ang=-PI / 2, mat="paint_yellow", depth=0.0005, font="stencil", sink=0.0003):
     """Estarcido doblado sobre un cilindro de radio R (eje Z de M), centrado en el ángulo `ang` y en z = 0 local."""
-    key = ("txt", s, round(size, 5), round(depth, 6), mat, font, "CENTER", 1.0)
+    lo = _lo()
+    key = ("txt", s, round(size, 5), round(depth, 6), mat, font, "CENTER", 1.0, lo, round(sink, 6))
 
     def build():
         t = MB()
-        text_font(t, s, size, depth, mat, None, font=font, align="CENTER", res=2)
+        text_font(t, s, size, depth, mat, None, font=font, align="CENTER", res=2, sink=sink)
+        if lo:
+            _drop_back(t, -sink * 0.5)
         return t
     src = _cached(key, build)
 
@@ -144,27 +166,45 @@ def stencil_cyl(mb, s, size, R, M, ang=-PI / 2, mat="paint_yellow", depth=0.0005
     _join_map(mb, src, fn)
 
 
+def _drop_back(t, zlim):
+    """Quita las caras traseras de las letras (hundidas en la superficie, nunca visibles): versión ligera."""
+    t.bm.faces.ensure_lookup_table()
+    dead = [f for f in t.bm.faces if max(v.co.z for v in f.verts) < zlim]
+    if dead:
+        bmesh.ops.delete(t.bm, geom=dead, context="FACES_ONLY")
+
+
 def nail(mb, M, d=0.0062, mat="steel"):
     """Cabeza de clavo de caja (plana, apenas abombada) sobre z = 0 local, +Z hacia afuera; el vástago queda en la madera."""
     with mb.soft():
-        revolve(mb, [(d * 0.5, -0.0016), (d * 0.5, 0.0004), (d * 0.40, 0.0009), (0.0, 0.0011)], mat, seg=10, M=M, caps=False)
+        if _lo():                                            # disco de 8 lados de sombreado continuo
+            revolve(mb, [(d * 0.5, -0.0012), (d * 0.5, 0.0004), (0.0, 0.0010)], mat, seg=8, M=M, caps=False)
+        else:
+            revolve(mb, [(d * 0.5, -0.0016), (d * 0.5, 0.0004), (d * 0.40, 0.0009), (0.0, 0.0011)], mat, seg=10, M=M, caps=False)
 
 
 def rivet(mb, M, d=0.007, mat="steel", seg=SEG_W):
     """Cabeza de remache / tornillo de gota sobre z = 0 local (hundida 0,4 mm), sombreado continuo (cabezas <= 8 mm)."""
     with mb.soft():
-        revolve(mb, [(d / 2, -0.0004), (d / 2, 0.0002), (d * 0.42, d * 0.17), (d * 0.24, d * 0.27), (0.0, d * 0.3)], mat, seg=seg,
-                M=M, caps=False)
+        if _lo():
+            revolve(mb, [(d / 2, -0.0004), (d * 0.42, d * 0.17), (0.0, d * 0.3)], mat, seg=8, M=M, caps=False)
+        else:
+            revolve(mb, [(d / 2, -0.0004), (d / 2, 0.0002), (d * 0.42, d * 0.17), (d * 0.24, d * 0.27), (0.0, d * 0.3)], mat, seg=seg,
+                    M=M, caps=False)
 
 
 def wire(mb, pts, r, mat="steel", bend=0.006, nseg=4, caps=True, seg=None):
     """Alambre / varilla delgada por una polilínea con dobleces de radio real. r <= 3 mm: 12 lados de sombreado continuo."""
-    P = fillet(pts, bend, nseg) if len(pts) > 2 else pts
+    lo = _lo()
+    P = fillet(pts, bend, min(nseg, 2) if lo else nseg) if len(pts) > 2 else pts
     out = [P[0]]
     for p in P[1:]:
         if (Vector(p) - Vector(out[-1])).length > 1e-6:
             out.append(p)
-    if r <= 0.0031:
+    if lo:                                                   # alambres y varillas de 8 lados de sombreado continuo
+        with mb.soft():
+            mb.tube(out, r, seg=8, mat=mat, caps=caps)
+    elif r <= 0.0031:
         with mb.soft():
             mb.tube(out, r, seg=seg or (8 if r < 0.0009 else SEG_W), mat=mat, caps=caps)
     else:
@@ -173,13 +213,15 @@ def wire(mb, pts, r, mat="steel", bend=0.006, nseg=4, caps=True, seg=None):
 
 def band(mb, path, w=0.019, t=0.0006, normal=(1, 0, 0), mat="steel", closed=True):
     """Fleje de acero (cinta de w × t con cantos rolados) a lo largo de un lazo plano; `normal` = normal del plano del lazo."""
-    prof = rr_profile(t, w, t * 0.45, n=1)
+    prof = [(t / 2, w / 2), (-t / 2, w / 2), (-t / 2, -w / 2), (t / 2, -w / 2)] if _lo() else rr_profile(t, w, t * 0.45, n=1)
     mb.sweep(prof, path, mat=mat, closed_profile=True, closed_path=closed, normal=normal)
 
 
 def band_seal(mb, M, w=0.019, L=0.032, mat="galvanized"):
     """Sello engargolado de fleje (camisa de lámina doblada sobre los dos extremos) con dos pares de muescas de engargolado,
-    centrado en el origen de M (largo en X, apoyado en z = 0)."""
+    centrado en el origen de M (largo en X, apoyado en z = 0). Versión ligera: sin sello."""
+    if _lo():
+        return
     h, wd = 0.0021, w + 0.0026
     st = []
     xs = [-L / 2, -L / 2 + 0.0015]
@@ -229,8 +271,10 @@ def rope(mb, pts, r=0.0062, pitch=0.030, seg=15, mat="fabric", caps=True, phase=
     """Cuerda torcida de 3 cabos de diámetro 2r: sección = unión de 3 círculos (cabos de radio 0,56 r a 0,44 r del eje)
     que gira a paso `pitch`; los anillos giran con la torsión, así las aristas entre cabos siguen la hélice sin dientes."""
     P = [Vector(p) for p in pts]
+    if _lo():                                                # 9 lados (3 por cabo) y un anillo cada media vuelta
+        seg, per_turn = 9, 2
     if smooth and len(P) > 2:
-        P = [Vector(p) for p in spline(P, 3)]
+        P = [Vector(p) for p in spline(P, 2 if _lo() else 3)]
     P = _resample(P, pitch / per_turn)
     F = _ptframes(P)
     acc = [0.0]
@@ -279,7 +323,7 @@ def spline(pts, n=3):
 def rope_knot(mb, M, s=0.0056, r=0.0062, mat="fabric", phase=0.0):
     """Nudo de tope (trébol apretado) de la cuerda, centrado en el origen de M; cabe en ~ 6,5 s × 6,5 s × 2 (s + r)."""
     pts = []
-    n = 22
+    n = 10 if _lo() else 22
     for k in range(n + 1):
         t = 2 * PI * k / n + 0.35
         pts.append(M @ Vector((s * (math.sin(t) + 2 * math.sin(2 * t)), s * (math.cos(t) - 2 * math.cos(2 * t)),
@@ -296,8 +340,11 @@ def wplank(mb, mn, mx, mat=WOOD, r=0.0028, rs=None, grain=0.00014, cup=0.0002, b
     El eje largo es el mayor de la caja mn..mx; el ancho, el siguiente. hidden=True (fondos, patines: caras que casi no se
     ven): sin golpes, una sola cresta por cara y anillos cada 15 cm (los cantos siguen redondos)."""
     rs = rs if rs is not None else rng(0)
+    lo = _lo()
     if hidden:
         step, kw, dings, cup, bow = max(step, 0.15), 1, [], 0.0, 0.0
+    if lo:                                                   # ligera: cantos de 2 segmentos, sin veta ni golpes, 2 anillos
+        kw, dings, cup, bow, grain, end, step = 0, [], 0.0, 0.0, 0.0, 0.0, 1e9
     ext = [mx[i] - mn[i] for i in range(3)]
     a = max(range(3), key=lambda i: ext[i])
     b, c = [i for i in range(3) if i != a]
@@ -307,14 +354,15 @@ def wplank(mb, mn, mx, mat=WOOD, r=0.0028, rs=None, grain=0.00014, cup=0.0002, b
     bc, cc = (mn[b] + mx[b]) / 2, (mn[c] + mx[c]) / 2
     r = min(r, T * 0.38, W * 0.38)
     nw = kw if kw is not None else (3 if W > 0.05 else (1 if W > 0.025 else 0))
-    nn = 1 if T > 0.03 else 0
+    nn = 1 if (T > 0.03 and not lo) else 0
+    nk = 2 if lo else 4
     hw, ht = W / 2, T / 2
     prof = []                                   # (pb, pc, nb, nc, cara: 1 / -1 cara ancha, 0 canto; esquina, u)
     cs = [(hw - r, ht - r, 0.0), (-hw + r, ht - r, PI / 2), (-hw + r, -ht + r, PI), (hw - r, -ht + r, 1.5 * PI)]
     for ci, (cx, cy, a0) in enumerate(cs):
-        for k in range(5):
-            an = a0 + PI / 2 * k / 4
-            prof.append((cx + r * math.cos(an), cy + r * math.sin(an), math.cos(an), math.sin(an), 0, ci if 0 < k < 4 else -1, 0.0))
+        for k in range(nk + 1):
+            an = a0 + PI / 2 * k / nk
+            prof.append((cx + r * math.cos(an), cy + r * math.sin(an), math.cos(an), math.sin(an), 0, ci if 0 < k < nk else -1, 0.0))
         if ci == 0:                             # cara +c (ancha) de +b a -b
             for j in range(nw):
                 u = 1 - 2 * (j + 1) / (nw + 1)
@@ -342,7 +390,7 @@ def wplank(mb, mn, mx, mat=WOOD, r=0.0028, rs=None, grain=0.00014, cup=0.0002, b
     sweep_s = float(rs.uniform(-1, 1)) * bow * 0.6
     # posiciones de anillos a lo largo
     e = min(end, L * 0.1)
-    n_in = max(1, int(round((L - 2 * e) / step)))
+    n_in = max(1, int(round((L - 2 * e) / step))) if step < 1.0 else 1
     S = {0.0, e, L - e, L}
     for k in range(1, n_in):
         S.add(e + (L - 2 * e) * k / n_in)
@@ -403,17 +451,20 @@ def holed_slab(mb, M, L, W, T, holes=(), ch=0.0025, rc=0.004, nc=4, mat=WOOD, n=
     barreno con chaflán redondo chh. Caras superior / inferior partidas en n-gonos por columnas de barrenos (malla soldada y
     cerrada, sin booleanos). n múltiplo de 4."""
     chh = ch if chh is None else chh
+    if _lo():
+        ne, nc = min(ne, 1), min(nc, 1)
     cols = _fix_cuts([h[0] for h in holes])
     lv = _edge_levels(T, ch, ch, ne) if ch > 0 else [(0.0, 0.0), (0.0, T)]
     pts_lv = [_perim(L - 2 * dl, W - 2 * dl, max(rc - dl, 3e-4), nc, xc=cols) for (dl, z) in lv]
     loops = [[(p[0], p[1], z) for p in P] for P, (dl, z) in zip(pts_lv, lv)]
     V = skin(mb, loops, mat, M, cap0=False, cap1=False)
     hl = []
-    for j in range(4):
-        p = PI / 2 * j / 3
+    nh = 1 if _lo() else 3
+    for j in range(nh + 1):
+        p = PI / 2 * j / nh
         hl.append((chh * (1 - math.sin(p)), chh * (1 - math.cos(p))))
-    for j in range(4):
-        p = PI / 2 * j / 3
+    for j in range(nh + 1):
+        p = PI / 2 * j / nh
         hl.append((chh * (1 - math.cos(p)), T - chh + chh * math.sin(p)))
     unit = [(math.cos(2 * PI * k / n), math.sin(2 * PI * k / n)) for k in range(n)]
     H = []
@@ -858,11 +909,17 @@ def _cbox(seed):
 # ======================================================================================================== cajas de madera
 def _knuckle(mb, M, a, b, ro=0.0042, ri=0.0013, mat="steel"):
     """Nudillo de bisagra (lámina enrollada, Ø <= 9 mm: 16 lados) a lo largo del eje Z de M, de z = a a z = b."""
+    if _lo():
+        with mb.soft():
+            revolve(mb, [(ri, a), (ro, a), (ro, b), (ri, b)], mat, seg=8, M=M, closed=True)
+        return
     revolve(mb, [(ri, a), (ro - 0.0005, a), (ro, a + 0.0005), (ro, b - 0.0005), (ro - 0.0005, b), (ri, b)], mat, seg=16, M=M, closed=True)
 
 
 def _pin(mb, M, a, b, r=0.0016, rh=0.0027):
-    """Pasador con cabezas remachadas (abombadas) a lo largo del eje Z de M."""
+    """Pasador con cabezas remachadas (abombadas) a lo largo del eje Z de M (la versión ligera lo omite: lo tapan los nudillos)."""
+    if _lo():
+        return
     with mb.soft():
         revolve(mb, [(0.0, a - 0.0016), (rh * 0.7, a - 0.0014), (rh, a - 0.0005), (rh, a), (r, a), (r, b), (rh, b), (rh, b + 0.0005),
                      (rh * 0.7, b + 0.0014), (0.0, b + 0.0016)], "steel", seg=SEG_W, M=M)
@@ -873,11 +930,13 @@ def _crate_hinge(body, lid, x, D, zt, tb):
     cara superior), tres nudillos alternados, pasador remachado y remaches de cabeza de gota."""
     ya, za = D / 2 + 0.0042, zt
     Mb = _basis((x, D / 2, 0), (1, 0, 0), (0, 0, 1), (0, 1, 0))
+    lo = _lo()
     plan(body, [(-0.0157, za - 0.0012), (-0.0157, za - 0.074), (-0.009, za - 0.094), (0.009, za - 0.094), (0.0157, za - 0.074),
-                (0.0157, za - 0.0012)], [0.0, 0.004, 0.007, 0.007, 0.004, 0.0], 0.002, "steel", z0=-0.0004, re=0.0007, n=3, ne=1, M=Mb)
+                (0.0157, za - 0.0012)], [0.0, 0.004, 0.007, 0.007, 0.004, 0.0], 0.002, "steel", z0=-0.0004, re=0.0 if lo else 0.0007,
+         n=1 if lo else 3, ne=1, M=Mb)
     for z in (za - 0.022, za - 0.050, za - 0.078):
         rivet(body, Mb @ _T(0, z, 0.0016))
-    for (a, b) in ((-0.016, -0.0056), (0.0056, 0.016)):
+    for (a, b) in (((-0.0150, 0.0150),) if lo else ((-0.016, -0.0056), (0.0056, 0.016))):
         _knuckle(body, _T(x, ya, za) @ _Ry(90), a, b)
     yl = D / 2 + 0.0004
     path = fillet([(x, yl, za + 0.0035), (x, yl, zt + tb + 0.0004), (x, D / 2 - 0.090, zt + tb + 0.0004)], 0.003, 4)
@@ -890,13 +949,19 @@ def _crate_hinge(body, lid, x, D, zt, tb):
 
     def sc(s):
         return (1.0, 0.55 + 0.45 * math.sqrt(max(1 - ((s - (1 - e0)) / e0) ** 2, 0.0))) if s > 1 - e0 else (1.0, 1.0)
-    pts = []
-    for a_, b_ in zip(path[:-1], path[1:]):                     # remuestreo para que el extremo redondo tenga anillos
-        n = max(1, int(math.ceil((Vector(b_) - Vector(a_)).length / 0.006)))
-        pts += [tuple(Vector(a_).lerp(Vector(b_), k / n)) for k in range(n)]
-    pts.append(path[-1])
-    sweep_frame(lid, rr_profile(0.002, 0.0314, 0.0008, n=2), pts, "steel", up=(1, 0, 0), scale=sc)
-    _knuckle(lid, _T(x, ya, za) @ _Ry(90), -0.0048, 0.0048)
+    if lo:
+        path = [(x, yl, za + 0.0005)] + fillet([(x, yl, za + 0.0035), (x, yl, zt + tb + 0.0004), (x, D / 2 - 0.090, zt + tb + 0.0004)],
+                                              0.003, 2)
+        sweep_frame(lid, [(0.001, 0.0157), (-0.001, 0.0157), (-0.001, -0.0157), (0.001, -0.0157)], path, "steel", up=(1, 0, 0))
+    else:
+        pts = []
+        for a_, b_ in zip(path[:-1], path[1:]):                 # remuestreo para que el extremo redondo tenga anillos
+            n = max(1, int(math.ceil((Vector(b_) - Vector(a_)).length / 0.006)))
+            pts += [tuple(Vector(a_).lerp(Vector(b_), k / n)) for k in range(n)]
+        pts.append(path[-1])
+        sweep_frame(lid, rr_profile(0.002, 0.0314, 0.0008, n=2), pts, "steel", up=(1, 0, 0), scale=sc)
+    if not lo:
+        _knuckle(lid, _T(x, ya, za) @ _Ry(90), -0.0048, 0.0048)
     for y in (D / 2 - 0.022, D / 2 - 0.047, D / 2 - 0.072):
         rivet(lid, _T(x, y, zt + tb + 0.0018))
     _pin(body, _T(x, ya, za) @ _Ry(90), -0.0157, 0.0157)
@@ -906,26 +971,31 @@ def _crate_hasp(body, lid, x, D, zt, tb, seal=True, seed=0):
     """Portacandado al frente (-Y): placa con nudillos en el canto de la tapa, hebilla ranurada que cuelga sobre la grapa
     (lazo de varilla de 6 mm en su placa remachada al cuerpo) y sello de alambre con su plomo."""
     r = rng(seed)
+    lo = _lo()
+    seal = seal and not lo
+    pn, pre = (1, 0.0) if lo else (3, 0.0007)
     yk, zk = -D / 2 - 0.0045, zt + 0.0015
     Mf = _basis((x, -D / 2, 0), (1, 0, 0), (0, 0, 1), (0, -1, 0))                 # cara frontal: u = x, v = z, +Z = -Y
     plan(lid, [(-0.017, zk), (-0.017, zt + tb - 0.003), (0.017, zt + tb - 0.003), (0.017, zk)], [0.0, 0.003, 0.003, 0.0], 0.002,
-         "steel", z0=-0.0004, re=0.0007, n=3, ne=1, M=Mf)
+         "steel", z0=-0.0004, re=pre, n=pn, ne=1, M=Mf)
     for u in (-0.010, 0.010):
         rivet(lid, Mf @ _T(u, zt + tb * 0.62, 0.0016), d=0.006)
-    for (a, b) in ((-0.017, -0.0062), (0.0062, 0.017)):
+    for (a, b) in (((-0.0155, 0.0155),) if lo else ((-0.017, -0.0062), (0.0062, 0.017))):
         _knuckle(lid, _T(x, yk, zk) @ _Ry(90), a, b, ro=0.0036)
     hl = 0.074
     zc = zk - 0.0036 - hl / 2 + 0.002
     zs = zc - 0.016                                           # centro de la ranura
     hasp = MB()
     holed_slab(hasp, _basis((x, -D / 2 - 0.0022, zc), (1, 0, 0), (0, 0, 1), (0, -1, 0)), 0.030, hl, 0.002,
-               holes=[(0.0, zs - zc, 0.0046, 0.0118, 5.0)], ch=0.0007, rc=0.005, nc=3, mat="steel", n=24, chh=0.0005, ne=1)
-    _knuckle(hasp, _T(x, yk, zk) @ _Ry(90), -0.0058, 0.0058, ro=0.0036)
+               holes=[(0.0, zs - zc, 0.0046, 0.0118, 5.0)], ch=0.0 if lo else 0.0007, rc=0.005, nc=3, mat="steel", n=8 if lo else 24,
+               chh=0.0005, ne=1)
+    if not lo:
+        _knuckle(hasp, _T(x, yk, zk) @ _Ry(90), -0.0058, 0.0058, ro=0.0036)
     _pin(hasp, _T(x, yk, zk) @ _Ry(90), -0.0166, 0.0166, r=0.0015, rh=0.0024)
     lid.join(hasp)
     # grapa del cuerpo
     plan(body, [(-0.014, zs - 0.024), (0.014, zs - 0.024), (0.014, zs + 0.020), (-0.014, zs + 0.020)], 0.004, 0.0019, "steel",
-         z0=-0.0004, re=0.0006, n=3, ne=1, M=Mf)
+         z0=-0.0004, re=0.0 if lo else 0.0006, n=pn, ne=1, M=Mf)
     for v in (zs - 0.018, zs + 0.014):
         rivet(body, Mf @ _T(0, v, 0.0015), d=0.006)
     ys = -D / 2 - 0.0145
@@ -950,12 +1020,15 @@ def _crate_band(mb, x, D, zb, ztop, seed=0, w=0.016, t=0.0007):
     la tapa y dos grapas de alambre clavadas a horcajadas en frente y espalda."""
     r = rng(seed)
     o = 0.0004 + t / 2
+    rf = 0.004
+    if _lo():                                                # sin grapas ni sello: el fleje se hunde medio espesor en la madera
+        t, o, rf = 0.001, 0.0, 0.0028                        # y dobla con el radio del canto de la tabla
     yo, za, zb_ = D / 2 + o, zb - o, ztop + o
-    path = fillet([(x, -yo, za), (x, yo, za), (x, yo, zb_), (x, -yo, zb_)], 0.004, 4)
+    path = fillet([(x, -yo, za), (x, yo, za), (x, yo, zb_), (x, -yo, zb_)], rf, 2 if _lo() else 4)
     band(mb, path, w=w, t=t, normal=(1, 0, 0))
     ys = float(r.uniform(-D * 0.25, D * 0.25))
     band_seal(mb, _T(x, ys, zb_ + t / 2 - 0.0002) @ _Rz(90), w=w)
-    for sy in (-1, 1):
+    for sy in (() if _lo() else (-1, 1)):                  # grapas de alambre de 2,2 mm: fuera en la versión ligera
         zz = zb + (ztop - zb) * float(r.uniform(0.35, 0.65))
         yy = sy * (yo + t / 2 + 0.0011)
         wire(mb, [(x - w / 2 - 0.0025, sy * (D / 2 - 0.004), zz), (x - w / 2 - 0.0025, yy, zz), (x + w / 2 + 0.0025, yy, zz),
@@ -969,9 +1042,10 @@ def _rope_end(mb, L, D, H, zc, rs):
     Dc = D + 2 * 0.019 - 0.004
     xm = L / 2 + dep / 2
     z0c = zc - hc / 2
+    lo = _lo()
     holed_slab(mb, _T(xm, 0, z0c) @ _Rz(90), Dc, dep, hc, holes=[(-0.05, 0.0, 0.0060, 0.0060, 2), (0.05, 0.0, 0.0060, 0.0060, 2)],
-               ch=0.003, rc=0.004, nc=3, mat=WOOD, n=16, chh=0.0022)
-    for y in (-Dc / 2 + 0.03, 0.0, Dc / 2 - 0.03):
+               ch=0.003, rc=0.004, nc=3, mat=WOOD, n=8 if lo else 16, chh=0.0022)
+    for y in ((-Dc / 2 + 0.03, Dc / 2 - 0.03) if lo else (-Dc / 2 + 0.03, 0.0, Dc / 2 - 0.03)):
         nail(mb, _T(L / 2 + dep, y, zc + float(rs.uniform(-0.012, 0.012))) @ _Ry(90))
     xr = xm + 0.0008
     zt_ = z0c + hc
@@ -983,6 +1057,8 @@ def _rope_end(mb, L, D, H, zc, rs):
     for sy in (-1, 1):
         rope_knot(mb, _T(xr, sy * 0.05, zt_ + 0.0085) @ _Rz(float(rs.uniform(0, 360))), phase=float(rs.uniform(0, 6)))
         a = float(rs.uniform(-0.6, 0.6))
+        if lo:
+            continue
         rope(mb, [(xr, sy * 0.05, zt_ + 0.012), (xr + 0.004 * math.cos(a), sy * (0.05 + 0.012), zt_ + 0.011),
                   (xr + 0.008 * math.cos(a), sy * (0.05 + 0.026), zt_ + 0.0075)], r=0.0058, pitch=0.030, seg=12, caps=True)
 
@@ -994,8 +1070,9 @@ def _bail_end(mb, L, D, H, zc, tb, rs):
     Dc = D + 2 * tb - 0.004
     wplank(mb, (L / 2 - 0.0005, -Dc / 2, zc - 0.045), (L / 2 + tc, Dc / 2, zc + 0.045), rs=rs)
     xf = L / 2 + tc
+    lo = _lo()
     for y in (-Dc / 2 + 0.025, Dc / 2 - 0.025):
-        for z in (zc - 0.025, zc + 0.025):
+        for z in ((zc,) if lo else (zc - 0.025, zc + 0.025)):
             nail(mb, _T(xf, y, z) @ _Ry(90))
     hw = 0.056
     ze = zc + 0.016
@@ -1004,12 +1081,17 @@ def _bail_end(mb, L, D, H, zc, tb, rs):
     for sy in (-1, 1):
         y = sy * hw
         plan(mb, [(ze - 0.032, y - 0.013), (ze + 0.008, y - 0.013), (ze + 0.008, y + 0.013), (ze - 0.032, y + 0.013)], 0.005, 0.0025,
-             "steel", z0=-0.0004, re=0.0008, n=3, ne=1, M=Me)
+             "steel", z0=-0.0004, re=0.0 if lo else 0.0008, n=1 if lo else 3, ne=1, M=Me)
         rivet(mb, Me @ _T(ze - 0.022, y, 0.002), d=0.0075)
-        revolve(mb, [(0.0075 + 0.0026 * math.cos(a), 0.0026 * math.sin(a) * 1.6) for a in [2 * PI * k / 10 for k in range(10)]],
-                "steel", seg=SEG, M=_T(xa, y, ze) @ _Rx(90), closed=True)
+        if lo:
+            with mb.soft():
+                revolve(mb, [(0.0075 + 0.0026 * math.cos(a), 0.0026 * math.sin(a) * 1.6) for a in [2 * PI * k / 6 for k in range(6)]],
+                        "steel", seg=10, M=_T(xa, y, ze) @ _Rx(90), closed=True)
+        else:
+            revolve(mb, [(0.0075 + 0.0026 * math.cos(a), 0.0026 * math.sin(a) * 1.6) for a in [2 * PI * k / 10 for k in range(10)]],
+                    "steel", seg=SEG, M=_T(xa, y, ze) @ _Rx(90), closed=True)
         side(mb, [(xf + 0.0010, ze - 0.012), (xa - 0.004, ze - 0.010), (xa - 0.004, ze - 0.004), (xf + 0.0010, ze - 0.002)],
-             [0.0, 0.002, 0.002, 0.0], 0.006, "steel", y0=y, re=0.0006, n=2, ne=1)
+             [0.0, 0.002, 0.002, 0.0], 0.006, "steel", y0=y, re=0.0 if lo else 0.0006, n=1 if lo else 2, ne=1)
     a = math.radians(float(rs.uniform(5, 11)))
     dz, dx = 0.062 * math.cos(a), 0.062 * math.sin(a)
     pth = [(xa, -hw + 0.013, ze), (xa, -hw - 0.009, ze), (xa + dx, -hw - 0.009, ze - dz), (xa + dx, hw + 0.009, ze - dz),
@@ -1018,8 +1100,9 @@ def _bail_end(mb, L, D, H, zc, tb, rs):
 
 
 def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, bands=None):
-    """Caja de munición de madera (ver ammo_crate)."""
+    """Caja de munición de madera (ver ammo_crate); respeta el nivel de detalle activo (_at_lod)."""
     rs = rng(seed * 7 + 3)
+    lo = _lo()
     body, lid = MB(), MB()
     tb = 0.016 if kind == "small" else 0.019
     z0 = 0.022
@@ -1060,7 +1143,7 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, band
             xa, xb_ = sorted((sx * (L / 2 - 0.058), sx * L / 2))
             ya, yb = sorted((sy * (D / 2 - 0.0012), sy * (D / 2 + tb)))
             wplank(body, (xa, ya, z0 + 0.002), (xb_, yb, zt - 0.001), rs=rs)
-            for z in (z0 + 0.03, (z0 + zt) / 2, zt - 0.03):
+            for z in ((z0 + 0.03, zt - 0.03) if lo else (z0 + 0.03, (z0 + zt) / 2, zt - 0.03)):
                 nail(body, _T((xa + xb_) / 2 + float(rs.uniform(-0.004, 0.004)), sy * (D / 2 + tb), z) @ _Rx(-90 * sy))
     # ---- extremos: travesaño con asa (se arma el extremo +X y se gira 180° para el -X)
     zc = z0 + (zt - z0) * 0.58
@@ -1082,7 +1165,7 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, band
         wplank(lid, (x, -D / 2 + 0.001, zt + tb - 0.0006), (x + 0.06, D / 2 - 0.001, H), rs=rs)
         for k in range(nl):
             yy = -D / 2 + k * (lw + g) + lw / 2
-            for dx in (0.018, 0.042):
+            for dx in ((0.030,) if lo else (0.018, 0.042)):
                 nail(lid, _T(x + dx + float(rs.uniform(-0.003, 0.003)), yy + float(rs.uniform(-0.015, 0.015)), H))
     # ---- herrajes: bisagras atrás, portacandados al frente
     for x in xh:
@@ -1111,8 +1194,10 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, band
         else:
             zu, zl = z0 + bh * 1.5 + g, z0 + bh / 2
             stencil(body, "AMMO", h, Mf @ _T(0, zu, 0), depth=0.0007, sink=0.0009)
-            stencil(body, lot, 0.016, Mf @ _T(0, zl + 0.013, 0), depth=0.0007, sink=0.0009, font="stencil2")
-            stencil(body, wt, 0.016, Mf @ _T(0, zl - 0.013, 0), depth=0.0007, sink=0.0009, font="stencil2")
+            stencil(body, lot, 0.016, Mf @ _T(0, zl + (0.0 if lo else 0.013), 0), depth=0.0007, sink=0.0009,
+                    font="stencil" if lo else "stencil2")
+            if not lo:
+                stencil(body, wt, 0.016, Mf @ _T(0, zl - 0.013, 0), depth=0.0007, sink=0.0009, font="stencil2")
     if open and contents:
         zf = z0 + tb
         if kind == "long":                                   # cunas con fieltro para dos tubos (eje a z = 0,1285, y = ±0,085)
@@ -1139,7 +1224,7 @@ def _crate(L, D, H, kind, seed=0, open=False, stencils=True, contents=True, band
     return body
 
 
-def ammo_crate(kind="wood", seed=0, open=False):
+def ammo_crate(kind="wood", seed=0, open=False, lod=0):
     """Caja de munición de madera pintada verde olivo (genérica). kind: «wood» 0,66 × 0,36 × 0,30 m (asas de cuerda),
     «long» 1,65 × 0,42 × 0,27 m (cohetes / armas, asas abatibles de varilla), «small» 0,46 × 0,30 × 0,24 m (asas
     abatibles). Construcción real: tablas individuales de 19 mm (16 mm en «small») con veta, cantos redondeados y gastados,
@@ -1152,23 +1237,29 @@ def ammo_crate(kind="wood", seed=0, open=False):
     Origen: centro de la base (z = 0 bajo los patines); largo en X, frente (estarcidos, portacandados) hacia -Y.
     Fuentes: everyspec.com/MIL-SPECS/MIL-SPECS-MIL-S/MIL-S-23389B_14382 (familia de cajas de munición de madera);
     varusteleka.com (caja de 40 mm: asas de cuerda en travesaños, bisagras y broches de fleje); fleje de 5/8–3/4 in ×
-    0,020–0,023 in con sello de 1–1,25 in (catálogos de fleje de acero para embalaje)."""
+    0,020–0,023 in con sello de 1–1,25 in (catálogos de fleje de acero para embalaje).
+    lod=1 (racks del almacén, vistos a >= 1 m): misma silueta (tablas con holgura, postes, travesaños, asas, bisagras,
+    broches, flejes) con cantos de 2 segmentos, sin veta ni golpes, cuerda de 9 lados, herrajes y clavos de 8 lados de
+    sombreado continuo, sin sellos ni pasadores y solo AMMO + LOT: ~ 5–6 k triángulos."""
     L, D, H = CRATE_DIMS.get(kind, CRATE_DIMS["wood"])
     kind = kind if kind in CRATE_DIMS else "wood"
-    key = ("crate", kind, int(seed) % 4, bool(open))
-    return _fresh(_cached(key, lambda: _crate(L, D, H, kind, seed=int(seed) % 4, open=bool(open))))
+    lod = 1 if lod else 0
+    key = ("crate", kind, int(seed) % 4, bool(open), lod)
+    return _fresh(_cached(key, lambda: _at_lod(lod, _crate, L, D, H, kind, seed=int(seed) % 4, open=bool(open))))
 
 
 # ======================================================================================================== tarimas
-def pallet_gma(mb, M=None, mat=WOOD, seed=0):
+def pallet_gma(mb, M=None, mat=WOOD, seed=0, lod=0):
     """Tarima de largueros GMA de 48 × 40 in (1219 × 1016 × 135 mm) unida a `mb` (con la matriz M); devuelve la altura de
     la cubierta (0,135). 3 largueros de 38 × 100 mm a lo largo de X con dos muescas de 229 × 38 mm (entrada parcial a 4 vías,
     esquinas de radio 12 mm), 7 tablas superiores de 19 mm (las de orilla de 140 mm, las interiores de 89 mm) y 5 inferiores
     de 16 mm, todas con cantos redondeados y gastados, veta, holguras y anchos ligeramente desiguales; dos clavos de caña
     anillada por cruce de tabla y larguero (72 cabezas). Origen: centro en el piso.
     Fuentes: interlakemecalux.com/blog/gma-pallet ; racklify.com/encyclopedia/the-anatomy-of-the-gma-style-wooden-pallet
-    (7 tablas arriba, 5 abajo, 3 largueros con muesca); nelsoncompany.com/pallet-spec-sheet (48 × 40 × 4,75 in)."""
-    src = _cached(("gma", mat, int(seed) % 4), lambda: _gma(mat, int(seed) % 4))
+    (7 tablas arriba, 5 abajo, 3 largueros con muesca); nelsoncompany.com/pallet-spec-sheet (48 × 40 × 4,75 in).
+    lod=1: tablas de cantos de 2 segmentos sin veta, largueros con canto de 1 segmento y clavos de 8 lados (~ 3 k)."""
+    lod = 1 if lod else 0
+    src = _cached(("gma", mat, int(seed) % 4, lod), lambda: _at_lod(lod, _gma, mat, int(seed) % 4))
     mb.join(src, M)
     return 0.135
 
@@ -1194,7 +1285,7 @@ def _gma(mat, seed):
              (0.20, tb - 0.0005), (0.20, tb + 0.038), (0.43, tb + 0.038), (0.43, tb - 0.0005), (Lx / 2, tb - 0.0005),
              (Lx / 2, tb + hs + 0.0005), (-Lx / 2, tb + hs + 0.0005)]
         R = [0.0, 0.0, 0.012, 0.012, 0.0, 0.0, 0.012, 0.012, 0.0, 0.0, 0.0, 0.0]
-        side(sub, P, R, 0.038, mat, y0=y, re=0.003, n=4, ne=4)
+        side(sub, P, R, 0.038, mat, y0=y, re=0.003, n=2 if _lo() else 4, ne=1 if _lo() else 4)
     xs = [-Lx / 2 + 0.07] + [-0.385 + 0.1925 * k for k in range(5)] + [Lx / 2 - 0.07]
     tx = []
     for k, x in enumerate(xs):                               # cubierta superior
@@ -1216,7 +1307,11 @@ def _gma(mat, seed):
 
 def threaded_rod(mb, M, r, z0, z1, pitch=0.0025, depth=0.0009, seg=SEG, thread=((None, None),)):
     """Varilla roscada a lo largo de Z de M: rosca helicoidal en V (paso `pitch`) en los tramos `thread` [(a, b)] y caña lisa
-    entre ellos (la rosca solo se ve junto a las tuercas)."""
+    entre ellos (la rosca solo se ve junto a las tuercas). Versión ligera: caña lisa de 12 lados de sombreado continuo."""
+    if _lo():
+        with mb.soft():
+            revolve(mb, [(0.0, z0 - 0.0002), (r - 0.0004, z0), (r - 0.0004, z1), (0.0, z1 + 0.0002)], "steel", seg=12, M=M)
+        return
     zs = []
     spans = [(z0 if a is None else a, z1 if b is None else b) for (a, b) in thread]
     edges = sorted({z0, z1} | {v for sp in spans for v in sp})
@@ -1241,7 +1336,18 @@ def threaded_rod(mb, M, r, z0, z1, pitch=0.0025, depth=0.0009, seg=SEG, thread=(
 
 def hex_nut(mb, M, s=0.024, h=0.014, washer=True, seg=24):
     """Tuerca hexagonal con chaflán cónico de 30° en ambas caras (la arista del hexágono se corta en círculo), sobre su
-    rondana plana de cantos redondeados; apoyada en z = 0 local, eje +Z."""
+    rondana plana de cantos redondeados; apoyada en z = 0 local, eje +Z. Versión ligera: 6 caras reales con chaflán plano y
+    rondana de 12 lados."""
+    if _lo():
+        z = 0.0
+        if washer:
+            with mb.soft():
+                revolve(mb, [(s * 0.36, 0.0), (s * 0.72, 0.0), (s * 0.72, 0.003), (s * 0.36, 0.003)], "steel", seg=12, M=M, closed=True)
+            z = 0.003
+        rc = s / 2 / math.cos(PI / 6)
+        lv = [(z, rc * 0.9), (z + 0.0015, rc), (z + h - 0.0015, rc), (z + h, rc * 0.9)]
+        skin(mb, [[(rr * math.cos(PI / 3 * k), rr * math.sin(PI / 3 * k), zz) for k in range(6)] for (zz, rr) in lv], "steel", M)
+        return z + h
     z = 0.0
     if washer:
         ro, ri, t = s * 0.72, s * 0.36, 0.003
@@ -1280,28 +1386,44 @@ def _projectile(seed=0):
     cubierta por su anillo protector de polímero, cuerpo, ojiva tangente truncada en el pozo de espoleta, tapón de izaje
     roscado con collarín y argolla forjada; estarcidos amarillos doblados sobre el cuerpo."""
     mb = MB()
+    lo = _lo()
     R = M107["R"]
-    prof = [(0.0, 0.0), (0.0520, 0.0), (0.0636, 0.0010), (0.0656, 0.0040), (0.0700, 0.0190), (0.0745, 0.0350), (R - 0.0003, 0.0430),
-            (R, 0.0470), (R, 0.0710), (R, 0.1140), (R, 0.2000), (R, M107["z_og"])]
-    for k in range(1, 15):
-        z = M107["z_og"] + (M107["z_nose"] - M107["z_og"]) * k / 14
+    if lo:                                                   # 24 lados, menos anillos de perfil
+        prof = [(0.0, 0.0), (0.0600, 0.0), (0.0656, 0.0040), (0.0745, 0.0350), (R, 0.0470), (R, M107["z_og"])]
+        nog = 7
+    else:
+        prof = [(0.0, 0.0), (0.0520, 0.0), (0.0636, 0.0010), (0.0656, 0.0040), (0.0700, 0.0190), (0.0745, 0.0350), (R - 0.0003, 0.0430),
+                (R, 0.0470), (R, 0.0710), (R, 0.1140), (R, 0.2000), (R, M107["z_og"])]
+        nog = 14
+    sg = SEG if lo else SEG_B
+    for k in range(1, nog + 1):
+        z = M107["z_og"] + (M107["z_nose"] - M107["z_og"]) * k / nog
         prof.append((_og_r(z), z))
     rn = prof[-1][0]
     zn = M107["z_nose"]
     prof += [(rn - 0.0006, zn + 0.0010), (0.0256, zn + 0.0016)]
-    revolve(mb, prof, "paint_od", seg=SEG_B, M=None, caps=True)
+    revolve(mb, prof, "paint_od", seg=sg, M=None, caps=True)
     # anillo protector de la banda de conducción (polímero), sobre la banda de cobre
     sect = []
     gz0, gz1, gr0, gr1, rr_ = 0.0745, 0.1115, R - 0.0006, M107["Rb"] + 0.0038, 0.0024
     for (cx, cz, a0) in ((gr1 - rr_, gz1 - rr_, 0.0), (gr0 + rr_ * 0.4, gz1 - rr_, PI / 2), (gr0 + rr_ * 0.4, gz0 + rr_, PI),
                          (gr1 - rr_, gz0 + rr_, 1.5 * PI)):
-        for k in range(4):
-            a = a0 + PI / 2 * k / 3
+        for k in range(2 if lo else 4):
+            a = a0 + PI / 2 * k / (1 if lo else 3)
             rx = rr_ if a0 in (0.0, 1.5 * PI) else rr_ * 0.4
             sect.append((cx + rx * math.cos(a), cz + rr_ * math.sin(a)))
-    revolve(mb, sect, "polymer", seg=SEG_B, closed=True)
+    revolve(mb, sect, "polymer", seg=sg, closed=True)
     # tapón de izaje: cuerpo roscado en el pozo, collarín, cuello y argolla
     zp = zn + 0.0016
+    if lo:
+        revolve(mb, [(0.0250, zp - 0.004), (0.0290, zp + 0.0030), (0.0290, zp + 0.0130), (0.0170, zp + 0.0162), (0.0102, zp + 0.0240),
+                     (0.0094, M107["L"] - 0.0465)], "steel", seg=16, caps=False)
+        rw, Rr = 0.0062, 0.0185
+        with mb.soft():
+            revolve(mb, [(Rr + rw * math.cos(2 * PI * k / 6), rw * math.sin(2 * PI * k / 6)) for k in range(6)], "steel", seg=12,
+                    M=_T(0, 0, M107["L"] - rw - Rr) @ _Rx(90), closed=True)
+        stencil_cyl(mb, "155MM HE", 0.017, R - 0.0004, _T(0, 0, 0.215), ang=-PI / 2, depth=0.0012, sink=0.0012)   # cuerpo de 24 caras
+        return mb
     revolve(mb, [(0.0250, zp - 0.004), (0.0262, zp + 0.0005), (0.0286, zp + 0.0030), (0.0290, zp + 0.0045), (0.0290, zp + 0.0130),
                  (0.0278, zp + 0.0150), (0.0170, zp + 0.0162), (0.0128, zp + 0.0190), (0.0102, zp + 0.0240), (0.0098, zp + 0.0330),
                  (0.0094, M107["L"] - 0.0465)], "steel", seg=SEG, caps=False)
@@ -1316,7 +1438,7 @@ def _projectile(seed=0):
     return mb
 
 
-def shell_pallet(seed=0):
+def shell_pallet(seed=0, lod=0):
     """Tarima de 8 proyectiles de artillería clase 155 mm (2 × 4, de pie con su tapón de izaje) como se embarcan:
     689 × 346 × ~ 800 mm. Base: 2 patines de 4 × 4 in (75 × 89 mm), 5 tablas de cubierta y tablero de cunas de 36 mm con 8 barrenos que
     abrazan la cola de bote; marco superior de 32 mm con 8 barrenos que asientan en la ojiva (donde su radio es ~ 55 mm);
@@ -1327,9 +1449,12 @@ def shell_pallet(seed=0):
     Fuentes: en.wikipedia.org/wiki/M107_projectile (154,71 mm de cuerpo, banda de 157,98 mm, 605 mm sin espoleta, tapón de
     izaje de argolla); vdoc.pub «Family of 155 mm M107 HE projectile» (681,2 mm con tapón de izaje); listado de partes NSN de
     la tarima del M107 (8 proyectiles por tarima de madera, 27,13 × 13,63 × 32,00 in, 797 lb); MIL-DTL-70951 (tarima de
-    proyectiles de 155 mm, mismo envolvente que la de madera)."""
-    key = ("shellpal", int(seed) % 4)
-    return _fresh(_cached(key, lambda: _shell_pallet(int(seed) % 4)))
+    proyectiles de 155 mm, mismo envolvente que la de madera).
+    lod=1 (racks): proyectiles de 24 lados con menos anillos de perfil, varillas lisas, tuercas hexagonales de 6 caras,
+    flejes sin sello, tablas ligeras y una sola línea de estarcido (~ 22 k)."""
+    lod = 1 if lod else 0
+    key = ("shellpal", int(seed) % 4, lod)
+    return _fresh(_cached(key, lambda: _at_lod(lod, _shell_pallet, int(seed) % 4)))
 
 
 def _shell_pallet(seed):
@@ -1349,9 +1474,11 @@ def _shell_pallet(seed):
     zb = hs + td
     cols = [(-1.5 + i) * px for i in range(4)]
     rows = [-py / 2, py / 2]
+    lo = _lo()
+    nh = SEG if lo else SEG_B
     holed_slab(mb, _T(0, 0, zb - 0.0004), Lx, Ly, tbd, holes=[(x, y, 0.0766, 0.0766, 2) for x in cols for y in rows], ch=0.003,
-               rc=0.006, nc=3, mat=W, n=SEG_B, chh=0.003, ne=3)
-    src = [_cached(("proj", k), lambda k=k: _projectile(k)) for k in range(3)]
+               rc=0.006, nc=3, mat=W, n=nh, chh=0.003, ne=3)
+    src = [_cached(("proj", k, lo), lambda k=k: _projectile(k)) for k in range(3)]
     for i, x in enumerate(cols):
         for j, y in enumerate(rows):
             mb.join(src[(i + 2 * j + seed) % 3], _T(x, y, zb - 0.0012) @ _Rz(float(rs.uniform(-60, 60)) + (180 if j else 0) - 0.0))
@@ -1360,7 +1487,7 @@ def _shell_pallet(seed):
     tf = 0.032
     zf = zfc - tf / 2
     holed_slab(mb, _T(0, 0, zf), Lx, Ly, tf, holes=[(x, y, 0.0556, 0.0556, 2) for x in cols for y in rows], ch=0.003, rc=0.006, nc=3,
-               mat=W, n=SEG_B, chh=0.0045, ne=3)
+               mat=W, n=nh, chh=0.0045, ne=3)
     ztop = zf + tf
     # varillas roscadas con rondana y tuerca arriba (sobre el marco) y abajo (bajo la cubierta)
     for sx in (-1, 1):
@@ -1374,27 +1501,28 @@ def _shell_pallet(seed):
     # flejes horizontales que ciñen los cuerpos
     R = M107["R"]
     t, w = 0.0008, 0.019
-    o = 0.0001                                                 # fleje tenso de 0,8 mm: medio espesor hundido en lo que ciñe
+    o = 0.0005 if lo else 0.0001                               # fleje tenso de 0,8 mm: medio espesor hundido en lo que ciñe
     wx, wy = 2 * (cols[-1] + R + o), 2 * (rows[-1] + R + o)
     for k, zh in enumerate((zb + 0.170, zb + 0.300)):
-        loop = [(x, y, zh) for (x, y) in rr_pts(wx, wy, R + o, 16)]
+        loop = [(x, y, zh) for (x, y) in rr_pts(wx, wy, R + o, 8 if lo else 16)]
         band(mb, loop, w=w, t=t, normal=(0, 0, 1))
         xs_ = float(rs.uniform(-0.05, 0.05)) + (-px / 2 if k else px / 2)
         band_seal(mb, _T(xs_, -wy / 2 - t / 2 + 0.0001, zh) @ _Rx(90), w=w)
     # fleje longitudinal sobre el marco, por los extremos y bajo la cubierta (entre patines)
     xe = Lx / 2 + o
     zu = hs - 0.0009                                           # bajo las tablas de cubierta (que no son planas): 0,5 mm libre
-    path = fillet([(-xe, 0.0, zu), (xe, 0.0, zu), (xe, 0.0, ztop + o), (-xe, 0.0, ztop + o)], 0.004, 4)
+    path = fillet([(-xe, 0.0, zu), (xe, 0.0, zu), (xe, 0.0, ztop + o), (-xe, 0.0, ztop + o)], 0.004, 2 if lo else 4)
     band(mb, path, w=w, t=t, normal=(0, 1, 0))
     band_seal(mb, _T(float(rs.uniform(-0.12, 0.12)), 0.0, ztop + o + t / 2 - 0.0002), w=w)
     # estarcidos del tablero de cunas (frente -Y)
     Mf = _T(0, -Ly / 2 - 0.0002, zb + tbd / 2) @ _Rx(90)
     stencil(mb, "155MM HE  8 EA", 0.018, Mf @ _T(-0.14, 0, 0), depth=0.0007, sink=0.0009)
-    stencil(mb, ("LOT 2705", "LOT 2209", "LOT 3102", "LOT 2611")[seed % 4], 0.018, Mf @ _T(0.19, 0, 0), depth=0.0007, sink=0.0009)
+    if not lo:
+        stencil(mb, ("LOT 2705", "LOT 2209", "LOT 3102", "LOT 2611")[seed % 4], 0.018, Mf @ _T(0.19, 0, 0), depth=0.0007, sink=0.0009)
     return mb
 
 
-def crate_pallet(n=6, kind="wood", seed=0, straps=None):
+def crate_pallet(n=6, kind="wood", seed=0, straps=None, lod=0):
     """Cajas de munición de madera (ammo_crate «wood» o «small») estibadas en una tarima GMA de 48 × 40 in y amarradas:
     flejes de acero de 3/4 in con sello engargolado (straps="steel") o cinchos de matraca de 2 in con su matraca (carrete
     con vueltas de cincho, placas, palanca con mango de hule; straps="ratchet"; por omisión según la semilla), con
@@ -1402,10 +1530,16 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
     flejes pasan bajo la cubierta superior (entre largueros), suben por el canto de la tarima y abrazan la carga.
     Origen: centro de la tarima en el piso; largo de la tarima (48 in) en X.
     Fuentes: interlakemecalux.com/blog/gma-pallet (48 × 40 in); fleje de acero de 3/4 × 0,023 in con sello de 1 1/4 in y
-    cincho de matraca de 2 in (catálogos de embalaje)."""
+    cincho de matraca de 2 in (catálogos de embalaje).
+    lod=1 (racks del almacén): tarima, cajas y amarres en su versión ligera, misma silueta (~ 37 k con 6 cajas, ~ 21 k con 3)."""
+    lod = 1 if lod else 0
+    return _at_lod(lod, _crate_pallet, n, kind, seed, straps, lod)
+
+
+def _crate_pallet(n, kind, seed, straps, lod):
     r = rng(seed)
     mb = MB()
-    zp = pallet_gma(mb, seed=seed)
+    zp = pallet_gma(mb, seed=seed, lod=lod)
     kind = kind if kind in ("wood", "small") else "wood"
     L, D, H = CRATE_DIMS[kind]
     tb = 0.016 if kind == "small" else 0.019
@@ -1423,7 +1557,7 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
             if k >= n:
                 break
             sd = int(r.integers(0, 4))
-            src = _cached(("crate", kind, sd, False), lambda sd=sd: _crate(L, D, H, kind, seed=sd))
+            src = _cached(("crate", kind, sd, False, lod), lambda sd=sd: _at_lod(lod, _crate, L, D, H, kind, seed=sd))
             mb.join(src, _T(x, y, zp + layer * H) @ _Rz(rz + (180.0 if r.random() < 0.5 else 0.0)))
             k += 1
     full_top = n >= per * nl
@@ -1440,13 +1574,14 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
     zt_ = ztt + 0.0031 + t / 2
     for yy in (-ys, ys):
         path = fillet([(-xp, yy, zu), (xp, yy, zu), (xp, yy, zp + 0.003), (xc, yy, zp + 0.045), (xc, yy, zt_), (-xc, yy, zt_),
-                       (-xc, yy, zp + 0.045), (-xp, yy, zp + 0.003)], 0.008, 4)
+                       (-xc, yy, zp + 0.045), (-xp, yy, zp + 0.003)], 0.008, 2 if lod else 4)
         band(mb, path, w=w, t=t, normal=(0, 1, 0), mat=mat)
         for sx in (-1, 1):                                     # esquineros de cartón doblado (L de 50 mm, 3,5 mm)
             x0 = sx * (xe - 0.0003)
             Q = [(0.0035, 0.0032), (0.0035, -0.05), (0.0, -0.05), (0.0, -0.0003), (-0.05, -0.0003), (-0.05, 0.0032)]
             Q = [(x0 + sx * qx, ztt + qz) for (qx, qz) in Q]
-            side(mb, Q, [0.0035, 0.0006, 0.0006, 0.0005, 0.0006, 0.0006], 0.05, "cardboard", y0=yy, re=0.0008, n=3, ne=1)
+            side(mb, Q, [0.0035, 0.0006, 0.0006, 0.0005, 0.0006, 0.0006], 0.05, "cardboard", y0=yy, re=0.0 if lod else 0.0008,
+                 n=1 if lod else 3, ne=1)
         if kind_s == "steel":
             band_seal(mb, _T(float(r.uniform(-0.25, 0.25)), yy, zt_ + t / 2 - 0.0002), w=w)
         else:
@@ -1457,6 +1592,9 @@ def crate_pallet(n=6, kind="wood", seed=0, straps=None):
 def _ratchet(mb, x0, y, zr, w=0.05):
     """Matraca de cincho de 2 in apoyada en la cara +X: base de dos placas laterales con dientes, carrete ranurado con tres
     vueltas de cincho, palanca de placas con mango de hule y pasadores."""
+    if _lo():
+        _ratchet_lo(mb, x0, y, zr, w)
+        return
     for sy in (-1, 1):
         side(mb, [(x0, zr - 0.062), (x0 + 0.012, zr - 0.062), (x0 + 0.030, zr - 0.022), (x0 + 0.030, zr + 0.040), (x0 + 0.012, zr + 0.058),
                   (x0, zr + 0.058)], [0.0, 0.006, 0.008, 0.008, 0.006, 0.0], 0.003, "steel", y0=y + sy * (w / 2 + 0.0045), re=0.0007,
@@ -1478,3 +1616,21 @@ def _ratchet(mb, x0, y, zr, w=0.05):
             M=_T(x0 + 0.031, y, zr - 0.086) @ _Rx(90))
     revolve(mb, [(0.0, -w / 2 - 0.0060), (0.0026, -w / 2 - 0.0060), (0.0026, w / 2 + 0.0060), (0.0, w / 2 + 0.0060)], "steel", seg=16,
             M=_T(x0 + 0.0021, y, zr - 0.052) @ _Rx(90))             # travesaño de la base: el cincho pasa debajo
+
+
+def _ratchet_lo(mb, x0, y, zr, w):
+    """Matraca ligera (racks): placas sin redondeo, carrete y vuelta de cincho de 12 lados, palanca, mango y travesaño."""
+    for sy in (-1, 1):
+        side(mb, [(x0, zr - 0.062), (x0 + 0.012, zr - 0.062), (x0 + 0.030, zr - 0.022), (x0 + 0.030, zr + 0.040), (x0 + 0.012, zr + 0.058),
+                  (x0, zr + 0.058)], [0.0, 0.006, 0.008, 0.008, 0.006, 0.0], 0.003, "steel", y0=y + sy * (w / 2 + 0.0045), re=0.0, n=1)
+        side(mb, [(x0 + 0.026, zr - 0.108), (x0 + 0.034, zr - 0.108), (x0 + 0.040, zr + 0.010), (x0 + 0.024, zr + 0.013),
+                  (x0 + 0.0095, zr + 0.005), (x0 + 0.011, zr - 0.010)], [0.004, 0.004, 0.005, 0.004, 0.005, 0.004], 0.0025, "steel",
+             y0=y + sy * (w / 2 + 0.0015), re=0.0, n=1)
+    with mb.soft():
+        revolve(mb, [(0.0, -w / 2 - 0.0115), (0.0055, -w / 2 - 0.0115), (0.0055, w / 2 + 0.0115), (0.0, w / 2 + 0.0115)], "steel", seg=12,
+                M=_T(x0 + 0.016, y, zr) @ _Rx(90))
+        revolve(mb, [(0.0052, -w / 2 + 0.0004), (0.0098, -w / 2 + 0.0004), (0.0098, w / 2 - 0.0004), (0.0052, w / 2 - 0.0004)], "canvas",
+                seg=12, M=_T(x0 + 0.016, y, zr) @ _Rx(90), closed=True)
+        revolve(mb, [(0.0, -w / 2 - 0.0052), (0.0026, -w / 2 - 0.0052), (0.0026, w / 2 + 0.0052), (0.0, w / 2 + 0.0052)], "steel", seg=8,
+                M=_T(x0 + 0.0021, y, zr - 0.052) @ _Rx(90))
+    _slab(mb, _T(x0 + 0.034, y, zr - 0.098) @ _Ry(90), 0.034, w + 0.012, 0.010, rc=0.004, re=0.003, mat="rubber", nc=1, ne=1)

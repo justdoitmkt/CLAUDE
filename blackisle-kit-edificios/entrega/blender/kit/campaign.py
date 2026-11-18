@@ -1713,7 +1713,7 @@ _NV_CACHE = {}
 
 
 # ---------------------------------------------------------------- utilidades de la nave (rack, jaula, montacargas, banco)
-def _nv_add(mb, V, F, mat, M=None, mirror_y=False, soft=False, mats=None):
+def _nv_add(mb, V, F, mat, M=None, mirror_y=False, soft=False, mats=None, soft_idx=None):
     """Agrega una malla indexada (V: (n, 3); F: tuplas de índices) transformada por M (y espejada en Y si se pide)."""
     V = np.asarray(V, float)
     if mirror_y:
@@ -1724,11 +1724,12 @@ def _nv_add(mb, V, F, mat, M=None, mirror_y=False, soft=False, mats=None):
     vs = [mb.bm.verts.new(p) for p in V.tolist()]
     mi = mb.mi(mat)
     mis = [mb.mi(m) for m in mats] if mats else None
-    sl = mb._soft_layer() if soft else None
+    sl = mb._soft_layer() if (soft or soft_idx) else None
+    sset = set(soft_idx) if soft_idx else ()
     for k, f in enumerate(F):
         face = mb.bm.faces.new([vs[i] for i in (f[::-1] if mirror_y else f)])
         face.material_index = mis[k] if mis else mi
-        if soft:
+        if soft or k in sset:
             face[sl] = 1
 
 
@@ -1753,7 +1754,7 @@ def _fillet_closed(pts, radii, nseg):
     return _fillet2d([m0] + P + [m0], list(rad), nseg)[1:-1]
 
 
-def _bead(mb, pts, r=0.0022, ripple=0.14, step=0.0022, taper=True, mat=None, closed=False):
+def _bead(mb, pts, r=0.0022, ripple=0.14, step=0.0022, taper=True, mat=None, closed=False, seg=12):
     """Cordón de soldadura MIG: tubo de 12 lados (sombreado continuo) con ondas de "monedas apiladas" y extremos que se
     adelgazan (inicio y cráter)."""
     P = [Vector(p) for p in pts]
@@ -1781,7 +1782,7 @@ def _bead(mb, pts, r=0.0022, ripple=0.14, step=0.0022, taper=True, mat=None, clo
             f *= (0.45 + 0.55 * min(1.0, e / 2.0))
         radii.append(r * f)
     with mb.soft():
-        mb.tube([tuple(q) for q in Q], r, seg=12, mat=mat or "steel", caps=True, radii=radii)
+        mb.tube([tuple(q) for q in Q], r, seg=seg, mat=mat or "steel", caps=True, radii=radii)
 
 
 def _nv_washer(mb, M, ro, ri, t, mat="galvanized", seg=SEG):
@@ -1814,42 +1815,52 @@ def _nv_thread(mb, M, d, L, pitch, mat="galvanized", seg=SEG, dome=True):
     _lathe(mb, prof, M, mat, seg=seg)
 
 
-def _nv_anchor(mb, p, d=0.0127, proud=0.014, mat="galvanized", plate_mat=None):
-    """Taquete de expansión (cuña) de 1/2" asomado sobre una placa: rondana, tuerca hexagonal y espárrago roscado."""
+def _nv_anchor(mb, p, d=0.0127, proud=0.014, mat="galvanized", plate_mat=None, lite=False):
+    """Taquete de expansión (cuña) de 1/2" asomado sobre una placa: rondana, tuerca hexagonal y espárrago roscado.
+    lite: rondana y espárrago de 12 lados con sombreado continuo y filetes a doble paso (piezas que se repiten mucho)."""
     M = Matrix.Translation(Vector(p))
+    if lite:
+        with mb.soft():
+            _nv_washer(mb, M, d * 1.06, d * 0.53, 0.0025, mat, seg=12)
+            _nv_thread(mb, M @ _T(0, 0, 0.002), d, proud + d * 0.85, 0.0039, mat, seg=12)
+        _nv_nut(mb, M @ _T(0, 0, 0.0025), d * 1.5, d * 0.85, mat, hole=d * 0.5)
+        return
     _nv_washer(mb, M, d * 1.06, d * 0.53, 0.0025, mat)
     _nv_nut(mb, M @ _T(0, 0, 0.0025), d * 1.5, d * 0.85, mat, hole=d * 0.5)
     _nv_thread(mb, M @ _T(0, 0, 0.002), d, proud + d * 0.85, 0.00195, mat)
 
 
-def _nv_bolt_head(mb, M, d=0.0095, mat="galvanized", washer=True):
+def _nv_bolt_head(mb, M, d=0.0095, mat="galvanized", washer=True, lite=False):
     """Cabeza hexagonal con rondana (eje +Z local, apoyada en z = 0; hundida 0,2 mm para asentar)."""
     M = M @ _T(0, 0, -0.0002)
     z = 0.0
     if washer:
-        _nv_washer(mb, M, d * 1.05, d * 0.53, 0.0018, mat)
+        if lite:
+            with mb.soft():
+                _nv_washer(mb, M, d * 1.05, d * 0.53, 0.0018, mat, seg=12)
+        else:
+            _nv_washer(mb, M, d * 1.05, d * 0.53, 0.0018, mat)
         z = 0.0018
     _nv_nut(mb, M @ _T(0, 0, z), d * 1.5, d * 0.65, mat)
 
 
 def _rk_tear_pts():
     """Gota del poste (2D, centrada en su celda, ancha arriba): arco superior r = 8,2 mm con centro en +4 mm, flancos
-    tangentes a un arco inferior r = 3,2 mm con centro en -10,5 mm (≈ 16 × 26 mm). 24 puntos antihorarios."""
+    tangentes a un arco inferior r = 3,2 mm con centro en -10,5 mm (≈ 16 × 26 mm). 10 puntos antihorarios (paredes con
+    sombreado continuo)."""
     c1, r1, c2, r2 = 0.0040, 0.0082, -0.0105, 0.0032
     al = math.asin((r2 - r1) / (c1 - c2))
     P = []
-    for k in range(7):
-        a = (PI - al) + ((2 * PI + al) - (PI - al)) * k / 6
+    for k in range(3):
+        a = (PI - al) + ((2 * PI + al) - (PI - al)) * k / 2
         P.append((r2 * math.cos(a), c2 + r2 * math.sin(a)))
     t2 = (r2 * math.cos(al), c2 + r2 * math.sin(al))
     t1 = (r1 * math.cos(al), c1 + r1 * math.sin(al))
-    for k in (1, 2):
-        P.append((t2[0] + (t1[0] - t2[0]) * k / 3, t2[1] + (t1[1] - t2[1]) * k / 3))
-    for k in range(13):
-        a = al + ((PI - al) - al) * k / 12
+    P.append(((t2[0] + t1[0]) / 2, (t2[1] + t1[1]) / 2))
+    for k in range(5):
+        a = al + ((PI - al) - al) * k / 4
         P.append((r1 * math.cos(a), c1 + r1 * math.sin(a)))
-    for k in (1, 2):
-        P.append((-t1[0] + (-t2[0] + t1[0]) * k / 3, t1[1] + (t2[1] - t1[1]) * k / 3))
+    P.append((-(t2[0] + t1[0]) / 2, (t2[1] + t1[1]) / 2))
     return np.array(P)
 
 
@@ -1880,18 +1891,28 @@ def _zip_bridge(O, Hh, c):
     return tris
 
 
-def _rk_column_geo(H):
-    """Poste rolado de 3" × 3" cal. 14 en C con labios (abre hacia +Y, el alma da a -Y = pasillo), radios de doblez reales
-    y perforación REAL: dos hileras de gotas en el alma y una hilera de barrenos de 7/16" en cada costado (para pernos J y
-    separadores), todo a paso de 2". Malla indexada (V, F) del poste delantero centrado en el origen; caché por altura."""
-    key = ("col", round(H, 4))
+def _rk_rows(H):
+    """Centros de las hileras de perforación (paso de 2") a lo alto de un poste."""
+    p = RK_PITCH
+    return [RK_Z0 + k * p for k in range(200) if RK_Z0 + k * p + p / 2 < H - 0.03]
+
+
+def _rk_column_geo(H, rowsL=None, rowsR=None, sideL=None, sideR=None):
+    """Poste rolado de 3" × 3" cal. 14 en C con labios (abre hacia +Y, el alma da a -Y), radios de doblez reales y
+    perforación REAL SOLO donde se ve: rowsL / rowsR = hileras con gota en la mitad izquierda / derecha del alma (None: alma
+    sin perforar, p. ej. la cara que da a la otra hilera o al muro; se omiten las hileras tapadas por conectores o placas);
+    sideL / sideR = hileras con barreno de 7/16" en el costado exterior. Las franjas perforadas se unen al resto de la C
+    con caras n-gono planas (sin uniones en T); el resto de la C es una extrusión de 2 estaciones. Gotas de 10 vértices
+    con pared de sombreado continuo. Devuelve (V, F, soft_idx); caché por patrón."""
+    key = ("col2", round(H, 4), rowsL, rowsR, sideL, sideR)
     if key in _NV_CACHE:
         return _NV_CACHE[key]
     a, t = RK_COL / 2, RK_T
     ac, rb, lip, nb = a - t / 2, 0.0035, 0.0175, 4
     S, N = [], []
+    cells = []                                     # (i0, kind, rowset)
 
-    def line(p0, p1, n, first):
+    def line(p0, p1, n, first=False):
         T = np.array(p1, float) - np.array(p0, float)
         T /= np.linalg.norm(T)
         for k in range(0 if first else 1, n + 1):
@@ -1903,107 +1924,125 @@ def _rk_column_geo(H):
             g = a0 + (a1 - a0) * k / nb
             S.append((c[0] + rb * math.cos(g), c[1] + rb * math.sin(g)))
             N.append((math.cos(g), math.sin(g)))
-    cells = []
-    line((-ac + lip, ac), (-ac + rb, ac), 2, True)
+    line((-ac + lip, ac), (-ac + rb, ac), 1, True)
     arc((-ac + rb, ac - rb), PI / 2, PI)
-    i0 = len(S) - 1
-    line((-ac, ac - rb), (-ac, -ac + rb), 8, False)
-    cells.append((i0 + 4, i0 + 8, "side"))
+    if sideL:
+        line((-ac, ac - rb), (-ac, 0.0), 1)
+        cells.append((len(S) - 1, "side", sideL))
+        line((-ac, 0.0), (-ac, -ac + rb), 2)
+    else:
+        line((-ac, ac - rb), (-ac, -ac + rb), 1)
     arc((-ac + rb, -ac + rb), PI, 1.5 * PI)
-    i0 = len(S) - 1
-    line((-ac + rb, -ac), (ac - rb, -ac), 8, False)
-    cells += [(i0, i0 + 4, "tear"), (i0 + 4, i0 + 8, "tear")]
+    if rowsL is not None or rowsR is not None:
+        i0 = len(S) - 1
+        line((-ac + rb, -ac), (0.0, -ac), 2)
+        line((0.0, -ac), (ac - rb, -ac), 2)
+        if rowsL:
+            cells.append((i0, "tear", rowsL))
+        if rowsR:
+            cells.append((i0 + 2, "tear", rowsR))
+        web_pts = set(range(i0, i0 + 5))
+    else:
+        line((-ac + rb, -ac), (ac - rb, -ac), 1)
+        web_pts = set()
     arc((ac - rb, -ac + rb), 1.5 * PI, 2 * PI)
-    i0 = len(S) - 1
-    line((ac, -ac + rb), (ac, ac - rb), 8, False)
-    cells.append((i0, i0 + 4, "side"))
+    if sideR:
+        i0 = len(S) - 1
+        line((ac, -ac + rb), (ac, 0.0), 2)
+        cells.append((i0, "side", sideR))
+        line((ac, 0.0), (ac, ac - rb), 1)
+    else:
+        line((ac, -ac + rb), (ac, ac - rb), 1)
     arc((ac - rb, ac - rb), 0.0, PI / 2)
-    line((ac - rb, ac), (ac - lip, ac), 2, False)
+    line((ac - rb, ac), (ac - lip, ac), 1)
     S, N = np.array(S), np.array(N)
     ns = len(S)
-    # estaciones en Z: tramo liso abajo, hileras de perforación (3 estaciones c/u) y tramo liso arriba
+    zc = _rk_rows(H)
     p = RK_PITCH
-    zc = [RK_Z0 + k * p for k in range(200) if RK_Z0 + k * p + p / 2 < H - 0.03]
-    Z = [RK_BP]
-    rows = []
-    for zk in zc:
-        k0 = len(Z) - 1 if abs(Z[-1] - (zk - p / 2)) < 1e-9 else len(Z)
-        if k0 == len(Z):
-            Z.append(zk - p / 2)
-        Z += [zk, zk + p / 2]
-        rows.append((k0, zk))
-    Z.append(H)
-    Z = np.array(Z)
-    nz = len(Z)
-    O3 = np.zeros((ns, nz, 3))
-    I3 = np.zeros((ns, nz, 3))
-    O3[:, :, :2] = (S + N * t / 2)[:, None, :]
-    I3[:, :, :2] = (S - N * t / 2)[:, None, :]
-    O3[:, :, 2] = Z[None, :]
-    I3[:, :, 2] = Z[None, :]
-    V = [O3.reshape(-1, 3), I3.reshape(-1, 3)]
-    nv = [2 * ns * nz]
-
-    def o(i, k):
-        return i * nz + k
-
-    def n_(i, k):
-        return ns * nz + i * nz + k
-    F = []
-    covered = np.zeros((ns - 1, nz - 1), bool)
+    rows_all = sorted(set().union(*[c[2] for c in cells])) if cells else []
+    Zf = [RK_BP]
+    for k in rows_all:
+        for zz in (zc[k] - p / 2, zc[k] + p / 2):
+            if zz - Zf[-1] > 1e-6:
+                Zf.append(zz)
+    Zf.append(H)
+    zidx = {round(z, 6): j for j, z in enumerate(Zf)}
+    perf = set(web_pts)
+    for (i0, kind, rs) in cells:
+        perf |= {i0, i0 + 1, i0 + 2}
+    cellseg = {}
+    for (i0, kind, rs) in cells:
+        cellseg[i0] = cellseg[i0 + 1] = (i0, kind, rs)
+    V = []
+    O, I = [], []
+    for i in range(ns):
+        zl = Zf if i in perf else [RK_BP, H]
+        o_, n_ = [], []
+        for z in zl:
+            o_.append(len(V))
+            V.append((S[i][0] + N[i][0] * t / 2, S[i][1] + N[i][1] * t / 2, z))
+            n_.append(len(V))
+            V.append((S[i][0] - N[i][0] * t / 2, S[i][1] - N[i][1] * t / 2, z))
+        O.append(o_)
+        I.append(n_)
+    F, soft = [], []
     tear = _rk_tear_pts()
-    circ = np.array([(0.0055 * math.cos(2 * PI * k / 16 - PI / 2), 0.0055 * math.sin(2 * PI * k / 16 - PI / 2)) for k in range(16)])
-    for (k0, zk) in rows:
-        for (ia, ib, kind) in cells:
-            covered[ia:ib, k0:k0 + 2] = True
-            per = [(i, k0) for i in range(ia, ib + 1)] + [(ib, k0 + 1)] + [(i, k0 + 2) for i in range(ib, ia - 1, -1)] + [(ia, k0 + 1)]
-            T = (S[ib] - S[ia]) / np.linalg.norm(S[ib] - S[ia])
-            Nn = N[(ia + ib) // 2]
-            sc = (S[ia] + S[ib]) / 2
-            # perímetro en coordenadas de la celda (u a lo largo de T, z relativo al centro de la hilera)
-            O2 = np.array([((S[i] - sc) @ T, Z[k] - zk) for (i, k) in per])
-            hole = tear if kind == "tear" else circ
-            nh = len(hole)
-            base = nv[0]
-            for side, sg in ((0, 1.0), (1, -1.0)):
-                P3 = np.zeros((nh, 3))
-                P3[:, :2] = sc + np.outer(hole[:, 0], T) + Nn * sg * t / 2
-                P3[:, 2] = zk + hole[:, 1]
-                V.append(P3)
-            nv[0] += 2 * nh
-            ho = lambda i: base + i          # noqa: E731
-            hi = lambda i: base + nh + i     # noqa: E731
-            for tri in _zip_bridge(O2, hole, (0.0, 0.0)):
-                fo = tuple(o(*per[j]) if s == "o" else ho(j) for (s, j) in tri)
-                fi = tuple(n_(*per[j]) if s == "o" else hi(j) for (s, j) in tri)
-                F.append(fo)
-                F.append(fi[::-1])
-            for j in range(nh):
-                jj = (j + 1) % nh
-                F.append((ho(j), ho(jj), hi(jj), hi(j)))
+    circ = np.array([(0.0055 * math.cos(2 * PI * k / 8 - PI / 2), 0.0055 * math.sin(2 * PI * k / 8 - PI / 2)) for k in range(8)])
+    hole_rows = {}
+    for (i0, kind, rs) in cells:
+        for k in rs:
+            hole_rows[(i0, zidx[round(zc[k] - p / 2, 6)])] = (kind, zc[k])
     for i in range(ns - 1):
-        for k in range(nz - 1):
-            if covered[i, k]:
-                continue
-            F.append((o(i, k), o(i + 1, k), o(i + 1, k + 1), o(i, k + 1)))
-            F.append((n_(i, k), n_(i, k + 1), n_(i + 1, k + 1), n_(i + 1, k)))
+        if i in cellseg:
+            i0, kind, rs = cellseg[i]
+            for kz in range(len(Zf) - 1):
+                if (i0, kz) in hole_rows:
+                    continue
+                F.append((O[i][kz], O[i + 1][kz], O[i + 1][kz + 1], O[i][kz + 1]))
+                F.append((I[i][kz], I[i][kz + 1], I[i + 1][kz + 1], I[i + 1][kz]))
+            continue
+        if len(O[i]) == 2 and len(O[i + 1]) == 2:
+            F.append((O[i][0], O[i + 1][0], O[i + 1][1], O[i][1]))
+            F.append((I[i][0], I[i][1], I[i + 1][1], I[i + 1][0]))
+        elif len(O[i]) == len(O[i + 1]):
+            for kz in range(len(O[i]) - 1):
+                F.append((O[i][kz], O[i + 1][kz], O[i + 1][kz + 1], O[i][kz + 1]))
+                F.append((I[i][kz], I[i][kz + 1], I[i + 1][kz + 1], I[i + 1][kz]))
+        else:                                                           # transición: cara plana n-gono (sin uniones en T)
+            fo = [O[i][0]] + O[i + 1] + O[i][::-1][:-1]
+            fi = [I[i][0]] + I[i + 1] + I[i][::-1][:-1]
+            F.append(tuple(fo))
+            F.append(tuple(fi[::-1]))
+    for ((i0, kz), (kind, zk)) in hole_rows.items():
+        per = [(i0, kz), (i0 + 1, kz), (i0 + 2, kz), (i0 + 2, kz + 1), (i0 + 1, kz + 1), (i0, kz + 1)]
+        T = (S[i0 + 2] - S[i0]) / np.linalg.norm(S[i0 + 2] - S[i0])
+        Nn = N[i0 + 1]
+        sc = (S[i0] + S[i0 + 2]) / 2
+        O2 = np.array([((S[i] - sc) @ T, Zf[k] - zk) for (i, k) in per])
+        hole = tear if kind == "tear" else circ
+        nh = len(hole)
+        base = len(V)
+        for sg in (1.0, -1.0):
+            for (hu, hz) in hole:
+                q = sc + T * hu + Nn * sg * t / 2
+                V.append((q[0], q[1], zk + hz))
+        for tri in _zip_bridge(O2, hole, (0.0, 0.0)):
+            fo = tuple(O[per[j][0]][per[j][1]] if s_ == "o" else base + j for (s_, j) in tri)
+            fi = tuple(I[per[j][0]][per[j][1]] if s_ == "o" else base + nh + j for (s_, j) in tri)
+            F.append(fo)
+            F.append(fi[::-1])
+        for j in range(nh):
+            jj = (j + 1) % nh
+            soft.append(len(F))
+            F.append((base + j, base + jj, base + nh + jj, base + nh + j))
     for i in range(ns - 1):                                              # cortes de los extremos
-        F.append((o(i, 0), n_(i, 0), n_(i + 1, 0), o(i + 1, 0)))
-        F.append((o(i, nz - 1), o(i + 1, nz - 1), n_(i + 1, nz - 1), n_(i, nz - 1)))
-    for k in range(nz - 1):                                              # cantos libres de los labios
-        F.append((o(0, k), o(0, k + 1), n_(0, k + 1), n_(0, k)))
-        F.append((o(ns - 1, k), n_(ns - 1, k), n_(ns - 1, k + 1), o(ns - 1, k + 1)))
-    Vall = np.concatenate(V)
-    used = np.zeros(len(Vall), bool)
-    for f in F:
-        used[list(f)] = True
-    remap = -np.ones(len(Vall), int)
-    remap[used] = np.arange(int(used.sum()))
-    F = [tuple(int(remap[i]) for i in f) for f in F]
-    res = (Vall[used], F, rows)
+        F.append((O[i][0], I[i][0], I[i + 1][0], O[i + 1][0]))
+        F.append((O[i][-1], O[i + 1][-1], I[i + 1][-1], I[i][-1]))
+    F.append((O[0][0], O[0][1], I[0][1], I[0][0]))                       # cantos libres de los labios
+    F.append((O[-1][0], I[-1][0], I[-1][1], O[-1][1]))
+    res = (np.array(V), F, soft)
     _NV_CACHE[key] = res
     return res
-
 
 def _rk_lprof(a, z0, z1, re=0.0012, n=2):
     """Lazos para extruir en Z un perfil 2D cerrado con los cantos superior e inferior redondeados (re)."""
@@ -2051,23 +2090,24 @@ def _rk_brace(mb, x, A, B, yc0, yc1):
     return d, n
 
 
-def _rk_frame(mb, x, yc, H, seed=0):
-    """Bastidor soldado: postes delantero y trasero, placas base de 1/4" soldadas con dos anclas cada una, riostras
+def _rk_frame(mb, x, yc, H, seed=0, pat_front=(None, None, None, None), pat_back=(None, None, None, None)):
+    """Bastidor soldado: postes delantero y trasero (patrón de perforación de cada uno: hileras con gota en cada mitad del
+    alma y barrenos en cada costado, ver _rk_column_geo), placas base de 1/4" soldadas con dos anclas cada una, riostras
     horizontales y diagonales en zigzag soldadas dentro de la C con cordones visibles."""
-    V, F, _ = _rk_column_geo(H)
     a = RK_COL / 2
     for front in (-1, 1):
         y = front * yc
-        _nv_add(mb, V, F, "rack_blue", M=_T(x, y, 0.0), mirror_y=(front > 0))
+        V, F, soft_ = _rk_column_geo(H, *(pat_front if front < 0 else pat_back))
+        _nv_add(mb, V, F, "rack_blue", M=_T(x, y, 0.0), mirror_y=(front > 0), soft_idx=soft_)
         # placa base 6 × 4 × 1/4" con cordón alrededor del poste
-        slab(mb, _T(x, y, 0.0), 0.1524, 0.1016, RK_BP, rc=0.006, re=0.0012, mat="rack_blue", nc=3, ne=2)
+        slab(mb, _T(x, y, 0.0), 0.1524, 0.1016, RK_BP, rc=0.006, re=0.0012, mat="rack_blue", nc=3, ne=1)
         ac = a + 0.0009
         path = []
         for (px, py) in ((-ac + 0.016, ac), (-ac, ac), (-ac, -ac), (ac, -ac), (ac, ac), (ac - 0.016, ac)):
             path.append((x + px, y + (py if front < 0 else -py), RK_BP + 0.0012))
-        _bead(mb, fillet(path, 0.004, 3), r=0.0024, mat="rack_blue")
+        _bead(mb, fillet(path, 0.004, 2), r=0.0024, mat="rack_blue", step=0.006, ripple=0.1, seg=8)
         for sx in (-1, 1):
-            _nv_anchor(mb, (x + sx * 0.0575, y, RK_BP), proud=0.012)
+            _nv_anchor(mb, (x + sx * 0.0575, y, RK_BP), proud=0.012, lite=True)
     # riostras
     yl = yc - a                                       # plano de los labios (por dentro del marco)
     ycut = yc + a - 0.014                             # corte de la riostra: 12 mm antes del alma (dentro de la C)
@@ -2092,7 +2132,7 @@ def _rk_frame(mb, x, yc, H, seed=0):
                 pts.append(q + d * lam)
             for sx in (-1, 1):
                 xb = x + sx * 0.0203
-                _bead(mb, [(xb, p.y, p.z) for p in pts], r=0.0021, mat="rack_blue")
+                _bead(mb, [(xb, p.y, p.z) for p in pts], r=0.0021, mat="rack_blue", step=0.005, ripple=0.1, seg=8)
     del seed
 
 
@@ -2112,7 +2152,7 @@ def _rk_beam(mb, xa, xb, z, side, yo, label=None):
     loop = loop + Nl * 0.0011
     for (xw, sx) in ((xa, 1), (xb, -1)):
         pts = [(xw + sx * 0.0016, yo - side * u, zb + v) for (u, v) in loop]
-        _bead(mb, pts, r=0.0021, mat="rack_orange", closed=True, step=0.003)
+        _bead(mb, pts, r=0.0021, mat="rack_orange", closed=True, step=0.007, ripple=0.08, seg=8)
 
 
 def _rk_connector(mb, xc, sx, yface, side, ztop, seed=0):
@@ -2123,16 +2163,16 @@ def _rk_connector(mb, xc, sx, yface, side, ztop, seed=0):
     z0, z1 = ztop - 0.152, ztop + 0.012
     # perfil en planta (u = x relativo al poste por el lado del larguero, v = y hacia afuera del alma, + = pasillo)
     P = [(-0.002, 0.0), (a, 0.0), (a, -0.046), (a + t, -0.046), (a + t, t), (-0.002, t)]
-    pr = _fillet_closed(P, [0.001, 0.0045, 0.0008, 0.0008, 0.0093, 0.001], 4)
+    pr = _fillet_closed(P, [0.001, 0.0045, 0.0008, 0.0008, 0.0093, 0.001], 3)
     pts = [(xc + sx * u, yface + side * v) for (u, v) in pr]
     if (sx * side) > 0:
         pts = pts[::-1]
-    skin(mb, _rk_lprof(pts, z0, z1, re=0.0012, n=2), "rack_orange")
-    for k in range(3):                                       # cabezas de remache (domo) en la pata del alma
-        zr = ztop - 0.025 - k * RK_PITCH
-        Mr = _frame_z(Vector((xc + sx * 0.0168, yface + side * (t - 0.0003), zr)), Vector((0, side, 0)))
-        _lathe(mb, [(0.0, 0.0), (0.0068, 0.0), (0.0066, 0.0012), (0.0055, 0.0026), (0.0032, 0.0034), (0.0, 0.0036)], Mr,
-               "rack_orange", seg=SEG)
+    skin(mb, _rk_lprof(pts, z0, z1, re=0.0012, n=1), "rack_orange")
+    with mb.soft():
+        for k in range(3):                                   # cabezas de remache (domo) en la pata del alma
+            zr = ztop - 0.025 - k * RK_PITCH
+            Mr = _frame_z(Vector((xc + sx * 0.0168, yface + side * (t - 0.0003), zr)), Vector((0, side, 0)))
+            _lathe(mb, [(0.0068, 0.0), (0.006, 0.0018), (0.0035, 0.0033), (0.0, 0.0036)], Mr, "rack_orange", seg=14)
     # seguro de resorte: lengüeta de lámina remachada arriba de la pata del alma, con la uña doblada hacia la gota
     xs_ = xc + sx * 0.0168
     yb_ = yface + side * (t - 0.0002)
@@ -2140,8 +2180,9 @@ def _rk_connector(mb, xc, sx, yface, side, ztop, seed=0):
     slab(mb, Ml @ _T(0, 0.0, 0.0), 0.011, 0.004, 0.0013, rc=0.0018, re=0.0004, mat="galvanized", nc=2, ne=1)
     tongue = [(xs_, yb_ + side * 0.0012, ztop - 0.016), (xs_, yb_ + side * 0.0012, ztop + 0.002), (xs_, yb_ + side * 0.0045, ztop + 0.009)]
     sweep_frame(mb, rr_profile(0.0105, 0.0013, 0.0005, n=1), fillet(tongue, 0.004, 3), "galvanized", up=(0, side, 0))
-    _lathe(mb, [(0.0, 0.0), (0.0032, 0.0), (0.003, 0.0008), (0.0018, 0.0016), (0.0, 0.0018)],
-           _frame_z(Vector((xs_, yb_ + side * 0.001, ztop - 0.012)), Vector((0, side, 0))), "galvanized", seg=SEG)
+    with mb.soft():
+        _lathe(mb, [(0.0032, 0.0), (0.0026, 0.0011), (0.0, 0.0018)],
+               _frame_z(Vector((xs_, yb_ + side * 0.001, ztop - 0.012)), Vector((0, side, 0))), "galvanized", seg=12)
     del seed
 
 
@@ -2152,24 +2193,24 @@ def _wire_deck(mb, x0, x1, yfo, ybo, z, seed=0):
     rL, rC = 0.00245, 0.0021
     zL = z + rL
     yfi, ybi = yfo + RK_BW, ybo - RK_BW
-    nL = max(2, int(round((x1 - x0 - 0.02) / 0.0635)))
+    nL = max(2, int(round((x1 - x0 - 0.02) / 0.1016)))
     with mb.soft():
         for i in range(nL + 1):
             x = x0 + 0.01 + (x1 - x0 - 0.02) * i / nL
             yA, yB = yfo - rL + 0.0003, ybo + rL - 0.0003
             path = [(x, yA, z - 0.026), (x, yA, zL), (x, yB, zL), (x, yB, z - 0.026)]
-            mb.tube(fillet(path, 0.007, 5), rL, seg=12, mat="galvanized")
+            mb.tube(fillet(path, 0.007, 3), rL, seg=8, mat="galvanized")
         zC = zL - rL - rC + 0.0007
-        m = int((ybi - yfi - 0.03) / 0.1016)
+        m = int((ybi - yfi - 0.03) / 0.0635)
         for j in range(m + 1):
             y = yfi + 0.015 + (ybi - yfi - 0.03) * j / m
-            mb.tube([(x0 + 0.004, y, zC), (x1 - 0.004, y, zC)], rC, seg=12, mat="galvanized")
+            mb.tube([(x0 + 0.004, y, zC), (x1 - 0.004, y, zC)], rC, seg=8, mat="galvanized")
     zst = z - 0.0413
     ztop = zC - rC + 0.0004
     hh = ztop - zst
     t = 0.0019
     hat = [(-0.024, -t / 2), (-0.014, -t / 2), (-0.0115, -hh + t / 2), (0.0115, -hh + t / 2), (0.014, -t / 2), (0.024, -t / 2)]
-    cl = _fillet2d(hat, 0.0025, 4)
+    cl = _fillet2d(hat, 0.0025, 3)
     Nn = _normals2d(cl)
     prof = [tuple(q) for q in (cl - Nn * t / 2)] + [tuple(q) for q in (cl + Nn * t / 2)[::-1]]
     for xc in (x0 + 0.09, (x0 + x1) / 2, x1 - 0.09):
@@ -2188,16 +2229,17 @@ def _rk_guard(mb, x, yf, seed=0, scuff=False):
     yn = yf - 0.044 + t / 2
     hw = 0.08
     cl = _fillet2d([(x - hw, yb), (x - hw, yn + 0.018), (x - hw + 0.03, yn), (x + hw - 0.03, yn), (x + hw, yn + 0.018), (x + hw, yb)],
-                   0.014, 4)
+                   0.014, 3)
     Nn = _normals2d(cl)
     prof = [tuple(q) for q in (cl + Nn * t / 2)] + [tuple(q) for q in (cl - Nn * t / 2)[::-1]]
-    skin(mb, _rk_lprof(prof, 0.0, 0.457, re=0.0022, n=3), "paint_yellow")
+    skin(mb, _rk_lprof(prof, 0.0, 0.457, re=0.0022, n=2), "paint_yellow")
     for sx in (-1, 1):
         xf = x + sx * (hw + t / 2)
-        slab(mb, _T(xf + sx * 0.035, (yb + yn) / 2 + 0.002, 0.0), 0.07, 0.034, 0.0064, rc=0.006, re=0.0012, mat="paint_yellow", nc=3,
-             ne=2)
-        _bead(mb, [(xf + sx * 0.0018, yb - 0.002, 0.0074), (xf + sx * 0.0018, yn + 0.004, 0.0074)], r=0.0022, mat="paint_yellow")
-        _nv_anchor(mb, (xf + sx * 0.042, (yb + yn) / 2 + 0.002, 0.0064), proud=0.012)
+        slab(mb, _T(xf + sx * 0.035, (yb + yn) / 2 + 0.002, 0.0), 0.07, 0.034, 0.0064, rc=0.006, re=0.0012, mat="paint_yellow", nc=2,
+             ne=1)
+        _bead(mb, [(xf + sx * 0.0018, yb - 0.002, 0.0074), (xf + sx * 0.0018, yn + 0.004, 0.0074)], r=0.0022, mat="paint_yellow",
+              step=0.005, seg=8)
+        _nv_anchor(mb, (xf + sx * 0.042, (yb + yn) / 2 + 0.002, 0.0064), proud=0.012, lite=True)
     if scuff:
         yfr = yn - t / 2
         for k in range(5):                                   # pintura raspada (acero) y marcas de llanta (hule)
@@ -2207,7 +2249,7 @@ def _rk_guard(mb, x, yf, seed=0, scuff=False):
             ang = float(r.uniform(-12, 12))
             mat = "steel" if k < 3 else "rubber"
             Ms = _T(xc, yfr + 0.0002, zc) @ _Ry(ang) @ _Rx(90)
-            slab(mb, Ms, ln, 0.004 + 0.004 * (k >= 3), 0.0006, rc=0.0018, re=0.0002, mat=mat, nc=2, ne=1)
+            slab(mb, Ms, ln, 0.004 + 0.004 * (k >= 3), 0.0006, rc=0.0018, re=0.0002, mat=mat, nc=1, ne=1)
 
 
 def _rk_plaque(mb, x, yf, z, seed=0):
@@ -2222,10 +2264,10 @@ def _rk_plaque(mb, x, yf, z, seed=0):
              ("UNIFORMLY DISTRIBUTED LOADS ONLY", 0.0072, False), ("DO NOT CLIMB  -  REPORT ALL DAMAGE", 0.0072, False)]
     zl = h / 2 - 0.058
     for (s, sz, b) in lines:
-        text_font(mb, s, sz, 0.0004, "cable", Mp @ _T(0, zl, t), font="sign", bold=b, res=2)
+        text_font(mb, s, sz, 0.0004, "cable", Mp @ _T(0, zl, t), font="sign", bold=b, res=1 if sz < 0.01 else 2)
         zl -= sz * 1.75
     for zz in (h / 2 - 0.041, -h / 2 + 0.01):                # tornillos a las gotas del poste (fuera del texto)
-        _nv_bolt_head(mb, Mp @ _T(-0.0168, zz, t), d=0.0064)
+        _nv_bolt_head(mb, Mp @ _T(-0.0168, zz, t), d=0.0064, lite=True)
 
 
 def _rk_label(mb, x, y, z, text, seed=0):
@@ -2234,11 +2276,11 @@ def _rk_label(mb, x, y, z, text, seed=0):
     r = rng(seed)
     M = _T(x, y + 0.0001, z) @ _Rx(90)
     slab(mb, M, 0.1, 0.038, 0.0006, rc=0.002, re=0.0002, mat="sign_white", nc=2, ne=1)
-    text_font(mb, text, 0.0125, 0.0003, "cable", M @ _T(-0.024, 0.004, 0.0005), font="sign", bold=True, res=2)
+    text_font(mb, text, 0.0125, 0.0003, "cable", M @ _T(-0.024, 0.004, 0.0005), font="sign", bold=True, res=1)
     xb = 0.006
-    while xb < 0.044:
+    while xb < 0.044:                                        # código de barras impreso (0,2 mm)
         wbar = float(r.choice([0.0005, 0.0008, 0.0012]))
-        slab(mb, M @ _T(xb + wbar / 2, -0.004, 0.0005), wbar, 0.022, 0.0002, rc=0.0001, re=0.0, mat="cable", nc=1, ne=1, re0=0.0)
+        mb.box((xb, -0.015, 0.0004), (xb + wbar, 0.007, 0.0006), "cable", bevel=0.0, m=M)
         xb += wbar + float(r.choice([0.0005, 0.0008, 0.001]))
 
 
@@ -2269,7 +2311,8 @@ def pallet_rack_slots(bays=3, levels=3, depth=1.1, bay_w=2.7):
 
 def pallet_rack(bays=3, levels=3, depth=1.1, bay_w=2.7, seed=0):
     """Rack selectivo de tarimas tipo gota (VACÍO; cargas en pallet_rack_slots). Postes rolados de 3" × 3" cal. 14 con
-    perforación REAL (gotas a cada 2" en el alma y barrenos laterales), bastidores soldados (riostras de canal en zigzag
+    perforación REAL donde se ve (gotas de 10 vértices a cada 2" en el alma del pasillo, sin las hileras tapadas por conectores;
+    barrenos en los costados exteriores de las cabeceras; el alma de atrás va lisa), bastidores soldados (riostras de canal en zigzag
     con cordones visibles), placas base de 1/4" con dos anclas de cuña (rondana, tuerca y espárrago roscado), largueros
     escalonados de 4" con conector de ángulo de 3 remaches soldado (cordón perimetral) y perno de seguridad J, parrillas de
     alambre en cascada (2 por claro y nivel) con canales asentados en el escalón, protectores amarillos atornillados al piso
@@ -2285,9 +2328,19 @@ def pallet_rack(bays=3, levels=3, depth=1.1, bay_w=2.7, seed=0):
     lv = _rk_levels(levels)
     yfc = -yc - a                                                       # cara del alma de los postes del pasillo
     dent = int(r.integers(bays + 1))
+    zr_ = _rk_rows(H)
+    allr = frozenset(range(len(zr_)))
+    cov = frozenset(k for k in allr if any(zr_[k] + 0.0122 > zt - 0.152 and zr_[k] - 0.0137 < zt + 0.012 for zt in lv))
+    plq = frozenset(k for k in allr if abs(zr_[k] - 1.32) < 0.0762 + 0.014)
     for f in range(bays + 1):
         x = -W / 2 + f * bay_w
-        _rk_frame(mb, x, yc, H, seed=seed + f)
+        # gotas solo en el alma del pasillo (sin las hileras tapadas por conectores o por la placa) y barrenos solo en los
+        # costados exteriores de las cabeceras; el alma de atrás (otra hilera o el muro) va sin perforar
+        rL = allr - (cov if f > 0 else frozenset()) - (plq if f == 0 else frozenset())
+        rR = allr - (cov if f < bays else frozenset()) - (plq if f == 0 else frozenset())
+        sL = allr if f == 0 else None
+        sR = allr if f == bays else None
+        _rk_frame(mb, x, yc, H, seed=seed + f, pat_front=(rL, rR, sL, sR), pat_back=(None, None, sL, sR))
         _rk_guard(mb, x, yfc, seed=seed * 7 + f, scuff=(f == dent))
     _rk_plaque(mb, -W / 2, yfc, 1.32, seed=seed)
     row = "ABCDEFGH"[(seed // 10 * 2 + seed % 10) % 8]
@@ -3422,57 +3475,57 @@ def _fin(mb, M, prof, t, mat="aluminium", re=0.0006):
 
 
 def high_bay_light():
-    """Lámpara LED industrial tipo UFO de 150-200 W (Ø 300 mm × 135 mm): disipador de aluminio fundido con 48 aletas radiales
-    reales de canto redondeado sobre disco base biselado, caja del driver integrada arriba con nervios y prensaestopa,
-    armella forjada roscada con tuerca, cadena de cuelgue con gancho S y cable de seguridad, cordón de alimentación SJOW
-    con caída natural, bisel inferior atornillado y mica de policarbonato con matriz de lentes TIR. Origen: punto de cuelgue
-    (interior de la armella); cuelga hacia -Z."""
+    """Lámpara LED industrial tipo UFO de 150-200 W (Ø 300 mm × 135 mm), versión de presupuesto (se usan 12 a 7 m de
+    altura): disipador de aluminio fundido con 24 aletas radiales reales de canto redondeado sobre disco base biselado, caja
+    del driver integrada arriba con 12 nervios y prensaestopa, armella forjada roscada con tuerca, cadena de cuelgue con
+    gancho S y cable de seguridad, cordón de alimentación SJOW, bisel inferior atornillado y mica de policarbonato con
+    anillos prismáticos. Origen: punto de cuelgue (interior de la armella); cuelga hacia -Z."""
     mb = MB()
     R = 0.15
+    from kit.clinic_servicios import lathe as slathe
     # armella forjada y espárrago con tuerca
-    revolve(mb, [(0.016 + 0.0042 * math.cos(a), 0.0042 * math.sin(a)) for a in np.linspace(0, 2 * PI, 17)[:-1]], "steel", seg=36,
-            M=_T(0, 0, -0.0118) @ _Rx(90), closed=True)
+    with mb.soft():
+        revolve(mb, [(0.016 + 0.0042 * math.cos(a), 0.0042 * math.sin(a)) for a in np.linspace(0, 2 * PI, 11)[:-1]], "steel", seg=24,
+                M=_T(0, 0, -0.0118) @ _Rx(90), closed=True)
+        _nv_thread(mb, _T(0, 0, -0.072), 0.0095, 0.03, 0.0032, "steel", seg=12)
     _lathe(mb, [(0.0, -0.028), (0.006, -0.029), (0.0075, -0.036), (0.0075, -0.045), (0.0065, -0.046), (0.0, -0.046)], Matrix(), "steel", seg=SEG)
-    _nv_thread(mb, _T(0, 0, -0.072), 0.0095, 0.03, 0.0016, "steel")
     _nv_nut(mb, _T(0, 0, -0.064), 0.016, 0.008, "steel", hole=0.004)
     zt = -0.064                                                           # tapa de la caja del driver
-    # caja del driver con nervios
-    from kit.clinic_servicios import lathe as slathe
     rib = lambda i, a, rr, z: rr * (1.0 + 0.05 * max(0.0, math.cos(12 * a)) ** 8) if 1 <= i <= 3 else rr   # noqa: E731
     slathe(mb, [(0.0, zt), (0.052, zt), (0.058, zt - 0.004), (0.06, zt - 0.012), (0.06, zt - 0.05), (0.064, zt - 0.054), (0.0, zt - 0.054)],
-           seg=96, mat="aluminium", M=Matrix(), rmod=rib)
+           seg=48, mat="aluminium", M=Matrix(), rmod=rib)
     zb = zt - 0.054                                                       # cara superior del disco base
     _lathe(mb, [(0.0, zb), (R - 0.004, zb - 0.006), (R, zb - 0.01), (R, zb - 0.022), (R - 0.004, zb - 0.026), (0.0, zb - 0.026)], Matrix(),
-           "aluminium", seg=96)
-    for k in range(48):                                                   # aletas radiales
-        a = 2 * PI * (k + 0.5) / 48
-        r0 = 0.068 if k % 2 == 0 else 0.095
+           "aluminium", seg=48)
+    for k in range(24):                                                   # aletas radiales
+        a = 2 * PI * (k + 0.5) / 24
+        r0 = 0.068
         prof = _fillet_closed([(r0, zb - 0.004), (R - 0.006, zb - 0.012), (R - 0.006, zb + 0.008), (r0 + 0.012, zb + 0.048), (r0, zb + 0.048)],
-                              [0.001, 0.002, 0.003, 0.006, 0.001], 3)
-        _fin(mb, _Rz(math.degrees(a)), prof, 0.0019)
-    # bisel inferior con tornillos y mica con lentes TIR
+                              [0.001, 0.002, 0.003, 0.006, 0.001], 2)
+        _fin(mb, _Rz(math.degrees(a)), prof, 0.0026, re=0.0008)
+    # bisel inferior con tornillos y mica prismática
     zl = zb - 0.026
     _lathe(mb, [(0.128, zl + 0.0005), (R - 0.004, zl + 0.0005), (R - 0.003, zl - 0.006), (R - 0.008, zl - 0.009), (0.128, zl - 0.009),
-                (0.125, zl - 0.006)], Matrix(), "aluminium", seg=96, closed=True)
-    for k in range(8):
-        a = 2 * PI * k / 8
-        _lathe(mb, [(0.0, 0.0), (0.0035, 0.0), (0.003, -0.0015), (0.0, -0.002)], _T(0.139 * math.cos(a), 0.139 * math.sin(a), zl - 0.009),
-               "steel", seg=16)
-    _lathe(mb, [(0.0, zl - 0.004), (0.127, zl - 0.004), (0.127, zl - 0.007), (0.0, zl - 0.0075)], Matrix(), "glass", seg=96)
-    k = 0
-    for ring_r, nn in ((0.0, 1), (0.024, 8), (0.048, 15), (0.072, 22), (0.096, 29), (0.117, 36)):
-        for j in range(nn):
-            a = 2 * PI * j / nn + 0.2 * k
-            p = (ring_r * math.cos(a), ring_r * math.sin(a), zl - 0.007)
-            _lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0078, -0.0022), (0.0055, -0.0038), (0.0, -0.0045)], _T(*p), "glass", seg=16)
-        k += 1
+                (0.125, zl - 0.006)], Matrix(), "aluminium", seg=48, closed=True)
+    with mb.soft():
+        for k in range(8):
+            a = 2 * PI * k / 8
+            _lathe(mb, [(0.0035, 0.0), (0.003, -0.0015), (0.0, -0.002)], _T(0.139 * math.cos(a), 0.139 * math.sin(a), zl - 0.0088),
+                   "steel", seg=12)
+    lens = [(0.0, zl - 0.004), (0.127, zl - 0.004), (0.127, zl - 0.0075)]
+    for k in range(6):                                                    # anillos prismáticos (dientes de sierra)
+        r1 = 0.127 - (k + 1) * 0.0205
+        lens += [(r1 + 0.006, zl - 0.0062), (r1, zl - 0.0075)]
+    lens += [(0.0, zl - 0.0075)]
+    _lathe(mb, lens, Matrix(), "glass", seg=48)
     # prensaestopa y cordón de alimentación que sube junto a la cadena
     pg = Vector((0.06, 0.0, zt - 0.03))
     _lathe(mb, [(0.0, -0.001), (0.009, -0.001), (0.009, 0.008), (0.0105, 0.009), (0.0105, 0.016), (0.0075, 0.02), (0.006, 0.026)],
-           _frame_z(pg, Vector((1, 0, 0))), "plastic", seg=SEG)
+           _frame_z(pg, Vector((1, 0, 0))), "plastic", seg=16)
     cab = [(0.085, 0.0, zt - 0.03), (0.11, 0.0, zt - 0.025), (0.125, 0.006, zt + 0.02), (0.08, 0.012, 0.06), (0.03, 0.012, 0.13),
            (0.018, 0.012, 0.205)]
-    _tube(mb, fillet(cab, 0.04, 8), 0.0046, seg=16, mat="cable")
+    with mb.soft():
+        mb.tube(fillet(cab, 0.04, 4), 0.0046, seg=10, mat="cable")
     # cadena de cuelgue con gancho S y cable de seguridad
     links = []
     zc = -0.002
@@ -3485,19 +3538,19 @@ def high_bay_light():
         for (zc, k) in links:
             M = _T(0, 0, zc + 0.016) @ (_Rz(90) if k % 2 else Matrix())
             pts = []
-            for q in range(8):
-                g = -PI / 2 + PI * q / 7
-                pts.append((0.0, 0.0055 * math.cos(g) * 1.0, 0.0105 + 0.0055 * math.sin(g)))
-            for q in range(8):
-                g = PI / 2 + PI * q / 7
+            for q in range(6):
+                g = -PI / 2 + PI * q / 5
+                pts.append((0.0, 0.0055 * math.cos(g), 0.0105 + 0.0055 * math.sin(g)))
+            for q in range(6):
+                g = PI / 2 + PI * q / 5
                 pts.append((0.0, 0.0055 * math.cos(g), -0.0105 + 0.0055 * math.sin(g)))
-            loop_tube(mb, [tuple(M @ Vector(p)) for p in pts], 0.0022, seg=12, mat="galvanized", normal=tuple(M.to_3x3() @ Vector((1, 0, 0))))
+            loop_tube(mb, [tuple(M @ Vector(p)) for p in pts], 0.0022, seg=8, mat="galvanized", normal=tuple(M.to_3x3() @ Vector((1, 0, 0))))
         zs = links[-1][0] + 0.032
         sh = [(0.0, 0.0, zs - 0.012), (0.009, 0.0, zs - 0.004), (0.0, 0.0, zs + 0.006), (-0.009, 0.0, zs + 0.016), (0.0, 0.0, zs + 0.026),
               (0.007, 0.0, zs + 0.02)]
-        mb.tube(fillet(sh, 0.006, 5), 0.0026, seg=12, mat="galvanized")
+        mb.tube(fillet(sh, 0.006, 3), 0.0026, seg=8, mat="galvanized")
         cbl = [(-0.012, 0.004, -0.024), (-0.016, 0.006, 0.02), (-0.012, 0.006, 0.12), (-0.006, 0.004, 0.2)]
-        mb.tube(fillet(cbl, 0.03, 6), 0.0012, seg=12, mat="galvanized")
+        mb.tube(fillet(cbl, 0.03, 3), 0.0012, seg=6, mat="galvanized")
     return mb
 
 
