@@ -38,6 +38,13 @@ incluyas, no los vas a incluir."
 3. **Cantidad según cada lugar:** si el usuario pide un lugar sin grafiti, no se pone; si pide poco, es poco (granero GRA_1:
    solo un par de rayaduras en un costado).
 
+## R-AGENTES · Un agente a la vez (orden del usuario, 2026-11-19)
+Cita: "Nunca te pedí que corrieras 300 agentes simultáneos... bastaba con correr uno a la vez y dejarlo como tarea larga
+mediante uno por uno. Así yo puedo trabajar otras cosas."
+- Nunca lanzar varios agentes en paralelo para este proyecto. Trabajo largo = un solo agente (o yo mismo) en segundo plano,
+  modelo por modelo, uno tras otro, cuidando el límite de uso del usuario.
+- Antes de cualquier tarea grande, avisar el plan y el orden; nada de ráfagas de agentes.
+
 ## Otras reglas vigentes (resumen; detalle en blackisle-kit-edificios/entrega/ESTADO.md)
 - R4: contenido seguro. Lettering con palabras inocuas; prohibidos nombres, números, siglas o símbolos de pandillas reales,
   símbolos de odio, personas reales y marcas comerciales. Crews ficticios.
