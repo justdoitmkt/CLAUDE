@@ -2782,15 +2782,15 @@ def satellite_dish(seed=0, detail="high", state=None):
         lnb_dir = (lnb_dir + Vector((rr.uniform(-0.3, 0.3), rr.uniform(-0.3, 0.3), -0.5))).normalized()
         Ml = _frame(tip, lnb_dir)
         # porta-LNB: abrazadera de anillo (fleje de 18 mm) con oreja y tornillo de apriete
-        _lathe(mb, [(0.0255, -0.009), (0.0285, -0.009), (0.0295, -0.007), (0.0295, 0.007), (0.0285, 0.009), (0.0255, 0.009)], seg=48,
+        _lathe(mb, [(0.0201, -0.009), (0.0231, -0.009), (0.0241, -0.007), (0.0241, 0.007), (0.0231, 0.009), (0.0201, 0.009)], seg=48,
                mat="metal_paint", m=Ml, loop=True)
         side_ = Ml.to_3x3() @ Vector((1, 0, 0))
         for sz in (-1, 1):
-            _box(mb, (0.0285, -0.006 + sz * 0.0045, -0.008), (0.042, 0.006 + sz * 0.0045 - sz * 0.006, 0.008), "metal_paint", bevel=0.001,
+            _box(mb, (0.0231, -0.006 + sz * 0.0045, -0.008), (0.037, 0.006 + sz * 0.0045 - sz * 0.006, 0.008), "metal_paint", bevel=0.001,
                  m=Ml)
-        _bolt(mb, Ml @ Vector((0.036, 0.0075, 0.0)), Ml.to_3x3() @ Vector((0, 1, 0)), r=0.004, h=0.004)
-        # LNB: cuerpo con bocina (feedhorn) cónica, anillos de choque y tapa de radomo; caja de electrónica con conector F
-        _lathe(mb, [(0.0, -0.09), (0.019, -0.09), (0.0235, -0.086), (0.024, -0.06), (0.024, 0.0), (0.026, 0.004), (0.031, 0.018),
+        _bolt(mb, Ml @ Vector((0.031, 0.0075, 0.0)), Ml.to_3x3() @ Vector((0, 1, 0)), r=0.004, h=0.004)
+        # LNB (cuello Ø 40 mm, ref. Inverto 60 cm: porta-LNB de 40 mm): cuerpo con bocina (feedhorn) cónica, anillos de choque y tapa de radomo; caja de electrónica con conector F
+        _lathe(mb, [(0.0, -0.09), (0.016, -0.09), (0.0195, -0.086), (0.0201, -0.06), (0.0201, 0.0), (0.023, 0.004), (0.031, 0.018),
                     (0.0335, 0.034), (0.034, 0.038), (0.0, 0.038)], seg=48, mat="plastic", m=Ml)
         for zz in (0.012, 0.022, 0.03):
             _torus(mb, Ml @ Vector((0, 0, zz)), Ml.to_3x3() @ Vector((0, 0, 1)), 0.027 + 0.18 * (zz - 0.004), 0.0012, mat="plastic")
