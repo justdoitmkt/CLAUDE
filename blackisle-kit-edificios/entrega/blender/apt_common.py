@@ -123,6 +123,8 @@ def dress_panel(p, details, interior, r, primary=False, depth=INFILL):
         elif kind in ("door_apt", "door_balcony"):
             if r.random() < 0.7:          # muchas hojas arrancadas: queda el vano
                 details.join(op.door("flush", w, h, depth, seed=seed, open_angle=max(80.0, float(r.uniform(0, 95)))), M)
+            else:                         # R-AAA (2026-11-19): sin hoja queda el marco (forro, chambranas, bisagras rotas)
+                details.join(ab.door_frame_remnant(w, h, depth, seed=seed), M)
         elif kind == "shutter":
             details.join(op.rolling_shutter(w, h, seed=seed, dent=float(r.uniform(0.4, 0.9)),
                                             open_frac=float(r.choice([0.0, 0.0, 0.35]))), M)
