@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "40cf41b",
+ "version_repo": "cf0d87c",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -3917,7 +3917,7 @@
     "Estructura": {
      "nombre": "SM_MIL_1_almacen_Estructura",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Estructura.glb",
-     "triangulos": 158236,
+     "triangulos": 166010,
      "ranuras": [
       "MIL_1_almacen_walls_main",
       "MIL_1_almacen_walls_rest",
@@ -3930,12 +3930,12 @@
       "BLK_sign_red",
       "BLK_brass"
      ],
-     "mib": 7.73
+     "mib": 7.93
     },
     "Detalle": {
      "nombre": "SM_MIL_1_almacen_Detalle",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Detalle.glb",
-     "triangulos": 1960277,
+     "triangulos": 1962145,
      "ranuras": [
       "BLK_paint_tan",
       "BLK_galvanized",
@@ -3956,12 +3956,12 @@
       "BLK_sign_green",
       "BLK_metal_rust"
      ],
-     "mib": 94.3
+     "mib": 94.34
     },
     "Mobiliario": {
      "nombre": "SM_MIL_1_almacen_Mobiliario",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Mobiliario.glb",
-     "triangulos": 2967771,
+     "triangulos": 2972157,
      "ranuras": [
       "BLK_rack_blue",
       "BLK_galvanized",
@@ -3987,12 +3987,12 @@
       "BLK_paper",
       "BLK_sign_green"
      ],
-     "mib": 151.17
+     "mib": 151.38
     },
     "Perimetro": {
      "nombre": "SM_MIL_1_almacen_Perimetro",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Perimetro.glb",
-     "triangulos": 3240744,
+     "triangulos": 3241247,
      "ranuras": [
       "BLK_concrete",
       "BLK_steel",
@@ -4008,12 +4008,12 @@
       "BLK_geotextile",
       "BLK_sand"
      ],
-     "mib": 139.38
+     "mib": 139.35
     },
     "Carga": {
      "nombre": "SM_MIL_1_almacen_Carga",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Carga.glb",
-     "triangulos": 2821828,
+     "triangulos": 2836496,
      "ranuras": [
       "BLK_wood_od",
       "BLK_steel",
@@ -4027,12 +4027,12 @@
       "BLK_aluminium",
       "BLK_galvanized"
      ],
-     "mib": 167.23
+     "mib": 167.74
     },
     "Malla": {
      "nombre": "SM_MIL_1_almacen_Malla",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Malla.glb",
-     "triangulos": 3349098,
+     "triangulos": 3349518,
      "ranuras": [
       "BLK_concrete",
       "BLK_galvanized",
@@ -4040,12 +4040,12 @@
       "BLK_cable",
       "BLK_steel"
      ],
-     "mib": 215.42
+     "mib": 215.48
     },
     "Vidrio": {
      "nombre": "SM_MIL_1_almacen_Vidrio",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Vidrio.glb",
-     "triangulos": 22516,
+     "triangulos": 22608,
      "ranuras": [
       "BLK_glass"
      ],
@@ -4054,11 +4054,11 @@
     "Colision": {
      "nombre": "SM_MIL_1_almacen_Colision",
      "archivo": "modelos/MIL_1_almacen/SM_MIL_1_almacen_Colision.glb",
-     "triangulos": 72875,
+     "triangulos": 73538,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 2.93
+     "mib": 2.95
     }
    },
    "texturas": {
@@ -4234,7 +4234,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 778.91,
+   "mib_total": 779.92,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "portón vehicular de la malla del frente y el andén con las dos cortinas; muros T al fondo y a los lados"
@@ -4266,7 +4266,7 @@
     "Detalle": {
      "nombre": "SM_MIL_2_avanzada_Detalle",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Detalle.glb",
-     "triangulos": 1127615,
+     "triangulos": 1130036,
      "ranuras": [
       "BLK_aluminium",
       "BLK_steel",
@@ -4287,12 +4287,12 @@
       "BLK_net",
       "BLK_plastic"
      ],
-     "mib": 48.34
+     "mib": 48.26
     },
     "Mobiliario": {
      "nombre": "SM_MIL_2_avanzada_Mobiliario",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Mobiliario.glb",
-     "triangulos": 1737374,
+     "triangulos": 1739503,
      "ranuras": [
       "BLK_wood",
       "BLK_steel",
@@ -4316,12 +4316,12 @@
       "BLK_metal_rust",
       "BLK_paint_tan"
      ],
-     "mib": 76.95
+     "mib": 77.0
     },
     "Perimetro": {
      "nombre": "SM_MIL_2_avanzada_Perimetro",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Perimetro.glb",
-     "triangulos": 788766,
+     "triangulos": 788772,
      "ranuras": [
       "BLK_galvanized",
       "BLK_geotextile",
@@ -4329,12 +4329,12 @@
       "BLK_concrete",
       "BLK_sandbag"
      ],
-     "mib": 31.79
+     "mib": 31.78
     },
     "Carga": {
      "nombre": "SM_MIL_2_avanzada_Carga",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Carga.glb",
-     "triangulos": 1123972,
+     "triangulos": 1127859,
      "ranuras": [
       "BLK_polymer",
       "BLK_brass",
@@ -4355,12 +4355,12 @@
       "BLK_aluminium",
       "BLK_galvanized"
      ],
-     "mib": 52.59
+     "mib": 52.74
     },
     "Vidrio": {
      "nombre": "SM_MIL_2_avanzada_Vidrio",
      "archivo": "modelos/MIL_2_avanzada/SM_MIL_2_avanzada_Vidrio.glb",
-     "triangulos": 28574,
+     "triangulos": 28584,
      "ranuras": [
       "BLK_glass"
      ],
@@ -4485,7 +4485,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 210.58,
+   "mib_total": 210.69,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "costado largo de la tienda enrollado con el mostrador y la red de camuflaje; generador al fondo (+y)"
