@@ -854,6 +854,7 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
     # ---- restos de revoque ----
     if plaster > 0:
         area, target, tries = 0.0, plaster * L * H, 0
+        placed = []
         stone = [o for o in obst]
         while area < target and tries < 40:
             tries += 1
@@ -864,6 +865,9 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 continue
             if keep_ends and (pu - ru * 1.3 < keep_ends or pu + ru * 1.3 > L - keep_ends):
                 continue                                                  # sin revoque bajo los sillares de esquina
+            if detail == "aaa" and any(abs(pu - a_) < (ru + b_) * 1.35 and abs(pv - c_) < (rv + d_) * 1.35 for (a_, b_, c_, d_) in placed):
+                continue                                                  # parches que no se enciman (sin caras casi coplanares)
+            placed.append((pu, ru, pv, rv))
             nn = _N1(r, wl=1.0, n=4)
             pts = []
             jit = [r.uniform(-0.06, 0.06) for _ in range(22)]

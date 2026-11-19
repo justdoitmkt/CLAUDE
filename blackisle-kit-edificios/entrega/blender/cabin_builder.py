@@ -502,8 +502,8 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
                 continue                                                  # tablón arrancado
             jag1 = 0.0
             tt = top - 0.002
-            if r.random() < 0.06:
-                tt = top - r.uniform(0.3, 0.9)
+            if r.random() < 0.06 and top - pc > 0.6:                     # tablón roto arriba (nunca colgando dentro de un vano)
+                tt = max(pc + 0.25, top - r.uniform(0.3, 0.9))
                 jag1 = 0.03
             boards.append((pa, pb, pc, tt))
             cup = r.uniform(0.0, 0.002)

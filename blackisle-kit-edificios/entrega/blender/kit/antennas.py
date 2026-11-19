@@ -195,10 +195,17 @@ def _end_cap(mb, MA, prof, z0, z1, top, mat="plastic"):
 
 
 def _port_43_10(mb, M, seg=24):
-    """Puerto hembra 4.3-10 de panel (eje +Z local hacia fuera): contratuerca hexagonal y cuerpo roscado con boca."""
+    """Puerto hembra 4.3-10 de panel (IEC 61169-54; rosca exterior M20 × 1: Telegärtner J01441, Rosenberger) con el eje +Z
+    local hacia fuera: contratuerca hexagonal, cuerpo con la rosca de 1 mm de paso en relieve (crestas y valles reales),
+    chaflán de entrada y boca con el contacto."""
     _hex(mb, M, 0.0155, h=0.0065, mat=SS, z=-0.001)
-    revolve(mb, [(0.0098, 0.004), (0.0098, 0.0235), (0.0087, 0.0262), (0.0060, 0.0262), (0.0056, 0.020), (0.0, 0.020)], SS,
-            seg=seg, M=M)
+    prof = [(0.0098, 0.004), (0.0098, 0.0058)]
+    z = 0.0062
+    while z < 0.0225:                                     # rosca M20 × 1: cresta Ø 19,6 / raíz Ø 18,6 cada 1 mm
+        prof += [(0.0093, z), (0.0098, z + 0.0005)]
+        z += 0.001
+    prof += [(0.0098, 0.0235), (0.0087, 0.0262), (0.0060, 0.0262), (0.0056, 0.020), (0.0024, 0.020), (0.0024, 0.0215), (0.0, 0.0215)]
+    revolve(mb, prof, SS, seg=seg, M=M)
 
 
 def _aisg_port(mb, M, seg=24):
@@ -251,7 +258,31 @@ def _tilt_mount(mb, MA, Pb, zt_body, ypiv, La, yc=-0.098):
     _pivot_bolt(mb, Matrix(), (Pt.y, Pt.z), 0.0215, d=0.010)
     for p in (Pc, (Pt + Pc) / 2):
         _pivot_bolt(mb, Matrix(), (p.y, p.z), 0.0275, d=0.010)
+    _tilt_scale(mb, Pc, u, La)
     return Pt, Pc
+
+
+def _tilt_scale(mb, Pc, u, La):
+    """Escala de inclinación estampada en la cara exterior de la solera superior del brazo (lado +X), donde termina la solera
+    inferior que se desliza bajo ella: rayas cada grado (0°, luego 2°–10°, como los juegos de inclinación de CommScope) con las
+    pares más largas, números en relieve y la ranura de lectura."""
+    from kit.fonts import text_font
+    xf = 0.0275
+    ax = -Vector((0.0, u.y, u.z))                         # a lo largo del brazo, hacia el pivote del cuerpo
+    w = Vector((0.0, -ax.z, ax.y))                        # transversal en la cara
+    s0, s1 = 0.26 * La, 0.44 * La
+    F = Matrix(((0.0, 0.0, 1.0, xf), (ax.y, w.y, 0.0, Pc.y), (ax.z, w.z, 0.0, Pc.z), (0, 0, 0, 1)))
+    for k, deg in enumerate([0] + list(range(2, 11))):
+        sv = s0 + (s1 - s0) * k / 10
+        ln = 0.0065 if deg % 2 == 0 else 0.004
+        mb.box((sv - 0.0003, -0.0125, -0.0002), (sv + 0.0003, -0.0125 + ln, 0.0005), "steel", bevel=0.0, m=F)
+    t = MB()
+    for deg in (0, 2, 4, 6, 8, 10):
+        k = 0 if deg == 0 else deg - 1
+        sv = s0 + (s1 - s0) * k / 10
+        text_font(t, str(deg), 0.0032 if La < 0.2 else 0.0038, 0.0005, "steel", F @ _T(sv, -0.0035, 0.0) @ _Rz(90), font="sign", res=4)
+    mb.join(t)
+    mb.box((s0 - 0.004, 0.008, -0.0002), (s1 + 0.004, 0.0095, 0.0004), "steel", bevel=0.0, m=F)        # ranura de lectura
 
 
 def panel_antenna(seed=0, tilt_deg=4.0):
@@ -277,6 +308,11 @@ def panel_antenna(seed=0, tilt_deg=4.0):
     pcap = _panel_profile(W, D, rails=False)
     _end_cap(mb, MA, pcap, 0.0, hc, top=False)
     _end_cap(mb, MA, pcap, L - hc, L, top=True)
+    hw = W / 2                                    # línea de partición del molde de extrusión a media cara lateral
+    for sx in (-1, 1):
+        xa = sx * (hw - 0.0015)
+        mb.box((min(xa, xa + sx * 0.0006), -0.1006, hc - 0.010), (max(xa, xa + sx * 0.0006), -0.0994, L - hc + 0.010), "radome",
+               bevel=0.0, m=MA)
     # tapa inferior: 8 puertos 4.3-10 (2 filas de 4), 2 AISG y tapón de ventilación
     for row, y in enumerate((-0.045, -0.100)):
         for x in (-0.105, -0.035, 0.035, 0.105):
