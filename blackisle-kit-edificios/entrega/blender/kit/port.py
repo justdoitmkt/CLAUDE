@@ -412,32 +412,92 @@ def corr_pts(L, pitch=0.278, depth=0.036, outer=0.072, inner=0.070, phase=0.0, r
     return [(u, d_at(u)) for u in us]
 
 
-def csheet(mb, M, upts, v0, v1, mat, nrows=8, t=0.002, dent=None, vfn=None):
+def csheet(mb, M, upts, v0, v1, mat, nrows=8, t=0.002, dent=None, vfn=None, holes=(), r=None):
     """Lámina corrugada como sólido delgado: upts = [(u, peralte)] (peralte hacia -Y local = afuera), cota v0..v1 en Z
     local, nrows filas (para abolladuras). dent(u, v) -> desplazamiento hacia +Y (adentro) en m. vfn(u, v) -> v alterado
-    (bordes inclinados). Caras: exterior, interior y los 4 cantos."""
+    (bordes inclinados). holes = [(u_centro, v_centro, semiancho, semialto)]: perforaciones por óxido (la lámina se corta
+    en celdas, el canto del hueco lleva su espesor y su borde queda roído y doblado hacia adentro)."""
     n = len(upts)
-    rows = [v0 + (v1 - v0) * j / nrows for j in range(nrows + 1)]
+    rows = {round(v0 + (v1 - v0) * j / nrows, 5) for j in range(nrows + 1)}
+    for (hu, hv, hw, hh) in holes:
+        k = -1.4
+        while k <= 1.4:
+            v = hv + hh * k
+            if v0 < v < v1:
+                rows.add(round(v, 5))
+            k += 0.2
+    rows = sorted(rows)
+    nr = len(rows)
+
+    def in_hole(u, v):
+        for (hu, hv, hw, hh) in holes:
+            q = ((u - hu) / hw) ** 2 + ((v - hv) / hh) ** 2
+            q *= 1.0 + 0.25 * math.sin(7 * math.atan2(v - hv, u - hu) + hu * 13)
+            if q < 1.0:
+                return True
+        return False
+    cell = [[in_hole((upts[i][0] + upts[i + 1][0]) / 2, (rows[j] + rows[j + 1]) / 2) for i in range(n - 1)] for j in range(nr - 1)]
+    rim = set()
+    for j in range(nr - 1):
+        for i in range(n - 1):
+            if cell[j][i]:
+                rim |= {(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)}
     O, I = [], []
-    for v in rows:
+    for jj, v in enumerate(rows):
         ro, ri = [], []
-        for (u, d) in upts:
+        for ii, (u, d) in enumerate(upts):
             vv = vfn(u, v) if vfn is not None else v
             dd = dent(u, vv) if dent is not None else 0.0
+            if (ii, jj) in rim and r is not None:          # borde roído: se adelgaza y se dobla hacia adentro
+                vv += float(r.uniform(-0.005, 0.005))
+                dd += float(r.uniform(0.002, 0.007))
             ro.append(mb.bm.verts.new(M @ Vector((u, -d + dd, vv))))
             ri.append(mb.bm.verts.new(M @ Vector((u, -d + dd + t, vv))))
         O.append(ro)
         I.append(ri)
-    for j in range(nrows):
+    for j in range(nr - 1):
         for i in range(n - 1):
+            if cell[j][i]:
+                continue
             mb.face([O[j][i], O[j][i + 1], O[j + 1][i + 1], O[j + 1][i]], mat)
             mb.face([I[j][i], I[j + 1][i], I[j + 1][i + 1], I[j][i + 1]], mat)
+            if i > 0 and cell[j][i - 1]:
+                mb.face([O[j][i], O[j + 1][i], I[j + 1][i], I[j][i]], mat)
+            if i < n - 2 and cell[j][i + 1]:
+                mb.face([O[j][i + 1], I[j][i + 1], I[j + 1][i + 1], O[j + 1][i + 1]], mat)
+            if j > 0 and cell[j - 1][i]:
+                mb.face([O[j][i], I[j][i], I[j][i + 1], O[j][i + 1]], mat)
+            if j < nr - 2 and cell[j + 1][i]:
+                mb.face([O[j + 1][i], O[j + 1][i + 1], I[j + 1][i + 1], I[j + 1][i]], mat)
     for i in range(n - 1):
-        mb.face([O[0][i], I[0][i], I[0][i + 1], O[0][i + 1]], mat)
-        mb.face([O[-1][i], O[-1][i + 1], I[-1][i + 1], I[-1][i]], mat)
-    for j in range(nrows):
-        mb.face([O[j][0], O[j + 1][0], I[j + 1][0], I[j][0]], mat)
-        mb.face([O[j][-1], I[j][-1], I[j + 1][-1], O[j + 1][-1]], mat)
+        if not cell[0][i]:
+            mb.face([O[0][i], I[0][i], I[0][i + 1], O[0][i + 1]], mat)
+        if not cell[-1][i]:
+            mb.face([O[-1][i], O[-1][i + 1], I[-1][i + 1], I[-1][i]], mat)
+    for j in range(nr - 1):
+        if not cell[j][0]:
+            mb.face([O[j][0], O[j + 1][0], I[j + 1][0], I[j][0]], mat)
+        if not cell[j][-1]:
+            mb.face([O[j][-1], I[j][-1], I[j + 1][-1], O[j + 1][-1]], mat)
+
+
+def offset_polyline(pts, t):
+    """Desfasa una polilínea 2D abierta t hacia su DERECHA (inglete en los quiebres)."""
+    P = [Vector((x, y, 0.0)) for (x, y) in pts]
+    out = []
+    n = len(P)
+    for i in range(n):
+        ns = []
+        for (a, b) in ((P[i - 1], P[i]) if i > 0 else (None, None), (P[i], P[i + 1]) if i < n - 1 else (None, None)):
+            if a is None:
+                continue
+            d = (b - a).normalized()
+            ns.append(Vector((d.y, -d.x, 0.0)))
+        nn = (ns[0] + ns[-1]).normalized()
+        f = 1.0 / max(nn.dot(ns[0]), 0.4)
+        q = P[i] + nn * t * f
+        out.append((q.x, q.y))
+    return out
 
 
 def dents(r, n, u0, u1, v0, v1, amp=(0.01, 0.04), rad=(0.15, 0.5)):
@@ -1100,6 +1160,9 @@ def _casting(mb, M, holes, mat="metal_rust", size=(0.178, 0.162, 0.118)):
     """Cantonera ISO 1161 (178 x 162 x 118) en la esquina local (0..sx, 0..sy, 0..sz) con aberturas ovaladas reales
     (bocas con túnel y fondo) en las caras indicadas: holes = {'x0','x1','y0','y1','z0','z1'} (x0 = cara en x = 0, etc.)."""
     sx, sy, sz = size
+    mb_out, M_out = mb, M
+    mb, M = MB(), Matrix()
+    lips = set()
     ne = 5                                     # vértices intermedios por arista (para que las caras con boca casen)
     C = {}
     for i in (0, 1):
@@ -1158,11 +1221,32 @@ def _casting(mb, M, holes, mat="metal_rust", size=(0.178, 0.162, 0.118)):
             ring_o.append(mb.bm.verts.new(p - n * 0.002))
             ring_i.append(mb.bm.verts.new(p - n * 0.03 + (A * xx + B * yy) * -0.08))
         k = len(lp)
+        lips |= set(ring_o)
         for q in range(k):
             qq = (q + 1) % k
             mb.face([lp[q], lp[qq], ring_o[qq], ring_o[q]], mat)
             mb.face([ring_o[q], ring_o[qq], ring_i[qq], ring_i[q]], mat)
         mb.face(list(ring_i), mat)
+    # radio de fundición: aristas del bloque (4 mm) y labio de las bocas (2 mm)
+    import bmesh as _bm
+
+    def on_box_edge(v):
+        c = v.co
+        k_ = sum(1 for (val, mx) in ((c.x, sx), (c.y, sy), (c.z, sz)) if abs(val) < 1e-6 or abs(val - mx) < 1e-6)
+        return k_ >= 2
+    try:
+        ee = [e for e in mb.bm.edges if on_box_edge(e.verts[0]) and on_box_edge(e.verts[1]) and
+              sum(1 for i_ in range(3) if abs(e.verts[0].co[i_] - e.verts[1].co[i_]) > 1e-7) == 1]
+        _bm.ops.bevel(mb.bm, geom=ee, offset=0.004, segments=2, profile=0.5, affect="EDGES", clamp_overlap=True)
+        el = [e for e in mb.bm.edges if e.verts[0] in lips and e.verts[1] in lips]
+        if el:
+            _bm.ops.bevel(mb.bm, geom=el, offset=0.0018, segments=1, profile=0.5, affect="EDGES", clamp_overlap=True)
+        mi = mb.mi(mat)
+        for f in mb.bm.faces:
+            f.material_index = mi
+    except Exception:
+        pass
+    mb_out.join(mb, M_out)
 
 
 def _door_leaf(mb, M, lw, lh, r, sg, mat, open_ang=0.0):
@@ -1228,8 +1312,15 @@ def _door_leaf(mb, M, lw, lh, r, sg, mat, open_ang=0.0):
         psweep(d, rr_profile(0.014, 0.03, 0.005), fillet([hp[0], hp[1], tip], 0.03, 5), "metal_rust", up=(0, 0, 1))
         yr = yy - sg * 0.26
         d.box((0.036, yr - 0.02, hz - 0.035), (0.125, yr + 0.02, hz - 0.018), "metal_rust", bevel=0.004)      # retén de la manija
-    if sg < 0:                                                           # placa de datos remachada en la hoja izquierda
+    if sg < 0:                                                           # placa CSC remachada en la hoja izquierda
         d.box((0.044, y0 + 0.2, 1.35), (0.05, y0 + 0.5, 1.55), "aluminium", bevel=0.002)
+        from kit.fonts import text_font
+        Mt = Matrix(((0, 0, 1, 0.05), (1, 0, 0, y0 + 0.35), (0, 1, 0, 0.0), (0, 0, 0, 1)))
+        text_font(d, "CSC SAFETY APPROVAL", 0.016, 0.0006, "aluminium", M=Mt @ _T(0, 1.515, 0), font="stencil2")
+        text_font(d, "TYPE APPROVED", 0.011, 0.0006, "aluminium", M=Mt @ _T(0, 1.49, 0), font="stencil2")
+        for k_ in range(5):                                              # renglones de datos grabados
+            d.box((0.05, y0 + 0.215, 1.37 + 0.022 * k_), (0.0506, y0 + 0.215 + (0.2 if k_ % 2 else 0.25), 1.376 + 0.022 * k_),
+                  "aluminium", bevel=0.0)
         for (py, pz) in ((0.21, 1.36), (0.49, 1.36), (0.21, 1.54), (0.49, 1.54)):
             lathe_n(d, [(0.0, 0.0), (0.004, 0.0), (0.0035, 0.002), (0.0, 0.0025)], seg=10, mat="aluminium",
                     M=_T(0.05, y0 + py, pz) @ _R("Y", 90))
@@ -1264,11 +1355,22 @@ def container(seed=0, open_doors=False, mat="container"):
         sy = 1 if j == 0 else -1
         X, Y = (0.0 if i == 0 else L), (0.0 if j == 0 else W)
         if i == 1:
-            offs = [(sx * 0.055 + px, sy * 0.065 + py) for (px, py) in rr_profile(0.11, 0.13, 0.008)]
+            # poste de puerta: sección cerrada de lámina prensada 6 mm con la acanaladura vertical de la cara lateral
+            base = [(0.0, 0.0), (0.022, 0.0), (0.03, 0.01), (0.08, 0.01), (0.088, 0.0), (0.11, 0.0), (0.11, 0.13), (0.0, 0.13)]
+            base = round_poly(base, 0.009, 3)
+            offs = [(sx * px, sy * py) for (px, py) in base]
+            if sx * sy < 0:
+                offs = list(reversed(offs))
         else:
-            base = [(0.0, 0.0), (0.13, 0.0), (0.13, 0.03), (0.115, 0.03), (0.112, 0.008), (0.008, 0.008), (0.008, 0.112),
-                    (0.03, 0.115), (0.03, 0.13), (0.0, 0.13)]
-            offs = round_poly([(sx * px, sy * py) for (px, py) in base], 0.003, 2)
+            # poste del frente: lámina prensada de 6 mm en L con una acanaladura en cada cara, esquina con radio de doblez
+            # (2t) y pestañas de remate hacia adentro donde se suelda la lámina corrugada
+            outer = [(0.13, 0.032), (0.13, 0.0), (0.098, 0.0), (0.088, 0.011), (0.048, 0.011), (0.038, 0.0), (0.0, 0.0),
+                     (0.0, 0.038), (0.011, 0.048), (0.011, 0.088), (0.0, 0.098), (0.0, 0.13), (0.032, 0.13)]
+            inner = offset_polyline(outer, 0.006)
+            base = round_poly(outer + list(reversed(inner)), 0.0045, 3)
+            offs = [(sx * px, sy * py) for (px, py) in base]
+            if sx * sy < 0:
+                offs = list(reversed(offs))
         psweep(mb, [(-ox, oy) for (ox, oy) in offs], [(X, Y, cz), (X, Y, H - cz)], m, up=(0, 1, 0), miter=False)
     # --- largueros inferiores (C 158 con alas de 48 hacia adentro) con bolsas para montacargas
     pockets = [(L / 2 - 1.025 - 0.18, L / 2 - 1.025 + 0.18), (L / 2 + 1.025 - 0.18, L / 2 + 1.025 + 0.18)]
@@ -1311,12 +1413,26 @@ def container(seed=0, open_doors=False, mat="container"):
         else:
             Ms = Matrix(((-1, 0, 0, L - 0.12), (0, -1, 0, Y - 0.04), (0, 0, 1, 0.0), (0, 0, 0, 1)))
         dside = dents(r, int(r.integers(2, 6)), 0.3, L - 0.6, 0.4, 2.3, amp=(0.008, 0.04), rad=(0.15, 0.55))
-        csheet(mb, Ms, ups, zr + 0.154, H - 0.058, m, nrows=12, t=0.002, dent=dside)
+        holes = [(float(r.uniform(0.6, L - 0.9)), zr + 0.154 + float(r.uniform(0.12, 0.35)), float(r.uniform(0.05, 0.14)),
+                  float(r.uniform(0.04, 0.09))) for _ in range(int(r.integers(1, 3)))]
+        csheet(mb, Ms, ups, zr + 0.154, H - 0.058, m, nrows=12, t=0.002, dent=dside, holes=holes, r=r)
+        # escamas de óxido levantadas sobre las crestas, más en la franja baja
+        for _ in range(int(r.integers(10, 18))):
+            k_ = int(r.integers(0, int((L - 0.3) / 0.278)))
+            u = k_ * 0.278 + 0.144 + float(r.uniform(-0.012, 0.012))          # centro de una cresta (cara exterior de 72 mm)
+            v = zr + 0.2 + float(r.uniform(0.0, 1.0)) ** 2 * 2.0
+            if any(abs(u - hu) < hw + 0.05 and abs(v - hv) < hh + 0.05 for (hu, hv, hw, hh) in holes):
+                continue
+            w_, h_ = float(r.uniform(0.014, 0.026)), float(r.uniform(0.02, 0.05))
+            Mf_ = Ms @ _T(u, -0.036 + dside(u, v) - 0.0004, v) @ _R("X", 90) @ _R("Z", float(r.uniform(-30, 30)))
+            bev_plate(mb, [(-w_ / 2, -h_ / 2), (w_ / 2, -h_ / 2 + 0.004), (w_ / 2 - 0.004, h_ / 2), (-w_ / 2 + 0.005, h_ / 2)], 0.0009,
+                      "metal_rust", M=Mf_, ch=0.0)
     # --- techo corrugado transversal (peralte 20, paso 209) con abolladuras hacia abajo
     upr = corr_pts(L - 0.21, pitch=0.209, depth=0.02, outer=0.06, inner=0.06, phase=0.0)
     Mr = Matrix(((1, 0, 0, 0.09), (0, 0, 1, 0.0), (0, -1, 0, H - 0.025), (0, 0, 0, 1)))      # u -> x, v -> y, peralte -> +z
     droof = dents(r, int(r.integers(2, 6)), 0.3, L - 0.6, 0.3, W - 0.3, amp=(0.01, 0.045), rad=(0.2, 0.6))
-    csheet(mb, Mr, upr, 0.055, W - 0.055, m, nrows=8, t=0.002, dent=droof)
+    rh = [(float(r.uniform(1.0, L - 1.5)), float(r.uniform(0.5, W - 0.5)), float(r.uniform(0.06, 0.16)), float(r.uniform(0.05, 0.12)))]
+    csheet(mb, Mr, upr, 0.055, W - 0.055, m, nrows=8, t=0.002, dent=droof, holes=rh if r.random() < 0.7 else (), r=r)
     # --- piso de triplay 28 mm sobre travesaños en C
     mb.box((0.16, 0.05, zr + 0.13), (L - 0.13, W - 0.05, zr + 0.158), "plywood", bevel=0.002)
     x = 0.3
@@ -1382,6 +1498,81 @@ def _hook(mb, M, scale=1.0, mat="metal_rust"):
     Ml, Ll = frame_on(p0, tip, up=tuple(M.to_3x3() @ Vector((0, 1, 0))))
     bev_plate(mb, [(0.0, -0.012 * S), (Ll * 0.92, -0.012 * S), (Ll * 0.92, 0.012 * S), (0.0, 0.012 * S)], 0.003 * S, mat,
               M=Ml @ _T(0, 0, -0.0015 * S), ch=0.0008)
+
+
+def _crane_seat_console(up, xc, cy0, r):
+    """Asiento del operador y consola de mando de la cabina (el operador mira hacia -Y, al vidrio frontal en cy0).
+    Asiento: columna con brida y plato giratorio, bastidor de lámina, cojín y respaldo tapizados (vinil con vivos y
+    costuras, de kit.clinic.cushion), cubierta trasera de plástico, palanca de ajuste y descansabrazos con las palancas de
+    mando (fuelle de hule, vástago, perilla) y botones. Consola: gabinete de lámina con cara inclinada, 3 carátulas con
+    bisel, vidrio y aguja, botonera, paro de emergencia de hongo rojo, 2 interruptores de palanca y chapa de llave."""
+    from kit import clinic as cl
+    ys = cy0 + 0.98
+    lathe_n(up, [(0.0, 0.05), (0.13, 0.05), (0.13, 0.062), (0.05, 0.07), (0.045, 0.40), (0.07, 0.41), (0.07, 0.425), (0.0, 0.43)],
+            seg=24, mat="metal_paint", M=_T(xc, ys, 0.0))
+    for k in range(4):
+        a = math.pi / 4 + k * math.pi / 2
+        hexnut(up, _T(xc + 0.1 * math.cos(a), ys + 0.1 * math.sin(a), 0.062), af=0.017, mat="metal_rust", washer=False, stud=0.004)
+    up.box((xc - 0.24, ys - 0.24, 0.425), (xc + 0.24, ys + 0.24, 0.445), "metal_paint", bevel=0.006)
+    cl.cushion(up, _T(xc, ys - 0.01, 0.445), 0.48, 0.46, 0.085, mat="vinyl", r=0.032, crown=0.014, piping=True, seg=(20, 16))
+    # respaldo inclinado 10° con su cubierta de plástico
+    Mb = _T(xc, ys + 0.22, 0.52) @ _R("X", 80)
+    cl.cushion(up, Mb, 0.46, 0.56, 0.075, mat="vinyl", r=0.03, crown=0.012, piping=True, seg=(20, 16))
+    up.box((-0.235, 0.0, -0.035), (0.235, 0.57, 0.0), "plastic", bevel=0.012, seg=2, m=Mb)
+    up.tube(fillet([(xc + 0.25, ys - 0.1, 0.43), (xc + 0.3, ys - 0.12, 0.43), (xc + 0.31, ys - 0.22, 0.4)], 0.02, 4), 0.006, seg=12,
+            mat="metal_paint")
+    lathe_n(up, [(0.0, 0.0), (0.012, 0.0), (0.014, 0.02), (0.012, 0.035), (0.0, 0.04)], seg=14, mat="plastic",
+            M=_T(xc + 0.31, ys - 0.22, 0.4) @ _R("X", 90))
+    # descansabrazos con palancas de mando
+    for sx in (-1, 1):
+        xa = xc + sx * 0.3
+        up.box((xa - 0.055, ys - 0.25, 0.62), (xa + 0.055, ys + 0.12, 0.7), "plastic", bevel=0.018, seg=3)
+        up.box((xa - 0.012, ys + 0.05, 0.43), (xa + 0.012, ys + 0.1, 0.62), "metal_paint", bevel=0.004)
+        jz = 0.7
+        jy = ys - 0.16
+        lathe_n(up, [(0.0, 0.0), (0.04, 0.0)] + [(0.034 - 0.004 * (k % 2) - 0.002 * k, 0.008 + 0.008 * k) for k in range(7)] +
+                [(0.012, 0.066), (0.0, 0.066)], seg=20, mat="rubber", M=_T(xa, jy, jz))
+        lathe_n(up, [(0.0, 0.06), (0.007, 0.06), (0.007, 0.14), (0.0, 0.14)], seg=14, mat="metal_paint", M=_T(xa, jy, jz))
+        lathe_n(up, [(0.0, 0.13), (0.016, 0.135), (0.021, 0.16), (0.02, 0.2), (0.014, 0.22), (0.0, 0.225)], seg=20, mat="plastic",
+                M=_T(xa, jy, jz))
+        for k in range(3):
+            lathe_n(up, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.004), (0.007, 0.007), (0.0, 0.0075)], seg=14,
+                    mat="sign_red" if k == 0 else "plastic", M=_T(xa - sx * 0.02, ys - 0.04 + 0.04 * k, 0.7))
+    # consola: gabinete con cara inclinada (placa convexa extruida en x)
+    x0c, x1c = xc - 0.4, xc + 0.4
+    yf, yb = cy0 + 0.06, cy0 + 0.42
+    sec = [(yf, 0.05), (yb, 0.05), (yb, 0.82), (yf + 0.12, 0.98), (yf, 0.98)]
+    bev_plate(up, sec, x1c - x0c, "metal_paint", M=Matrix(((0, 0, 1, x0c), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1))), ch=0.008)
+    pa, pb = Vector((0, yb, 0.82)), Vector((0, yf + 0.12, 0.98))
+    dv = (pb - pa).normalized()
+    nv = Vector((0, -dv.z, dv.y)) if Vector((0, -dv.z, dv.y)).y > 0 else Vector((0, dv.z, -dv.y))
+    # marco de la cara inclinada: base local (x, a lo largo de la pendiente, normal)
+
+    def face_M(x, f, lift=0.0):
+        p = pa.lerp(pb, f) + nv * lift
+        return Matrix(((1, 0, 0, x), (0, dv.y, nv.y, p.y), (0, dv.z, nv.z, p.z), (0, 0, 0, 1)))
+    for (k, x) in enumerate((xc - 0.24, xc, xc + 0.24)):                  # carátulas
+        Mg = face_M(x, 0.62)
+        lathe_n(up, [(0.0, 0.0), (0.052, 0.0), (0.056, 0.004), (0.056, 0.012), (0.05, 0.016), (0.046, 0.012), (0.0, 0.012)], seg=32,
+                mat="metal_paint", M=Mg)
+        lathe_n(up, [(0.0, 0.012), (0.046, 0.012), (0.04, 0.02), (0.0, 0.024)], seg=32, mat="glass", M=Mg)
+        a = math.radians(float(r.uniform(-60, 60)))
+        up.box((-0.002, 0.0, 0.0125), (0.002, 0.036, 0.0135), "sign_red", bevel=0.0, m=Mg @ _R("Z", math.degrees(a)))
+        lathe_n(up, [(0.0, 0.012), (0.005, 0.012), (0.005, 0.016), (0.0, 0.017)], seg=12, mat="metal_paint", M=Mg)
+    for k in range(6):                                                     # botonera
+        Mbt = face_M(xc - 0.3 + 0.08 * k, 0.24)
+        lathe_n(up, [(0.0, 0.0), (0.014, 0.0), (0.014, 0.004), (0.011, 0.006), (0.011, 0.012), (0.009, 0.014), (0.0, 0.0145)], seg=16,
+                mat="sign_green" if k < 2 else ("sign_red" if k == 5 else "plastic"), M=Mbt)
+    Me = face_M(xc + 0.3, 0.3)                                             # paro de emergencia
+    lathe_n(up, [(0.0, 0.0), (0.03, 0.0), (0.03, 0.01), (0.012, 0.012), (0.012, 0.03), (0.026, 0.032), (0.03, 0.04), (0.026, 0.05),
+                 (0.0, 0.054)], seg=24, mat="sign_red", M=Me)
+    for k in range(2):                                                     # interruptores de palanca
+        Mtg = face_M(xc - 0.34 + 0.06 * k, 0.88)
+        lathe_n(up, [(0.0, 0.0), (0.01, 0.0), (0.01, 0.008), (0.0, 0.009)], seg=14, mat="metal_paint", M=Mtg)
+        up.tube([Mtg @ Vector((0, 0, 0.008)), Mtg @ Vector((0, 0.006 * (1 if k else -1), 0.026))], 0.0025, seg=12, mat="aluminium")
+    Mk = face_M(xc + 0.34, 0.88)                                           # chapa de llave
+    lathe_n(up, [(0.0, 0.0), (0.016, 0.0), (0.016, 0.006), (0.013, 0.009), (0.0, 0.009)], seg=20, mat="aluminium", M=Mk)
+    up.box((-0.002, -0.006, 0.009), (0.002, 0.006, 0.0095), "cable", bevel=0.0, m=Mk)
 
 
 def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
@@ -1588,7 +1779,14 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
                   M=_T(x, 2.725 + 0.0125, 1.2) @ _R("X", 90), ch=0.003)
     # --- cabina del operador
     cx0, cx1, cy0, cy1, cz1 = 0.58, 1.5, -2.6, -0.82, 2.12
-    up.box((cx0, cy0, 0.02), (cx1, cy1, 0.95), "metal_paint", bevel=0.02, seg=3)
+    # caja baja hueca: piso de placa y 4 paneles de lámina de 30 mm (se ve el interior por los vidrios)
+    up.box((cx0, cy0, 0.02), (cx1, cy1, 0.05), "metal_rust", bevel=0.004)
+    for (a, b) in (((cx0, cy0), (cx1, cy0 + 0.03)), ((cx0, cy1 - 0.03), (cx1, cy1)), ((cx0, cy0 + 0.03), (cx0 + 0.03, cy1 - 0.03)),
+                   ((cx1 - 0.03, cy0 + 0.03), (cx1, cy1 - 0.03))):
+        up.box((a[0], a[1], 0.02), (b[0], b[1], 0.95), "metal_paint", bevel=0.008, seg=2)
+    for (a, b) in (((cx0 + 0.03, cy1 - 0.03), (cx0 + 0.12, cy1)), ((cx0 + 0.8, cy1 - 0.03), (cx1 - 0.03, cy1)),
+                   ((cx0, cy0 + 0.93), (cx0 + 0.03, cy1 - 0.03))):
+        up.box((a[0], a[1], 0.95), (b[0], b[1], cz1), "metal_paint", bevel=0.006, seg=2)
     for (x, y) in ((cx0 + 0.03, cy0 + 0.03), (cx1 - 0.03, cy0 + 0.03), (cx0 + 0.03, cy1 - 0.03), (cx1 - 0.03, cy1 - 0.03)):
         psweep(up, rr_profile(0.06, 0.06, 0.012), [(x, y, 0.95), (x, y, cz1)], "metal_paint", up=(0, 1, 0))
     _rr_loft(up, [(cz1, cx1 - cx0 + 0.02, cy1 - cy0 + 0.02, 0.04), (cz1 + 0.08, cx1 - cx0 + 0.02, cy1 - cy0 + 0.02, 0.04),
@@ -1641,13 +1839,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     up.tube(fillet([(cx0 + 0.72, cy1 + 0.035, 1.0), (cx0 + 0.72, cy1 + 0.09, 1.0), (cx0 + 0.6, cy1 + 0.09, 1.0)], 0.02, 4), 0.01,
             seg=14, mat="metal_rust")
     # asiento y consola
-    up.box((cx0 + 0.25, cy0 + 0.7, 0.45), (cx0 + 0.75, cy0 + 1.2, 0.55), "vinyl", bevel=0.03, seg=3)
-    up.box((cx0 + 0.27, cy0 + 1.12, 0.55), (cx0 + 0.73, cy0 + 1.2, 1.15), "vinyl", bevel=0.03, seg=3)
-    lathe_n(up, [(0.0, 0.0), (0.05, 0.0), (0.05, 0.45), (0.0, 0.45)], seg=20, mat="metal_paint", M=_T(cx0 + 0.5, cy0 + 0.95, 0.0))
-    up.box((cx0 + 0.15, cy0 + 0.25, 0.6), (cx1 - 0.08, cy0 + 0.5, 0.95), "metal_paint", bevel=0.02, seg=3)
-    for x in (cx0 + 0.3, cx1 - 0.3):
-        lathe_n(up, [(0.0, 0.0), (0.012, 0.0), (0.01, 0.15), (0.02, 0.17), (0.022, 0.21), (0.0, 0.23)], seg=16, mat="plastic",
-                M=_T(x, cy0 + 0.38, 0.95))
+    _crane_seat_console(up, (cx0 + cx1) / 2, cy0, r)
     # --- caballete en A
     apex = 4.6
     feet = []

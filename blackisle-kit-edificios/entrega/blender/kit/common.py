@@ -199,6 +199,12 @@ class MB:
             else:
                 a, b = P[max(i - 1, 0)], P[min(i + 1, n - 1)]
             t = (b - a)
+            if 0 < i < n - 1 or closed_path:
+                # inglete en la bisectriz de las direcciones normalizadas: (b - a) se carga hacia el tramo más largo y con
+                # tramos de distinto largo (marco no cuadrado) el corte salía chueco y el perfil cambiaba de ancho en la esquina
+                tb = (P[i] - a).normalized() + (b - P[i]).normalized()
+                if tb.length > 1e-6:
+                    t = tb
             t = (t - N * t.dot(N)).normalized()
             side = t.cross(N).normalized()
             s = 1.0

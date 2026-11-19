@@ -153,10 +153,13 @@ def cz_profile(h, b, t, kind="C", lip=0.0, r_in=None):
     return port.round_poly(pts, r_in if r_in is not None else t * 1.2, 2)
 
 
-def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c=0.015, rebar_mat="metal_rust"):
+def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c=0.015, rebar_mat="metal_rust", top_spalls=0,
+              joints=0.0, groove=None):
     """Viga de concreto colado de p0 a p1 (sección w x h, base en la cota de p0/p1 y altura hacia `up`) con chaflán c en
-    las 4 aristas. spalls > 0 (requiere r y out = vector hacia la cara expuesta): descascarados en la arista inferior
-    expuesta, con la varilla longitudinal y los estribos a la vista y oxidados."""
+    las 4 aristas. Con r y out (vector hacia la cara expuesta): spalls = descascarados en la arista inferior expuesta con
+    la varilla longitudinal y los estribos a la vista; top_spalls = despostillado somero de la arista superior expuesta;
+    joints = separación de las juntas de colado (ranura en V vertical en la cara expuesta); groove = cota de la marca de
+    cimbra horizontal (ranura en V) en la cara expuesta."""
     P0, P1 = Vector(p0), Vector(p1)
     L = (P1 - P0).length
     T = (P1 - P0).normalized()
@@ -166,37 +169,60 @@ def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c
     sx = 1.0
     if out is not None:
         sx = 1.0 if B.dot(Vector(out)) >= 0 else -1.0
-    sp = []
-    if spalls and r is not None:
-        for _ in range(spalls):
-            ln = float(r.uniform(0.5, 1.8))
-            s0 = float(r.uniform(0.3, max(0.31, L - ln - 0.3)))
-            sp.append((s0, s0 + ln, float(r.uniform(0.05, 0.11))))
+
+    def ranges(nn, lo, hi, dlo, dhi):
+        out_ = []
+        if nn and r is not None:
+            for _ in range(nn):
+                ln = float(r.uniform(lo, hi))
+                s0 = float(r.uniform(0.3, max(0.31, L - ln - 0.3)))
+                out_.append((s0, s0 + ln, float(r.uniform(dlo, dhi))))
+        return out_
+    sp = ranges(spalls, 0.5, 1.8, 0.05, 0.11)
+    tp = ranges(top_spalls, 0.2, 0.7, 0.02, 0.045)
+    js = []
+    if joints and L > joints * 0.8:
+        q = joints / 2 + (L % joints) / 2
+        while q < L - 0.3:
+            js.append(q)
+            q += joints
     stations = {0.0, L}
-    for (a, b, _) in sp:
+    for (a, b, _) in sp + tp:
         k = 0
         while a - 0.04 + 0.07 * k <= b + 0.04:
             if 0 < a - 0.04 + 0.07 * k < L:
                 stations.add(round(a - 0.04 + 0.07 * k, 4))
             k += 1
+    for q in js:
+        for dq in (-0.014, 0.0, 0.014):
+            stations.add(round(q + dq, 4))
     stations = sorted(stations)
-    rings = []
-    for st in stations:
+
+    def depth(lst, st):
         d = 0.0
-        for (a, b, dep) in sp:
+        for (a, b, dep) in lst:
             if a <= st <= b:
                 f = math.sin(math.pi * (st - a) / (b - a)) ** 0.6
                 d = max(d, dep * f * (0.8 + 0.4 * float(r.random())))
-        cb = max(c, d)
-        hx = w / 2
-        # base, arista inferior derecha (con cráter si es la expuesta), lado derecho, arriba, lado izquierdo, arista inferior
-        # izquierda: siempre 10 vértices para que los anillos casen
-        cr = cb if sx > 0 else c
-        cl = cb if sx < 0 else c
-        kr = 0.154 * d if sx > 0 else 0.0
-        kl = 0.154 * d if sx < 0 else 0.0
-        prof = [(-hx + cl, 0.0), (hx - cr, 0.0), (hx - cr * 0.5 - kr, cr * 0.5 + kr), (hx, cr), (hx, h - c), (hx - c, h),
-                (-hx + c, h), (-hx, h - c), (-hx, cl), (-hx + cl * 0.5 + kl, cl * 0.5 + kl)]
+        return d
+    rings = []
+    hx = w / 2
+    for st in stations:
+        d = depth(sp, st)
+        dt = depth(tp, st)
+        jn = 0.012 if any(abs(st - q) < 1e-4 for q in js) else 0.0
+        cb, ct = max(c, d), max(c, dt)
+        kb, kt = 0.154 * d, 0.154 * dt
+        # perfil canónico con la cara expuesta en +x (se refleja con sx); vértices fijos para que los anillos casen
+        outer = [(hx - cb, 0.0), (hx - cb * 0.5 - kb, cb * 0.5 + kb), (hx, cb)]
+        if groove is not None:
+            outer += [(hx, groove - 0.009), (hx - 0.007, groove), (hx, groove + 0.009)]
+        outer += [(hx, h - ct), (hx - ct * 0.5 - kt, h - ct * 0.5 - kt), (hx - ct, h)]
+        if jn:
+            outer = [(x - jn * (1.0 if x > hx - 0.03 else 0.0), y) for (x, y) in outer]
+        prof = [(-hx + c, 0.0)] + outer + [(-hx + c, h), (-hx, h - c), (-hx, c)]
+        if sx < 0:
+            prof = [(-x, y) for (x, y) in reversed(prof)]
         P = P0 + T * st
         rings.append([mb.bm.verts.new(P + B * x + N * y) for (x, y) in prof])
     m = len(rings[0])
@@ -221,9 +247,69 @@ def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c
                 st += 0.2
 
 
-def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=()):
+def _pit(mb, rect, z0, dep, r, mat="concrete", up=True, rebar=False):
+    """Descascarado somero dentro de un rectángulo de la losa (la losa deja ese hueco sin cara): borde en z0, paredes rotas
+    que bajan (up=True, cara superior) o suben (lecho inferior) y fondo de agregado expuesto, irregular. rebar: malla de
+    varilla oxidada a la vista en el fondo (lecho inferior)."""
+    x0, x1, y0, y1 = rect
+    n = 8
+    sg = -1.0 if up else 1.0
+    per = []
+    for k in range(n):
+        per.append((x0 + (x1 - x0) * k / n, y0))
+    for k in range(n):
+        per.append((x1, y0 + (y1 - y0) * k / n))
+    for k in range(n):
+        per.append((x1 - (x1 - x0) * k / n, y1))
+    for k in range(n):
+        per.append((x0, y1 - (y1 - y0) * k / n))
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rim = [mb.bm.verts.new((x, y, z0)) for (x, y) in per]
+    inner = []
+    for (x, y) in per:
+        f = float(r.uniform(0.6, 0.85))
+        px, py = cx + (x - cx) * f, cy + (y - cy) * f
+        inner.append(mb.bm.verts.new((px, py, z0 + sg * dep * float(r.uniform(0.55, 0.85)))))
+    m = len(per)
+    for k in range(m):
+        kk = (k + 1) % m
+        q = [rim[k], rim[kk], inner[kk], inner[k]]
+        mb.face(q if up else list(reversed(q)), mat)
+    # fondo: anillos concéntricos con rugosidad de agregado
+    rings = [inner]
+    for f in (0.66, 0.33):
+        rg = []
+        for v in inner:
+            px, py = cx + (v.co.x - cx) * f, cy + (v.co.y - cy) * f
+            rg.append(mb.bm.verts.new((px, py, z0 + sg * dep * float(r.uniform(0.85, 1.05)))))
+        rings.append(rg)
+    for a, b in zip(rings[:-1], rings[1:]):
+        for k in range(m):
+            kk = (k + 1) % m
+            q = [a[k], a[kk], b[kk], b[k]]
+            mb.face(q if up else list(reversed(q)), mat)
+    c = mb.bm.verts.new((cx, cy, z0 + sg * dep))
+    for k in range(m):
+        kk = (k + 1) % m
+        q = [rings[-1][k], rings[-1][kk], c]
+        mb.face(q if up else list(reversed(q)), mat)
+    if rebar:
+        cz = z0 + sg * 0.035
+        with mb.soft():
+            x = x0 + 0.06
+            while x < x1 - 0.04:
+                mb.tube([(x, y0 - 0.05, cz), (x, y1 + 0.05, cz)], 0.006, seg=12, mat="metal_rust")
+                x += 0.15
+            y = y0 + 0.08
+            while y < y1 - 0.04:
+                mb.tube([(x0 - 0.05, y, cz + sg * 0.012), (x1 + 0.05, y, cz + sg * 0.012)], 0.006, seg=12, mat="metal_rust")
+                y += 0.15
+
+
+def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=(), pits=(), bpits=(), r=None):
     """Losa cerrada en rejilla: cara superior subdividida (AO por vértice), inferior y cantos (también alrededor de huecos).
-    ztop(x, y) / zbot(x, y): cotas."""
+    ztop(x, y) / zbot(x, y): cotas. pits / bpits = [(x0, x1, y0, y1, prof)]: descascarados someros en la cara superior y en
+    el lecho inferior (este con la malla de varilla a la vista)."""
     def axis(a0, a1, cuts):
         vals = {round(a0, 4), round(a1, 4)}
         k = math.floor(a0 / cell) + 1
@@ -234,8 +320,12 @@ def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=()):
             if a0 < c < a1:
                 vals.add(round(c, 4))
         return sorted(vals)
-    xs = axis(x0, x1, [c for h in holes for c in h[:2]])
-    ys = axis(y0, y1, [c for h in holes for c in h[2:]])
+    xs = axis(x0, x1, [c for h in list(holes) + list(pits) + list(bpits) for c in h[:2]])
+    ys = axis(y0, y1, [c for h in list(holes) + list(pits) + list(bpits) for c in h[2:4]])
+
+    def inside(i, j, lst):
+        cx, cy = (xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2
+        return any(h[0] <= cx <= h[1] and h[2] <= cy <= h[3] for h in lst)
     nx, ny = len(xs) - 1, len(ys) - 1
 
     def solid(i, j):
@@ -258,8 +348,10 @@ def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=()):
         for j in range(ny):
             if not solid(i, j):
                 continue
-            mb.face([T(i, j), T(i + 1, j), T(i + 1, j + 1), T(i, j + 1)], mat)
-            mb.face([B(i, j), B(i, j + 1), B(i + 1, j + 1), B(i + 1, j)], mat)
+            if not inside(i, j, pits):
+                mb.face([T(i, j), T(i + 1, j), T(i + 1, j + 1), T(i, j + 1)], mat)
+            if not inside(i, j, bpits):
+                mb.face([B(i, j), B(i, j + 1), B(i + 1, j + 1), B(i + 1, j)], mat)
             if not solid(i - 1, j):
                 mb.face([B(i, j), T(i, j), T(i, j + 1), B(i, j + 1)], mat)
             if not solid(i + 1, j):
@@ -268,6 +360,10 @@ def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=()):
                 mb.face([B(i, j), B(i + 1, j), T(i + 1, j), T(i, j)], mat)
             if not solid(i, j + 1):
                 mb.face([B(i, j + 1), T(i, j + 1), T(i + 1, j + 1), B(i + 1, j + 1)], mat)
+    for h in pits:
+        _pit(mb, h[:4], ztop((h[0] + h[1]) / 2, (h[2] + h[3]) / 2), h[4], r, mat=mat, up=True)
+    for h in bpits:
+        _pit(mb, h[:4], zbot((h[0] + h[1]) / 2, (h[2] + h[3]) / 2), h[4], r, mat=mat, up=False, rebar=True)
 
 
 # ------------------------------------------------------------------------------------------------------------ lámina
@@ -461,9 +557,19 @@ def build_deck(shell, inter, det, r):
     w = FASCIA_W
     ax0, ax1, ay0, ay1 = DECK_A
     bx0, bx1, by0, by1 = DECK_B
-    grid_solid(inter, ax0 + w, ax1 - w, ay0 + w, by0, zt, zb, "concrete")
-    grid_solid(inter, bx0 + w, ax1 - w, by0, by1 - w, zt, zb, "concrete")
-    grid_solid(inter, ax1 - w, bx1 - w, by0 + w, by1 - w, zt, zb, "concrete", holes=[HOLE])
+    def pr(cx, cy, sx, sy, d):
+        return (round(cx - sx / 2, 3), round(cx + sx / 2, 3), round(cy - sy / 2, 3), round(cy + sy / 2, 3), d)
+    # descascarados someros en los carriles (lejos de juntas y de lo que está apoyado) y en el lecho inferior entre vigas
+    pits_a = [pr(-12, 2.6, 0.7, 0.45, 0.025), pr(9, 7.6, 0.5, 0.6, 0.02), pr(14.5, 25, 0.8, 0.5, 0.03), pr(-15.5, 20.5, 0.6, 0.7, 0.025),
+              pr(-21, 30, 0.5, 0.4, 0.02), pr(2, 38.8, 0.6, 0.4, 0.02)]
+    pits_bw = [pr(0, 45.5, 0.7, 0.5, 0.03), pr(12, 47.3, 0.5, 0.4, 0.02), pr(-15, 43.5, 0.6, 0.5, 0.025), pr(21, 49.0, 0.5, 0.4, 0.02)]
+    pits_be = [pr(45, 44.5, 0.6, 0.5, 0.03)]
+    bp_a = [pr(-18, 10, 0.6, 0.5, 0.06), pr(12, 35, 0.5, 0.6, 0.055)]
+    bp_bw = [pr(-10, 46, 0.6, 0.5, 0.065), pr(6, 44.5, 0.7, 0.4, 0.06)]
+    bp_be = [pr(26, 49, 0.5, 0.5, 0.06), pr(46, 46.5, 0.6, 0.6, 0.065)]
+    grid_solid(inter, ax0 + w, ax1 - w, ay0 + w, by0, zt, zb, "concrete", pits=pits_a, bpits=bp_a, r=r)
+    grid_solid(inter, bx0 + w, ax1 - w, by0, by1 - w, zt, zb, "concrete", pits=pits_bw, bpits=bp_bw, r=r)
+    grid_solid(inter, ax1 - w, bx1 - w, by0 + w, by1 - w, zt, zb, "concrete", holes=[HOLE], pits=pits_be, bpits=bp_be, r=r)
     # trabes de borde (Shell: atlas con óxido, salitre y grafiti): concreto colado con chaflán y descascarados con la
     # varilla a la vista en la arista inferior expuesta (más del lado del mar)
     z0, z1 = FASCIA_Z0, DECK_Z
@@ -477,7 +583,7 @@ def build_deck(shell, inter, det, r):
         ((ax0 + w, by1 - w / 2), (bx1 - w, by1 - w / 2), (0, 1, 0), 8)]
     for (a, b, o, nsp) in segs:
         beam_loft(shell, (a[0], a[1], z0), (b[0], b[1], z0), w, hh, "concrete", out=o, r=r, spalls=nsp, c=0.02,
-                  rebar_mat="metal_rust")
+                  rebar_mat="metal_rust", top_spalls=max(2, nsp // 2 + 1), joints=6.0, groove=0.45)
     # vigas cabezal bajo la losa y pilotes de acero con riostras
     piles = []
     xa = [ax0 + 2.0 + k * (ax1 - ax0 - 4.0) / 8 for k in range(9)]
@@ -701,14 +807,10 @@ def build_ramp(shell, inter, det, r):
         x0 = W if sg > 0 else -W - RAMP_WALL
         x1 = x0 + RAMP_WALL
         xm = (x0 + x1) / 2
+        # muro de contención de concreto colado con chaflán de 18 mm en sus aristas (placa convexa extruida en x)
         prof = [(RAMP_Y0, -0.8), (0.0, -0.8), (0.0, ramp_z(0.0) + PARAPET), (RAMP_Y0, ramp_z(RAMP_Y0) + PARAPET)]
-        vl = [shell.bm.verts.new((x0, y, z)) for (y, z) in prof]
-        vr = [shell.bm.verts.new((x1, y, z)) for (y, z) in prof]
-        shell.face(list(reversed(vl)), "concrete")
-        shell.face(vr, "concrete")
-        for i in range(4):
-            j = (i + 1) % 4
-            shell.face([vl[i], vl[j], vr[j], vr[i]], "concrete")
+        port.bev_plate(shell, prof, RAMP_WALL, "concrete", M=Matrix(((0, 0, 1, x0), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1))),
+                       ch=0.018)
         # coronamiento con goteros (sobresale 5 cm a cada lado)
         cop = [(-0.2, 0.0), (-0.175, 0.0), (-0.172, 0.012), (-0.16, 0.012), (-0.157, 0.0), (0.157, 0.0), (0.16, 0.012),
                (0.172, 0.012), (0.175, 0.0), (0.2, 0.0), (0.2, 0.065), (0.185, 0.09), (-0.185, 0.09), (-0.2, 0.065)]
@@ -719,15 +821,10 @@ def build_ramp(shell, inter, det, r):
         L = 4.0
         pw = [(0.0, -0.8), (L, -0.8), (L, 0.3), (0.0, PARAPET)]
         dirv = Vector((sg * math.sin(ang), -math.cos(ang), 0.0))
-        nrm = Vector((-dirv.y, dirv.x, 0.0)) * RAMP_WALL / 2
-        base = Vector((xm, RAMP_Y0, 0.0))
-        side_a = [shell.bm.verts.new(base + dirv * u - nrm + Vector((0, 0, z))) for (u, z) in pw]
-        side_b = [shell.bm.verts.new(base + dirv * u + nrm + Vector((0, 0, z))) for (u, z) in pw]
-        shell.face(side_a, "concrete")
-        shell.face(list(reversed(side_b)), "concrete")
-        for i in range(4):
-            j = (i + 1) % 4
-            shell.face([side_a[i], side_b[i], side_b[j], side_a[j]], "concrete")
+        nu = Vector((-dirv.y, dirv.x, 0.0))
+        o = Vector((xm, RAMP_Y0, 0.0)) - nu * RAMP_WALL / 2
+        Mw = Matrix(((dirv.x, 0, nu.x, o.x), (dirv.y, 0, nu.y, o.y), (0, 1, 0, o.z), (0, 0, 0, 1)))
+        port.bev_plate(shell, pw, RAMP_WALL, "concrete", M=Mw, ch=0.018)
         # guarnición interior (rueda) de concreto
         beam_loft(inter, (sg * (W - 0.15), RAMP_Y0 + 0.4, ramp_z(RAMP_Y0 + 0.4)), (sg * (W - 0.15), -0.3, ramp_z(-0.3)), 0.3, 0.2,
                   "concrete", up=tuple(up_n), c=0.015)
@@ -1017,15 +1114,40 @@ def build_roof(roof, det, r):
                 sheet(roof, u0 + 0.003, u1 - 0.003, lambda u, a=za: a, lambda u, b=zb: b, mat, M, hinge=hinge, out=-1.0,
                       lift=0.0 if za == 0.0 else SHEET_T * 2.5)
                 stats["sheets"] += 1
-        # caballete
-        bevbox(roof, (WH["y0"] - ov, -0.003, roof_z(0.0) + 0.03), (WH["y1"] + ov, 0.003, roof_z(0.0) + 0.06), "metal_rust", bevel=0.001,
-                 m=Matrix(((0, 1, 0, 0), (1, 0, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))))
-        member(roof, (sg * 0.32, WH["y0"] - ov, roof_z(0.32) + 0.035), (sg * 0.32, WH["y1"] + ov, roof_z(0.32) + 0.035),
-               [(-0.32, 0.32, -0.003, 0.003)], "metal_rust", up=(sg * math.sin(p), 0, math.cos(p)))
-        # tapajuntas de remate en los hastiales
-        for yb in (WH["y0"] - ov, WH["y1"] + ov):
-            member(roof, (sg * xe, yb, roof_z(xe) + 0.02), (0.0, yb, roof_z(0.0) + 0.06), [(-0.05, 0.05, -0.06, 0.05)],
-                   "metal_paint")
+        # tapajuntas de remate en los hastiales: lámina doblada en L (ala sobre las crestas, faldón con dobladillo sobre la
+        # cara del hastial) con tornillos autotaladrantes cada 0,5 m
+        for (yb, o) in ((WH["y0"] - ov, -1.0), (WH["y1"] + ov, 1.0)):
+            q = [(-0.1, 0.0), (0.012, 0.0), (0.012, -0.11), (-0.004, -0.11)]
+            prof = port.round_poly(q + list(reversed(port.offset_polyline(q, 0.0009))), 0.002, 2)
+            kq = o * sg
+            prof = [(kq * a, b) for (a, b) in prof]
+            if kq < 0:
+                prof = list(reversed(prof))
+            pa, pb = Vector((sg * (xe + 0.01), yb, roof_z(xe) + 0.037)), Vector((0.0, yb, roof_z(0.0) + 0.037))
+            port.psweep(roof, prof, [pa, pb], "metal_paint", up=(0, 0, 1), miter=False)
+            Lr = (pb - pa).length
+            k = 0.25
+            while k < Lr - 0.2:
+                c = pa.lerp(pb, k / Lr) + Vector((0, -o * 0.05, 0.0009))
+                port.hexnut(roof, _T(*c) @ Matrix.Rotation(sg * p, 4, "Y"), af=0.008, mat="metal_paint", washer=True, stud=0.0)
+                k += 0.5
+    # caballete: cumbrera de lámina doblada que monta sobre las crestas de ambos faldones (con su lomo y dobladillos) y
+    # tornillos autotaladrantes con arandela en cada cresta
+    tp_ = math.tan(p)
+    top = [(-0.3, -0.3 * tp_), (-0.06, -0.06 * tp_), (-0.025, 0.004), (0.0, 0.016), (0.025, 0.004), (0.06, -0.06 * tp_),
+           (0.3, -0.3 * tp_), (0.306, -0.3 * tp_ - 0.012)]
+    top = [(-0.306, -0.3 * tp_ - 0.012)] + top
+    prof = port.round_poly(top + list(reversed(port.offset_polyline(top, 0.0009))), 0.002, 2)
+    zr = roof_z(0.0) + 0.038
+    port.psweep(roof, prof, [(0.0, WH["y0"] - ov - 0.01, zr), (0.0, WH["y1"] + ov + 0.01, zr)], "metal_rust", up=(0, 0, 1),
+                miter=False)
+    y = WH["y0"] - ov + 0.1
+    while y < WH["y1"] + ov - 0.05:
+        for sg in (-1, 1):
+            xx = sg * 0.22
+            port.hexnut(roof, _T(xx, y, zr - 0.22 * tp_ + 0.0009) @ Matrix.Rotation(sg * p, 4, "Y"), af=0.008, mat="metal_rust",
+                        washer=True, stud=0.0)
+        y += 0.2
     # canalones y bajantes
     from kit import circulation as circ
     for sg in (-1, 1):
@@ -1155,6 +1277,7 @@ def build_annex(shell, inter, det, r):
         "west": (A["y0"], A["y1"], A["x0"], [("window", (1.0, 2.2, 0.9, 2.0)), ("window", (3.6, 4.8, 0.9, 2.0))]),
         "east": (A["y0"], A["y1"], A["x1"], [("door_in", (0.7, 1.7, 0.0, 2.1))]),     # frente a la puerta oeste de la nave
     }
+    rc = 0.021                                          # esquinas de aplanado redondeadas (boleado de 2 cm)
     for side, (a0, a1, face, ops) in sides.items():
         L = a1 - a0
         M = ac.panel_matrix(side, a0, a1, face, DECK_Z)
@@ -1162,6 +1285,10 @@ def build_annex(shell, inter, det, r):
             M = ac.panel_matrix(side, a0 + t, a1 - t, face, DECK_Z)
             L = L - 2 * t
             ops = [(k, (o[0] - t, o[1] - t, o[2], o[3])) for k, o in ops]
+        else:
+            M = ac.panel_matrix(side, a0 + rc, a1 - rc, face, DECK_Z)
+            L = L - 2 * rc
+            ops = [(k, (o[0] - rc, o[1] - rc, o[2], o[3])) for k, o in ops]
         wall_with_openings(shell, L, H, t, [o for _, o in ops], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=M)
         for kind, (u0, u1, v0, v1) in ops:
             w, h = u1 - u0, v1 - v0
@@ -1174,12 +1301,22 @@ def build_annex(shell, inter, det, r):
                     det.join(op.security_grille(w, h, seed=seed + 1), Mo)
             else:
                 det.join(op.door("metal", w, h, t, seed=seed, open_angle=float(r.uniform(30, 80))), Mo)
-    # losa de azotea con pretil bajo
-    shell.box((A["x0"] - 0.05, A["y0"] - 0.05, DECK_Z + H), (A["x1"] + 0.05, A["y1"] + 0.05, DECK_Z + H + 0.2), "concrete")
+    # columnas de esquina con boleado (cierran las esquinas entre muros de frente/fondo, recortados rc, y laterales)
+    for (cx, cy, sx_, sy_) in ((A["x0"], A["y0"], 1, 1), (A["x1"], A["y0"], -1, 1), (A["x0"], A["y1"], 1, -1), (A["x1"], A["y1"], -1, -1)):
+        prof = [(0.0, rc)] + [(rc + rc * math.cos(math.pi + 0.5 * math.pi * k / 6), rc + rc * math.sin(math.pi + 0.5 * math.pi * k / 6))
+                              for k in range(1, 6)] + [(rc, 0.0), (rc, t), (0.0, t)]          # cuarto de círculo en la esquina
+        w_ = [(cx + sx_ * px, cy + sy_ * py) for (px, py) in prof]
+        if sx_ * sy_ < 0:
+            w_ = list(reversed(w_))
+        port.psweep(shell, [(-(x - cx), y - cy) for (x, y) in w_], [(cx, cy, DECK_Z), (cx, cy, DECK_Z + H)], "plaster", up=(0, 1, 0),
+                    miter=False)
+    # losa de azotea (con boleado) y pretil bajo con chaflán
+    bevbox(shell, (A["x0"] - 0.05, A["y0"] - 0.05, DECK_Z + H), (A["x1"] + 0.05, A["y1"] + 0.05, DECK_Z + H + 0.2), "concrete",
+           bevel=0.018, seg=2)
     for (a, b) in [((A["x0"] - 0.05, A["y0"] - 0.05), (A["x1"] + 0.05, A["y0"] + 0.1)),
                    ((A["x0"] - 0.05, A["y1"] - 0.1), (A["x1"] + 0.05, A["y1"] + 0.05)),
                    ((A["x0"] - 0.05, A["y0"] + 0.1), (A["x0"] + 0.1, A["y1"] - 0.1))]:
-        shell.box((a[0], a[1], DECK_Z + H + 0.2), (b[0], b[1], DECK_Z + H + 0.5), "concrete")
+        bevbox(shell, (a[0], a[1], DECK_Z + H + 0.2), (b[0], b[1], DECK_Z + H + 0.5), "concrete", bevel=0.016, seg=2)
     # servicios: aire acondicionado, medidor, letrero
     det.join(sv.ac_unit("window", seed=int(r.integers(1e6)), detail="mid"),
              _T(A["x0"], A["y0"] + 3.0, DECK_Z + 2.35) @ _Rz(90))          # entre las dos ventanas del muro oeste
