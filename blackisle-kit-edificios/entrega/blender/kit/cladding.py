@@ -1162,8 +1162,15 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
                 drop = 0.0
                 j0 = j1 = 0.0
                 if k > 0 and x < loose * 0.8 * sev:
-                    # suelta: un extremo se despega y cae
-                    if r.uniform() < 0.5:
+                    # suelta: un extremo se despega y cae (nunca el que llega a la esquina: ahí lo sujeta el esquinero)
+                    end1 = r.uniform() < 0.5
+                    if end1 and pb2 > ub - 0.25:
+                        end1 = False
+                    elif not end1 and pa2 < ua + 0.25:
+                        end1 = True
+                    if (end1 and pb2 > ub - 0.25) or (not end1 and pa2 < ua + 0.25):
+                        pass
+                    elif end1:
                         kick1, drop = r.uniform(0.015, 0.05), r.uniform(0.0, 0.012)
                     else:
                         kick0, drop = r.uniform(0.015, 0.05), r.uniform(0.0, 0.012)

@@ -893,11 +893,11 @@ def signs(det):
 def store_services(det, furn):
     """Medidor y tubo conduit al frente, tinaco sobre base de ángulo en la losa, condensadora y jaula de gas LP atrás,
     bajada de agua pluvial."""
-    det.join(cl.remap(sv.meter_box(seed=4, open_door=False, detail="high"), {"metal_rust": "steel", "metal_paint": "steel"}),
+    det.join(cl.remap(sv.meter_box(seed=4, open_door=False, detail="high", state="service"), {"metal_rust": "steel", "metal_paint": "steel"}),
              _T(SX0 + 0.45, SY0, 1.45) @ _Rz(180))
     # conduit en coordenadas del muro (plano y = 0 local, se coloca con la matriz: antes se le daban coordenadas del mundo y sus
     # cajas y abrazaderas caían en y = 0, dentro del muro del fondo, con un tramo cruzando la tienda)
-    det.join(cl.remap(sv.conduit([(0.0, 0.0, 1.95), (0.0, 0.0, S_PARA - 0.1), (0.0, 0.25, S_PARA + 0.3)], seed=5, detail="high"),
+    det.join(cl.remap(sv.conduit([(0.0, 0.0, 1.95), (0.0, 0.0, S_PARA - 0.1), (0.0, 0.25, S_PARA + 0.3)], seed=5, detail="high", state="service"),
                       {"metal_rust": "steel"}), _T(SX0 + 0.45, SY0, 0.0))
     # tinaco sobre base de ángulo de 2" × 3/16" (0,9 m): 4 patas, 2 marcos de ángulo, cama de solera y placas de desplante
     tx, ty = SX1 - 1.4, SY1 - 1.6
@@ -918,8 +918,8 @@ def store_services(det, furn):
         x = tx - 0.44 + 0.22 * k
         det.box((x - 0.025, ty - 0.55, S_ST + 0.9), (x + 0.025, ty + 0.55, S_ST + 0.906), "steel", bevel=0.0015)
     det.box((tx - 0.55, ty - 0.55, S_ST + 0.906), (tx + 0.55, ty + 0.55, S_ST + 0.93), "plywood", bevel=0.004)
-    det.join(sv.water_tank(seed=6, detail="high"), _T(tx, ty, S_ST + 0.93))
-    det.join(cl.remap(sv.ac_unit("split_outdoor", seed=7, detail="mid"), {"metal_rust": "enamel", "metal_paint": "sign_white"}),
+    det.join(sv.water_tank(seed=6, detail="high", state="service", stand=0.93), _T(tx, ty, S_ST + 0.93))
+    det.join(cl.remap(sv.ac_unit("split_outdoor", seed=7, detail="mid", state="service"), {"metal_rust": "enamel", "metal_paint": "sign_white"}),
              _T(SX0 + 1.4, SY1 + 0.02, 1.0) @ _Rz(180))
     # bajada pluvial de PVC de 4": gárgola por el pretil al nivel de la losa, codo, tubo con abrazaderas y zapata abajo
     bx, by, rp = SX1 - 0.3, SY1 + 0.055, 0.0505

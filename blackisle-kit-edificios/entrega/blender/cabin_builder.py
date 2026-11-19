@@ -894,7 +894,7 @@ def _door_lining(mb, dd, r):
     for uu in (u0 + 0.011, u0 + w - 0.011):
         lumber(sub, (uu, t / 2, 0.003), (uu, t / 2, h - 0.002), 0.02, t + 0.012, "wood_grey", up=(0, 1, 0), r=r, rc=0.003, grain=1.0,
                check=0.7 if r.random() < 0.33 else 0.0)
-    lumber(sub, (u0 + 0.001, t / 2, h - 0.011), (u0 + w - 0.001, t / 2, h - 0.011), 0.02, t + 0.012, "wood_grey", up=(0, 1, 0),
+    lumber(sub, (u0 + 0.0215, t / 2, h - 0.011), (u0 + w - 0.0215, t / 2, h - 0.011), 0.02, t + 0.012, "wood_grey", up=(0, 1, 0),
            r=r, rc=0.003, grain=1.0)
     mb.join(sub, m)
     sub.bm.free()

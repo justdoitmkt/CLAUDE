@@ -347,7 +347,7 @@ def wall_services(det, r):
     cables con su capucha."""
     y0 = SH_Y0
     for k, x in enumerate((-3.85, -2.20)):
-        ac_ = cl.remap(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="high"),
+        ac_ = cl.remap(sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail="high", state="service"),
                        {"metal_rust": "enamel", "metal_paint": "sign_white"})
         det.join(ac_, _T(x, y0, 0.78))
         _proxy_box((x - 0.42, y0 - 0.38, 0.55), (x + 0.42, y0, 1.36))
@@ -408,7 +408,7 @@ def wall_services(det, r):
     _text(cab, "DANGER 240V", 0.016, 0.0006, "sign_red", _T(-0.06, -0.2362, 0.52) @ _Rx(90))
     det.join(cab, _T(gx, gy, 1.00) @ _Rz(-90))
     for dx in (-0.12, 0.12):                       # conduit del fondo de la caja al firme (plano del muro: x local = gy - y)
-        det.join(cl.remap(sv.conduit([(dx, 0.0, 1.00), (dx, 0.0, Z_PAD - 0.03)], seed=int(r.integers(1e6)), detail="high"),
+        det.join(cl.remap(sv.conduit([(dx, 0.0, 1.00), (dx, 0.0, Z_PAD - 0.03)], seed=int(r.integers(1e6)), detail="high", state="service"),
                           {"metal_rust": "galvanized", "metal_paint": "galvanized"}), _T(gx, gy, 0.0) @ _Rz(-90))
     # barra de tierras exterior bajo el puerto (cobre con aisladores) y sus bajantes al anillo de tierras
     py, pz = PORT
