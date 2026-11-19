@@ -802,3 +802,54 @@ bajo la red, pasillo interior de la tienda), más una revisión de lógica de us
   los armeros (contactos, no cruces), focos colgados de la cumbrera. El rollo de la pared enrollada de la tienda queda a
   1,70–1,75 m: es la altura real de una TEMPER (alero de 6'9"); el cliente se queda afuera del mostrador.
 - Lo que el verificador sigue marcando son contactos de apoyo (piezas sobre su soporte, abrazaderas, amarres) revisados a la vista.
+
+## MIL_1 + MIL_2 · revisión independiente de lógica y correcciones (2026-11-19)
+Un revisor independiente (sin mis conclusiones) recorrió las 25 vistas de auditoría y levantó 24 observaciones. Una de ellas
+desmiente lo que yo había dado por correcto arriba: la "chicana" de 4 barreras dejaba un carril recto de 2 m alineado con el
+portón (las filas no se traslapaban). Lo que se corrigió:
+- **Acceso vehicular (grave)** → punto de control (`ecp()`, UFC 4-022-01 en chico): canal de 12 barreras Jersey conectadas
+  pin-and-loop que nace en la malla (8,4 m entre caras, hasta y −38,7: al portón solo se llega por el canal), serpentín de
+  dos tramos de 4,9 m que salen alternados de cada muro y se traslapan 1,7 m (paso de 3,3 m, obliga a una S lenta), pluma de
+  7,6 m a 7,45 m de la guarnición (zona de revisión de un vehículo) y puesto de guardia de costales de muro doble junto al
+  gabinete de la pluma, del lado de adentro.
+- **Franja sin acabado al pie de la rampa (grave)** → la grava excluía la caja andén+rampa completa; ahora excluye cada uno
+  por separado.
+- **Tienda de munición expuesta tras la malla** → 9 muros T (13,7 m) entre la malla y el testero cerrado; la avanzada se
+  recorre 0,3 m al norte (9,5; −11,1) y sube a 0,06 m (sobre la grava); el viento de cumbrera del testero cerrado se acorta
+  a 2,0 m para librar los muros T.
+- **Puesto de tirador bajo y delgado; parapeto de la torre a 0,6 m** → `sandbag_ring(thickness="double")`: hiladas de soga
+  doble (anillos a r ∓ 0,14) alternadas con tizones radiales (FM 5-103, ~0,55 m), 12 hiladas ≈ 1,17 m; la torre lleva 10
+  hiladas (≈ 1,05 m, a la altura del pecho del centinela de pie). Las hiladas bajas usan el saco de 24 × 20 (sin facetas).
+- **Cortinas montadas por fuera, cadena colgando al patio** → montadas por dentro (`rollup_door(inside=True)`): guías y
+  capota del rollo sobre el cerramiento, cerrojos con candado y cadena por dentro; vano enmarcado (`door_frame`: jambas de
+  canal C, cerramiento, PTR anclado al concreto, remate exterior en J con gotero); las marcas de palanca quedan en la cara de
+  afuera de la barra inferior. Las duelas ahora tienen las dos caras.
+- **Arbotantes tapados por la capota y la marquesina** → sin capota afuera, el arbotante sobre cada cortina alumbra el vano; el
+  de la puerta de personal pasa al costado, fuera de la sombra de la marquesina.
+- **Defensas del andén fuera del ancho del camión (±1,785 m)** → ±1,15 m, junto a los bordes del nivelador de 2 m (MHI,
+  Cisco-Eagle, Blue Giant).
+- **Andén sin escalera de personal** → escalera de acero en la cabecera poniente (`dock_stair`, IBC 1011: 7 contrahuellas de
+  157 mm, huellas de 280 mm, zancas MC 200, peldaños de rejilla con nariz antiderrapante, barandales con prolongaciones y
+  descanso de concreto).
+- **Cámara montada sobre la bajada pluvial** → cámaras a 1,0 m de las esquinas; la bajada del frente-poniente a 0,40 m (su
+  salpicadero ya no toca el andén).
+- **Bajante del pararrayos suelta** → cada bajada va pegada a la lámina del hastial con grapas de cobre cada 0,9 m (NFPA 780),
+  dobla sobre el remate, lleva tubo protector de PVC en los últimos 1,8 m y entra a un registro de prueba con tapa.
+- **Letrero SUPPLY ilegible** → letras y filete blancos; además, letrero de triplay de 1,2 × 0,6 m con flecha al mostrador
+  amarrado con cinchos a la cara de afuera del HESCO del sur (se lee desde el portón).
+- **Generador sin conexión, escape a 1,3 m de la lona, bidones en el paso de clientes** → generador a 3 m de la pared de atrás
+  con el escape vertical del lado de afuera; bidones juntos a un costado; cable SOOW del tablero de cargas al reflector (conector
+  hembra acoplado a la clavija de su rollo) y a la serie de focos (sube por el testero cerrado y entra por una manga de lona con
+  cordón); protector de cable de dos canales en el paso del testero; varilla de tierra con conector de bellota y cable verde.
+- **Vientos en el paso** → banderolas de cinta naranja en todos los vientos de la tienda y de la red (a ~0,55 m del piso). Con
+  el verificador se comprobó que ningún viento cruza el paso de la rampa al testero norte (las 4-5 "cuerdas" eran perspectiva).
+- **Aislante interior que parecía hojas sueltas** → manta continua de la cabeza del concreto al alero, apretada en cada larguero
+  con su comba entre ellos y traslapes verticales cada 1,22 m, cortada alrededor de los vanos.
+- Se queda como está, con su razón: rampa de 14 % (los fabricantes de rampas de andén trabajan entre 10 y 15 %; el 1:12 de
+  IBC/ADA es para rampas de ruta accesible, y el personal ahora tiene la escalera) — fuente: Copperloy, "Dock to ground ramps";
+  armas montadas en la jaula (mortero en bípode, ametralladora en trípode) como exhibición del armero; bajadas del fondo
+  descargando en el callejón trasero sobre salpicaderos (hay grava drenante).
+- Verificador de coherencia (`coh/coherence.py`) después de los cambios: 389 piezas, 10 parejas que se tocan, todas contactos
+  de diseño (lazos y pasadores de las Jersey conectadas, fusiles en armeros, clavija dentro del conector, cable por la manga de
+  lona, esquinas de muros T con la malla); zonas libres nuevas (carril de revisión, pasos del serpentín, pie de la escalera,
+  paso rampa → tienda, frente y espalda de cada cortina) sin nada adentro.
