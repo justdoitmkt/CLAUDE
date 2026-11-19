@@ -1183,7 +1183,7 @@ def _ac_split(r):
     bent = r.uniform(0, 2 * PI)
     bend_amp = 0.0 if svc else 0.006
     for k, rr_ in enumerate(rings_r):
-        npt = max(48, int(2 * PI * rr_ / 0.012))
+        npt = max(36, int(2 * PI * rr_ / _lv(0.012, 0.02, 0.028)))   # tramos de 4–8° (sombreado continuo)
         pts = []
         for i in range(npt):
             a = 2 * PI * i / npt
@@ -3097,17 +3097,19 @@ def _clothespin(mb, x, z, rr, mat=None):
     for sg in (-1, 1):
         lev = MB()
         lev.plate(_pin_lever(sg), 0.0095, mat, m=Matrix(((0, 0, 1, -0.00475), (sg, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1))))
-        bmesh.ops.bevel(lev.bm, geom=list(lev.bm.edges), offset=0.0007, segments=2, profile=0.5, affect="EDGES", clamp_overlap=True)
+        bmesh.ops.bevel(lev.bm, geom=list(lev.bm.edges), offset=0.0007, segments=_lv(2, 1, 1), profile=0.5, affect="EDGES",
+                        clamp_overlap=True)
         for f in lev.bm.faces:
             f.material_index = lev.mi(mat)
         _merge(mb, lev, M)
-    coil = [M @ Vector((-0.0022 + 0.0044 * k / 60, 0.0026 * math.cos(2 * PI * 2.5 * k / 60), 0.018 + 0.0026 * math.sin(2 * PI * 2.5 * k / 60)))
-            for k in range(61)]
+    nk = _lv(60, 40, 30)
+    coil = [M @ Vector((-0.0022 + 0.0044 * k / nk, 0.0026 * math.cos(2 * PI * 2.5 * k / nk), 0.018 + 0.0026 * math.sin(2 * PI * 2.5 * k / nk)))
+            for k in range(nk + 1)]
     _tube(mb, coil, 0.0005, mat="steel")
     for (xa, sg) in ((-0.0022, 1), (0.0022, -1)):
         arm = [Vector((xa, sg * 0.0026, 0.018)), Vector((xa, sg * 0.0062, 0.026)), Vector((xa, sg * 0.0076, 0.036)),
                Vector((xa * 0.3, sg * 0.0076, 0.040))]
-        _tube(mb, [M @ p for p in _spline(arm, 0.002)], 0.0005, mat="steel")
+        _tube(mb, [M @ p for p in _spline(arm, _lv(0.002, 0.004, 0.006))], 0.0005, mat="steel")
 
 
 def _cloth(mb, grid, mat, skip=None, t=0.0014, steps=((1, 1), (1, 1), (2, 2))):

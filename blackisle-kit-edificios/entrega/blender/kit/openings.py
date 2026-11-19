@@ -2161,7 +2161,7 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
             d += kd * max(0.0, 1.0 - q) ** 1.5
         d -= pry * math.exp(-((x - pxc) / 0.5) ** 2) * _smooth((zb0 + 0.55 - z) / 0.55)
         v.co.y += d * ex
-    _declump(cur)
+    _declump(cur, dist=0.00012, push=0.00025)   # solo lo que soldaría un merge de 0,1 mm (sin pliegues visibles)
     _merge(mb, cur)
     return mb
 
