@@ -632,8 +632,8 @@ def _bag_rings(r, ls=1.0, ws=1.0, hs=1.0, blunt=0.0, lod=0):
     """Geometría local de un saco lleno (largo en X: costura en -X, boca amarrada en +X; ancho en Y; base en z = 0).
     Devuelve dict: R (anillos × nt × 3, un solo tubo continuo: punta del dobladillo -> costura -> cuerpo -> cuello -> cola),
     nf (anillos del dobladillo), cord (eje del cordón de amarre), c0 (media altura), nt."""
-    nt = BAG_NT if lod == 0 else 30
-    ns = BAG_NS if lod == 0 else 28
+    nt = BAG_NT if lod == 0 else (30 if lod == 1 else 24)
+    ns = BAG_NS if lod == 0 else (28 if lod == 1 else 20)
     a = 0.236 * ls * float(r.uniform(0.975, 1.025))
     c0 = 0.055 * hs * float(r.uniform(0.94, 1.05))
     P0 = BAG_P0 * ws * float(r.uniform(0.985, 1.015))
@@ -961,7 +961,7 @@ def _bag_stack(courses, seed, bounds, hs_course=None, lod=0):
             x, y, ang, ls, ws = item[:5]
             rb = rng(int(r.integers(1 << 30)))
             hs = 1.0 - 0.07 * (nc - 1 - ci) / max(nc - 1, 1)     # las hiladas de abajo cargan más: más aplastadas
-            rings = _bag_rings(rb, ls, ws, hs, blunt=1.0, lod=lod)
+            rings = _bag_rings(rb, ls, ws, hs, blunt=1.0, lod=lod(ci) if callable(lod) else lod)
             if len(item) > 5 and item[5]:
                 rings["R"] = _bend_ring_xy(rings["R"], item[5])
                 rings["cord"] = _bend_ring_xy(rings["cord"], item[5])
@@ -1022,34 +1022,59 @@ def sandbag_wall(L=3.0, rows=4, seed=0, thickness="single"):
     return _bag_stack(courses, seed, (-0.4, L + 0.4, -0.5, 0.5))
 
 
-def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0):
-    """Anillo de sacos (puesto de tirador / protección de un equipo): sacos a soga tangentes a un círculo de `radius` m
-    (eje del muro), curvados en planta para seguirlo (la cara interior más corta), hiladas cuatrapeadas, con una entrada de
-    `opening_deg` grados hacia -Y. Origen: centro, en el piso."""
+def sandbag_ring(radius=1.1, rows=3, seed=0, opening_deg=50.0, thickness="single", lod_top=None):
+    """Anillo de sacos (puesto de tirador / protección de un equipo) con una entrada de `opening_deg` grados hacia -Y.
+    Origen: centro, en el piso. `radius` es el eje del muro. Cada hilada mide ~0,105 m: 11 hiladas ~1,15 m (a la altura del
+    pecho de un tirador de pie, que dispara por encima).
+    single: sacos a soga tangentes al círculo, curvados en planta para seguirlo, hiladas cuatrapeadas (espesor ~0,30 m).
+    double (FM 5-103: muro de dos sacos, ~0,55 m, para detener fuego de armas ligeras): hiladas de soga doble (dos anillos
+    concéntricos a radius ∓ 0,14, cuatrapeados) alternadas con hiladas de tizón (sacos radiales que amarran las dos hojas); en
+    las cabezas de la entrada, los tizones y medios sacos rematan a plomo.
+    lod_top: si se da, solo las `lod_top` hiladas de arriba van con el saco completo; las 3 siguientes con el ligero (30 × 28)
+    y las de abajo con el de 24 × 20 (sigue sin facetas a la vista: 24 puntos por anillo)."""
     courses = []
     pitch = 0.515
     rf = rng(seed + 77)
-    for k in range(rows):
-        arc0 = -PI / 2 + math.radians(opening_deg) / 2
-        arc = 2 * PI - math.radians(opening_deg)
-        n = max(3, int(round(arc * radius / pitch)))
+    arc0 = -PI / 2 + math.radians(opening_deg) / 2
+    arc = 2 * PI - math.radians(opening_deg)
+
+    def stretchers(rad, k, ws=1.0):
+        n = max(3, int(round(arc * rad / pitch)))
         da = arc / n
-        ls = da * radius / pitch * 0.985
+        ls = da * rad / pitch * 0.985
         row = []
         off = 0.5 * (k % 2)
         idx = [i + off for i in range(n)] if not off else [i + off for i in range(n - 1)]
         for t in idx:
             a = arc0 + da * (t + 0.5)
             fl = rf.uniform() < 0.5                        # boca hacia uno u otro lado (el saco se curva igual)
-            row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + (270.0 if fl else 90.0), ls, 1.0,
-                        -radius if fl else radius))
+            row.append((rad * math.cos(a), rad * math.sin(a), math.degrees(a) + (270.0 if fl else 90.0), ls, ws,
+                        -rad if fl else rad))
         if off:                                            # medios sacos en las cabezas de la entrada
             for t in (0.25, n - 0.25):
                 a = arc0 + da * t
-                row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + 90.0, 0.5 * ls, 1.0, radius))
-        courses.append(row)
-    R = radius + 0.5
-    return _bag_stack(courses, seed, (-R, R, -R, R))
+                row.append((rad * math.cos(a), rad * math.sin(a), math.degrees(a) + 90.0, 0.5 * ls, ws, rad))
+        return row
+
+    for k in range(rows):
+        if thickness == "double" and k % 2 == 1:           # hilada de tizón: sacos radiales que amarran las dos hojas
+            n = max(4, int(round(arc * radius / 0.315)))
+            da = arc / n
+            ws = 0.97 * da * radius / 0.315
+            row = []
+            for i in range(n):
+                a = arc0 + da * (i + 0.5)
+                fl = 180.0 if rf.uniform() < 0.5 else 0.0
+                row.append((radius * math.cos(a), radius * math.sin(a), math.degrees(a) + fl, 1.15, ws))
+            courses.append(row)
+        elif thickness == "double":
+            off = (k // 2) % 2
+            courses.append(stretchers(radius - 0.14, off, 0.9) + stretchers(radius + 0.14, 1 - off, 0.9))
+        else:
+            courses.append(stretchers(radius, k))
+    R = radius + (0.75 if thickness == "double" else 0.5)
+    lod = 0 if lod_top is None else (lambda ci: 0 if ci >= rows - lod_top else (1 if ci >= rows - lod_top - 3 else 2))
+    return _bag_stack(courses, seed, (-R, R, -R, R), lod=lod)
 
 
 # ================================================================================================ barreras de concreto
@@ -2103,7 +2128,8 @@ def guard_tower(seed=0):
     contravientos en X de solera 60 × 8 con placas de conexión y tornillos de 5/8" (rondana, tuerca, punta de rosca); piso de
     rejilla electrosoldada (soleras 30 × 3 a 33 mm, varilla transversal Ø 6 a 100 mm, marco de solera) sobre marco de PTR;
     barandal de tubo de 48 mm continuo con curvas de radio real (R 120 mm) en las esquinas, pasamanos a 1,07 m, intermedio a
-    0,55 m y rodapié de 100 mm (OSHA 1910.29); muro de sacos terreros de 6 hiladas sobre el piso (hueco de acceso al fondo);
+    0,55 m y rodapié de 100 mm (OSHA 1910.29); muro de sacos terreros de 10 hiladas (~1,05 m: el centinela de pie queda cubierto hasta el pecho) sobre el piso (hueco de
+    acceso al fondo);
     techo a un agua de lámina acanalada sobre postes de 60 × 60 con placa base atornillada, largueros y pijas con rondana de
     neopreno; escalera marina en el fondo (+Y) con jaula (aros a partir de 2,4 m; OSHA 1910.28/ANSI A14.3: peldaños a 0,30 m,
     ancho libre 0,42 m). Origen: centro del pie de la torre; frente (lado vigilado) hacia -Y."""
@@ -2234,8 +2260,8 @@ def guard_tower(seed=0):
               M=_T(x, y, 0), caps=False)
         ring = [(x + 0.0265 * math.cos(a), y + 0.0265 * math.sin(a), zd + 0.002) for a in np.linspace(0, 2 * PI, 25)[:-1]]
         _weld(mb, ring, r=0.003, closed=True)              # pie del poste soldado al marco
-    # ---- muro de sacos sobre el piso (hueco de acceso al fondo)
-    bags = _bag_stack(_ring_courses(1.08, 6, opening=("b", 0.42)), seed, (-1.6, 1.6, -1.6, 1.6), lod=1)   # a 5 m de altura
+    # ---- muro de sacos sobre el piso (hueco de acceso al fondo), a la altura del pecho
+    bags = _bag_stack(_ring_courses(1.08, 10, opening=("b", 0.42)), seed, (-1.6, 1.6, -1.6, 1.6), lod=1)   # a 5 m de altura
     mb.join(bags, _T(0, 0, zd))
     # ---- techo a un agua: postes con placa base atornillada, marco, largueros, lámina acanalada y pijas con rondana
     zr_f, zr_b = zd + 2.25, zd + 2.05
@@ -2509,6 +2535,42 @@ def _bilerp(xs, ys, Z, x, y):
     j = np.clip(np.floor(fy).astype(int), 0, len(ys) - 2)
     tx, ty = fx - i, fy - j
     return (Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty) + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty)
+
+
+def line_flag(mb, pts, seed=0, z=0.55, rc=0.005):
+    """Banderola de cinta de señalización naranja (polietileno de 30 mm, 0,6 mm) amarrada a un viento donde pasa a `z` del
+    piso: vuelta alrededor de la cuerda con nudo y dos colas de 0,25-0,35 m que cuelgan por su peso con una torcedura."""
+    r = rng(seed)
+    P = [Vector(p) for p in pts]
+    k = max(1, min(len(P) - 2, min(range(len(P)), key=lambda i: abs(P[i].z - z))))
+    c = P[k]
+    u = (P[k + 1] - P[k - 1]).normalized()
+    side = u.cross(Vector((0, 0, 1)))
+    side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
+    up = side.cross(u).normalized()
+    nr = 14
+    ring = [c + (side * math.cos(2 * PI * i / nr) + up * math.sin(2 * PI * i / nr)) * (rc + 0.0035) for i in range(nr + 1)]
+    tube_path(mb, ring, 0.0022, seg=12, mat="rack_orange", caps=True)
+    for e in (-1, 1):
+        L = float(r.uniform(0.25, 0.35))
+        tw = float(r.uniform(-0.6, 0.6))
+        n = 9
+        V = []
+        for i in range(n + 1):
+            t = i / n
+            p = c - up * (rc + 0.006) + side * e * 0.006 + Vector((0, 0, -L * t)) + side * e * 0.03 * t * t
+            a = tw * t + (0.0 if e < 0 else 0.4)
+            dr = u * math.cos(a) + side * math.sin(a)
+            nn = Vector((0, 0, 1)).cross(dr).normalized() * 0.0003
+            d = dr * 0.015
+            V.append([mb.bm.verts.new(q) for q in (p - d - nn, p + d - nn, p + d + nn, p - d + nn)])
+        with mb.soft():
+            for i in range(n):
+                for j in range(4):
+                    jj = (j + 1) % 4
+                    mb.face([V[i][j], V[i][jj], V[i + 1][jj], V[i + 1][j]], "rack_orange")
+            mb.face(list(reversed(V[0])), "rack_orange")
+            mb.face(V[n], "rack_orange")
 
 
 def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True, front_ties=True, mid_edge_poles=True):
@@ -2818,7 +2880,9 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True, front_ties=True,
                 continue
             g = Vector((x, y, 0)) + d * 1.6 + Vector((d.y, -d.x, 0)) * float(r.uniform(-0.2, 0.2))
             stakes.append(g)
-            tube_path(mb, catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=16), 0.005, seg=16, mat="canvas", caps=True)
+            cat = catenary((x, y, z + 0.06), (g.x, g.y, 0.07), 0.03, n=16)
+            tube_path(mb, cat, 0.005, seg=16, mat="canvas", caps=True)
+            line_flag(mb, cat, seed=int(r.integers(1 << 30)))
     # amarres intermedios de la orilla a estacas
     for (x0, y0, x1, y1) in ((-w / 2, -l / 2, w / 2, -l / 2), (-w / 2, l / 2, w / 2, l / 2), (-w / 2, -l / 2, -w / 2, l / 2),
                              (w / 2, -l / 2, w / 2, l / 2)):
@@ -2832,7 +2896,9 @@ def camo_net(w=8.0, l=10.0, seed=0, poles=True, back_ties=True, front_ties=True,
             d = Vector((math.copysign(1, x) if abs(x0 - x1) < 1e-6 else 0.0, math.copysign(1, y) if abs(y0 - y1) < 1e-6 else 0.0, 0))
             g = Vector((x, y, 0)) + d * 1.1
             stakes.append(g)
-            tube_path(mb, catenary((x, y, zz - 0.01), (g.x, g.y, 0.07), 0.02, n=14), 0.0045, seg=16, mat="canvas", caps=True)
+            cat = catenary((x, y, zz - 0.01), (g.x, g.y, 0.07), 0.02, n=14)
+            tube_path(mb, cat, 0.0045, seg=16, mat="canvas", caps=True)
+            line_flag(mb, cat, seed=int(r.integers(1 << 30)))
     for g in stakes:                                       # estaca de varilla con gancho, hincada
         tube_path(mb, [(g.x, g.y, -0.12), (g.x, g.y, 0.08), (g.x + 0.03, g.y, 0.1), (g.x + 0.05, g.y, 0.07)], 0.006, seg=16,
                   mat="steel", bend=0.015, nseg=5, caps=True)

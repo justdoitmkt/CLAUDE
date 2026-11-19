@@ -159,17 +159,20 @@ abollada y palanqueada junto al candado, rayones en la puerta de personal y en e
 impactos de bala). Sin grafiti ni placas. Textos en inglés (esténciles genéricos), sin banderas ni insignias.
 - **MIL_1_almacen** (pivote al centro del recinto, z = 0 terreno): nave de acero preingeniería de 30 × 18 m (x -20..10,
   y 0..18), piso a altura de andén (z 1,2), alero a 7,2 m, lámina R color arena sobre muro de concreto, techo de junta alzada
-  con ventiladores de turbina, pararrayos y rociadores. Andén con 2 cortinas de 14 × 14 ft y rampa con puerta de personal
-  (abierta). Dentro: 3 filas de racks selectivos con tarimas, jaula de armas (armero con fusiles, ametralladoras en
+  con ventiladores de turbina, pararrayos y rociadores. Andén con 2 cortinas de 14 × 14 ft montadas por dentro, escalera de
+  acero en la cabecera poniente y rampa con puerta de personal (abierta). Dentro: 3 filas de racks selectivos con tarimas, jaula de armas (armero con fusiles, ametralladoras en
   trípode, mortero, lanzadores), zona de recibo con montacargas, banco y extintores. Recinto x -24..22, y -20..21: muros T
-  de 3,66 m al poniente, al fondo y al oriente; malla con rollo de navaja y portón de 6 m al frente, pluma y chicana Jersey
-  afuera; torre de vigilancia, 2 torres de luz, HESCO MIL7 y puesto de costales.
+  de 3,66 m al poniente, al fondo y al oriente; malla con rollo de navaja y portón de 6 m al frente; afuera, punto de
+  control vehicular: canal de barreras Jersey de ~18 m (llega a y −38,7), serpentín traslapado, pluma con zona de revisión
+  y puesto de guardia de costales; adentro, torre de vigilancia, 2 torres de luz, HESCO MIL7, muros T entre la malla y la
+  tienda de munición y puesto de tirador de costales.
 - **MIL_2_avanzada** (pieza suelta, pivote al centro de la tienda): tienda militar de marco 6,1 × 9,75 m sobre tarima de
   triplay, mostrador de cajas de munición con caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con
   chalecos y fundas, mesa con cargadores, serie de focos, letrero SUPPLY, red de camuflaje al frente, HESCO, costales,
-  generador táctico, bidones y reflector. **Para ponerla junto al almacén** colócala en (9,5; −11,4; 0) del pivote de MIL_1
-  (ejes de Blender) girada −90° en z: queda en el patio del frente oriente, con el mostrador mirando al portón y al patio de
-  maniobras, fuera del frente del andén y de la rampa, sin tocar la malla ni la torre de luz (vientos y estacas incluidos).
+  generador táctico cableado al reflector y a los focos, bidones y reflector. **Para ponerla junto al almacén** colócala en
+  (9,5; −11,1; 0,06) del pivote de MIL_1 (ejes de Blender; 0,06 m = sobre la grava) girada −90° en z: queda en el patio del frente oriente, con el mostrador mirando al portón y al patio de
+  maniobras, fuera del frente del andén y de la rampa, con los muros T entre su testero cerrado y la malla, sin tocar la
+  torre de luz (vientos y estacas incluidos).
 
 ## 4. Pasos
 1. **Copia la carpeta `kit_ue5` completa a disco**, fuera de `Content/` (por ejemplo junto al `.uproject`).

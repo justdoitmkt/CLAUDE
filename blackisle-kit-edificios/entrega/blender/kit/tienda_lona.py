@@ -1993,7 +1993,7 @@ def _tieout(mb, roof, x, side, seed):
     return dpt + dd * 0.026, dd
 
 
-def _guy(mb, pa, dd, stake_base, lean, seed, tensioner=True):
+def _guy(mb, pa, dd, stake_base, lean, seed, tensioner=True, flag=False):
     """Viento de cuerda de 3/8" (Ø 9,5 mm): gaza amarrada a la argolla D (as de guía con su nudo), tramo con su catenaria,
     tensor de 3 ojos a 0,4 m de la estaca, dos ramales que abrazan la estaca forjada bajo la cabeza, chicote con nudo."""
     r = rng(seed)
@@ -2031,10 +2031,49 @@ def _guy(mb, pa, dd, stake_base, lean, seed, tensioner=True):
     tk = s2[-1]
     _lathe(mb, [(0.0, -0.008), (rr * 1.6, -0.006), (rr * 2.0, 0.0), (rr * 1.5, 0.006), (0.0, 0.008)],
            _frame_z(tk, Vector((0, 0, 1))), "fabric", seg=SEG_T)
+    if flag:
+        _guy_flag(mb, cat, r)
+
+
+def _guy_flag(mb, cat, r):
+    """Banderola de cinta de señalización naranja (polietileno de 30 mm) amarrada al viento donde pasa a ~0,55 m del piso:
+    vuelta con nudo alrededor de la cuerda y dos colas de 0,25-0,35 m que cuelgan por su peso con una torcedura suave."""
+    pts = [Vector(p) for p in cat]
+    k = min(range(len(pts)), key=lambda i: abs(pts[i].z - 0.55))
+    k = max(1, min(len(pts) - 2, k))
+    c = pts[k]
+    u = (pts[k + 1] - pts[k - 1]).normalized()
+    side = u.cross(Vector((0, 0, 1))).normalized()
+    up = side.cross(u).normalized()
+    ring = [c + (side * math.cos(2 * PI * i / 14) + up * math.sin(2 * PI * i / 14)) * 0.0085 for i in range(14)]
+    with mb.soft():
+        loop_tube(mb, ring, 0.0022, seg=12, mat="rack_orange", normal=tuple(u))
+    _lathe(mb, [(0.0, -0.007), (0.009, -0.006), (0.012, 0.0), (0.009, 0.006), (0.0, 0.007)], _frame_z(c - up * 0.009, u),
+           "rack_orange", seg=SEG_T)
+    for e in (-1, 1):
+        L = _f(r.uniform(0.25, 0.35))
+        tw = _f(r.uniform(-0.6, 0.6))
+        n = 9
+        V = []
+        for i in range(n + 1):
+            t = i / n
+            p = c - up * 0.012 + side * e * 0.006 + Vector((0, 0, -L * t)) + side * e * 0.03 * t * t
+            a = tw * t + (0.0 if e < 0 else 0.4)
+            dr = u * math.cos(a) + side * math.sin(a)
+            nr = Vector((0, 0, 1)).cross(dr).normalized() * 0.0003       # espesor de la cinta (0,6 mm)
+            d = dr * 0.015
+            V.append([mb.bm.verts.new(q) for q in (p - d - nr, p + d - nr, p + d + nr, p - d + nr)])
+        with mb.soft():
+            for i in range(n):
+                for j in range(4):
+                    jj = (j + 1) % 4
+                    mb.face([V[i][j], V[i][jj], V[i + 1][jj], V[i + 1][j]], "rack_orange")
+            mb.face(list(reversed(V[0])), "rack_orange")
+            mb.face(V[n], "rack_orange")
 
 
 # ======================================================================================================== ensamble
-def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
+def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",), ridge_guy=2.6, guy_flags=True):
     """Tienda militar de armazón tipo TEMPER 20 × 32 ft (6,1 × 9,75 m) armada como expendio del puesto avanzado (MIL_2).
 
     Misma firma, origen, orientación y huella que kit.campaign.frame_tent: origen en el piso al centro; largo L en X, ancho W
@@ -2043,6 +2082,8 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
       enrolladas cuelgan cerradas con dos ventanas (una con la solapa enrollada y la malla a la vista, otra con la solapa de
       oscurecimiento bajada y atada).
     - open_front: la puerta del testero -X (entrada) abierta con su hoja enrollada sobre el dintel; la del testero +X cerrada.
+    - ridge_guy: distancia de la estaca del viento de cumbrera al testero (2,6 m; menos si algo la estorba).
+    - guy_flags: banderola de cinta naranja de señalización en cada viento (a la altura de la rodilla) para no tropezar.
     Huella al piso (con las medidas por omisión): paredes, faldones tendidos y estacas de sus gazas dentro de x ±5,13
     (L/2 + 0,25) e y -3,08 (frente enrollado) / +3,38 (fondo cerrado: faldón de 0,17 m + gazas a 0,25 m); armazón y placas
     base dentro de x ±4,90, y ±3,07; vientos y estacas hasta y ±4,46 y x ±7,54 (como antes, ±4 cm). Interior libre a ras
@@ -2078,7 +2119,7 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
             pa, dd = _tieout(mb, rf, xp, sy, seed + 7 * k + (sy > 0))
             lean = Vector((0.25 * (-1 if k == 0 else 1 if k == 4 else 0), sy, 0)).normalized()
             base = Vector((x + lean.x * 1.45, sy * (W / 2 + 1.35), 0.0))
-            _guy(mb, pa, dd, base, lean, seed + k * 3 + (sy > 0))
+            _guy(mb, pa, dd, base, lean, seed + k * 3 + (sy > 0), flag=guy_flags)
     for end in (-1, 1):
         if end < 0 and open_front:
             continue                      # entrada abierta: sin viento de cumbrera cruzando frente a la puerta
@@ -2092,5 +2133,5 @@ def frame_tent(L=9.75, W=6.1, seed=0, open_front=True, rolled_sides=("front",)):
         with mb.soft():
             loop_tube(mb, ring, 0.0025, seg=12, mat="steel", normal=tuple(Vector((0, 1, 0)).cross(out)))
         pa = tab[-1] + out * 0.03
-        _guy(mb, pa, out, Vector((end * (L / 2 + 2.6), 0.0, 0.0)), Vector((end, 0, 0)), seed + 40 + end)
+        _guy(mb, pa, out, Vector((end * (L / 2 + ridge_guy), 0.0, 0.0)), Vector((end, 0, 0)), seed + 40 + end, flag=guy_flags)
     return mb

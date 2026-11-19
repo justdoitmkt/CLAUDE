@@ -46,7 +46,8 @@ RAMP = (-3.0, 6.4, -2.0, 0.0)    # rampa de la puerta de personal, baja hacia +x
 CX0, CX1, CY0, CY1 = -24.0, 22.0, -20.0, 21.0
 GATE = (-14.0, -8.0)             # portón vehicular (x de los postes) en la malla del frente
 APRON = (-20.0, -3.0, -16.0, -3.6)
-MIL_OUTPOST = (9.5, -11.4, -90.0)   # dónde va MIL_2_avanzada respecto del pivote de MIL_1 (x, y, giro en z)
+MIL_OUTPOST = (9.5, -11.1, -90.0)   # dónde va MIL_2_avanzada respecto del pivote de MIL_1 (x, y, giro en z)
+MIL_OUTPOST_Z = 0.06                # sobre la grava de MIL_1 (Z_GRAVEL)
 
 
 def _T(x=0.0, y=0.0, z=0.0):
@@ -265,7 +266,7 @@ def roof(rf, det):
             det.box((xk - 0.012, ya_, zg + 0.02), (xk + 0.012, yb_, zg + 0.026), "paint_tan", bevel=0.002)
         # bajadas: en el frente solo en las esquinas (el centro del frente es andén, cortinas, puerta de personal y rampa: una
         # bajada ahí caía dentro del vano de la puerta); atrás, tres. La del poniente del frente va fuera del costado del andén.
-        for xd in ((x0 + 0.45, x1 - 0.6) if sg < 0 else (x0 + 0.6, (x0 + x1) / 2 + 0.6, x1 - 0.6)):
+        for xd in ((x0 + 0.40, x1 - 0.6) if sg < 0 else (x0 + 0.6, (x0 + x1) / 2 + 0.6, x1 - 0.6)):
             downspout(det, xd, WY0 if sg < 0 else WY1, sg, zg - 0.16, yg + sg * 0.075)
     # ventiladores de turbina en el caballete
     for xv in (-15.0, -7.5, 0.0, 7.5):
@@ -563,10 +564,8 @@ def liner(inter):
             for xa, xb in zip(FRAMES[:-1], FRAMES[1:]):
                 _sag_panel(inter, xa + 0.15, xb - 0.15, ya, yb, lambda y: roof_z(y) - 0.205, 0.03)
     W = wall_frames()
-    for side, (M, L) in W.items():
-        zs = (KNEE + 0.10, 3.9, 5.4, 6.7)
-        for za, zb in zip(zs[:-1], zs[1:]):
-            _sag_wall(inter, M, L, za + 0.10, zb - 0.10, side)
+    for side, (M, L) in W.items():                          # muros: una sola manta continua de la cabeza del concreto al
+        _liner_wall(inter, M, L, side)                      # alero, sujeta en cada larguero y con su comba entre ellos
 
 
 def _sag_panel(mb, xa, xb, ya, yb, zf, sag, nx=6, ny=4):
@@ -583,25 +582,57 @@ def _sag_panel(mb, xa, xb, ya, yb, zf, sag, nx=6, ny=4):
             mb.face([V[i, j], V[i + 1, j], V[i + 1, j + 1], V[i, j + 1]], "plastic")
 
 
-def _sag_wall(mb, M, L, za, zb, side, n=40, m=3):
+LINER_PINS = (KNEE + 0.10, 3.9, 5.4, 6.7)              # largueros de muro: ahí la manta queda sujeta (sin comba)
+
+
+def _liner_wall(mb, M, L, side):
+    """Manta de fibra de vidrio con cara de vinilo blanco (sistema de liner) en un muro: continua de la cabeza del muro de
+    concreto al alero (o al remate del hastial), apretada contra la cara de cada larguero y abombada 2,5 cm entre ellos, con
+    traslapes verticales engrapados cada 1,22 m (pestaña de vinilo de 5 cm) y cortada alrededor de los vanos: sobre las
+    cortinas empieza arriba de la capota del rollo; sobre la puerta de personal, arriba de su marco."""
+    z_lo, z_hi = LINER_PINS[0] + 0.02, LINER_PINS[-1] + 0.08
+    top = (lambda u: z_hi) if side in ("front", "back") else (lambda u: min(z_hi, roof_z(WY0 + (u if side == "east" else L - u)) - 0.4))
     holes = []
     if side == "front":
-        holes = [(cx - w / 2 - WX0 - 0.1, cx + w / 2 - WX0 + 0.1, FFL, FFL + DOOR_H + 0.2) for (cx, w) in DOORS] + \
-                [(PDOOR_X - 0.6 - WX0, PDOOR_X + 0.6 - WX0, FFL, FFL + PDOOR_H + 0.2)]
-    top = (lambda u: zb) if side in ("front", "back") else (lambda u: min(zb, roof_z(WY0 + (u if side == "east" else L - u)) - 0.4))
-    for (ua, ub) in _gaps(L, [(h[0], h[1]) for h in holes if h[2] < zb and h[3] > za]):
+        holes = [(cx - w / 2 - WX0 - 0.075, cx + w / 2 - WX0 + 0.075, FFL + DOOR_H + 0.15 + 0.66 + 0.04) for (cx, w) in DOORS] + \
+                [(PDOOR_X - 0.6 - WX0, PDOOR_X + 0.6 - WX0, FFL + PDOOR_H + 0.25)]
+
+    def dz(z):
+        for za, zb in zip(LINER_PINS[:-1], LINER_PINS[1:]):
+            if za <= z <= zb:
+                return 0.025 * math.sin(math.pi * (z - za) / (zb - za))
+        return 0.0
+    cuts = sorted({0.0, L} | {h[i] for h in holes for i in (0, 1)})
+    for ua, ub in zip(cuts[:-1], cuts[1:]):
+        um = (ua + ub) / 2
+        hz = [h[2] for h in holes if h[0] <= um <= h[1]]
+        z0 = max([z_lo] + hz)
+        if top(um) - z0 < 0.1:
+            continue
+        nn = max(2, int((ub - ua) / 0.6))
         V = {}
-        nn = max(2, int((ub - ua) / 1.0))
+        zs_ = sorted({z0, *(p for p in LINER_PINS if z0 < p < z_hi)} | set(np.linspace(z0, z_hi, 22).tolist()))
         for i in range(nn + 1):
-            for j in range(m + 1):
-                u = ua + (ub - ua) * i / nn
-                v = j / m
-                z = za + (top(u) - za) * v
-                d = 0.20 + 0.025 * math.sin(math.pi * v)
-                V[i, j] = mb.bm.verts.new(M @ Vector((u, d, z)))
+            u = ua + (ub - ua) * i / nn
+            zt = top(u)
+            col = [z for z in zs_ if z < zt - 0.02] + [zt]
+            for j, z in enumerate(col):
+                V[i, j] = mb.bm.verts.new(M @ Vector((u, 0.202 + dz(z), z)))
+            V[i, "n"] = len(col)
         for i in range(nn):
-            for j in range(m):
+            m_ = min(V[i, "n"], V[i + 1, "n"])
+            for j in range(m_ - 1):
                 mb.face([V[i, j], V[i, j + 1], V[i + 1, j + 1], V[i + 1, j]], "plastic")
+        # traslapes verticales engrapados (pestaña de 5 cm, 2 mm por dentro de la manta)
+        u = ua + 0.61
+        while u < ub - 0.3:
+            zt = top(u)
+            col = [z for z in zs_ if z < zt - 0.02] + [zt]
+            A_ = [mb.bm.verts.new(M @ Vector((u - 0.025, 0.2045 + dz(z), z))) for z in col]
+            B_ = [mb.bm.verts.new(M @ Vector((u + 0.025, 0.2045 + dz(z), z))) for z in col]
+            for j in range(len(col) - 1):
+                mb.face([A_[j], A_[j + 1], B_[j + 1], B_[j]], "plastic")
+            u += 1.22
 
 
 def sprinklers(inter):
@@ -672,7 +703,8 @@ def dock(det):
     det.box((x0, y0 - 0.008, FFL - 0.10), (x1, y0 + 0.002, FFL + 0.004), "steel", bevel=0.002)      # ángulo de canto
     det.box((x0, y0 + 0.002, FFL - 0.006), (x1, y0 + 0.10, FFL + 0.004), "steel", bevel=0.001)
     for (cx, w) in DOORS:
-        for dx in (-w / 2 + 0.35, w / 2 - 0.35):           # defensas de hule laminado
+        for dx in (-1.15, 1.15):                            # defensas de hule laminado: dentro del ancho del remolque (2,44-2,6 m),
+                                                            # junto a los bordes del nivelador de 2 m (MHI / Blue Giant)
             bump = cl.MB()
             for k in range(8):
                 bump.box((-0.125, -0.115 + 0.0, 0.0 + k * 0.057), (0.125, 0.0, 0.052 + k * 0.057), "rubber", bevel=0.004)
@@ -718,6 +750,100 @@ def dock(det):
         z0 = max(zr(x), 0.02)
         det.cyl((x, rail_y, z0 - 0.02), (x, rail_y, z0 + 0.92), 0.024, seg=24, mat="paint_yellow")
         det.box((x - 0.06, rail_y - 0.06, z0), (x + 0.06, rail_y + 0.06, z0 + 0.008), "steel", bevel=0.002)
+
+
+STAIR_Y = (-2.9, -1.9)            # escalera de personal del andén (cabecera poniente): ancho libre entre zancas
+STAIR_PAD = (-21.45, -19.42, -3.15, -1.65)
+
+
+def _frame_x(p0, p1, up=(0, 1, 0)):
+    """Marco local: +x de p0 a p1, +y = up (proyectado), +z = x × y; origen en p0."""
+    X = (Vector(p1) - Vector(p0)).normalized()
+    Yv = (Vector(up) - X * X.dot(Vector(up))).normalized()
+    M = Matrix((X, Yv, X.cross(Yv))).transposed().to_4x4()
+    M.translation = Vector(p0)
+    return M
+
+
+def dock_stair(det):
+    """Escalera de acero de personal en la cabecera poniente del andén (IBC 1011: contrahuella <= 178 mm, huella >= 279 mm):
+    7 contrahuellas de 157 mm y huellas de 280 mm; zancas de canal MC 200 × 75 galvanizado con placa base anclada al descanso
+    de concreto y ángulos de conexión atornillados al canto del andén; peldaños de rejilla electrosoldada (soleras 30 × 3 a
+    30 mm, varilla Ø 6 a 100 mm) con nariz de placa antiderrapante y placas de apoyo atornilladas a las zancas; barandales de
+    tubo de 42 mm amarillo de seguridad a 0,90 m de las narices con curvas de radio real y prolongación de 0,30 m arriba y
+    abajo (pasamanos continuo) e intermedio a 0,45 m, postes atornillados por fuera de las zancas."""
+    ys0, ys1 = STAIR_Y
+    XT = DOCK[0]
+    zp = Z_GRAVEL + 0.04
+    N = 7
+    rr = (FFL - zp) / N
+    g = 0.28
+    xn = lambda k: XT - (N - k) * g                     # noqa: E731  nariz del peldaño k (1..N-1); el N es el andén
+    slope = rr / g
+    ang = math.degrees(math.atan2(rr, g))
+    # ---- zancas (canal MC 200 × 75 × 9,5, patines hacia afuera)
+    for yw, sg in ((ys0, -1), (ys1, 1)):
+        zb_ = lambda x: zp + rr + (x - xn(1)) * slope - 0.05   # noqa: E731  eje de la zanca bajo la línea de narices
+        xa = xn(1) - 0.06 - 0.10 / slope
+        xb = XT - 0.012
+        p0, p1 = (xa, yw, zb_(xa)), (xb, yw, zb_(xb))
+        M = _frame_x(p0, p1, up=(0, 0, 1))
+        L = (Vector(p1) - Vector(p0)).length
+        so = -sg                                          # z local = -y del mundo: el alma y los patines quedan por fuera
+        cl.rbox(det, (0.0, -0.10, min(0.0, so * 0.0095)), (L, 0.10, max(0.0, so * 0.0095)), "galvanized", r=0.002, m=M)
+        for zf in (-0.10, 0.10 - 0.011):
+            cl.rbox(det, (0.0, zf, min(0.0, so * 0.075)), (L, zf + 0.011, max(0.0, so * 0.075)), "galvanized", r=0.002, m=M)
+        # placa base al descanso y ángulo de conexión al canto del andén
+        cl.rbox(det, (xa - 0.02, yw - 0.09, zp), (xa + 0.24, yw + 0.09, zp + 0.012), "galvanized", r=0.003)
+        for (dx, dy) in ((0.03, -0.06), (0.03, 0.06), (0.20, -0.06), (0.20, 0.06)):
+            ce.hexnut(det, _T(xa + dx, yw + dy, zp + 0.012), d=0.016, mat="galvanized")
+        cl.rbox(det, (XT - 0.010, yw - 0.10, FFL - 0.30), (XT, yw + 0.10, FFL - 0.08), "galvanized", r=0.002)
+        cl.rbox(det, (XT - 0.10, min(yw, yw + sg * 0.010), FFL - 0.30), (XT, max(yw, yw + sg * 0.010), FFL - 0.08), "galvanized",
+                r=0.002)
+        for zz in (FFL - 0.25, FFL - 0.13):
+            for dy in (-0.06, 0.06):
+                ce.hexnut(det, _T(XT - 0.010, yw + dy, zz) @ _Ry(-90), d=0.016, mat="galvanized")
+    # ---- peldaños de rejilla con nariz antiderrapante y placas de apoyo
+    w = ys1 - ys0
+    for k in range(1, N):
+        zt = zp + k * rr
+        x0, x1 = xn(k), xn(k) + g + 0.025
+        nb = int((x1 - x0) / 0.030)
+        for i in range(nb + 1):                           # soleras portantes (a lo ancho, entre zancas)
+            xb_ = x0 + 0.012 + i * (x1 - x0 - 0.024) / nb
+            det.box((xb_ - 0.0015, ys0 + 0.006, zt - 0.030), (xb_ + 0.0015, ys1 - 0.006, zt), "galvanized", bevel=0.0004)
+        for j in range(int(w / 0.10)):                    # varilla transversal hundida a ras
+            yv = ys0 + 0.05 + j * 0.10
+            det.cyl((x0 + 0.004, yv, zt - 0.003), (x1 - 0.004, yv, zt - 0.003), 0.003, seg=12, mat="galvanized")
+        cl.rbox(det, (x0 - 0.002, ys0 + 0.006, zt - 0.032), (x0 + 0.032, ys1 - 0.006, zt + 0.0015), "steel", r=0.002)   # nariz
+        for j in range(int(w / 0.025)):                   # gajos del antiderrapante
+            yv = ys0 + 0.02 + j * 0.025
+            det.box((x0 + 0.004, yv - 0.004, zt + 0.0015), (x0 + 0.028, yv + 0.004, zt + 0.0035), "steel", bevel=0.0008)
+        for yw, sg in ((ys0, 1), (ys1, -1)):              # placas de apoyo atornilladas al alma de la zanca
+            cl.rbox(det, (x0, min(yw, yw + sg * 0.006), zt - 0.075), (x1, max(yw, yw + sg * 0.006), zt), "galvanized", r=0.002)
+            for xx in (x0 + 0.06, x1 - 0.06):
+                ce.hexnut(det, _T(xx, yw + sg * 0.006, zt - 0.045) @ (_Rx(-90) if sg > 0 else _Rx(90)), d=0.012, mat="galvanized")
+    # ---- barandales (pasamanos continuo con prolongaciones) y postes por fuera de las zancas
+    for yw, sg in ((ys0, -1), (ys1, 1)):
+        yr = yw + sg * 0.115
+        for hh, rad in ((0.90, 0.021), (0.45, 0.0168)):
+            P = [(xn(1) - 0.30, yr, zp + rr + hh), (xn(1), yr, zp + rr + hh), (XT, yr, FFL + hh), (XT + 0.30, yr, FFL + hh)]
+            P = [(P[0][0], yr, P[0][2] - 0.10)] + P + [(P[-1][0], yr, P[-1][2] - 0.10)] if hh > 0.5 else P
+            det.tube(cl.fillet(P, 0.09, 10), rad, seg=24, mat="paint_yellow")
+            for e in (P[0], P[-1]):
+                ce.lathe(det, [(0.0, 0.0), (rad, 0.0), (rad * 0.7, rad * 0.5), (0.0, rad * 0.6)], seg=24, mat="paint_yellow",
+                         M=_T(*e) @ (_Rx(180) if hh > 0.5 else (_Ry(-90) if e[0] < XT else _Ry(90))))
+        for k in (1, 4, N - 1):
+            xp = xn(k) + 0.14
+            zn = zp + rr + (xp - xn(1)) * slope
+            det.cyl((xp, yr, zn - 0.24), (xp, yr, zn + 0.90), 0.021, seg=24, mat="paint_yellow")
+            ce.lathe(det, [(0.0, 0.0), (0.021, 0.0), (0.0, 0.004)], seg=24, mat="paint_yellow", M=_T(xp, yr, zn - 0.24) @ _Rx(180))
+            cl.rbox(det, (xp - 0.05, min(yr, yw + sg * 0.075), zn - 0.22), (xp + 0.05, max(yr, yw + sg * 0.075), zn - 0.08),
+                    "paint_yellow", r=0.002)                # placa de fijación lateral sobre las puntas de los patines
+            for dx in (-0.032, 0.032):                       # tornillos pasados a la zanca (cabeza en la cara de la placa)
+                ce.hexnut(det, _T(xp + dx, yw + sg * 0.075, zn - 0.15) @ (_Rx(-90) if sg < 0 else _Rx(90)),
+                          d=0.012, mat="galvanized")
+    _proxy_box((xn(1) - 0.35, ys0 - 0.15, 0.0), (XT, ys1 + 0.15, FFL + 1.0))
 
 
 def bollard(det, x, y, z, h=1.07):
@@ -992,9 +1118,30 @@ def cctv(det, x, y0, z, rot=0.0):
     det.join(c, _T(x, y0, z) @ _Rz(rot))
 
 
+def _lp_clip(det, p, axis, nrm, r=0.0055):
+    """Grapa de cobre para el conductor de pararrayos (NFPA 780: sujeción a no más de 0,9 m): base de 2 mm atornillada con
+    dos pijas y abrazadera en arco sobre el cable. p: punto de la cara (lámina o techo) bajo el cable; axis: dirección del
+    cable; nrm: normal de la cara (hacia afuera)."""
+    X = Vector(axis).normalized()
+    Z = Vector(nrm).normalized()
+    Yv = Z.cross(X).normalized()
+    M = Matrix((X, Yv, Z)).transposed().to_4x4()
+    M.translation = Vector(p)
+    wb = r + 0.0205
+    cl.rbox(det, (-0.009, -wb, 0.0), (0.009, wb, 0.002), "copper", r=0.0008, m=M)
+    arc = [tuple(M @ Vector((0.0, (r + 0.003) * math.cos(t), 0.002 + r + (r + 0.0012) * math.sin(t))))
+           for t in np.linspace(0.0, math.pi, 13)]
+    det.tube(arc, 0.0012, seg=12, mat="copper")
+    for e in (-1, 1):
+        ce.lathe(det, [(0.0, 0.0), (0.0045, 0.0), (0.0042, 0.0012), (0.003, 0.002), (0.0, 0.0022)], seg=24, mat="steel",
+                 M=M @ _T(0, e * (r + 0.0135), 0.002))
+
+
 def lightning(det):
-    """Protección contra rayos (almacén de explosivos): puntas de cobre de 0,6 m sobre el caballete y en los extremos con
-    bases, conductor de cobre trenzado sobre soportes y bajadas a los registros de tierra en dos esquinas."""
+    """Protección contra rayos (almacén de explosivos): puntas de cobre de 0,6 m sobre el caballete con bases atornilladas,
+    conductor de cobre trenzado sobre el caballete; en cada extremo baja por la charola junto al remate de hastial, dobla
+    sobre el remate y baja PEGADO a la lámina del hastial con grapas de cobre a cada 0,9 m (NFPA 780 §4.10), con tubo
+    protector de PVC en los últimos 1,8 m y entra al registro de prueba de la varilla de tierra al pie del muro."""
     ym = (WY0 + WY1) / 2
     zr = roof_z(ym) + 0.10
     xs = np.linspace(WX0 + 0.3, WX1 - 0.3, 6)
@@ -1003,24 +1150,54 @@ def lightning(det):
         det.cyl((x, ym, zr + 0.03), (x, ym, zr + 0.60), 0.008, seg=24, mat="copper")
         ce.lathe(det, [(0.0, 0.0), (0.008, 0.0), (0.0, 0.03)], seg=24, mat="copper", M=_T(x, ym, zr + 0.60))
     det.tube([(xs[0], ym, zr + 0.05), (xs[-1], ym, zr + 0.05)], 0.0055, seg=14, mat="copper")
-    for (x, yw, sy) in ((WX0 - 0.04, WY0, -1), (WX1 + 0.04, WY1, 1)):
-        pts = [(x if abs(x - xs[0]) > 1 else xs[0], ym, zr + 0.05), (x, ym + sy * 0.5, roof_z(ym + sy * 0.5) + 0.06),
-               (x, yw + sy * 0.12, roof_z(yw) + 0.03), (x, yw + sy * 0.12, EAVE - 0.4), (x, yw + sy * 0.12, 0.3),
-               (x, yw + sy * 0.6, 0.05), (x, yw + sy * 0.9, 0.05)]
-        det.tube(cl.fillet(pts, 0.15, 6), 0.0055, seg=14, mat="copper")
-        det.cyl((x, yw + sy * 0.9, 0.0), (x, yw + sy * 0.9, 0.06), 0.13, seg=40, mat="plastic")
+    rc = 0.0055
+    for (xw, sx, yd, sy) in ((WX0, -1, WY0 + 0.60, -1), (WX1, 1, WY1 - 0.60, 1)):
+        xf = xw + sx * (RIB_T + 0.0008)                    # crestas de la lámina del hastial
+        xc = xf + sx * (0.002 + rc)                        # eje del cable sobre las grapas
+        xin = xw - sx * 0.20                               # sobre la charola, 0,35 m dentro de la orilla del techo
+        xo = xw + sx * 0.335                               # por fuera del remate de hastial
+        zt = roof_z(yd)
+        pts = [(xs[0] if sx < 0 else xs[-1], ym, zr + 0.05), (xin, ym + sy * 0.4, roof_z(ym + sy * 0.4) + 0.0032 + rc),
+               (xin, yd - sy * 0.35, roof_z(yd - sy * 0.35) + 0.0032 + rc), (xw + sx * 0.10, yd, zt + 0.07),
+               (xo, yd, zt + 0.02), (xo, yd, zt - 0.20), (xc, yd, zt - 0.40), (xc, yd, 0.32), (xc + sx * 0.18, yd, 0.08),
+               (xc + sx * 0.55, yd, 0.06)]
+        det.tube(cl.fillet(pts, 0.06, 8), rc, seg=14, mat="copper")
+        # grapas sobre la charola (cada 0,9 m) y sobre la lámina del hastial
+        ya, yb = ym + sy * 0.4, yd - sy * 0.35
+        n = max(1, int(abs(yb - ya) / 0.9))
+        for k in range(n + 1):
+            y = ya + (yb - ya) * k / n
+            _lp_clip(det, (xin, y, roof_z(y) + 0.0012), (0, 1, 0), (0, -sy * SLOPE, 1))
+        for z in np.arange(2.3, zt - 0.5, 0.9):
+            _lp_clip(det, (xf, yd, z), (0, 0, 1), (sx, 0, 0))
+        # tubo protector de PVC gris en el tramo bajo (1,8 m), con sus abrazaderas
+        rp = 0.0125
+        xp = xf + sx * (0.002 + rp)
+        det.cyl((xp, yd, 0.30), (xp, yd, 1.95), rp, seg=24, mat="plastic")
+        ce.lathe(det, [(0.0, 0.0), (rp + 0.001, 0.0), (rp + 0.001, 0.012), (0.0, 0.012)], seg=24, mat="plastic",
+                 M=_T(xp, yd, 1.95))
+        for z in (0.55, 1.15, 1.75):
+            _lp_clip(det, (xf, yd, z), (0, 0, 1), (sx, 0, 0), r=rp)
+        # registro de prueba de la varilla de tierra (caja redonda de polímero al ras de la grava, tapa con dos tornillos)
+        xg = xc + sx * 0.62
+        ce.lathe(det, [(0.0, -0.10), (0.125, -0.10), (0.13, 0.04), (0.145, 0.05), (0.145, 0.075), (0.0, 0.075)], seg=40,
+                 mat="plastic", M=_T(xg, yd, 0.0))
+        for e in (-1, 1):
+            ce.lathe(det, [(0.0, 0.0), (0.008, 0.0), (0.007, 0.003), (0.0, 0.004)], seg=24, mat="steel",
+                     M=_T(xg, yd + e * 0.09, 0.075))
+        text_font(det, "GROUND", 0.025, 0.0006, "plastic", M=_T(xg, yd, 0.0752), font="sign", res=3)
 
 
 def exterior_services(det, r):
     """Medidor y desconectador con tubo conduit, gabinete de extintor rojo, letreros esténcil en el muro de concreto y en
     lámina, arbotantes sobre cada puerta, cámaras en esquinas, un par de impactos de bala (pintura saltada) en la lámina."""
     y0 = WY0 - RIB_T
-    for (cx, w) in DOORS:
-        wall_pack(det, cx, y0, FFL + DOOR_H + 0.95)
-    wall_pack(det, PDOOR_X, y0, FFL + PDOOR_H + 0.75)
+    for (cx, w) in DOORS:                                  # cortinas montadas por dentro: nada tapa el arbotante sobre el vano
+        wall_pack(det, cx, y0, FFL + DOOR_H + 0.55)
+    wall_pack(det, PDOOR_X - 1.05, y0, FFL + PDOOR_H + 0.20)   # junto a la puerta, fuera de la sombra de la marquesina
     wall_pack(det, WX1 - 4.0, y0, 5.6)
-    cctv(det, WX0 + 0.4, y0, 6.4, rot=-25)
-    cctv(det, WX1 - 0.4, y0, 6.4, rot=25)
+    cctv(det, WX0 + 1.0, y0, 6.4, rot=-25)                # a 0,75 m de la bajada pluvial de la esquina
+    cctv(det, WX1 - 1.0, y0, 6.4, rot=25)
     # esténciles pintados sobre el muro de concreto (letras de 0,14 m, 1 mm de relieve de pintura)
     M = _T(0, y0 - 0.0005, 0) @ _Rx(90)
     for (txt, x, z, s) in (("AUTHORIZED PERSONNEL ONLY", 2.4, 1.85, 0.16), ("NO SMOKING", 6.6, 1.85, 0.16),
@@ -1184,7 +1361,9 @@ def site_ground(det, r):
     slab(GATE[0] + h, GATE[1] - h, CY0 - 0.8, ay0, Z_GRAVEL + 0.04)
     slab(RAMP[1], RAMP[1] + 1.6, -2.6, 0.0, Z_GRAVEL + 0.04, panel=2.0)
     slabs.append((WX0 - 0.1, WX1 + 0.1, WY0 - 0.1, WY1 + 0.1))
-    slabs.append((DOCK[0], RAMP[1], min(DOCK[2], RAMP[2]), 0.0))
+    slabs.append((DOCK[0], DOCK[1], DOCK[2], 0.0))
+    slabs.append((RAMP[0], RAMP[1], RAMP[2], 0.0))
+    slab(STAIR_PAD[0], STAIR_PAD[1], STAIR_PAD[2], STAIR_PAD[3], Z_GRAVEL + 0.04, panel=2.0)   # descanso al pie de la escalera
     # grava
     g0x, g1x, g0y, g1y = CX0 + 0.02, CX1 - 0.02, CY0 + h - 0.01, CY1 - 0.02
     step = 0.25
@@ -1287,6 +1466,116 @@ def cfg_mil2(bid="MIL_2_avanzada"):
                 lookdev=dict(base_z=0.0, graffiti_mats=(), wear=0.12, band=None))
 
 
+FLOOD_M = _T(5.6, -7.6, 0.0) @ _Rz(-128)          # reflector en trípode de MIL_2 (apunta al mostrador)
+
+
+def plywood_sign():
+    """Letrero de triplay de 1,2 × 0,6 m (18 mm, cantos lijados) con letras de esténcil blancas SUPPLY, leyenda y flecha hacia
+    el mostrador, amarrado con cinchos negros a la malla del HESCO (pasan por encima de los cantos). Origen: centro de la cara
+    de atrás al pie (z = 0); cara a -Y; la flecha apunta a -X."""
+    mb = cl.MB()
+    t = 0.018
+    z0, z1 = 0.47, 1.07
+    cl.rbox(mb, (-0.6, -t, z0), (0.6, 0.0, z1), "plywood", r=0.003)
+    M = _T(0, -t - 0.0002, 0) @ _Rx(90)
+    text_font(mb, "SUPPLY", 0.17, 0.0008, "sign_white", M=M @ _T(0.02, 0.83, 0), font="stencil", res=4)
+    text_font(mb, "AMMO  -  GEAR  -  PARTS", 0.045, 0.0008, "sign_white", M=M @ _T(0.02, 0.70, 0), font="stencil2", res=3)
+    arrow = [(0.22, 0.555), (-0.10, 0.555), (-0.10, 0.525), (-0.22, 0.575), (-0.10, 0.625), (-0.10, 0.595), (0.22, 0.595)]
+    F = [mb.bm.verts.new((x, -t - 0.0010, z)) for (x, z) in arrow]
+    B = [mb.bm.verts.new((x, -t + 0.0002, z)) for (x, z) in arrow]
+    mb.face(F, "sign_white")
+    mb.face(list(reversed(B)), "sign_white")
+    for i in range(len(arrow)):
+        j = (i + 1) % len(arrow)
+        mb.face([F[i], F[j], B[j], B[i]], "sign_white")
+    for xz in (-0.5, 0.5):                                 # cinchos por encima de los cantos, hasta la malla de atrás
+        for zt, sz in ((z1, 1), (z0, -1)):
+            P = [(xz, -t - 0.0025, zt - sz * 0.035), (xz, -t - 0.0025, zt + sz * 0.003), (xz, 0.025, zt + sz * 0.003),
+                 (xz, 0.025, zt - sz * 0.035), (xz, -t - 0.0025, zt - sz * 0.036)]
+            mb.tube(cl.fillet(P, 0.004, 3), 0.0021, seg=12, mat="polymer")
+            cl.rbox(mb, (xz - 0.006, -t - 0.0105, zt - sz * 0.03 - 0.005), (xz + 0.006, -t - 0.0025, zt - sz * 0.03 + 0.005),
+                    "polymer", r=0.0015)
+    return mb
+
+
+def _flood_plug():
+    """Punta y dirección de la clavija del cable del reflector (misma cuenta que fortif_equipo.floodlight_tripod), en las
+    coordenadas de MIL_2."""
+    k = 72
+    a = math.pi + 2 * math.pi * k / 24
+    rr_ = 0.15 + 0.012 * math.sin(k * 0.7) + 0.01 * (k / 24)
+    zz = 0.0045 + 0.009 + 0.003 * max(0.0, math.sin(a + k * 0.05))
+    end = Vector((0.9 + rr_ * math.cos(a), 0.42 + rr_ * math.sin(a) * 0.92, zz))
+    t1, t2 = end + Vector((0.06, -0.05, -0.008)), end + Vector((0.14, -0.06, -0.011))
+    dd = (t2 - t1).normalized()
+    tip = t2 + Vector((0, 0, 0.012))
+    return FLOOD_M @ tip, (FLOOD_M.to_3x3() @ dd).normalized()
+
+
+def generator_power(GX, GY):
+    """Instalación del generador: cable de uso rudo (SOOW 10/3, Ø 17 mm) del tablero de cargas al reflector (conector hembra
+    acoplado a la clavija de su rollo) y a la serie de focos (sube por el testero cerrado y entra por una manga de lona con
+    cordón), tendidos juntos por el piso con su curvatura; protector de cable de dos canales (hule negro, tapa amarilla) en el
+    paso del testero; varilla de tierra de cobre Ø 16 con conector de bellota y cable verde al borne GROUND."""
+    mb = cl.MB()
+    rc = 0.0085
+    xd, yd = GX + 0.70, GY + 0.21                        # puerta del tablero de cargas (cara +X del generador)
+    tip, dd = _flood_plug()
+    F0 = tip + dd * 0.038
+    F1 = tip + dd * 0.118
+    out = Vector((dd.x, dd.y, 0)).normalized()
+    # conector hembra acoplado a la clavija del reflector
+    Mf = Matrix(_frame_x(tuple(F0), tuple(F1), up=(0, 0, 1)))
+    ce.lathe(mb, [(0.0, 0.0), (0.021, 0.0), (0.023, 0.006), (0.023, 0.058), (0.019, 0.07), (0.011, 0.08), (0.0, 0.08)], seg=32,
+             mat="rubber", M=Mf @ _Ry(90))
+    for (yoff, zf_, route) in ((0.0, 0.17, "flood"), (0.045, 0.20, "lights")):
+        P = [(xd + 0.005, yd + yoff, zf_), (xd + 0.10, yd + yoff, zf_ - 0.03), (xd + 0.24, yd + yoff - 0.03, rc),
+             (5.85, GY - 0.10 + yoff, rc), (6.05 + yoff, 3.6, rc + 0.002)]
+        if route == "flood":
+            P += [(6.05, -1.40, rc), (6.05, -1.55, 0.03), (6.05, -2.45, 0.03), (6.05, -2.60, rc), (5.95, -5.5, rc),
+                  tuple(F1 + out * 0.45 + Vector((0, 0, rc - F1.z))), tuple(F1 + out * 0.12), tuple(F1)]
+        else:
+            P += [(6.10, 1.20, rc), (5.75, 0.62, rc), (5.02, 0.66, rc), (4.97, 0.80, 0.25), (4.95, 1.18, 1.85), (4.98, 1.30, 2.06),
+                  (5.03, 1.30, 2.10), (4.80, 1.30, 2.10), (4.70, 1.28, 2.16), (4.62, 0.90, 2.62), (4.52, 0.38, 2.90),
+                  (4.32, 0.06, 2.94)]
+        mb.tube(cl.fillet(P, 0.12, 8), rc, seg=16, mat="cable")
+    # manga de lona en el testero (sale 0,17 m) con su cordón
+    ce.lathe(mb, [(0.0, 0.0), (0.036, 0.0), (0.035, 0.09), (0.0245, 0.14), (0.026, 0.165), (0.0, 0.17)], seg=24, mat="canvas",
+             M=_T(4.86, 1.30, 2.10) @ _Ry(90))                 # manga fruncida por el cordón alrededor del cable
+    ring = [(5.0, 1.30 + 0.027 * math.cos(a), 2.10 + 0.027 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 17)]
+    mb.tube(ring, 0.0025, seg=12, mat="canvas")
+    mb.tube([(5.0, 1.30, 2.076), (5.004, 1.31, 1.99), (5.0, 1.325, 1.93)], 0.002, seg=12, mat="canvas")
+    # conector del extremo de la serie de focos
+    ce.lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.018, 0.01), (0.018, 0.06), (0.0, 0.06)], seg=24, mat="rubber",
+             M=_T(4.32, 0.06, 2.94) @ _Ry(-90))
+    # protector de cable de dos canales a lo largo del cable en el paso del testero (y -2,45 .. -1,55)
+    prof = [(-0.25, 0.0), (0.25, 0.0), (0.25, 0.006), (0.13, 0.048), (-0.13, 0.048), (-0.25, 0.006)]
+    for (ya, yb, mat_, pr) in ((-2.45, -1.55, "rubber", prof),
+                               (-2.44, -1.56, "paint_yellow", [(-0.125, 0.048), (0.125, 0.048), (0.12, 0.054), (-0.12, 0.054)])):
+        A_ = [mb.bm.verts.new((6.05 + u, ya, z)) for (u, z) in pr]
+        B_ = [mb.bm.verts.new((6.05 + u, yb, z)) for (u, z) in pr]
+        for i in range(len(pr)):
+            j = (i + 1) % len(pr)
+            mb.face([A_[i], A_[j], B_[j], B_[i]], mat_)
+        mb.face(list(reversed(A_)), mat_)
+        mb.face(B_, mat_)
+    for k in range(9):                                   # estrías antiderrapantes de las rampas
+        yk = -2.40 + k * 0.1
+        for sgn in (-1, 1):
+            mb.box((6.05 + sgn * 0.19 - 0.05, yk - 0.008, 0.026 - sgn * 0.0), (6.05 + sgn * 0.19 + 0.05, yk + 0.008, 0.030), "rubber",
+                   bevel=0.002)
+    # varilla de tierra con conector de bellota y cable verde al borne GROUND (cara +X, 0,25 m hacia -y)
+    xr_, yr_ = GX + 1.05, GY - 0.45
+    mb.cyl((xr_, yr_, -0.30), (xr_, yr_, 0.15), 0.008, seg=24, mat="copper")
+    ce.lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.018, 0.012), (0.017, 0.03), (0.011, 0.045), (0.0, 0.048)], seg=24, mat="brass",
+             M=_T(xr_, yr_, 0.09))
+    ce.hexnut(mb, _T(xr_ + 0.017, yr_, 0.115) @ _Ry(90), d=0.012, mat="brass")
+    G = [(GX + 0.74, GY - 0.25, 0.24), (GX + 0.82, GY - 0.27, 0.19), (GX + 0.95, GY - 0.37, 0.012), (xr_ - 0.03, yr_ + 0.01, 0.03),
+         (xr_ - 0.004, yr_, 0.115)]
+    mb.tube(cl.fillet(G, 0.05, 6), 0.0045, seg=12, mat="sign_green")
+    return mb
+
+
 def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     """Puesto de avanzada: tienda de marco (frente largo enrollado al -y) sobre tarima de triplay, mostrador de cajas con la
     caja de dinero, armeros con fusiles, anaqueles de latas y cajas, tablero con fundas y chalecos, mesa con cargadores y
@@ -1302,8 +1591,8 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
         if solid:
             _proxy(piece, M)
         (mb or furn).join(piece, M)
-    put(_fn("frame_tent", cp)(L=TENT_L, W=TENT_W, seed=int(r.integers(1e6)), open_front=True, rolled_sides=("front",)), Matrix(), mb=det,
-        solid=False)
+    put(_fn("frame_tent", cp)(L=TENT_L, W=TENT_W, seed=int(r.integers(1e6)), open_front=True, rolled_sides=("front",), ridge_guy=2.0),
+        Matrix(), mb=det, solid=False)    # viento de cumbrera del testero cerrado a 2 m: libra los muros T del frente de MIL_1
     for (a, b) in (((-TENT_L / 2 - 0.1, TENT_W / 2 - 0.05), (TENT_L / 2 + 0.1, TENT_W / 2 + 0.25)),
                    ((-TENT_L / 2 - 0.25, -TENT_W / 2), (-TENT_L / 2 + 0.05, TENT_W / 2)),
                    ((TENT_L / 2 - 0.05, -TENT_W / 2), (TENT_L / 2 + 0.25, TENT_W / 2))):
@@ -1366,7 +1655,7 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
         LIGHTS.append([round(float(x), 3), 0.0, 2.85])
     # letrero SUPPLY
     # letrero colgado de la orilla del mostrador, al frente de las cajas: se lee desde el paso y no queda a la altura de la cabeza
-    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6), _T(-1.2, -2.755, zf + 0.909), solid=False)
+    put(_fn("hanging_sign", cp)("SUPPLY", 0.9, seed=6, ink="sign_white"), _T(-1.2, -2.755, zf + 0.909), solid=False)
     if ft is None:
         return
     # HESCO en las esquinas del frente y costales al fondo y en los testeros
@@ -1375,14 +1664,18 @@ def outpost(furn, det, r, standalone=True, per=None, cargo=None):
     put(ft.sandbag_wall(TENT_L - 0.4, rows=4, seed=int(r.integers(1e6))), _T(-TENT_L / 2 + 0.2, TENT_W / 2 + 0.55, 0.0), mb=per)
     for xs, sg in ((-TENT_L / 2 - 0.55, -1), (TENT_L / 2 + 0.55, 1)):
         put(ft.sandbag_wall(2.0, rows=3, seed=int(r.integers(1e6))), _T(xs, TENT_W / 2 - 0.2, 0.0) @ _Rz(-90), mb=per)
-    # generador táctico con bidones, reflector en trípode
-    put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(1.2, TENT_W / 2 + 1.7, 0.0) @ _Rz(180))   # entre dos vientos
-    for k in range(3):
-        put(_fn("jerry_can", ft)(seed=k, color="od" if k != 1 else "tan"), _T(4.0 + k * 0.2, TENT_W / 2 + 1.35, 0.0) @ _Rz(90))
-    put(_fn("floodlight_tripod", ft)(seed=7), _T(5.6, -7.6, 0.0) @ _Rz(-128))     # apunta al mostrador, libre de los vientos
+    # letrero alto de triplay amarrado a la cara de afuera del HESCO del sur: se lee desde el portón y apunta al mostrador
+    det.join(plywood_sign(), _T(TENT_L / 2 + 1.3 - 1.06, -TENT_W / 2 - 7.35 - 0.588, 0.0))
+    # generador táctico a 3 m de la pared de atrás (escape vertical hacia afuera), bidones aparte, varilla de tierra, cables al
+    # reflector y a la serie de focos (manga de cable en el testero cerrado), protector de cable en el paso del testero
+    GX, GY = 1.2, TENT_W / 2 + 3.0
+    put(_fn("tactical_generator", ft)(seed=int(r.integers(1e6))), _T(GX, GY, 0.0))     # frente de servicio (-y) hacia la tienda
+    for k in range(7):
+        put(_fn("jerry_can", ft)(seed=k if k < 3 else 7 + k, color="tan" if k % 2 else "od"),
+            _T(-0.55 + (k % 4) * 0.2, GY + (0.22 if k < 4 else -0.22), 0.0) @ _Rz(90))
+    put(_fn("floodlight_tripod", ft)(seed=7), FLOOD_M)     # apunta al mostrador, libre de los vientos
     LIGHTS.append([5.6, -7.6, 1.98])
-    for k in range(4):
-        put(_fn("jerry_can", ft)(seed=10 + k, color="tan" if k % 2 else "od"), _T(3.4 + k * 0.2, -TENT_W / 2 - 0.9, 0.0) @ _Rz(90))
+    det.join(generator_power(GX, GY))
     if hasattr(ft, "camo_net"):
         # red centrada en el mostrador: orilla de atrás a 0,45 m del alero, sin vientos hacia la tienda ni amarres al frente, y
         # sin postes a media orilla (solo esquinas, medios costados y los dos separadores, que flanquean el paso de clientes)
@@ -1412,8 +1705,8 @@ def build_mil2(bid="MIL_2_avanzada", collection_root=None, dress_on=True, **kw):
 
 def perimeter(det, towers, r):
     """Muros T de concreto (3,66 m) al poniente, al fondo y al oriente; torre de vigilancia en la esquina del frente poniente;
-    torres de luz; pluma de acceso y chicana de barreras Jersey afuera del portón; HESCO MIL7 tras la malla del frente y un
-    puesto de tirador de costales junto al portón."""
+    torres de luz; punto de control vehicular afuera del portón (canal, serpentín, pluma y puesto de guardia); HESCO MIL7 tras
+    la malla del frente, muros T entre la malla y la tienda de munición y un puesto de tirador de costales junto al portón."""
     ft = _mod("fortif")
     if ft is None:
         return
@@ -1434,12 +1727,45 @@ def perimeter(det, towers, r):
     put(_fn("light_tower", ft)(seed=4), _T(18.5, 8.0, 0.0) @ _Rz(-90), mb=towers)    # patio oriente, reflectores hacia la nave
     put(_fn("light_tower", ft)(seed=5), _T(19.8, -16.5, 0.0) @ _Rz(-90), mb=towers)
     LIGHTS.extend([[18.5, 8.0, 9.0], [19.8, -16.5, 9.0]])
-    put(_fn("drop_arm_barrier", ft)(L=6.4, seed=6), _T(GATE[0] - 0.35, CY0 - 1.6, 0.0))
-    for k, (x, y) in enumerate(((-17.8, -24.0), (-14.6, -24.0), (-9.6, -27.0), (-6.4, -27.0))):
-        put(ft.jersey_barrier(3.0, seed=10 + k), _T(x, y, 0.0))
+    ecp(det, put, ft)
     put(ft.hesco_run(3, "MIL7", seed=7), _T(-23.0, -18.6, 0.0))
-    # puesto de tirador: la cara cerrada mira al frente (la malla y el acceso de afuera); la entrada, hacia el almacén
-    put(ft.sandbag_ring(radius=1.1, rows=4, seed=8, opening_deg=60.0), _T(-6.0, -17.6, Z_GRAVEL) @ _Rz(180), solid=True)
+    # puesto de tirador junto al portón (adentro): muro doble de sacos a la altura del pecho (FM 5-103); la cara cerrada mira
+    # al frente (la malla y el acceso de afuera); la entrada, hacia el almacén
+    put(ft.sandbag_ring(radius=1.25, rows=12, seed=8, opening_deg=60.0, thickness="double", lod_top=2),
+        _T(-5.5, -17.7, Z_GRAVEL) @ _Rz(180), solid=True)
+    # muro de muros T detrás de la malla del frente, entre la malla y el testero cerrado de la tienda de munición (MIL_2): la
+    # malla ciclónica no detiene esquirlas ni deja de mostrar lo que hay detrás
+    for k in range(9):
+        put(ft.t_wall(seed=20 + k % 4), _T(TW_X0 + k * 1.52, TW_Y, 0.0))
+
+
+TW_X0, TW_Y = 3.0, CY0 + 0.15 + 0.686 + 0.03     # muros T del frente (cara exterior hacia -y, junto a la guarnición)
+ECP_X = (-15.5, -6.5)                           # ejes de los muros del canal del punto de control vehicular
+ECP_ARM_Y = CY0 - 7.6                           # pluma: 7,45 m de zona de revisión hasta la guarnición del portón
+
+
+def ecp(det, put, ft):
+    """Punto de control vehicular afuera del portón (UFC 4-022-01, en chico): canal de barreras Jersey de 8,4 m entre caras
+    (6 por lado, conectadas pin-and-loop) que nace en la malla, de modo que al portón solo se llega por el canal; dentro,
+    serpentín de dos tramos de 4,9 m que salen alternados de cada muro y se traslapan 1,7 m (ningún carril recto: el vehículo
+    tiene que hacer una S lenta con 3,3 m de paso), pluma de 7,6 m a 7,45 m de la guarnición (zona de revisión de un vehículo
+    con su gente alrededor) y puesto de guardia de costales junto al gabinete de la pluma, del lado de adentro."""
+    jb = [ft.jersey_barrier(3.0, seed=10 + k) for k in range(4)]
+    js = [ft.jersey_barrier(2.44, seed=30 + k) for k in range(2)]
+    yt = CY0 - CURB_W / 2 - 0.30                       # primera barrera: arranca junto a la guarnición
+    pitch = 3.05
+    for i, xw in enumerate(ECP_X):
+        for k in range(6):
+            put(jb[(k + 2 * i) % 4], _T(xw, yt - k * pitch, 0.0) @ _Rz(-90))
+    xl, xr = ECP_X[0] + 0.305, ECP_X[1] - 0.305       # caras interiores del canal
+    y1, y2 = ECP_ARM_Y - 3.0, ECP_ARM_Y - 8.4
+    for k in range(2):                                 # tramo 1: sale del muro poniente (paso por el oriente)
+        put(js[k], _T(xl + 0.10 + k * 2.49, y1, 0.0))
+    for k in range(2):                                 # tramo 2: sale del muro oriente (paso por el poniente)
+        put(js[1 - k], _T(xr - 0.10 - k * 2.49, y2, 0.0) @ _Rz(180))
+    put(_fn("drop_arm_barrier", ft)(L=7.6, seed=6), _T(xl + 0.35, ECP_ARM_Y, 0.0))
+    put(ft.sandbag_ring(radius=1.0, rows=12, seed=9, opening_deg=60.0, thickness="double", lod_top=2),
+        _T(xl + 1.75, ECP_ARM_Y + 2.0, 0.0) @ _Rz(180), solid=True)
 
 
 LOD_RACK = {}                     # se llena con lod=1 si kit.municion lo acepta (carga de racks ligera: ~2 M en vez de 12 M)
@@ -1557,6 +1883,7 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     floor_slab(inter)
     sprinklers(inter)
     dock(det)
+    dock_stair(det)
     for k, (cx, w) in enumerate(DOORS):
         door_frame(det, cx, w)
         rollup_door(det, cx, w, seed=k + 3, damaged=(k == 1))

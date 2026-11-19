@@ -462,7 +462,7 @@ def verificar():
 def colocar(bid, ubicacion=None, yaw=0.0, con_escombro=True, etiqueta=None):
     """Pone el edificio: actor BLK_<ID>_Estructura (raíz) + Detalle, Mobiliario, Perimetro, Malla, Carga (si los trae), Vidrio,
     Escombro y Colision enganchados a él. Sin Estructura (MIL_2_avanzada) la raíz es el Detalle. Para poner el puesto de
-    avanzada junto al almacén: colocar("MIL_2_avanzada", ubicacion_del_almacen + (950, 1140, 0) cm en ejes de Unreal
+    avanzada junto al almacén: colocar("MIL_2_avanzada", ubicacion_del_almacen + (950, 1110, 6) cm en ejes de Unreal
     (Y de Unreal = -Y de Blender), girada 90° respecto del almacén para que el mostrador mire al portón: en Blender va
     a −90° en z; el cambio de mano del importador invierte el signo (yaw del almacén + 90). Compruébalo con
     comun/geometria/SM_BLK_Ejes.glb: el mostrador debe quedar viendo hacia el portón, no hacia el muro."""

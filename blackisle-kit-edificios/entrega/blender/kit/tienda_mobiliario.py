@@ -2306,12 +2306,13 @@ def _screw_eye(mb, M, r_eye=0.009, rw=0.0022, shank=0.03, mat="galvanized"):
     _lathe(mb, prof, M, mat, seg=12)
 
 
-def hanging_sign(text="SUPPLY", w=0.9, seed=0):
+def hanging_sign(text="SUPPLY", w=0.9, seed=0, ink="paint_od"):
     """Letrero de tabla pintado a mano: tabla de pino de 1×10" (19 × 220 mm) con veta en relieve (vetas tardías levantadas por
     la intemperie, dos nudos), cantos redondeados y gastados con mellas; letras de esténcil (Saira Stencil) aplicadas a mano
     (cada una con su giro, altura y tamaño un poco distintos), filete pintado alrededor y leyenda chica; dos armellas en el
     canto superior, cadena galvanizada de eslabón ovalado que sube a un gancho S común. Origen: punto de cuelgue (z = 0, la
-    cara interior del gancho S, p. ej. sobre el larguero del alero); la tabla cuelga 0,30 m abajo, cara a -Y."""
+    cara interior del gancho S, p. ej. sobre el larguero del alero); la tabla cuelga 0,30 m abajo, cara a -Y.
+    ink: pintura de las letras y del filete (blanca para que se lea sobre la madera oscura)."""
     r = rng(seed)
     mb = MB()
     hgt, th = 0.22, 0.019
@@ -2361,14 +2362,14 @@ def hanging_sign(text="SUPPLY", w=0.9, seed=0):
             continue
         x = cx + _jit(r, 0.003)
         Ml = _T(x, yfc, zb + hgt * 0.36 + _jit(r, 0.004)) @ _Rx(90) @ _Rz(_jit(r, 2.5))
-        text_font(mb, ch, size * (1 + _jit(r, 0.035)), 0.0009, "paint_od", Ml, font="stencil", res=3)
-    text_font(mb, "AMMO  -  GEAR  -  PARTS", 0.022, 0.0009, "paint_od", _T(_jit(r, 0.004), yfc, zb + hgt * 0.13) @ _Rx(90) @ _Rz(_jit(r, 1.0)),
+        text_font(mb, ch, size * (1 + _jit(r, 0.035)), 0.0009, ink, Ml, font="stencil", res=3)
+    text_font(mb, "AMMO  -  GEAR  -  PARTS", 0.022, 0.0009, ink, _T(_jit(r, 0.004), yfc, zb + hgt * 0.13) @ _Rx(90) @ _Rz(_jit(r, 1.0)),
               font="stencil2", res=2)
     # filete pintado a 14 mm del canto (marco de una pieza)
     from kit.clinic_servicios import rrframe
     m_ = 0.014
     rrframe(mb, _T(0, yfc + 0.0003, zb + hgt / 2) @ _Rx(90), (0.0, 0.0, w - 2 * m_ + 0.005, hgt - 2 * m_ + 0.005, 0.003),
-            (0.0, 0.0, w - 2 * m_ - 0.005, hgt - 2 * m_ - 0.005, 0.001), 0.0012, re_o=0.0003, re_i=0.0003, n=2, ne=1, mat="paint_od")
+            (0.0, 0.0, w - 2 * m_ - 0.005, hgt - 2 * m_ - 0.005, 0.001), 0.0012, re_o=0.0003, re_i=0.0003, n=2, ne=1, mat=ink)
     # armellas, cadena y gancho S
     ze = zb + hgt
     for sx in (-1, 1):
