@@ -49,9 +49,11 @@ def dedupe(objs, passes=5, **kw):
     return tuple(tot)
 
 
-def dedupe_pass(objs, tol=0.0012, eps=0.0015, min_area=1e-5, push=0.003, log=print):
+def dedupe_pass(objs, tol=0.0012, eps=0.0015, min_area=1e-5, push=0.003, relief=0.00025, log=print):
     """Borra de `objs` (mallas en coordenadas de mundo = locales; los objetos del kit no llevan transformación) las caras cubiertas
-    por completo por otra coplanar del mismo sentido y hunde las parcialmente cubiertas. Devuelve (borradas, área borrada, hundidas)."""
+    por completo por otra coplanar del mismo sentido y hunde las parcialmente cubiertas. Devuelve (borradas, área borrada, hundidas).
+    `relief`: separación a partir de la cual el par no es coplanar sino un relieve (letra de 0,8 mm sobre su placa): nunca se
+    borra ni se hunde la cara de delante (antes se actuaba sobre la menor y las letras en relieve perdían su cara frontal)."""
     bms, trees = [], []
     for o in objs:
         bm = bmesh.new()
@@ -72,19 +74,37 @@ def dedupe_pass(objs, tol=0.0012, eps=0.0015, min_area=1e-5, push=0.003, log=pri
             c = f.calc_center_median()
             for j, tr in enumerate(trees):
                 hit = None
-                for start, dist in ((c + n * 0.0005, tol + 0.0005), (c - n * 0.00002, tol)):
+                gap = 0.0
+                for start, dist, off in ((c + n * 0.0005, tol + 0.0005, -0.0005), (c - n * 0.00002, tol, 0.00002)):
                     loc, nrm, idx, dd = tr.ray_cast(start, -n, dist)
                     if idx is None or (j == k and idx == f.index) or idx in kill[j]:
                         continue
                     if bms[j].faces[idx].normal.dot(n) > 0.995:
                         hit = idx
+                        gap = dd + off                    # > 0: G queda detrás de F; < 0: G queda delante
                         break
                 if hit is None:
                     continue
                 g = bms[j].faces[hit]
                 ga = g.calc_area()
-                # se actúa sobre la menor del par (empate: decide el índice; nunca las dos), la encuentre quien la encuentre:
-                # si el centro de la menor no cae sobre la mayor, solo el rayo de la mayor descubre el solape
+                if abs(gap) > relief:
+                    # caras paralelas separadas de verdad (letras, placas y relieves de 0,3 a 1,2 mm sobre su base): la de delante
+                    # es la que se ve. Solo se toca la de atrás, y solo si es la menor (la base grande nunca se hunde ni se borra)
+                    (fa, fk, ff), (ba_, bk, bf) = (((a, k, f), (ga, j, g)) if gap > 0 else ((ga, j, g), (a, k, f)))
+                    if ba_ >= fa:
+                        continue
+                    (sa, sk, sf), (bk, bf) = (ba_, bk, bf), (fk, ff)
+                    if sf.index in kill[sk] or sf.index in sink[sk]:
+                        break
+                    if _covers(bf, sf, eps):
+                        kill[sk].add(sf.index)
+                        area_k += sa
+                    else:
+                        sink[sk].add(sf.index)
+                    break
+                # coplanares de verdad (|separación| <= relief): se actúa sobre la menor del par (empate: decide el índice; nunca
+                # las dos), la encuentre quien la encuentre: si el centro de la menor no cae sobre la mayor, solo el rayo de la
+                # mayor descubre el solape
                 (sa, sk, sf), (bk, bf) = ((a, k, f), (j, g)) if (a, k, f.index) < (ga, j, hit) else ((ga, j, g), (k, f))
                 if sf.index in kill[sk] or sf.index in sink[sk]:
                     break

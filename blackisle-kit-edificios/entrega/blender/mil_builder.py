@@ -597,10 +597,14 @@ def _liner_wall(mb, M, L, side):
         holes = [(cx - w / 2 - WX0 - 0.075, cx + w / 2 - WX0 + 0.075, FFL + DOOR_H + 0.15 + 0.66 + 0.04) for (cx, w) in DOORS] + \
                 [(PDOOR_X - 0.6 - WX0, PDOOR_X + 0.6 - WX0, FFL + PDOOR_H + 0.25)]
 
-    def dz(z):
+    def dz(z, u):
+        # en las esquinas la manta va engrapada a la columna de esquina: el abombado se apaga en 0,6 m y las dos mantas se
+        # encuentran en una arista recta (antes se cruzaban en zigzag)
+        t = min(1.0, min(u, L - u) / 0.6)
+        a = t * t * (3.0 - 2.0 * t)
         for za, zb in zip(LINER_PINS[:-1], LINER_PINS[1:]):
             if za <= z <= zb:
-                return 0.025 * math.sin(math.pi * (z - za) / (zb - za))
+                return 0.025 * a * math.sin(math.pi * (z - za) / (zb - za))
         return 0.0
     cuts = sorted({0.0, L} | {h[i] for h in holes for i in (0, 1)})
     for ua, ub in zip(cuts[:-1], cuts[1:]):
@@ -609,7 +613,7 @@ def _liner_wall(mb, M, L, side):
         z0 = max([z_lo] + hz)
         if top(um) - z0 < 0.1:
             continue
-        nn = max(2, int((ub - ua) / 0.6))
+        nn = max(2, int((ub - ua) / 0.3))                  # 0,3 m: el abombado se apaga suave hacia las esquinas
         V = {}
         zs_ = sorted({z0, *(p for p in LINER_PINS if z0 < p < z_hi)} | set(np.linspace(z0, z_hi, 22).tolist()))
         for i in range(nn + 1):
@@ -617,7 +621,7 @@ def _liner_wall(mb, M, L, side):
             zt = top(u)
             col = [z for z in zs_ if z < zt - 0.02] + [zt]
             for j, z in enumerate(col):
-                V[i, j] = mb.bm.verts.new(M @ Vector((u, 0.202 + dz(z), z)))
+                V[i, j] = mb.bm.verts.new(M @ Vector((u, 0.202 + dz(z, u), z)))
             V[i, "n"] = len(col)
         for i in range(nn):
             m_ = min(V[i, "n"], V[i + 1, "n"])
@@ -628,8 +632,8 @@ def _liner_wall(mb, M, L, side):
         while u < ub - 0.3:
             zt = top(u)
             col = [z for z in zs_ if z < zt - 0.02] + [zt]
-            A_ = [mb.bm.verts.new(M @ Vector((u - 0.025, 0.2045 + dz(z), z))) for z in col]
-            B_ = [mb.bm.verts.new(M @ Vector((u + 0.025, 0.2045 + dz(z), z))) for z in col]
+            A_ = [mb.bm.verts.new(M @ Vector((u - 0.025, 0.2045 + dz(z, u - 0.025), z))) for z in col]
+            B_ = [mb.bm.verts.new(M @ Vector((u + 0.025, 0.2045 + dz(z, u + 0.025), z))) for z in col]
             for j in range(len(col) - 1):
                 mb.face([A_[j], A_[j + 1], B_[j + 1], B_[j]], "plastic")
             u += 1.22
