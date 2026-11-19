@@ -588,9 +588,11 @@ def main():
     atlas_objs = [(main_o, "walls_main"), (rest_o, "walls_rest")] + ([] if ue else [(sand_o, "skirt")])
     atlas_objs = [(o, a) for (o, a) in atlas_objs if o is not None]
     log("split ok", round(time.time() - t0), "s")
-    gb = cfg.get("graffiti_bounds") or (cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
-                                        cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2)
-    gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)), *gb) if has_g else None
+    gmap = None
+    if has_g:                                            # las cabañas no llevan panel (ni xs/ys de departamento)
+        gb = cfg.get("graffiti_bounds") or (cfg["xs"][0] - ab.COL_CORNER / 2, cfg["xs"][-1] + ab.COL_CORNER / 2,
+                                            cfg["ys"][0] - ab.COL_CORNER / 2, cfg["ys"][-1] + ab.COL_CORNER / 2)
+        gmap = ld.graffiti_map(f"G_{short}", json.load(open(gfile)), *gb)
     for nm in sorted({m.name for o, _ in atlas_objs for m in o.data.materials}):
         ld.lookdev_material(nm, seed=cfg["seed"], gmap=gmap, band_top=band_top, dust_h=0.12 if ue else 0.35, **cfg.get("lookdev", {}))
     for o, _ in atlas_objs:
