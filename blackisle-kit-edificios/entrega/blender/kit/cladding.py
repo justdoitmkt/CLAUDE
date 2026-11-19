@@ -24,12 +24,292 @@ import bmesh  # noqa: F401
 from mathutils import Matrix, Vector
 
 from kit.common import MB, rng
-from kit.roofing import _N1, _beam, _loft, _nail, _R, _T, _about
+from kit.roofing import _N1, _R, _T, _about
 
 PI = math.pi
 BRICK_L, BRICK_H, BRICK_D, JOINT = 0.24, 0.06, 0.12, 0.01
 COURSE, PITCH = BRICK_H + JOINT, BRICK_L + JOINT
 REC = 0.008                                  # rehundido de la junta = cara del núcleo de mortero
+
+
+# =====================================================================================================================
+# 0) MADERA ASERRADA INTEMPERIZADA — base de todas las piezas de madera de las cabañas (pasada AAA, 2026-11-19)
+#    Cantos redondeados de radio real (n = 4 segmentos por esquina: pasos de 22,5°, sombreado continuo con el corte de 30° de
+#    MB.finish), vetas abiertas y fendas como muescas en V que nacen y mueren a lo largo de la pieza, arqueo, flecha, alabeo,
+#    puntas rotas con astillas, clavos de cabeza abombada (sombreado suave). Medidas de escuadría de madera aserrada en bruto
+#    (full-sawn): un "2x4" de antes de 1930 mide 2 x 4 pulgadas reales (51 x 102 mm).
+# =====================================================================================================================
+def _wsec(w, h, rc, n=4, grooves=(), y0=0.0):
+    """Sección de esquinas redondeadas (antihoraria), x en ±w/2, y en y0..y0+h. grooves = [(cara, t, media_anchura, prof)]:
+    cara 0 = derecha (+x), 1 = arriba (+y), 2 = izquierda, 3 = abajo; t = 0..1 a lo largo del tramo plano. Muesca en V hacia dentro."""
+    rc = max(0.0004, min(rc, 0.45 * w, 0.45 * h))
+    C = [((w / 2 - rc, y0 + rc), -PI / 2), ((w / 2 - rc, y0 + h - rc), 0.0), ((-w / 2 + rc, y0 + h - rc), PI / 2),
+         ((-w / 2 + rc, y0 + rc), PI)]
+    pts = []
+    for i, ((cx, cy), a0) in enumerate(C):
+        for k in range(n + 1):
+            a = a0 + PI / 2 * k / n
+            pts.append((cx + rc * math.cos(a), cy + rc * math.sin(a)))
+        gs = sorted((g for g in grooves if g[0] == i), key=lambda g: g[1])
+        if not gs:
+            continue
+        ax, ay = cx + rc * math.cos(a0 + PI / 2), cy + rc * math.sin(a0 + PI / 2)
+        (cx2, cy2), a2 = C[(i + 1) % 4]
+        bx, by = cx2 + rc * math.cos(a2), cy2 + rc * math.sin(a2)
+        L = math.hypot(bx - ax, by - ay)
+        if L < 1e-4:
+            continue
+        dx, dy = (bx - ax) / L, (by - ay) / L
+        nx, ny = -dy, dx                                  # hacia dentro (polígono antihorario)
+        last = 0.0
+        for (_, t, hw, d) in gs:
+            s = t * L
+            if s - hw <= last + 0.0008 or s + hw >= L - 0.0008:
+                continue
+            for ds, dd in ((-hw, 0.0), (0.0, d), (hw, 0.0)):
+                pts.append((ax + dx * (s + ds) + nx * dd, ay + dy * (s + ds) + ny * dd))
+            last = s + hw
+    return pts
+
+
+def _frame(p0, p1, up):
+    p0, p1 = Vector(p0), Vector(p1)
+    T = p1 - p0
+    L = T.length
+    T = T / max(L, 1e-9)
+    U = Vector(up)
+    if abs(T.dot(U.normalized())) > 0.985:
+        U = Vector((0, 1, 0)) if abs(T.y) < 0.9 else Vector((1, 0, 0))
+    S = U.cross(T).normalized()
+    U = T.cross(S).normalized()
+    return p0, T, S, U, L
+
+
+def _cap_loft(mb, rings, mat, caps=True):
+    vs = [[mb.bm.verts.new(p) for p in rg] for rg in rings]
+    k = len(rings[0])
+    for i in range(len(vs) - 1):
+        a, b = vs[i], vs[i + 1]
+        for j in range(k):
+            jj = (j + 1) % k
+            mb.face([a[j], a[jj], b[jj], b[j]], mat)
+    if caps:
+        mb.face(list(reversed(vs[0])), mat)
+        mb.face(vs[-1], mat)
+    return vs
+
+
+def lumber(mb, p0, p1, w, h, mat="wood_grey", up=(0, 0, 1), r=None, rc=0.004, n=4, step=0.5, center=True, grain=1.0,
+           check=0.0, bow=0.0, sag=0.0, twist=0.0, cup=0.0, jag0=0.0, jag1=0.0, splinters=True, cut0=None, cut1=None,
+           y_off=0.0):
+    """Pieza de madera aserrada de p0 a p1: sección w (eje lateral S = up x T) por h (eje `up`), centrada en el eje (center) o con
+    la cara inferior en el eje + y_off. Cantos de radio rc; grain 0..1 = vetas abiertas (0,5–1,6 mm) en las caras anchas que
+    aparecen y se desvanecen; check 0..1 = fenda (grieta de secado) en una cara ancha, hasta ~25 % del grueso; bow/sag = flecha
+    lateral / vertical (m) en el centro; twist = alabeo (rad) de punta a punta; cup = abarquillado (m) de la cara superior;
+    jag0/jag1 = punta rota (m) con astillas; cut0/cut1 = (punto, normal) corte a inglete o a bisel del extremo."""
+    if r is None:
+        r = rng(int(abs(p0[0] * 7919 + p0[1] * 104729 + p0[2] * 1299709 + p1[0] * 31 + p1[2] * 17) * 1000) % 2147483647)
+    P0, T, S, U, L = _frame(p0, p1, up)
+    if L < 0.004:
+        return None
+    yb = -h / 2 if center else y_off
+    # vetas y fenda: (cara, t, media anchura, prof, s0, s1)
+    gro = []
+    wide = [1, 3] if w >= h * 0.8 else [0, 2]
+    if h >= w * 0.8 and w >= h * 0.8:
+        wide = [0, 1, 2, 3]
+    for f in wide:
+        flen = (w if f in (1, 3) else h) - 2 * rc
+        if flen < 0.03 or grain <= 0:
+            continue
+        for _ in range(int(r.integers(0, 1 + int(round(3 * grain * min(1.0, flen / 0.12)))))):
+            s0 = r.uniform(-0.3, 0.6) * L
+            gro.append((f, r.uniform(0.12, 0.88), r.uniform(0.0012, 0.003), r.uniform(0.0005, 0.0016) * grain, s0,
+                        s0 + r.uniform(0.35, 1.0) * L))
+    if check > 0 and L > 0.3:
+        f = wide[int(r.integers(0, len(wide)))]
+        s0 = r.uniform(0.0, 0.45) * L
+        dep = min(w, h) * r.uniform(0.12, 0.25) * check
+        gro.append((f, r.uniform(0.3, 0.7), r.uniform(0.0012, 0.0028) * (0.6 + check), dep, s0, min(L * 1.05, s0 + r.uniform(0.35, 0.8) * L)))
+    need = bool(gro or bow or sag or twist)
+    ns = max(2 if not need else 4, int(math.ceil(L / step)) + 1)
+    rings = []
+    for i in range(ns):
+        f = i / (ns - 1)
+        s = L * f
+        g_here = []
+        for (fc, t, hw, d, s0, s1) in gro:
+            u = (s - s0) / max(s1 - s0, 1e-6)
+            g_here.append((fc, t, hw, d * (math.sin(PI * min(max(u, 0.0), 1.0)) ** 0.6 if 0.0 < u < 1.0 else 0.0)))
+        prof = _wsec(w, h, rc, n, g_here, yb)
+        sn = math.sin(PI * f)
+        tw = twist * (f - 0.5)
+        ct, st = math.cos(tw), math.sin(tw)
+        base = P0 + T * s + S * (bow * sn) + U * (sag * sn)
+        rg = []
+        for (x, y) in prof:
+            if cup:
+                y += cup * (1.0 - (2.0 * x / w) ** 2)
+            yy = y - (yb + h / 2)
+            xr, yr = x * ct - yy * st, x * st + yy * ct
+            rg.append(base + S * xr + U * (yr + yb + h / 2))
+        if i == 0 and cut0 is not None:
+            q, nn = Vector(cut0[0]), Vector(cut0[1])
+            rg = [p + T * ((q - p).dot(nn) / (T.dot(nn) if abs(T.dot(nn)) > 1e-6 else 1e-6)) for p in rg]
+        if i == ns - 1 and cut1 is not None:
+            q, nn = Vector(cut1[0]), Vector(cut1[1])
+            rg = [p + T * ((q - p).dot(nn) / (T.dot(nn) if abs(T.dot(nn)) > 1e-6 else 1e-6)) for p in rg]
+        j = jag0 if i == 0 else (jag1 if i == ns - 1 else 0.0)
+        if j:
+            sg = 1.0 if i == 0 else -1.0
+            ph = r.uniform(0, 2 * PI)
+            rg = [p + T * (sg * j * (0.5 + 0.5 * math.sin(ph + 5.0 * k / len(rg) * 2 * PI) * r.uniform(0.4, 1.0)))
+                  for k, p in enumerate(rg)]
+        rings.append(rg)
+    _cap_loft(mb, rings, mat)
+    for (jj, end) in ((jag0, 0), (jag1, 1)):
+        if jj and splinters:
+            sg = 1.0 if end == 0 else -1.0
+            e0 = P0 + T * (0.0 if end == 0 else L)
+            for _ in range(int(r.integers(1, 4))):
+                x, y = r.uniform(-0.38, 0.38) * w, r.uniform(-0.35, 0.35) * h + yb + h / 2
+                ln = r.uniform(0.6, 1.8) * jj + 0.015
+                tw_ = r.uniform(0.002, 0.006)
+                th_ = min(r.uniform(0.0015, 0.004), 0.3 * h)
+                b = e0 + S * x + U * y + T * (sg * jj * 0.5)
+                d = -T * sg
+                tip = b + d * ln + S * r.uniform(-0.2, 0.2) * ln * 0.2 + U * r.uniform(-0.1, 0.1) * ln * 0.2
+                bb = b - d * 0.01
+                ring0 = [bb + S * (-tw_) + U * (-th_), bb + S * tw_ + U * (-th_), bb + S * tw_ * 0.6 + U * th_, bb + S * (-tw_ * 0.6) + U * th_]
+                vs = [mb.bm.verts.new(p) for p in ring0]
+                vt = mb.bm.verts.new(tip)
+                for k in range(4):
+                    mb.face([vs[k], vs[(k + 1) % 4], vt], mat)
+                mb.face(list(reversed(vs)), mat)
+    return rings
+
+
+def lbox(mb, mn, mx, mat="wood_grey", r=None, axis=None, **kw):
+    """lumber() con la huella de una caja alineada a ejes (mn, mx): la pieza corre a lo largo de `axis` (0/1/2; por omisión el
+    lado mayor). Sustituye a mb.box() en tablas, vigas y postes."""
+    d = [mx[i] - mn[i] for i in range(3)]
+    ax = max(range(3), key=lambda i: d[i]) if axis is None else axis
+    c = [(mn[i] + mx[i]) / 2 for i in range(3)]
+    p0, p1 = list(c), list(c)
+    p0[ax], p1[ax] = mn[ax], mx[ax]
+    if ax == 0:
+        return lumber(mb, p0, p1, d[1], d[2], mat, up=(0, 0, 1), r=r, **kw)
+    if ax == 1:
+        return lumber(mb, p0, p1, d[0], d[2], mat, up=(0, 0, 1), r=r, **kw)
+    return lumber(mb, p0, p1, d[0], d[1], mat, up=(0, 1, 0), r=r, **kw)
+
+
+def lbox_m(mb, mn, mx, mat, m, r=None, axis=None, **kw):
+    """lbox() en el marco de la matriz m (piezas giradas: vierteaguas, repisas, tablas caídas)."""
+    tmp = MB()
+    lbox(tmp, mn, mx, mat, r=r, axis=axis, **kw)
+    mb.join(tmp, m)
+    tmp.bm.free()
+
+
+def _lathe(mb, prof, seg, mat, M, caps=True):
+    """Sólido de revolución sobre Z local (perfil [(r, z)]; r = 0 -> polo). caps=False: sin tapas (anillos, collarines)."""
+    rings = []
+    for (rr, z) in prof:
+        if rr < 1e-7:
+            rings.append([mb.bm.verts.new(M @ Vector((0.0, 0.0, z)))])
+            continue
+        rings.append([mb.bm.verts.new(M @ Vector((rr * math.cos(2 * PI * k / seg), rr * math.sin(2 * PI * k / seg), z)))
+                      for k in range(seg)])
+    for i in range(len(rings) - 1):
+        A, B = rings[i], rings[i + 1]
+        for k in range(seg):
+            kk = (k + 1) % seg
+            if len(A) == 1:
+                mb.face([A[0], B[kk], B[k]], mat)
+            elif len(B) == 1:
+                mb.face([A[k], A[kk], B[0]], mat)
+            else:
+                mb.face([A[k], A[kk], B[kk], B[k]], mat)
+    if caps and len(rings[0]) > 1:
+        mb.face(list(reversed(rings[0])), mat)
+    if caps and len(rings[-1]) > 1:
+        mb.face(rings[-1], mat)
+    return rings
+
+
+def axis_m(p, axis):
+    """Matriz con Z local = axis y origen en p."""
+    a = Vector(axis).normalized()
+    q = a.to_track_quat("Z", "Y")
+    return Matrix.Translation(Vector(p)) @ q.to_matrix().to_4x4()
+
+
+def nail(mb, p, axis, r=0.0045, h=0.0024, mat="metal_rust", seg=8, pop=0.0, bend=0.0):
+    """Clavo de alambre: cabeza abombada (sombreado suave, seg 8 en Ø <= 10 mm) que sobresale h y entra 4 mm en la madera.
+    pop > 0: clavo botado (la caña asoma pop m); bend: caña doblada (rad)."""
+    a = Vector(axis).normalized()
+    with mb.soft():
+        if pop > 0:
+            M = axis_m(Vector(p), a)
+            sh = 0.0016 if r < 0.004 else 0.0021
+            pts = [Vector((0, 0, -0.004)), Vector((0, 0, pop * 0.5)), Vector((math.sin(bend) * pop * 0.5, 0, pop * (0.5 + 0.5 * math.cos(bend))))]
+            mb.tube([M @ q for q in pts], sh, seg=seg, mat=mat)
+            hp = M @ pts[-1]
+            ax2 = (M.to_3x3() @ Vector((math.sin(bend), 0, math.cos(bend)))).normalized()
+            _lathe(mb, [(r, 0.0), (r, h * 0.45), (r * 0.55, h), (0.0, h * 1.05)], seg, mat, axis_m(hp, ax2))
+        else:
+            _lathe(mb, [(r, -0.004), (r, h * 0.45), (r * 0.55, h), (0.0, h * 1.05)], seg, mat, axis_m(Vector(p), a))
+
+
+def bolt_head(mb, p, axis, d=0.012, mat="metal_rust", kind="carriage", seg=12):
+    """Cabeza de tornillo sobre una cara (eje = normal de la cara): 'carriage' cabeza de hongo; 'nut' arandela + tuerca
+    hexagonal con punta de espárrago. d = diámetro nominal."""
+    M = axis_m(Vector(p), axis)
+    with mb.soft():
+        if kind == "carriage":
+            _lathe(mb, [(d * 1.15, -0.003), (d * 1.15, d * 0.12), (d * 0.95, d * 0.38), (d * 0.55, d * 0.58), (0.0, d * 0.64)], seg, mat, M)
+            return
+        _lathe(mb, [(d * 0.55, -0.002), (d * 1.25, -0.002), (d * 1.25, d * 0.16), (d * 0.55, d * 0.16)], seg, mat, M)
+    z = d * 0.16
+    hx = []
+    for k in range(6):
+        a = PI / 6 + PI / 3 * k
+        hx.append((d * 0.85 * math.cos(a), d * 0.85 * math.sin(a)))
+    # tuerca hexagonal con los vértices achaflanados (aristas duras reales)
+    bot = [mb.bm.verts.new(M @ Vector((x, y, z))) for x, y in hx]
+    top = [mb.bm.verts.new(M @ Vector((x * 0.94, y * 0.94, z + d * 0.8))) for x, y in hx]
+    mid = [mb.bm.verts.new(M @ Vector((x, y, z + d * 0.68))) for x, y in hx]
+    for k in range(6):
+        kk = (k + 1) % 6
+        mb.face([bot[k], bot[kk], mid[kk], mid[k]], mat)
+        mb.face([mid[k], mid[kk], top[kk], top[k]], mat)
+    mb.face(list(reversed(bot)), mat)
+    mb.face(top, mat)
+    with mb.soft():
+        _lathe(mb, [(d * 0.5, z + d * 0.75), (d * 0.5, z + d * 1.15), (d * 0.38, z + d * 1.28), (0.0, z + d * 1.3)], seg, mat, M)
+
+
+def knot(mb, p, nrm, along, rx, ry, mat="wood_dark", proud=0.0008):
+    """Nudo de la madera: lente ovalada (rx a lo largo de la veta) que sobresale `proud` de la cara y se hunde 1,5 mm en ella."""
+    n = Vector(nrm).normalized()
+    a = Vector(along).normalized()
+    b = n.cross(a).normalized()
+    c = Vector(p)
+    seg = 14
+    with mb.soft():
+        rings = []
+        for (k, dep) in ((1.0, -0.0015), (0.8, proud * 0.75), (0.45, proud)):
+            rings.append([mb.bm.verts.new(c + a * (rx * k * math.cos(2 * PI * i / seg)) + b * (ry * k * math.sin(2 * PI * i / seg)) + n * dep)
+                          for i in range(seg)])
+        top = mb.bm.verts.new(c + n * (proud * 1.05))
+        for i in range(2):
+            for j in range(seg):
+                jj = (j + 1) % seg
+                mb.face([rings[i][j], rings[i][jj], rings[i + 1][jj], rings[i + 1][j]], mat)
+        for j in range(seg):
+            mb.face([rings[2][j], rings[2][(j + 1) % seg], top], mat)
+        mb.face(list(reversed(rings[0])), mat)
 
 
 # =====================================================================================================================
@@ -164,15 +444,17 @@ def _cut(rc, z, vertical):
     return _rect_sub(rc, z)
 
 
-def _member(mb, rc, y0, y1, r, mat="wood", vertical=True, jag=False):
+def _member(mb, rc, y0, y1, r, mat="wood", vertical=True, jag=False, grain=0.6, check=0.0):
+    """Pieza del bastidor / tapajuntas: madera de cantos redondeados (3 mm) con vetas; recta (las holguras de 1 mm entre piezas
+    del bastidor no admiten arqueos)."""
     u0, u1, v0, v1 = rc
-    # piezas rectas: las holguras de 1 mm entre piezas del bastidor no admiten arqueos
+    ym = (y0 + y1) / 2
     if vertical:
         um = (u0 + u1) / 2
-        _beam(mb, [(um, y0, v0), (um, y0, v1)], Vector((0, 1, 0)), u1 - u0, 0.0, y1 - y0, mat, c=0.004)
+        lumber(mb, (um, ym, v0), (um, ym, v1), u1 - u0, y1 - y0, mat, up=(0, 1, 0), r=r, rc=0.003, grain=grain, check=check)
     else:
         vm = (v0 + v1) / 2
-        _beam(mb, [(u0, y0, vm), (u1, y0, vm)], Vector((0, 1, 0)), v1 - v0, 0.0, y1 - y0, mat, c=0.004)
+        lumber(mb, (u0, ym, vm), (u1, ym, vm), v1 - v0, y1 - y0, mat, up=(0, 1, 0), r=r, rc=0.003, grain=grain, check=check)
 
 
 def _framing(mb, L, H, y0, depth, openings, r, style="studs", spacing=0.6, mat="wood"):
@@ -248,6 +530,74 @@ def _brick(mb, u0, u1, v0, v1, yf, yb, r, bev=0.004, chip=0, tilt=(0.0, 0.0), ja
 
     def Y(u, v, y):
         return y + tilt[0] * (u - uc) + tilt[1] * (v - vc)
+    if mode == "round":
+        # 'round' (pasada AAA): aristas redondeadas de radio `bev` en 2 tramos (sombreado continuo) + costados hasta yb + trasera,
+        # cara vista en abanico con un vértice central hundido/abombado ±0,8 mm (cara cocida irregular) y esquinas despostilladas.
+        # 26 tris por ladrillo; sólido cerrado.
+        b = max(0.0015, min(bev * 0.75, 0.25 * (u1 - u0), 0.25 * (v1 - v0)))
+        L0 = [[u0 + b + r.uniform(-0.0006, 0.0006), v0 + b + r.uniform(-0.0004, 0.0004)],
+              [u1 - b + r.uniform(-0.0006, 0.0006), v0 + b + r.uniform(-0.0004, 0.0004)],
+              [u1 - b + r.uniform(-0.0006, 0.0006), v1 - b + r.uniform(-0.0004, 0.0004)],
+              [u0 + b + r.uniform(-0.0006, 0.0006), v1 - b + r.uniform(-0.0004, 0.0004)]]
+        d0 = [Y(u, v, yf) for u, v in L0]
+        k1 = 0.2929 * b
+        L1 = [[u0 + k1, v0 + k1], [u1 - k1, v0 + k1], [u1 - k1, v1 - k1], [u0 + k1, v1 - k1]]
+        d1 = [Y(u, v, yf + k1) for u, v in L1]
+        if chip:
+            for _ in range(chip):
+                k = int(r.integers(0, 4))
+                du = r.uniform(0.01, 0.028) * (1 if k in (0, 3) else -1)
+                dv = r.uniform(0.006, 0.016) * (1 if k in (0, 1) else -1)
+                dd = r.uniform(0.004, 0.012)
+                L0[k][0] += du
+                L0[k][1] += dv
+                d0[k] += dd
+                L1[k][0] += du * 0.55
+                L1[k][1] += dv * 0.55
+                d1[k] += dd * 0.6
+        if jag:
+            d0 = [y + r.uniform(0.0, jag) for y in d0]
+        outer = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        # cara vista: rejilla 3 x 2 bilineal sobre las 4 esquinas, con el arris y la cara irregulares (ladrillo de horno)
+        NU, NV = 3, 2
+
+        def bil(i, j):
+            fu, fv = i / NU, j / NV
+            a = [L0[0][0] + (L0[1][0] - L0[0][0]) * fu, L0[0][1] + (L0[1][1] - L0[0][1]) * fu, d0[0] + (d0[1] - d0[0]) * fu]
+            c = [L0[3][0] + (L0[2][0] - L0[3][0]) * fu, L0[3][1] + (L0[2][1] - L0[3][1]) * fu, d0[3] + (d0[2] - d0[3]) * fu]
+            return [a[k] + (c[k] - a[k]) * fv for k in range(3)]
+        G = {}
+        for i in range(NU + 1):
+            for j in range(NV + 1):
+                u, v, y = bil(i, j)
+                corner = i in (0, NU) and j in (0, NV)
+                edge = i in (0, NU) or j in (0, NV)
+                if not corner:
+                    if edge:
+                        y += r.uniform(-0.0004, 0.0006)
+                        if j in (0, NV):
+                            v += r.uniform(-0.0007, 0.0007)
+                        else:
+                            u += r.uniform(-0.0007, 0.0007)
+                    else:
+                        y += r.uniform(-0.0009, 0.0009)
+                G[i, j] = mb.bm.verts.new((u, y, v))
+        for i in range(NU):
+            for j in range(NV):
+                mb.face([G[i, j], G[i + 1, j], G[i + 1, j + 1], G[i, j + 1]], mat)
+        edges = [[G[i, 0] for i in range(NU + 1)], [G[NU, j] for j in range(NV + 1)],
+                 [G[i, NV] for i in range(NU, -1, -1)], [G[0, j] for j in range(NV, -1, -1)]]
+        M1 = [mb.bm.verts.new((u, y, v)) for (u, v), y in zip(L1, d1)]
+        with mb.soft():
+            O = [mb.bm.verts.new((u, Y(u, v, yf + b), v)) for u, v in outer]
+            B = [mb.bm.verts.new((u, yb, v)) for u, v in outer]
+            for i in range(4):
+                j = (i + 1) % 4
+                mb.face(list(reversed(edges[i])) + [M1[i], M1[j]], mat)
+                mb.face([M1[j], M1[i], O[i], O[j]], mat)
+                mb.face([O[j], O[i], B[i], B[j]], mat)
+            mb.face(B, mat)
+        return
     if mode != "bevel":
         fy = yf + (r.uniform(0.0, jag) if jag else 0.0)
         c = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
@@ -326,19 +676,46 @@ BRICK_LOD = {
     "high": dict(brick="bevel", jamb="bevel", plaster_pts=22, fallen_bev=0.006),
     "mid": dict(brick="box5", jamb="box5", plaster_pts=14, fallen_bev=0.0),
     "low": dict(brick="front3", jamb="box5", plaster_pts=10, fallen_bev=0.0),
+    # pasada AAA (2026-11-19): aristas redondeadas en 2 tramos, cara irregular, despostillados; ~26 tris por ladrillo
+    "aaa": dict(brick="round", jamb="round", plaster_pts=24, fallen_bev=0.006),
 }
+
+
+def _patch(mb, pts, t, mat, m, r):
+    """Parche de revoque viejo: canto roto en dos escalones (la capa de acabado se desprende antes que el emparche), no una
+    placa de canto vivo. pts en el plano (x, y) de la placa; espesor t hacia +z local."""
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+
+    def ins(p, d):
+        dx, dy = cx - p[0], cy - p[1]
+        L = math.hypot(dx, dy)
+        k = min(d, 0.45 * L) / max(L, 1e-9)
+        return (p[0] + dx * k, p[1] + dy * k)
+    rings = [[(x, y, 0.0) for x, y in pts]]
+    d1 = [r.uniform(0.002, 0.006) for _ in pts]
+    rings.append([(*ins(p, d), t * 0.55) for p, d in zip(pts, d1)])
+    rings.append([(*ins(p, d + r.uniform(0.002, 0.012)), t) for p, d in zip(pts, d1)])
+    vs = [[mb.bm.verts.new(m @ Vector(p)) for p in rg] for rg in rings]
+    k = len(pts)
+    for i in range(2):
+        for j in range(k):
+            jj = (j + 1) % k
+            mb.face([vs[i][j], vs[i][jj], vs[i + 1][jj], vs[i + 1][j]], mat)
+    mb.face(list(reversed(vs[0])), mat)
+    mb.face(vs[2], mat)
 
 
 def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14, plaster=0.12, lintel_courses=3,
                fallen=True, detail="high"):
     """Muro de ladrillo individual a soga sobre núcleo de mortero (ver cabecera). openings como wall_with_openings.
-    detail = 'high' | 'mid' | 'low' (BRICK_LOD); la disposición (aparejo, faltantes, descascarados, caídos, revoque) es la
+    detail = 'aaa' | 'high' | 'mid' | 'low' (BRICK_LOD); la disposición (aparejo, faltantes, descascarados, caídos, revoque) es la
     misma en los tres niveles. Ladrillo de 20 / 10 / 6 tris (bisel / caja sin trasera / cara + tabla + sardinel; los de
     jamba, que se ven en el derrame, son caja sin trasera en mid y low). Medido con test_G3 (--budget) en un muro de
     6,5 x 2,8 con 2 ventanas y 1 puerta (13,6 m² de ladrillo, 57 ladrillos/m²), núcleo, dinteles, caídos y revoque incluidos:
       high ~18,8 k tris (~1380 tris/m²) · mid ~10,6 k (~780/m²) · low ~7,3 k (~535/m²)."""
     if detail not in BRICK_LOD:
-        raise ValueError("detail debe ser 'high', 'mid' o 'low'")
+        raise ValueError("detail debe ser 'aaa', 'high', 'mid' o 'low'")
     lod = BRICK_LOD[detail]
     r = rng(seed + 2024)
     mb = MB()
@@ -466,8 +843,12 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
         lay = r.uniform() < 0.7
         dims = (ln, BRICK_D, BRICK_H) if lay else (ln, BRICK_H, BRICK_D)
         m = _T(x, -r.uniform(0.08, 0.7), 0.0013 * (idf % 5)) @ _R("Z", a) @ _R("X", r.uniform(-4, 4))
-        mb.box((-dims[0] / 2, -dims[1] / 2, 0.001), (dims[0] / 2, dims[1] / 2, dims[2] + 0.001), "brick", bevel=lod["fallen_bev"],
-               seg=1, m=m)
+        if detail == "aaa":
+            # ladrillo suelto de aristas gastadas (radio 6 mm en 4 tramos: sombreado continuo)
+            mb.box((-dims[0] / 2, -dims[1] / 2, 0.001), (dims[0] / 2, dims[1] / 2, dims[2] + 0.001), "brick", bevel=0.006, seg=4, m=m)
+        else:
+            mb.box((-dims[0] / 2, -dims[1] / 2, 0.001), (dims[0] / 2, dims[1] / 2, dims[2] + 0.001), "brick",
+                   bevel=lod["fallen_bev"], seg=1, m=m)
 
     # ---- restos de revoque ----
     if plaster > 0:
@@ -490,7 +871,10 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 pts.append((min(max(pu + ru * k * math.cos(a), 0.01), L - 0.01), min(max(pv + rv * k * math.sin(a), 0.01), H - 0.01)))
             t = r.uniform(0.008, 0.013)
             m = Matrix(((1, 0, 0, 0), (0, 0, -1, -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
-            mb.plate(pts, t, "plaster", m=m)
+            if detail == "aaa":
+                _patch(mb, pts, t, "plaster", m, r)
+            else:
+                mb.plate(pts, t, "plaster", m=m)
             area += PI * ru * rv
     return mb
 
@@ -546,64 +930,46 @@ def _trims(mb, ops, y0, y1, r, mat="wood_grey", H=99.0):
                 continue
             _member(mb, (a, b, c, d), y0 + r.uniform(-0.002, 0.0), y1, r, mat, vertical=vert)
             rects.append((a, b, c, d))
-        # vierteaguas sobre el cabezal y repisa de la ventana (sobresalen)
+        # vierteaguas sobre el cabezal y repisa de la ventana (sobresalen): tabla de cantos redondeados con su caída
         if top + 0.03 < H:
-            mb.box((u0 - 0.11, y0 - 0.03, top + 0.001), (u1 + 0.11, y1, top + 0.026), mat, bevel=0.004, seg=1,
-                   m=_about(((u0 + u1) / 2, y1, top), _R("X", -r.uniform(4, 9))))
+            lbox_m(mb, (u0 - 0.11, y0 - 0.03, top + 0.001), (u1 + 0.11, y1, top + 0.026), mat,
+                   _about(((u0 + u1) / 2, y1, top), _R("X", -r.uniform(4, 9))), r=r, axis=0, rc=0.004, grain=0.8,
+                   sag=-r.uniform(0.0, 0.004))
             rects.append((u0 - 0.11, u1 + 0.11, top, top + 0.035))
         if win:
             # repisa por delante del revestimiento (antes se metía 4 cm en tablas y montantes)
-            mb.box((u0 - 0.08, y0 - 0.045, v0 - 0.039), (u1 + 0.08, y1 - 0.002, v0 - 0.003), mat, bevel=0.005, seg=1,
-                   m=_about(((u0 + u1) / 2, y1 - 0.002, v0 - 0.003), _R("X", r.uniform(2, 6))))
+            lbox_m(mb, (u0 - 0.08, y0 - 0.045, v0 - 0.039), (u1 + 0.08, y1 - 0.002, v0 - 0.003), mat,
+                   _about(((u0 + u1) / 2, y1 - 0.002, v0 - 0.003), _R("X", r.uniform(2, 6))), r=r, axis=0, rc=0.005,
+                   grain=1.0, check=0.5 if r.uniform() < 0.4 else 0.0)
             rects.append((u0 - 0.08, u1 + 0.08, v0 - 0.045, v0))
     return rects
 
 
-def _vboard(mb, uc, w, t, v0, v1, r, jag0=0.0, jag1=0.0, mat="wood", step=0.45):
-    """Tablón vertical (cara vista en y = 0, espesor hacia +y) con vetas abiertas (1–3 ranuras de 1,5–3 mm), leve
-    abarquillado hacia dentro, arqueo lateral y puntas astilladas."""
-    c = 0.003
-    hw = w / 2
-    grooves = []
-    for _ in range(int(r.integers(1, 5)) if w > 0.09 else 0):
-        gx = r.uniform(-hw + 0.025, hw - 0.025)
-        if all(abs(gx - g[0]) > 0.025 for g in grooves):
-            grooves.append((gx, r.uniform(0.003, 0.007), r.uniform(0.002, 0.0045)))
-    cup = r.uniform(0.0, 0.003)
-    fx = sorted({round(x, 6) for x in [hw - c, -hw + c, hw * 0.5, -hw * 0.5] + [g[0] + d for g in grooves for d in (-g[1], 0.0, g[1])]},
-                reverse=True)
-
-    def yfront(x):
-        y = cup * (1.0 - (2 * x / w) ** 2)
-        for gx, gw, gd in grooves:
-            if abs(x - round(gx, 6)) < 1e-6:
-                y += gd
-        return y
-    prof = [(-hw + c, t), (hw - c, t), (hw, t - c), (hw, c)] + [(x, yfront(x)) for x in fx] + [(-hw, c), (-hw, t - c)]
-    n = max(2, int(math.ceil((v1 - v0) / step)) + 1)
-    bow = r.uniform(-0.003, 0.003)
-    twist = r.uniform(-0.0008, 0.0008)
-    rings = []
-    for i in range(n):
-        f = i / (n - 1)
-        v = v0 + (v1 - v0) * f
-        du = bow * math.sin(PI * f)
-        rg = [Vector((uc + du + x, y + twist * x / hw * f, v)) for x, y in prof]
-        j = jag0 if i == 0 else (jag1 if i == n - 1 else 0.0)
-        if j:
-            sg = 1.0 if i == 0 else -1.0
-            rg = [p + Vector((0, 0, sg * r.uniform(0.0, j))) for p in rg]
-        rings.append(rg)
-    _loft(mb, rings, mat)
+def _vboard(mb, uc, w, t, v0, v1, r, jag0=0.0, jag1=0.0, mat="wood", step=0.45, knots=True, cut1=None):
+    """Tablón vertical (cara vista en y = 0, espesor hacia +y) de cantos redondeados (4 mm) con vetas abiertas que nacen y
+    mueren, fenda de secado en uno de cada tres, leve abarquillado hacia dentro, arqueo lateral, alabeo, puntas astilladas y
+    nudos (lentes de madera oscura en la zona libre de junquillos). cut1 = (punto, normal): corte del extremo alto (hastial)."""
+    bow, cup = r.uniform(-0.003, 0.003), r.uniform(0.0, 0.003)
+    lumber(mb, (uc, t / 2, v0), (uc, t / 2, v1), w, t, mat, up=(0, 1, 0), r=r, rc=0.004, step=step, grain=1.0,
+           check=0.6 if r.uniform() < 0.33 else 0.0, bow=bow, twist=r.uniform(-0.004, 0.004), cup=cup, jag0=jag0, jag1=jag1,
+           cut1=cut1)
+    if knots and w > 0.12 and v1 - v0 > 0.5:
+        for _ in range(int(r.integers(0, 3))):
+            ku = r.uniform(-w / 2 + 0.035, w / 2 - 0.035)
+            kv = r.uniform(v0 + 0.15, v1 - 0.15)
+            rx = r.uniform(0.010, 0.024)
+            knot(mb, (uc + ku + bow * math.sin(PI * (kv - v0) / (v1 - v0)), cup * (1.0 - (2 * ku / w) ** 2), kv), (0, -1, 0),
+                 (0, 0, 1), rx, rx * r.uniform(0.55, 0.85))
 
 
 # =====================================================================================================================
 # 2) TABLÓN Y JUNQUILLO
 # =====================================================================================================================
-def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, gap=0.04, frame=True):
-    """Tablones verticales (0,22, rendija 0,04) con junquillos 0,05 x 0,02 sobre las rendijas (ver cabecera para cotas).
-    rot 0..1: tablones podridos por abajo (más cortos, punta astillada), rotos con tramo faltante, faltantes; junquillos
-    faltantes, cortos o colgando de un clavo. Bastidor de postes y largueros detrás (frame=True)."""
+def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, gap=0.022, frame=True, batten=0.064):
+    """Tablones verticales (0,22 = 1x10 en bruto, rendija 0,022 ± 8 mm: la tabla vieja se encoge) con junquillos 1x3
+    (0,064 x 0,020) que traslapan ~2 cm cada tablón (ver cabecera para cotas). rot 0..1: tablones podridos por abajo (más
+    cortos, punta astillada), rotos con tramo faltante, faltantes; junquillos faltantes, cortos o colgando de un clavo.
+    Bastidor de postes y largueros detrás (frame=True)."""
     r = rng(seed + 8080)
     mb = MB()
     L, H = float(length), float(height)
@@ -651,18 +1017,20 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
                         pu, pv = uc + r.uniform(-0.01, 0.01), gv + r.uniform(-0.01, 0.01)
                         if any(t[0] - 0.01 < pu < t[1] + 0.01 and t[2] - 0.01 < pv < t[3] + 0.01 for t in trims):
                             continue
-                        _nail(mb, (pu, 0.0, pv), (0, -1, 0), r=0.005, h=0.003)
+                        pop = r.uniform(0.004, 0.012) if r.uniform() < 0.06 else 0.0
+                        nail(mb, (pu, 0.0, pv), (0, -1, 0), r=0.0048, h=0.0026, pop=pop, bend=r.uniform(0.0, 0.6) if pop else 0.0)
     # ---- junquillos ----
+    hb = batten / 2
     for (c0, c1) in zip(cols[:-1], cols[1:]):
         um = (c0[1] + c1[0]) / 2
-        rc = (um - 0.025, um + 0.025, 0.03, H - 0.01)
+        rc = (um - hb, um + hb, 0.03, H - 0.01)
         pcs = [rc]
         for t in trims:
             pcs = [q for p in pcs for q in _rect_sub(p, (t[0] - 0.003, t[1] + 0.003, t[2] - 0.003, t[3] + 0.003))]
         for (u0, u1, v0, v1) in ops:
             pcs = [q for p in pcs for q in _rect_sub(p, (u0, u1, v0, v1))]
         for (a, b, c, d) in pcs:
-            if b - a < 0.045 or d - c < 0.1:
+            if b - a < batten - 0.005 or d - c < 0.1:
                 continue
             sev = rot * (1.0 + 1.2 * rotn(um * 1.3 + 5.0))
             x = r.uniform()
@@ -671,21 +1039,22 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
             if x < 0.45 * sev:
                 c = c + r.uniform(0.1, 0.6) * (d - c)                # corto
             yo = -0.021 - (r.uniform(0.0, 0.004) if r.uniform() < 0.3 else 0.0)
-            pts = [(um, yo, c), (um + r.uniform(-0.0015, 0.0015), yo, (c + d) / 2), (um, yo, d)]
             M = None
             if 0.45 * sev < x < 0.6 * sev and d - c > 0.6:
                 # colgando del clavo superior: gira en el plano y se despega
-                ang = math.degrees(math.atan2(min(0.12, gap + 0.06), d - c)) * r.choice((-1, 1))
+                ang = math.degrees(math.atan2(min(0.12, gap + 0.08), d - c)) * r.choice((-1, 1))
                 M = _about((um, -0.021, d - 0.05), _R("Y", ang) @ _R("X", -r.uniform(1.0, 3.0)))
             tmp = MB()
-            _beam(tmp, pts, Vector((0, 1, 0)), 0.05, 0.0, 0.020, "wood_dark", c=0.004, jag0=0.02 if c > 0.05 else 0.0, r=r)
+            lumber(tmp, (um, yo + 0.010, c), (um, yo + 0.010, d), batten, 0.020, "wood_dark", up=(0, 1, 0), r=r, rc=0.004,
+                   step=0.5, grain=0.8, check=0.5 if r.uniform() < 0.25 else 0.0, bow=r.uniform(-0.0015, 0.0015),
+                   jag0=0.02 if c > 0.05 else 0.0)
             if M is not None:
                 M = _T(0, -0.002, 0) @ M
             mb.join(tmp, M)
             tmp.bm.free()
             for gv in girts_v:
                 if c + 0.04 < gv < d - 0.04 and M is None:
-                    _nail(mb, (um, yo, gv), (0, -1, 0), r=0.0048, h=0.003)
+                    nail(mb, (um + r.uniform(-0.004, 0.004), yo, gv), (0, -1, 0), r=0.0046, h=0.0025)
     return mb
 
 
@@ -744,17 +1113,19 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
         v0, v1 = vk + CLAP_W * f0 - drop, vk + CLAP_W * f1
         kick = kick + r.uniform(0.0, 0.0018)          # canto bajo irregular (tabla vieja, alabeada)
         v0 -= r.uniform(0.0, 0.002)
-        ch = min(0.004, 0.3 * (v1 - v0))
+        rb = min(0.0035, 0.3 * (v1 - v0), 0.3 * th(f0))
+        yf0 = yb(f0) - th(f0) - kick
+        # canto vivo de la testa redondeado (radio 3,5 mm, 4 segmentos: es la línea de sombra que se ve de la fachada)
+        arc = [(yf0 + rb * (1 - math.sin(PI / 2 * k / 4)), v0 + rb * (1 - math.cos(PI / 2 * k / 4))) for k in range(5)]
         if bend:
             # tabla suelta: se despega por debajo de la línea fk y conserva la parte que tapa la tabla de arriba, así no se
             # mete en ella (antes giraba entera alrededor del canto alto)
             fm = min(max(fk, f0 + 0.05), f1 - 0.02)
             vm_ = vk + CLAP_W * fm
-            pts = [(yb(f0) - kick, v0), (yb(fm), vm_), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(fm) - th(fm), vm_),
-                   (yb(f0) - th(f0) - kick, v0 + ch), (yb(f0) - th(f0) + 0.004 - kick, v0)]
+            pts = [(yb(f0) - kick, v0), (yb(fm), vm_), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(fm) - th(fm), vm_)] + \
+                arc[::-1]
         else:
-            pts = [(yb(f0) - kick, v0), (yb(f1), v1), (yb(f1) - th(f1), v1), (yb(f0) - th(f0) - kick, v0 + ch),
-                   (yb(f0) - th(f0) + 0.004 - kick, v0)]
+            pts = [(yb(f0) - kick, v0), (yb(f1), v1), (yb(f1) - th(f1), v1)] + arc[::-1]
         return [Vector((u, y, v)) for y, v in pts]
 
     k, vk = 0, 0.03
@@ -806,7 +1177,7 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
                         sg = 1 if i == 0 else -1
                         rg = [p + Vector((sg * r.uniform(0, jj), 0, 0)) for p in rg]
                     rings.append(rg)
-                _loft(mb, rings, "wood_grey")
+                _cap_loft(mb, rings, "wood_grey")
                 # clavos sobre cada pie derecho, cerca del canto bajo
                 if not (kick0 or kick1):
                     for sx in studs:
@@ -814,7 +1185,9 @@ def clapboard(length, height, seed=0, openings=(), corners=(True, True), loose=0
                         if pa2 + 0.03 < us < pb2 - 0.03 and r.uniform() > 0.12 and f0 < 0.1:
                             fv = 0.025 / CLAP_W
                             yface = ybb + (ytb - ybb) * fv - (CLAP_TB + (CLAP_TT - CLAP_TB) * fv)
-                            _nail(mb, (us + r.uniform(-0.008, 0.008), yface, vk + 0.025), (0, -1, -0.11), r=0.0045, h=0.0025)
+                            pop = r.uniform(0.003, 0.009) if r.uniform() < 0.05 else 0.0
+                            nail(mb, (us + r.uniform(-0.008, 0.008), yface, vk + 0.025), (0, -1, -0.11), r=0.0045, h=0.0024,
+                                 pop=pop, bend=r.uniform(0.0, 0.5) if pop else 0.0)
         k += 1
         vk += CLAP_EXP
     return mb

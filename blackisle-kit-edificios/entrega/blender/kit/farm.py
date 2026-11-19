@@ -14,7 +14,10 @@ Materiales: wood, wood_dark, wood_grey, wood_varnish, steel, aluminium, metal_ru
 plastic_blue, concrete, paint_green, paint_yellow, sign_red, sign_white, paper, glass, vegetation, hay, burlap, cardboard, amber.
 Aleatoriedad solo vía rng(seed).
 """
+import hashlib
+import json
 import math
+import os
 
 import bmesh
 import bpy  # noqa: F401  (bpy antes que mathutils)
@@ -24,8 +27,109 @@ from mathutils.bvhtree import BVHTree
 
 from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rng, rr_profile
-from kit.clinic_equipo import loft_rings, loop_tube, revolve, sweep_frame
-from kit.clinic_servicios import _dedupe, hexnut, label, lathe, resample, rr_pts, skin, slab
+from kit.clinic_equipo import loft_rings, sweep_frame
+from kit.clinic_equipo import loop_tube as _loop_tube0
+from kit.clinic_equipo import revolve as _revolve0
+from kit.clinic_servicios import _dedupe, hexnut, label, resample, skin
+from kit.clinic_servicios import rr_pts as _rr_pts0
+from kit.clinic_servicios import lathe as _lathe0
+from kit.clinic_servicios import rrframe as _rrframe0
+from kit.clinic_servicios import slab as _slab0
+
+
+# ======================================================================================================== redondos sin facetas
+# Segunda pasada R-AAA (punto 7): ninguna sección redonda facetada a < 2 m. MB.finish() marca dura toda arista de más de 30°,
+# así que cada redondo lleva los lados que pide su radio (flecha de la cuerda <= 0,18 mm, mínimo 24 en cilindros visibles de
+# Ø >= 16 mm y 14 en lo demás), los alambres de Ø <= 6 mm van con 12 lados y sombreado continuo (MB.soft) y cada canto
+# redondeado lleva pasos de <= 22,5° (suave bajo el umbral de 30°). Hexágonos y cuadros intencionales (seg <= 6 con fase)
+# se respetan. Estos envoltorios sustituyen a los de kit.clinic_* dentro de este módulo y de kit.store.
+SAG = 0.00018
+
+
+def nsides(r, lo=None, hi=96):
+    """Lados de una sección redonda de radio r: flecha <= SAG, mínimo `lo` (24 si r >= 8 mm, si no 14), número par."""
+    r = abs(float(r))
+    if lo is None:
+        lo = 24 if r >= 0.008 else 14
+    n = PI / math.acos(1.0 - SAG / r) if r > SAG * 2 else lo
+    n = int(math.ceil(n / 2.0)) * 2
+    return max(lo, min(hi, n))
+
+
+def qsegs(r):
+    """Segmentos por cuarto de vuelta de un canto redondeado de radio r: pasos de <= 22,5° desde 1,8 mm."""
+    r = abs(float(r))
+    if r < 0.0009:
+        return 1
+    if r < 0.0018:
+        return 2
+    if r < 0.015:
+        return 4
+    return 6
+
+
+def _rmax(prof):
+    return max(abs(float(p[0])) for p in prof)
+
+
+def revolve(mb, prof, mats, seg=16, M=None, caps=True, phase=0.0, rmod=None, a0=0.0, a1=None, closed=False):
+    """kit.clinic_equipo.revolve con los lados que pide el radio (salvo polígonos intencionales: seg <= 6 con fase)."""
+    if not (seg <= 6 and phase):
+        seg = max(seg, nsides(_rmax(prof)))
+    return _revolve0(mb, prof, mats, seg=seg, M=M, caps=caps, phase=phase, rmod=rmod, a0=a0, a1=a1, closed=closed)
+
+
+def lathe(mb, prof, seg=32, mat="steel", M=None, closed=False, phase=0.0, rmod=None, caps=True, mats=None):
+    """kit.clinic_servicios.lathe con los lados que pide el radio (salvo polígonos intencionales: seg <= 6 con fase)."""
+    if not (seg <= 6 and phase):
+        seg = max(seg, nsides(_rmax(prof)))
+    return _lathe0(mb, prof, seg=seg, mat=mat, M=M, closed=closed, phase=phase, rmod=rmod, caps=caps, mats=mats)
+
+
+def loop_tube(mb, pts, r, seg=6, mat="steel", normal=None):
+    """Alambre/aro cerrado: >= 12 lados con sombreado continuo si Ø <= 6 mm; si no, los que pida el radio."""
+    if r <= 0.003:
+        with mb.soft():
+            return _loop_tube0(mb, pts, r, seg=max(seg, 12), mat=mat, normal=normal)
+    return _loop_tube0(mb, pts, r, seg=max(seg, nsides(r)), mat=mat, normal=normal)
+
+
+def tube(mb, pts, r, seg=8, mat="cable", caps=True, radii=None):
+    """MB.tube con los lados que pide el radio (alambres de Ø <= 6 mm: 12 lados, sombreado continuo)."""
+    rm = max([r] + list(radii or []))
+    if rm <= 0.003:
+        with mb.soft():
+            return mb.tube(pts, r, seg=max(seg, 12), mat=mat, caps=caps, radii=radii)
+    return mb.tube(pts, r, seg=max(seg, nsides(rm)), mat=mat, caps=caps, radii=radii)
+
+
+def cyl(mb, p0, p1, r, seg=8, mat="metal_rust", caps=True, r1=None):
+    """MB.cyl con los lados que pide el radio (varillas de Ø <= 6 mm: 12 lados, sombreado continuo)."""
+    rm = max(r, r1 or 0.0)
+    if rm <= 0.003:
+        with mb.soft():
+            return mb.cyl(p0, p1, r, seg=max(seg, 12), mat=mat, caps=caps, r1=r1)
+    return mb.cyl(p0, p1, r, seg=max(seg, nsides(rm)), mat=mat, caps=caps, r1=r1)
+
+
+def slab(mb, M, w, d, h, rc=0.01, re=0.004, mat="sign_white", nc=4, ne=3, re0=None, cap0=True, cap1=True, mats=None):
+    """kit.clinic_servicios.slab con cantos de pasos <= 22,5° (esquinas en planta y cantos superior/inferior)."""
+    rcm = max(rc) if isinstance(rc, (tuple, list)) else rc
+    nc = max(nc, qsegs(rcm))
+    ne = max(ne, qsegs(max(re, re0 if re0 is not None else re)))
+    return _slab0(mb, M, w, d, h, rc=rc, re=re, mat=mat, nc=nc, ne=ne, re0=re0, cap0=cap0, cap1=cap1, mats=mats)
+
+
+def rr_pts(w, h, r, n=4):
+    """Rectángulo redondeado con >= 4 segmentos por esquina (mismo número en todos los lazos de un mismo sólido)."""
+    return _rr_pts0(w, h, r, max(n, 4))
+
+
+def rrframe(mb, M, outer, inner, t, re_o=0.004, re_i=0.003, n=5, ne=3, mat="sign_white"):
+    """kit.clinic_servicios.rrframe con esquinas y cantos de pasos <= 22,5°."""
+    n = max(n, qsegs(max(outer[4], inner[4])))
+    ne = max(ne, qsegs(max(re_o, re_i)))
+    return _rrframe0(mb, M, outer, inner, t, re_o=re_o, re_i=re_i, n=n, ne=ne, mat=mat)
 
 
 # ======================================================================================================== primitivas
@@ -46,7 +150,7 @@ def board(mb, p0, p1, w, t, mat, rr, r=0.004, up=(0, 0, 1), seg=3, n=1, rough=0.
     `up`), torcedura `twist` (grados a lo largo), aristas irregulares (`rough` m por vértice), testas con chaflán y corte fuera
     de escuadra (±`square` grados). deform(x, py, pz) -> (py, pz) para mordidas/desgaste. rr = Generator."""
     M, L = port.frame_on(p0, p1, up)
-    prof = rr_profile(w, t, r, n)
+    prof = rr_profile(w, t, r, max(n, qsegs(r)))
     e = min(r * 0.8, L * 0.1)
     xs = [0.0, e] + [L * k / seg for k in range(1, seg)] + [L - e, L]
     xs = sorted(set(round(x, 6) for x in xs))
@@ -77,16 +181,24 @@ def board(mb, p0, p1, w, t, mat, rr, r=0.004, up=(0, 0, 1), seg=3, n=1, rough=0.
     return M, L
 
 
-def log_post(mb, p0, p1, r0, r1, mat, rr, seg=10, rings=6, crook=0.015, top=True, checks=1, cap_bottom=True, rough=0.06):
-    """Poste rollizo de p0 (abajo) a p1 (arriba): radio r0 -> r1 con irregularidad por vértice, eje chueco, grietas de secado
-    (columnas hundidas) y cabeza intemperizada (canto redondeado y copete abombado)."""
+def log_post(mb, p0, p1, r0, r1, mat, rr, seg=None, rings=None, crook=0.015, top=True, checks=1, cap_bottom=True, rough=0.06):
+    """Poste rollizo de p0 (abajo) a p1 (arriba): radio r0 -> r1, superficie de madera intemperizada sin corteza (ondulación
+    suave por ruido continuo: nudos, lomos de la fibra que gira en espiral), eje chueco, grietas de secado (`checks`: canal en V
+    de 4-7 mm que sigue la fibra en espiral y se cierra en los extremos) y cabeza gastada (canto redondeado y copete abombado).
+    28+ lados y un anillo cada ~6 cm: nada facetado de cerca."""
     p0, p1 = _V(p0), _V(p1)
+    seg = max(seg or 0, nsides(r0, lo=28))
     d = (p1 - p0)
     L = d.length
     d.normalize()
     n1, n2 = _perp(d)
-    ph = [float(rr.uniform(0, 2 * PI)) for _ in range(4)]
-    ck = [int(rr.integers(0, seg)) for _ in range(checks)]
+    rings = max(rings or 0, int(L / 0.06) + 2)
+    ph = [float(rr.uniform(0, 2 * PI)) for _ in range(5)]
+    sd = float(rr.uniform(0, 100))
+    spiral = float(rr.uniform(-0.9, 0.9))                         # giro de la fibra (rad por metro)
+    ck = [(float(rr.uniform(0, 2 * PI)), float(rr.uniform(0.004, 0.007)), float(rr.uniform(0.1, 0.3)), float(rr.uniform(0.7, 0.95)))
+          for _ in range(checks)]
+    knots = [(float(rr.uniform(0, 2 * PI)), float(rr.uniform(0.1, 0.9)), float(rr.uniform(0.012, 0.025))) for _ in range(2)]
     loops = []
     zs = [L * k / (rings - 1) for k in range(rings)]
     if top:
@@ -98,18 +210,30 @@ def log_post(mb, p0, p1, r0, r1, mat, rr, seg=10, rings=6, crook=0.015, top=True
         c = p0 + d * z + off
         ring = []
         for k in range(seg):
-            a = 2 * PI * k / seg + 0.15 * math.sin(i + ph[2])
-            f = 1.0 + float(rr.uniform(-rough, rough)) + 0.05 * math.sin(3 * a + ph[3])
-            if k in ck and 0 < i < rings - 1:
-                f -= 0.09
+            a = 2 * PI * k / seg
+            af = a + spiral * z
+            f = 1.0 + rough * 0.6 * noise.noise(Vector((math.cos(af) * 0.9 + sd, math.sin(af) * 0.9, z * 2.2)))
+            f += rough * 0.25 * noise.noise(Vector((math.cos(af) * 2.6, math.sin(af) * 2.6 + sd, z * 7.0)))
+            f += 0.03 * math.sin(3 * af + ph[3]) + 0.012 * math.sin(11 * af + ph[4])        # lomos de la fibra
+            for (ka, kz, kr) in knots:                                                      # nudos: bulto con centro hundido
+                da = math.atan2(math.sin(a - ka), math.cos(a - ka)) * rad
+                dd = math.hypot(da, z - kz * L)
+                if dd < kr * 2.2:
+                    f += (0.06 * math.exp(-(dd / kr) ** 2) - 0.05 * math.exp(-(dd / (kr * 0.4)) ** 2))
+            for (ca, cw, c0, c1) in ck:                                                     # grieta de secado (V)
+                if c0 < u < c1:
+                    da = abs(math.atan2(math.sin(af - ca), math.cos(af - ca))) * rad
+                    w_ = cw * min(1.0, (u - c0) / 0.08, (c1 - u) / 0.08)
+                    if da < w_:
+                        f -= (1.0 - da / w_) * min(0.16, 3.5 * w_ / max(rad, 0.02))
             ring.append(c + (n1 * math.cos(a) + n2 * math.sin(a)) * rad * f)
         loops.append(ring)
     if top:
-        c = p0 + d * L + crook * 0.0 * n1
         last = loops[-1]
         cc = sum(last, Vector()) / len(last)
-        loops.append([cc + (v - cc) * 0.82 + d * 0.011 for v in last])
-        loops.append([cc + d * (0.014 + float(rr.uniform(-0.003, 0.004))) + n1 * float(rr.uniform(-0.01, 0.01))])
+        for (sc, dz) in ((0.96, 0.005), (0.88, 0.0095), (0.72, 0.013), (0.45, 0.0155)):   # canto gastado y copete
+            loops.append([cc + (v - cc) * sc + d * (dz + 0.0015 * noise.noise(Vector((v.x * 30 + sd, v.y * 30, 1.0)))) for v in last])
+        loops.append([cc + d * (0.017 + float(rr.uniform(-0.002, 0.003)))])
     skin(mb, loops, mat, cap0=cap_bottom, cap1=True)
     return loops
 
@@ -137,8 +261,11 @@ def bplate(mb, outline, t, mat, M=None, e=0.0015):
             out.append(b - bis * (dl / k))
         return out
     e = min(e, t * 0.45)
-    if e > 0:
-        rings = [[p + Vector((0, 0, z)) for p in ring] for (ring, z) in ((inset(e), 0.0), (P, e), (P, t - e), (inset(e), t))]
+    if e > 0:                                                    # canto redondeado (cuarto de círculo, pasos <= 22,5°)
+        nq = qsegs(e)
+        lo_ = [(e * (1 - math.sin(PI / 2 * j / nq)), e * (1 - math.cos(PI / 2 * j / nq))) for j in range(nq + 1)]
+        hi_ = [(e * (1 - math.cos(PI / 2 * j / nq)), t - e + e * math.sin(PI / 2 * j / nq)) for j in range(nq + 1)]
+        rings = [[p + Vector((0, 0, z)) for p in (inset(d_) if d_ > 1e-9 else P)] for (d_, z) in lo_ + hi_]
     else:
         rings = [[p + Vector((0, 0, z)) for p in P] for z in (0.0, t)]
     loft_rings(mb, rings, mat, M=M, cap0=True, cap1=True)
@@ -146,7 +273,8 @@ def bplate(mb, outline, t, mat, M=None, e=0.0015):
 
 def nail(mb, M, r=0.0045, mat="steel", seg=6):
     """Cabeza de clavo (ligeramente abombada) apoyada en z = 0 local, hundida 0,4 mm en la madera (sin tapa oculta)."""
-    lathe(mb, [(r, -0.0004), (r * 0.8, 0.0009), (0.0, 0.0013)], seg=seg, mat=mat, M=M, caps=False)
+    lathe(mb, [(r, -0.0004), (r * 0.97, 0.0004), (r * 0.8, 0.0010), (r * 0.45, 0.00135), (0.0, 0.0014)], seg=max(seg, 14), mat=mat, M=M,
+          caps=False)
 
 
 def cbolt(mb, M, r=0.011, mat="steel", nut=False):
@@ -160,10 +288,11 @@ def cbolt(mb, M, r=0.011, mat="steel", nut=False):
         lathe(mb, [(r, -0.0003), (r * 0.97, r * 0.2), (r * 0.75, r * 0.45), (r * 0.35, r * 0.58), (0.0, r * 0.6)], seg=10, mat=mat, M=M)
 
 
-def rope_tube(mb, pts, r, mat="burlap", seg=6, step=None, lay=None, depth=0.16, caps=True, strands=3):
+def rope_tube(mb, pts, r, mat="burlap", seg=18, step=None, lay=None, depth=0.16, caps=True, strands=3):
     """Cuerda torcida de 3 cabos: tubo por la polilínea con la sección de 3 lóbulos girando a lo largo (paso `lay`)."""
     step = step or r * 2.2
     lay = lay or r * 18
+    seg = max(seg, 6 * strands)
     P = [Vector(p) for p in resample(_dedupe([tuple(p) for p in pts], 1e-5), step)]
     n = len(P)
     if n < 2:
@@ -210,7 +339,8 @@ def straw(mb, p, d, L, r, rr, mat="hay", droop=0.25, segs=2, flat=0.55, curl=0.3
         f = 1.0 - 0.35 * i / segs
         loops.append([c + (n1 * math.cos(tw + 2 * PI * k / 3) + n2 * math.sin(tw + 2 * PI * k / 3) * flat) * r * f for k in range(3)])
     loops.append([pts[-1]])
-    skin(mb, loops, mat, cap0=True, cap1=False)
+    with mb.soft():                                               # popote: sombreado continuo (Ø 3-4 mm)
+        skin(mb, loops, mat, cap0=True, cap1=False)
     return pts
 
 
@@ -219,85 +349,119 @@ BALE = (0.90, 0.46, 0.36)
 TWINE_Y = 0.115
 
 
-def _bale_outline(hy, hz, rc, cinch, bulge, bul_cut, bul_fold, rr, jit):
-    """Contorno (y, z) de un tajo de paca, centrado: base plana, esquinas redondeadas, vértices de amarre (cinchados) en
-    y = ±TWINE_Y arriba, cara superior abombada entre hilos, lado de corte (-Y) casi plano y lado doblado (+Y) abombado.
-    17 vértices, antihorario."""
-    P = []
-    tw = TWINE_Y
-    for (cy, cz, a0) in ((hy - rc, -hz + rc, -PI / 2), (hy - rc, hz - rc, 0.0)):
-        for k in range(3):
-            a = a0 + PI / 4 * k
-            P.append((cy + rc * math.cos(a), cz + rc * math.sin(a)))
-        if a0 < 0:
-            P.append((hy + bul_fold, 0.0))
-    for y in (tw, 0.0, -tw):
-        P.append((y, hz - cinch if y else hz + bulge))
-    for (cy, cz, a0) in ((-hy + rc, hz - rc, PI / 2), (-hy + rc, -hz + rc, PI)):
-        for k in range(3):
-            a = a0 + PI / 4 * k
-            P.append((cy + rc * math.cos(a), cz + rc * math.sin(a)))
-        if a0 < PI * 0.75:
-            P.append((-hy - bul_cut, 0.0))
-    return [(y + float(rr.uniform(-jit, jit)), z + float(rr.uniform(-jit, jit))) for (y, z) in P]
+def _bale_ring(hy, hz, rc, n=48):
+    """Contorno (y, z) de un tajo de paca centrado: rectángulo de esquinas redondeadas `rc`, n puntos a paso constante de
+    longitud de arco (antihorario desde y = +hy, z = 0). Devuelve [(y, z, ny, nz, s)] con la normal hacia afuera y el arco s."""
+    segs = [("L", (hy, -hz + rc), (hy, hz - rc), (1.0, 0.0)), ("A", (hy - rc, hz - rc), 0.0), ("L", (hy - rc, hz), (-hy + rc, hz), (0.0, 1.0)),
+            ("A", (-hy + rc, hz - rc), PI / 2), ("L", (-hy, hz - rc), (-hy, -hz + rc), (-1.0, 0.0)), ("A", (-hy + rc, -hz + rc), PI),
+            ("L", (-hy + rc, -hz), (hy - rc, -hz), (0.0, -1.0)), ("A", (hy - rc, -hz + rc), 1.5 * PI)]
+    lens = [(math.hypot(g[2][0] - g[1][0], g[2][1] - g[1][1]) if g[0] == "L" else rc * PI / 2) for g in segs]
+    per = sum(lens)
+    out = []
+    for k in range(n):
+        s_ = per * k / n
+        # el lazo arranca a media altura del costado +Y
+        s_ = (s_ + lens[0] / 2) % per
+        acc = 0.0
+        for g, ln in zip(segs, lens):
+            if s_ <= acc + ln + 1e-12:
+                t = (s_ - acc) / ln
+                if g[0] == "L":
+                    y = g[1][0] + (g[2][0] - g[1][0]) * t
+                    z = g[1][1] + (g[2][1] - g[1][1]) * t
+                    ny, nz = g[3]
+                else:
+                    a = g[2] + PI / 2 * t
+                    ny, nz = math.cos(a), math.sin(a)
+                    y, z = g[1][0] + rc * ny, g[1][1] + rc * nz
+                break
+            acc += ln
+        out.append((y, z, ny, nz, per * k / n))
+    return out
 
 
 def hay_bale(seed=0):
-    """Paca chica de 0,90 × 0,46 × 0,36 (eje largo X): cuerpo de 'tajos' (flakes) de 6-10 cm separados por juntas suaves de
-    3-6 mm, cada tajo con su contorno irregular; cara superior abombada entre los hilos, lado de corte (-Y) casi plano con
-    puntas de popote cortadas, lado doblado (+Y) abombado; cinchada por dos hilos (henequén o rafia) tensos que puentean las
-    juntas, con nudo del anudador y cabos; testas abombadas e irregulares con popotes cortados, fleco de popotes sueltos que
-    se doblan por su peso y algunos tirados al piso. Asentada: base plana en z = 0. ≤ 2 500 triángulos."""
+    """Paca chica de 0,90 × 0,46 × 0,36 (eje largo X; medidas de paca de dos hilos 14 × 18 × 36"): cuerpo de 'tajos' (flakes)
+    de 6-10 cm, cada uno con su contorno (48 puntos, esquinas de 3-4 cm), juntas hundidas 3-6 mm y onduladas, y la superficie
+    de paja comprimida como relieve: capas de popote que corren alrededor del tajo (estrías), grumos, lado de corte (-Y) más
+    áspero (puntas de popote) y lado doblado (+Y) abombado por tajo; cinchada por dos hilos de rafia o henequén (12 lados,
+    sombreado continuo) que se hunden en su surco, con nudo del anudador y cabos; testas con popotes cortados, fleco de popotes
+    sueltos que se doblan por su peso y algunos tirados al piso. Asentada: base plana en z = 0. ~8 000 triángulos."""
     r = rng(seed)
     L, W, H = BALE
     hz0 = H / 2
+    sd = float(r.uniform(0, 100))
     # ---- tajos
     xs = [-L / 2]
     while xs[-1] < L / 2 - 0.13:
         xs.append(xs[-1] + float(r.uniform(0.064, 0.10)))
     xs.append(L / 2)
     nfl = len(xs) - 1
-    outl = []
-    for i in range(nfl):
-        hy = W / 2 + float(r.uniform(-0.005, 0.005))
-        hz = hz0 + float(r.uniform(-0.004, 0.006))
-        outl.append(dict(o=_bale_outline(hy, hz, float(r.uniform(0.03, 0.042)), float(r.uniform(0.004, 0.008)),
-                                         float(r.uniform(0.003, 0.010)), float(r.uniform(0.0, 0.004)), float(r.uniform(0.005, 0.014)),
-                                         r, 0.004),
-                         dy=float(r.uniform(-0.004, 0.004)), dz=float(r.uniform(-0.002, 0.003))))
-    tilt = [(float(r.uniform(-0.03, 0.03)), float(r.uniform(-0.03, 0.03))) for _ in xs]
+    NR = 36
+    base = _bale_ring(W / 2, hz0, 0.036, NR)
+    flk = [dict(hy=W / 2 + float(r.uniform(-0.006, 0.006)), hz=hz0 + float(r.uniform(-0.004, 0.006)), dy=float(r.uniform(-0.005, 0.005)),
+                dz=float(r.uniform(-0.002, 0.003)), fold=float(r.uniform(0.006, 0.016)), cut=float(r.uniform(-0.002, 0.003)),
+                tl=(float(r.uniform(-0.03, 0.03)), float(r.uniform(-0.03, 0.03))), ph=float(r.uniform(0, 2 * PI)))
+           for _ in range(nfl)]
+    tw = TWINE_Y
 
-    wav = [(float(r.uniform(0.0015, 0.005)), float(r.uniform(0, 2 * PI)), float(r.uniform(9, 16))) for _ in xs]
-
-    def ring_at(x, o, dy, dz, scale, tl, xj=0.0, wv=None):
+    def ring_at(x, F, G=None, inset=0.0, xj=0.0, tl=None):
+        """Lazo de la estación x del tajo F (G: tajo vecino para promediar en la junta), metido `inset` hacia el eje."""
+        hy = F["hy"] if G is None else (F["hy"] + G["hy"]) / 2
+        hz = F["hz"] if G is None else (F["hz"] + G["hz"]) / 2
+        dy = F["dy"] if G is None else (F["dy"] + G["dy"]) / 2
+        dz = F["dz"] if G is None else (F["dz"] + G["dz"]) / 2
+        fold = F["fold"] if G is None else (F["fold"] + G["fold"]) / 2
+        tl = tl or F["tl"]
         out = []
-        for (y, z) in o:
-            yy, zz = y * scale[0] + dy, z * scale[1] + dz
-            xw = wv[0] * math.sin(wv[2] * (yy + zz) + wv[1]) if wv else 0.0     # juntas onduladas, no planos perfectos
-            out.append(Vector((x + tl[0] * yy + tl[1] * zz + xw + (float(r.uniform(-xj, xj)) if xj else 0.0), yy, zz + hz0)))
+        for (y0, z0, ny, nz, s_) in base:
+            y = y0 * hy / (W / 2)
+            z = z0 * hz / hz0
+            dn = 0.0
+            if nz > 0.5:                                          # cara superior: lomo entre hilos, surco del hilo
+                dn += 0.006 * (1 - min(abs(abs(y) - tw) / 0.07, 1.0)) * -1.0 + 0.004 * math.cos(PI * y / (W / 2)) ** 2
+            if ny > 0.5:                                          # lado doblado: cada tajo se abomba
+                dn += fold * (1 - (z / hz) ** 2)
+            if ny < -0.5:                                         # lado de corte: plano y áspero
+                dn += F["cut"] + 0.0035 * noise.noise(Vector((x * 70 + sd, s_ * 60, 3.1)))
+            # paja comprimida: capas que corren alrededor del tajo (varían rápido en x, lento a lo largo del lazo) y grumos
+            dn += 0.0028 * noise.noise(Vector((x * 46 + sd, s_ * 3.0 + F["ph"], 0.7)))
+            dn += 0.0022 * noise.noise(Vector((x * 14 + sd, s_ * 11.0, 5.3)))
+            if nz < -0.5:
+                dn *= 0.25                                        # la base apoya en el piso
+            dn -= inset
+            yy, zz = y + ny * dn + dy, z + nz * dn + dz
+            out.append(Vector((x + tl[0] * yy + tl[1] * zz + (float(r.uniform(-xj, xj)) if xj else 0.0), yy, zz + hz0)))
         return out
     loops = []
-    e = 0.016
+    e = 0.014
     for i in range(nfl):
-        F = outl[i]
+        F = flk[i]
         xa, xb = xs[i], xs[i + 1]
-        if i == 0:
-            loops.append([Vector((xa - float(r.uniform(0.014, 0.024)), F["dy"] + float(r.uniform(-0.03, 0.03)),
+        if i == 0:                                                # testa: copete abombado e irregular
+            loops.append([Vector((xa - float(r.uniform(0.012, 0.02)), F["dy"] + float(r.uniform(-0.03, 0.03)),
                                   hz0 + F["dz"] + float(r.uniform(-0.03, 0.03))))])
-            loops.append(ring_at(xa - 0.004, F["o"], F["dy"], F["dz"], (0.9, 0.9), tilt[0], xj=0.006))
+            for (dx, ins) in ((0.0, 0.07), (0.004, 0.03), (0.010, 0.008)):
+                rg = ring_at(xa + dx, F, inset=ins, xj=0.004)
+                if ins > 0.05:
+                    rg = [Vector((v.x - 0.012 + 0.005 * noise.noise(Vector((v.y * 20 + sd, v.z * 20, 1.0))), v.y, v.z)) for v in rg]
+                loops.append(rg)
         else:
-            G = outl[i - 1]
-            avg = [((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2) for a_, b_ in zip(F["o"], G["o"])]
-            dd = float(r.uniform(0.003, 0.006))
-            sc = (1 - dd / (W / 2), 1 - dd * 0.8 / hz0)
-            loops.append(ring_at(xa, avg, (F["dy"] + G["dy"]) / 2, (F["dz"] + G["dz"]) / 2, sc, tilt[i], wv=wav[i]))
-        jit = [(float(r.uniform(-0.0025, 0.0025)), float(r.uniform(-0.0025, 0.0025))) for _ in F["o"]]
-        o2 = [(y + j[0], z + j[1]) for (y, z), j in zip(F["o"], jit)]
-        loops.append(ring_at(xa + e, F["o"], F["dy"], F["dz"], (1, 1), tilt[i], wv=wav[i]))
-        loops.append(ring_at(xb - e, o2, F["dy"], F["dz"], (1, 1), tilt[i + 1], wv=wav[i + 1]))
+            G = flk[i - 1]
+            dd = float(r.uniform(0.003, 0.006))                   # junta entre tajos
+            tlj = ((F["tl"][0] + G["tl"][0]) / 2, (F["tl"][1] + G["tl"][1]) / 2)
+            loops.append(ring_at(xa, F, G, inset=dd, tl=tlj))
+        xm = (xa + xb) / 2
+        loops.append(ring_at(xa + e, F))
+        loops.append(ring_at(xm, F))
+        loops.append(ring_at(xb - e, F))
         if i == nfl - 1:
-            loops.append(ring_at(xb + 0.004, F["o"], F["dy"], F["dz"], (0.9, 0.9), tilt[-1], xj=0.006))
-            loops.append([Vector((xb + float(r.uniform(0.014, 0.024)), F["dy"] + float(r.uniform(-0.03, 0.03)),
+            for (dx, ins) in ((-0.010, 0.008), (-0.004, 0.03), (0.0, 0.07)):
+                rg = ring_at(xb + dx, F, inset=ins, xj=0.004)
+                if ins > 0.05:
+                    rg = [Vector((v.x + 0.012 + 0.005 * noise.noise(Vector((v.y * 20 + sd, v.z * 20, 2.0))), v.y, v.z)) for v in rg]
+                loops.append(rg)
+            loops.append([Vector((xb + float(r.uniform(0.012, 0.02)), F["dy"] + float(r.uniform(-0.03, 0.03)),
                                   hz0 + F["dz"] + float(r.uniform(-0.03, 0.03))))])
     for L_ in loops:                                              # asentada: la base se aplana contra el piso
         for v in L_:
@@ -315,8 +479,8 @@ def hay_bale(seed=0):
     tmat = ["burlap", "burlap", "plastic_blue", "sign_red"][int(r.integers(0, 4))]
     rt = 0.0028
     A, B, Rc = L / 2 + 0.05, H / 2 + 0.05, 0.08
-    outer = [Vector((x, 0.0, z + hz0)) for (x, z) in rr_pts(2 * A, 2 * B, Rc, n=3)]
-    outer = [Vector(p) for p in resample([tuple(p) for p in outer + [outer[0]]], 0.075)][:-1]
+    outer = [Vector((x, 0.0, z + hz0)) for (x, z) in rr_pts(2 * A, 2 * B, Rc, n=6)]
+    outer = [Vector(p) for p in resample([tuple(p) for p in outer + [outer[0]]], 0.065)][:-1]
     for sgn in (-1, 1):
         y = sgn * TWINE_Y + float(r.uniform(-0.005, 0.005))
         pts = []
@@ -326,33 +490,34 @@ def hay_bale(seed=0):
             hit, nrm, _, _ = tree.ray_cast(q, (qi - q).normalized(), 0.5)
             if hit is None:
                 continue
-            p_ = hit + nrm * (rt - 0.0012)
+            p_ = hit + nrm * (rt - 0.0016)                        # el hilo se hunde 1,6 mm en la paja
             p_.y = y
             p_.z = max(p_.z, rt)
             pts.append(p_)
-        loop_tube(mb, pts, rt, seg=3, mat=tmat, normal=(0, 1, 0))
+        loop_tube(mb, pts, rt, seg=12, mat=tmat, normal=(0, 1, 0))
         kp = min((p_ for p_ in pts if p_.z > H * 0.8), key=lambda p_: abs(p_.x - (0.3 * sgn)))
-        lathe(mb, [(0.0, -0.002), (0.0045, 0.0), (0.0065, 0.003), (0.0045, 0.007), (0.0, 0.008)], seg=5, mat=tmat,
-              M=_T(kp.x, kp.y, kp.z - 0.001) @ _Rx(float(r.uniform(-20, 20))))
+        lathe(mb, [(0.0, -0.002), (0.0045, 0.0), (0.0065, 0.003), (0.0058, 0.0055), (0.0045, 0.007), (0.0, 0.008)], seg=14, mat=tmat,
+              M=_T(kp.x, kp.y, kp.z - 0.001) @ _Rx(float(r.uniform(-20, 20))) @ Matrix.Diagonal((1.25, 0.8, 1.0, 1.0)))
         for k in range(2):                                        # cabos cortados del nudo
             straw(mb, (kp.x, kp.y, kp.z + 0.003), (float(r.uniform(-1, 1)), float(r.uniform(-0.4, 0.4)), 0.3), 0.03, 0.0018, r,
-                  mat=tmat, droop=0.6, segs=1)
+                  mat=tmat, droop=0.6, segs=2)
     # ---- popotes: puntas cortadas (testas y lado de corte -Y), fleco largo que cuelga de juntas y aristas
     areas = np.array([a_ * (1.0 + 12.0 * (1.0 - max(abs(n_.x), abs(n_.y), abs(n_.z)))) for (_, n_, a_) in faces])   # más en aristas
     cdf = np.cumsum(areas) / areas.sum()
     n_long = n_stub = tries = 0
-    while (n_long < 52 or n_stub < 34) and tries < 4000:
+    NL, NS = 50, 90
+    while (n_long < NL or n_stub < NS) and tries < 8000:
         tries += 1
         c, nrm, _ = faces[int(np.searchsorted(cdf, r.uniform()))]
         if nrm.z < -0.5 or c.z < 0.02:
             continue
         cut = abs(nrm.x) > 0.6 or nrm.y < -0.7
-        if cut and n_stub < 34:
+        if cut and n_stub < NS:
             d = (nrm + Vector((float(r.uniform(-0.45, 0.45)), float(r.uniform(-0.45, 0.45)), float(r.uniform(-0.35, 0.5))))).normalized()
-            straw(mb, c - nrm * 0.004, d, float(r.uniform(0.016, 0.045)), 0.0017, r, droop=0.05, segs=1)
+            straw(mb, c - nrm * 0.004, d, float(r.uniform(0.012, 0.04)), 0.0016, r, droop=0.05, segs=1)
             n_stub += 1
             continue
-        if cut or n_long >= 52:
+        if cut or n_long >= NL:
             continue
         t1 = Vector((1, 0, 0)) if abs(nrm.x) < 0.7 else Vector((0, 0, 1))
         t1 = (t1 - nrm * t1.dot(nrm)).normalized()
@@ -360,9 +525,9 @@ def hay_bale(seed=0):
             t1 = -t1
         d = (t1 * float(r.uniform(0.6, 1.0)) + nrm * float(r.uniform(0.12, 0.5))
              + nrm.cross(t1) * float(r.uniform(-0.5, 0.5))).normalized()
-        straw(mb, c - nrm * 0.004, d, float(r.uniform(0.06, 0.17)), 0.002, r, droop=0.6 if c.z < 0.09 else 0.3, segs=2)
+        straw(mb, c - nrm * 0.004, d, float(r.uniform(0.06, 0.17)), 0.002, r, droop=0.6 if c.z < 0.09 else 0.3, segs=3)
         n_long += 1
-    for k in range(8):                                            # popotes que salen de la junta inferior y descansan en el piso
+    for k in range(10):                                           # popotes que salen de la junta inferior y descansan en el piso
         x = float(r.uniform(-L / 2 + 0.05, L / 2 - 0.05))
         sy = 1 if r.uniform() < 0.5 else -1
         ang = float(r.uniform(-0.9, 0.9))
@@ -372,7 +537,8 @@ def hay_bale(seed=0):
         pts = [p0, p0 + d * Ls * 0.45 + Vector((0, 0, -0.0085)), p0 + d * Ls + Vector((0, 0, -0.0095))]
         n1, n2 = _perp(d)
         lp = [[c + (n1 * math.cos(2 * PI * q / 3) + n2 * math.sin(2 * PI * q / 3) * 0.55) * 0.002 for q in range(3)] for c in pts[:-1]]
-        skin(mb, lp + [[pts[-1]]], "hay", cap0=True, cap1=False)
+        with mb.soft():
+            skin(mb, lp + [[pts[-1]]], "hay", cap0=True, cap1=False)
     return mb
 
 
@@ -423,6 +589,7 @@ def hay_stack(nx=3, ny=2, nz=3, seed=0):
     rest_top = [s_ for s_ in top if s_[1:3] not in gone]
     if nz > 1 and rest_top:
         pulled = rest_top[int(r.integers(0, len(rest_top)))][1:3]
+    placed = []
     for (k, x, y, z, rot) in slots:
         if (x, y) in gone and k == nz - 1:
             continue
@@ -433,8 +600,29 @@ def hay_stack(nx=3, ny=2, nz=3, seed=0):
             jx += float(r.uniform(0.12, 0.2)) if rot else 0.0
             yaw += float(r.uniform(-9, 9))
         tl = (float(r.uniform(-1.0, 1.0)), float(r.uniform(-0.8, 0.8))) if k else (0.0, 0.0)
-        mb.join(pool[used % len(pool)], _bale_M(x + jx, y + jy, z - (0.004 if k else 0.0), yaw, rot90=rot, tilt=tl))
+        placed.append((used % len(pool), _bale_M(x + jx, y + jy, z - (0.004 if k else 0.0), yaw, rot90=rot, tilt=tl), x + jx, y + jy, z, rot))
         used += 1
+    # pacas encerradas (cubiertas por sus 4 costados y por arriba) no se ven desde ningún lado: no se agregan (la huella y la
+    # colisión de la estiba no cambian)
+    boxes = []
+    for (_, _, x, y, z, rot) in placed:
+        hx, hy = (W / 2, L / 2) if rot else (L / 2, W / 2)
+        boxes.append((x - hx, x + hx, y - hy, y + hy, z, z + H))
+
+    def covered(p, me):
+        return any(b[0] - 0.02 <= p[0] <= b[1] + 0.02 and b[2] - 0.02 <= p[1] <= b[3] + 0.02 and b[4] - 0.02 <= p[2] <= b[5] + 0.02
+                   for j, b in enumerate(boxes) if j != me)
+    for i, (pi, M, x, y, z, rot) in enumerate(placed):
+        x0, x1, y0, y1, z0, z1 = boxes[i]
+        zm, o = (z0 + z1) / 2, 0.06
+        probes = []
+        for f in (0.15, 0.5, 0.85):
+            xf, yf = x0 + (x1 - x0) * f, y0 + (y1 - y0) * f
+            probes += [(x0 - o, yf, zm), (x1 + o, yf, zm), (xf, y0 - o, zm), (xf, y1 + o, zm)]
+            probes += [(xf, y0 + (y1 - y0) * g, z1 + o) for g in (0.2, 0.8)]
+        if all(covered(p_, i) for p_ in probes):
+            continue
+        mb.join(pool[pi], M)
     # pacas sueltas al pie: una en el piso frente a la estiba, otra de canto al costado
     y0 = -DY / 2 - W / 2 - float(r.uniform(0.25, 0.45))
     mb.join(pool[used % 6], _bale_M(float(r.uniform(-0.3, 0.3)) * WX / 2, y0, 0.0, float(r.uniform(-35, 35))))
@@ -475,7 +663,7 @@ def loose_hay(w=1.2, d=0.8, h=0.15, seed=0):
     r = rng(seed)
     sd = seed * 3.17 + 0.71
     mb = MB()
-    na, nr = 30, 7
+    na, nr = 48, 10
     lumps = [(float(r.uniform(-0.6, 0.6)), float(r.uniform(-0.6, 0.6)), float(r.uniform(0.12, 0.3)), float(r.uniform(0.15, 0.4)))
              for _ in range(5)]
 
@@ -538,7 +726,8 @@ def loose_hay(w=1.2, d=0.8, h=0.15, seed=0):
         for i_, c in enumerate(pts[:-1]):
             f = 1.0 - 0.25 * i_ / 3
             lp.append([c + (n1 * math.cos(tw + 2 * PI * q / 3) + n2 * math.sin(tw + 2 * PI * q / 3) * 0.55) * rr_ * f for q in range(3)])
-        skin(mb, lp + [[pts[-1]]], "hay", cap0=True, cap1=False)
+        with mb.soft():
+            skin(mb, lp + [[pts[-1]]], "hay", cap0=True, cap1=False)
     return mb
 
 
@@ -647,7 +836,7 @@ def _hem(mb, top, r, up, mat="burlap", h=0.026, thread="plastic"):
             u = min(max((x - a_.x) / max(b_.x - a_.x, 1e-9), 0.0), 1.0)
             q = a_.lerp(b_, u)
             pts.append(q + up * (0.0025 if k % 2 else -0.0025) + Vector((0, sgn * 0.0012, 0)))
-        mb.tube([tuple(p_) for p_ in _dedupe([tuple(q) for q in pts], 1e-4)], 0.0011, seg=3, mat=thread)
+        tube(mb, [tuple(p_) for p_ in _dedupe([tuple(q) for q in pts], 1e-4)], 0.0011, seg=3, mat=thread)
     for k in range(9):                                          # hilos deshilachados en el canto
         v = L2[int(r.integers(0, N))]
         d = (v - c)
@@ -659,12 +848,229 @@ def _hem(mb, top, r, up, mat="burlap", h=0.026, thread="plastic"):
           droop=1.0, segs=2)
 
 
+# ---------------------------------------------------------------------------------------------- costal simulado (tela)
+SACK_CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache_tela")
+SACK_SIM_V = 2
+
+
+def _sack_sim(var):
+    """Costal de rafia tejida (bolsa plana de dos hojas cosidas en todo el perímetro, 0,46 × 0,72) lleno de grano, simulado con la
+    tela de Blender: presión a volumen objetivo (0,029-0,033 m³ ≈ 25 kg de grano) con densidad de fluido 0,75 kg/l (gradiente
+    hidrostático: el grano se va al fondo y la panza se ensancha), gravedad y piso; la costura queda como pestaña marcada
+    (malla de 26 × 40 por hoja, sombreado suave). Devuelve (co, caras, uv por esquina de cara) en caché cache_tela/sack_*.npz:
+    el modelo se reconstruye idéntico y rápido."""
+    rr = np.random.default_rng(100 + var)
+    W, L = 0.46 + float(rr.uniform(-0.01, 0.01)), 0.72 + float(rr.uniform(-0.015, 0.015))
+    prm = dict(v=SACK_SIM_V, var=var, W=round(W, 4), L=round(L, 4), nx=26, ny=40, vol=round(0.029 + 0.0013 * var, 4), frames=80,
+               tilt=round(float(rr.uniform(-6, 6)), 2))
+    os.makedirs(SACK_CACHE, exist_ok=True)
+    path = os.path.join(SACK_CACHE, "sack_" + hashlib.sha1(json.dumps(prm, sort_keys=True).encode()).hexdigest()[:16] + ".npz")
+    if os.path.exists(path):
+        d = np.load(path)
+        return d["co"], d["flat"], d["lens"], d["uv"]
+    nx, ny = prm["nx"], prm["ny"]
+    bm = bmesh.new()
+    grid = {}
+
+    def V(i, j, sd):
+        b = i in (0, nx) or j in (0, ny)
+        k = (i, j, 0 if b else sd)
+        if k not in grid:
+            u_, v_ = 2 * i / nx - 1, 2 * j / ny - 1
+            z = 0.0 if b else sd * 0.06 * (1 - u_ * u_) ** 0.5 * (1 - v_ * v_) ** 0.5
+            x = -W / 2 + W * i / nx + float(rr.normal(0, 0.0008))
+            y = -L / 2 + L * j / ny + float(rr.normal(0, 0.0008))
+            grid[k] = bm.verts.new((x, y, z + 0.08))
+        return grid[k]
+    uvq = []
+    for sd in (1, -1):
+        for i in range(nx):
+            for j in range(ny):
+                q = [V(i, j, sd), V(i + 1, j, sd), V(i + 1, j + 1, sd), V(i, j + 1, sd)]
+                if sd < 0:
+                    q = q[::-1]
+                f = bm.faces.new(q)
+                uvq.append([((v.co.x + W / 2) / W + (0.0 if sd > 0 else 2.0), (v.co.y + L / 2) / L) for v in q])
+    bm.faces.ensure_lookup_table()
+    me = bpy.data.meshes.new("_sack")
+    bm.to_mesh(me)
+    uvl = me.uv_layers.new(name="UV")
+    k = 0
+    for poly, uvs in zip(me.polygons, uvq):
+        for li, uv in zip(poly.loop_indices, uvs):
+            uvl.data[li].uv = uv
+        k += 1
+    cr = me.attributes.new("crease_edge", "FLOAT", "EDGE")
+    bnd = set(v.index for (key, v) in grid.items() if key[2] == 0)
+    for e in me.edges:
+        if e.vertices[0] in bnd and e.vertices[1] in bnd:
+            cr.data[e.index].value = 1.0
+    bm.free()
+    ob = bpy.data.objects.new("_sack", me)
+    sc = bpy.context.scene
+    sc.collection.objects.link(ob)
+    ob.rotation_euler = (math.radians(prm["tilt"] * 0.3), math.radians(prm["tilt"]), 0.0)
+    pm = bpy.data.meshes.new("_floor")
+    pm.from_pydata([(-3, -3, 0), (3, -3, 0), (3, 3, 0), (-3, 3, 0)], [], [(0, 1, 2, 3)])
+    fl = bpy.data.objects.new("_floor", pm)
+    sc.collection.objects.link(fl)
+    fl.modifiers.new("col", "COLLISION")
+    fl.collision.thickness_outer = 0.002
+    fl.collision.cloth_friction = 12.0
+    md = ob.modifiers.new("cloth", "CLOTH")
+    st = md.settings
+    st.quality = 6
+    st.mass = 0.009
+    st.tension_stiffness = st.compression_stiffness = 80.0
+    st.shear_stiffness = 32.0
+    st.bending_stiffness = 0.3
+    st.air_damping = 2.0
+    st.use_pressure = True
+    st.uniform_pressure_force = 0.0
+    st.use_pressure_volume = True
+    st.target_volume = prm["vol"]
+    st.pressure_factor = 20.0
+    st.fluid_density = 0.75
+    st.effector_weights.gravity = 1.0
+    md.collision_settings.distance_min = 0.003
+    md.collision_settings.use_self_collision = False
+    fr = prm["frames"]
+    sc.frame_start, sc.frame_end = 1, fr
+    md.point_cache.frame_start, md.point_cache.frame_end = 1, fr
+    for f in range(1, fr + 1):
+        sc.frame_set(f)
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = ob.evaluated_get(dg)
+    m2 = ev.to_mesh()
+    sim = np.array([(ob.matrix_world @ v.co)[:] for v in m2.vertices], np.float32)
+    ev.to_mesh_clear()
+    sc.frame_set(1)
+    bpy.data.objects.remove(fl)
+    bpy.data.meshes.remove(pm)
+    ob.modifiers.remove(md)
+    ob.rotation_euler = (0, 0, 0)
+    for v, c in zip(me.vertices, sim):
+        v.co = Vector(c)
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = ob.evaluated_get(dg)
+    m3 = ev.to_mesh()
+    co = np.array([v.co[:] for v in m3.vertices], np.float32)
+    flat = np.array([i for p_ in m3.polygons for i in p_.vertices], np.int32)
+    lens = np.array([len(p_.vertices) for p_ in m3.polygons], np.int32)
+    uvd = m3.uv_layers.active.data
+    uv = np.array([uvd[li].uv[:] for p_ in m3.polygons for li in p_.loop_indices], np.float32)
+    ev.to_mesh_clear()
+    bpy.data.objects.remove(ob)
+    bpy.data.meshes.remove(me)
+    co[:, 2] -= co[:, 2].min()
+    co[:, 0] -= (co[:, 0].min() + co[:, 0].max()) / 2
+    co[:, 1] -= (co[:, 1].min() + co[:, 1].max()) / 2
+    np.savez_compressed(path, co=co, flat=flat, lens=lens, uv=uv)
+    return co, flat, lens, uv
+
+
+def _sack_lying(seed):
+    """Costal de alimento de rafia acostado, de la simulación de tela (_sack_sim, 3 variantes) con lo que la simulación no da:
+    pliegues de tensión que salen de las cuatro orejas, grumos del grano y ligera ondulación del tejido, franjas tejidas de color
+    y cartel impreso (regiones de material por UV, sin calcomanías), cierre cosido en un extremo con puntada de cadeneta en zigzag
+    (hilo de 2,2 mm) que corre sobre la pestaña de la costura, hilos sueltos y cabo colgando. Base en z = 0, largo en Y."""
+    r = rng(seed)
+    co, flat, lens, uv = _sack_sim(seed % 3)
+    co = co.copy()
+    sx = 1.0 if r.uniform() < 0.5 else -1.0                      # espejo: la variante no se repite igual
+    sy = 1.0 if r.uniform() < 0.5 else -1.0
+    sc_ = float(r.uniform(0.97, 1.03))
+    co[:, 0] *= sx * sc_
+    co[:, 1] *= sy * float(r.uniform(0.97, 1.03))
+    co[:, 2] *= float(r.uniform(0.92, 1.06))
+    stripe = ["sign_red", "paint_green", "plastic_blue"][int(r.integers(0, 3))]
+    mb = MB()
+    vs = [mb.bm.verts.new(Vector(c.tolist())) for c in co]
+    k = 0
+    Wb, Lb = float(co[:, 0].max() - co[:, 0].min()), float(co[:, 1].max() - co[:, 1].min())
+    sd = float(r.uniform(0, 50))
+    fuv = []
+    for n in lens:
+        idx = flat[k:k + n]
+        u_, v_ = uv[k:k + n].mean(0)
+        k += n
+        top = u_ < 1.5
+        uu = u_ if top else u_ - 2.0
+        m = "burlap"
+        if top and 0.3 < uu < 0.7 and 0.33 < v_ < 0.62:
+            m = "paper"                                           # cartel impreso al centro de la cara de arriba
+        elif 0.16 < v_ < 0.2 or 0.76 < v_ < 0.8:
+            m = stripe                                            # franjas tejidas que dan la vuelta
+        try:
+            f = mb.bm.faces.new([vs[i] for i in idx])
+            f.material_index = mb.mi(m)
+            fuv.append(f)
+        except ValueError:
+            pass
+    bm = mb.bm
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.normal_update()
+    # pliegues de tensión desde las orejas, grumos del grano y ondulación del tejido (a lo largo de la normal)
+    xs, ys = co[:, 0], co[:, 1]
+    corners = [(float(xs.min()), float(ys.min())), (float(xs.max()), float(ys.min())), (float(xs.min()), float(ys.max())),
+               (float(xs.max()), float(ys.max()))]
+    zmax = float(co[:, 2].max())
+    disp = []
+    for v in bm.verts:
+        c = v.co
+        d = 0.0
+        if c.z > 0.012:
+            for (cx, cy) in corners:
+                dx, dy = c.x - cx, c.y - cy
+                rr_ = math.hypot(dx, dy)
+                if rr_ < 0.2:
+                    ang = math.atan2(dy, dx)
+                    d += 0.0035 * (1 - abs(math.sin(5.5 * ang + cx * 40))) ** 3 * math.exp(-rr_ / 0.07) * min(1.0, rr_ / 0.02)
+            d += 0.004 * noise.noise(Vector((c.x * 9 + sd, c.y * 9, c.z * 9))) + 0.0012 * noise.noise(Vector((c.x * 31, c.y * 31 + sd, 2.0)))
+            d *= min(1.0, c.z / 0.03)
+        disp.append(v.normal * d)
+    for v, dv in zip(bm.verts, disp):
+        v.co += dv
+    for v in bm.verts:
+        if v.co.z < 0.0:
+            v.co.z = 0.0
+    # costura cerrada (extremo +Y o -Y según el espejo): cadeneta en zigzag sobre la pestaña, 2 cm adentro
+    tree = BVHTree.FromBMesh(bm)
+    ye = float(co[:, 1].max()) if sy > 0 else float(co[:, 1].min())
+    inward = -1.0 if sy > 0 else 1.0
+    n = 34
+    for side in (1, -1):
+        pts = []
+        for q in range(n + 1):
+            x = float(xs.min()) * 0.9 + (float(xs.max()) * 0.9 - float(xs.min()) * 0.9) * q / n
+            y = ye + inward * (0.022 + (0.0025 if q % 2 else -0.0025))
+            o = Vector((x, y, zmax + 0.3)) if side > 0 else Vector((x, y, -0.3))
+            hit = tree.ray_cast(o, Vector((0, 0, -side)), 1.0)[0]
+            if hit is not None and hit.z > 0.002:
+                pts.append(hit + Vector((0, 0, side * 0.0009)))
+        if len(pts) > 4:
+            tube(mb, [tuple(p_) for p_ in pts], 0.0011, mat="plastic")
+    end = Vector((float(xs.max()) * 0.85, ye + inward * 0.004, 0.02))
+    hit = tree.ray_cast(end + Vector((0, 0, 0.3)), Vector((0, 0, -1)), 1.0)[0]
+    if hit is not None:
+        straw(mb, hit + Vector((0, 0, 0.002)), (0.5, -inward * 0.6, -0.4), float(r.uniform(0.07, 0.11)), 0.0011, r, mat="plastic",
+              droop=1.0, segs=3, floor=0.0)
+    for k_ in range(7):                                           # hilos deshilachados del corte
+        x = float(r.uniform(float(xs.min()) * 0.8, float(xs.max()) * 0.8))
+        hit = tree.ray_cast(Vector((x, ye + inward * 0.002, zmax + 0.3)), Vector((0, 0, -1)), 1.0)[0]
+        if hit is not None:
+            straw(mb, hit - Vector((0, 0, 0.002)), (float(r.uniform(-0.4, 0.4)), -inward, 0.2), float(r.uniform(0.01, 0.025)), 0.0007, r,
+                  mat="burlap", droop=0.5, segs=1, floor=0.0)
+    return mb
+
+
 def feed_sack(seed=0, lying=False):
-    """Costal de alimento de yute/rafia (~0,45 × 0,25 × 0,70) lleno de grano: cuerpo blando subdividido que se asienta (panza
-    baja, ligera inclinación, bultos del grano), hombros con pliegues que bajan de las orejas, costura superior con dobladillo
-    y puntada de cadeneta, hilos deshilachados, cabo colgando, trama insinuada por estrías finas, franjas impresas (regiones de
-    material, sin calcomanías) y etiqueta de papel cosida. lying=True: acostado, aplastado por su peso, ~0,70 a lo largo de Y.
-    ≤ 3 000 triángulos."""
+    """Costal de alimento de rafia lleno de grano. lying=True (el que se estiba): costal SIMULADO como tela (_sack_lying, de
+    0,46 × 0,72 × ~0,14). lying=False: de pie (~0,45 × 0,25 × 0,70), cuerpo blando subdividido que se asienta (panza baja,
+    ligera inclinación, bultos del grano), hombros con pliegues que bajan de las orejas, costura superior con dobladillo y
+    puntada de cadeneta, hilos deshilachados, cabo colgando, franjas impresas y etiqueta de papel cosida."""
+    if lying:
+        return _sack_lying(seed)
     r = rng(seed)
     mb = MB()
     rings, T, Hs = _sack_rings(r, lying)
@@ -814,8 +1220,9 @@ def sack_pile(n=6, seed=0):
                 pat = [(float(r.uniform(-0.1, 0.1)), float(r.uniform(-0.1, 0.1)), pat[0][2])]
         for (x, y, yaw) in pat:
             s_ = feed_sack(seed=seed * 31 + layer * 7 + int(x * 10 + y * 10) + 50, lying=True)
-            M = _T(x + float(r.uniform(-0.025, 0.025)), y + float(r.uniform(-0.025, 0.025)), z - 0.035 * (layer > 0)) @ \
-                _Rz(yaw + float(r.uniform(-6, 6)) + (180.0 if r.uniform() < 0.5 else 0.0))
+            sq = 0.86 if pat is patA or len(pat) == 3 else 0.95       # los costales vecinos se aprietan de lado
+            M = _T(x + float(r.uniform(-0.02, 0.02)), y + float(r.uniform(-0.02, 0.02)), z - 0.035 * (layer > 0)) @ \
+                _Rz(yaw + float(r.uniform(-5, 5)) + (180.0 if r.uniform() < 0.5 else 0.0)) @ Matrix.Diagonal((sq, 1.0, 1.0, 1.0))
             s_.transform(M)
             zs = [v.co.z for v in s_.bm.verts]
             zlo, zhi = min(zs), max(zs)
@@ -940,7 +1347,7 @@ def wheelbarrow(seed=0):
     for sx in (-1, 1):
         P = [(sx * 0.285, 0.88, 0.52), (sx * 0.27, 0.62, 0.40), (sx * 0.252, 0.36, 0.276), (sx * 0.228, 0.12, 0.268),
              (sx * 0.195, -0.16, 0.268), (sx * 0.13, -0.40, 0.236), (sx * 0.084, -0.53, 0.205), (sx * 0.084, -0.57, 0.2)]
-        mb.tube(_dedupe(fillet(P, 0.14, 3), 1e-4), rt, seg=8, mat="steel", caps=True)
+        tube(mb, _dedupe(fillet(P, 0.14, 3), 1e-4), rt, seg=8, mat="steel", caps=True)
         # oreja aplanada del larguero que abraza el eje
         bplate(mb, [(-0.035, -0.022), (0.03, -0.024), (0.045, 0.0), (0.03, 0.024), (-0.035, 0.022)], 0.005, "steel",
                M=_T(sx * (0.084 - 0.0025 * sx) - (0.0025 if sx > 0 else -0.0025) * 0 + (-0.0025 if sx > 0 else -0.0025), -0.585, 0.2)
@@ -956,18 +1363,18 @@ def wheelbarrow(seed=0):
         # pata: tubo del larguero al piso con pie aplanado, riostra al larguero
         top = Vector((sx * 0.262, 0.47, 0.335))
         foot = Vector((sx * 0.29, 0.42, 0.0182))
-        mb.tube(_dedupe(fillet([tuple(top + Vector((0, 0, 0.004))), tuple(foot + Vector((0, 0.0, 0.03))), tuple(foot), tuple(foot + Vector((0, -0.07, 0)))],
+        tube(mb, _dedupe(fillet([tuple(top + Vector((0, 0, 0.004))), tuple(foot + Vector((0, 0.0, 0.03))), tuple(foot), tuple(foot + Vector((0, -0.07, 0)))],
                                0.03, 4), 1e-4), 0.0125, seg=8, mat="steel")
         lathe(mb, [(0.0, -0.022), (0.016, -0.022), (0.018, -0.012), (0.016, 0.0), (0.013, 0.012), (0.0, 0.013)], seg=8, mat="rubber",
               M=_T(foot.x, foot.y - 0.04, 0.0182) @ _Rx(90))
         mid = foot.lerp(top, 0.45)
-        mb.tube([tuple(mid), (sx * 0.226, 0.13, 0.262)], 0.009, seg=6, mat="steel")
+        tube(mb, [tuple(mid), (sx * 0.226, 0.13, 0.262)], 0.009, seg=6, mat="steel")
         port.bolt(mb, _T(top.x + sx * 0.016, top.y, top.z) @ _Ry(90 * sx), d=0.008, stud=0.006, mat="steel")
         # tirante de solera del labio delantero al eje
         sweep_frame(mb, [(-0.012, -0.0022), (0.012, -0.0022), (0.012, 0.0022), (-0.012, 0.0022)],
                     fillet([(sx * 0.12, -0.49, 0.585), (sx * 0.112, -0.52, 0.45), (sx * 0.095, -0.575, 0.215)], 0.04, 4), "steel",
                     up=(1, 0, 0))
-    mb.tube([(-0.29, 0.425, 0.09), (0.29, 0.425, 0.09)], 0.008, seg=6, mat="steel")
+    tube(mb, [(-0.29, 0.425, 0.09), (0.29, 0.425, 0.09)], 0.008, seg=6, mat="steel")
     for y in (-0.07, 0.21):
         xa = 0.21 if y < 0 else 0.245
         port.member(mb, (-xa - 0.04, y, zb - 0.0125), (xa + 0.04, y, zb - 0.0125), [(-0.0125, 0.0125, -0.0125, 0.0125)], "steel")
@@ -985,7 +1392,7 @@ def wheelbarrow(seed=0):
     revolve(mb, [(0.112, 0.034), (0.09, 0.01), (0.05, 0.004), (0.035, 0.018), (0.035, -0.018), (0.05, -0.004), (0.09, -0.01),
                  (0.112, -0.034)], "steel", seg=26, M=Mw, closed=True)
     revolve(mb, [(0.0, -0.05), (0.02, -0.05), (0.022, -0.045), (0.022, 0.045), (0.02, 0.05), (0.0, 0.05)], "steel", seg=12, M=Mw)
-    mb.cyl(Mw @ Vector((0, 0, -0.105)), Mw @ Vector((0, 0, 0.105)), 0.0065, seg=8, mat="steel")
+    cyl(mb, Mw @ Vector((0, 0, -0.105)), Mw @ Vector((0, 0, 0.105)), 0.0065, seg=8, mat="steel")
     for sz in (-1, 1):
         hexnut(mb, Mw @ _T(0, 0, sz * 0.092) @ (_Rx(180) if sz < 0 else Matrix()), s=0.016, h=0.008, mat="steel")
     lathe(mb, [(0.0035, 0.0), (0.0035, 0.025), (0.004, 0.027), (0.0, 0.03)], seg=6, mat="rubber",
@@ -1042,7 +1449,7 @@ def pitchfork(seed=0):
         for i in range(1, len(P)):
             acc.append(acc[-1] + (P[i] - P[i - 1]).length)
         radii = [0.0007 + 0.0040 * min(a_ / 0.16, 1.0) ** 0.75 for a_ in acc]
-        mb.tube([tuple(p) for p in P], 0.0045, seg=8, mat=metal, radii=radii, caps=True)
+        tube(mb, [tuple(p) for p in P], 0.0045, seg=8, mat=metal, radii=radii, caps=True)
     # cuello forjado: abraza la unión de los tres dientes y sube adelgazándose hasta la virola
     revolve(mb, [(0.0, 0.296), (0.011, 0.303), (0.0145, 0.318), (0.012, 0.334), (0.0088, 0.352), (0.0095, 0.372), (0.0125, 0.386),
                  (0.0, 0.387)], metal, seg=12, M=_T(0, dy(0.33), 0) @ Matrix.Scale(1.0, 4) , caps=False,
@@ -1097,7 +1504,7 @@ def shovel(seed=0):
                     [tuple(p) for p in pts], "metal_rust", up=(0, 0, 1))
     # lomo estampado al dorso y cubo
     sp = [surf(0, v, 1) for v in (0.3, 0.55, 0.8, 0.97)]
-    mb.tube([tuple(p + Vector((0, 0.0012, 0))) for p in sp], 0.006, seg=6, mat="metal_rust",
+    tube(mb, [tuple(p + Vector((0, 0.0012, 0))) for p in sp], 0.006, seg=6, mat="metal_rust",
             radii=[0.0025, 0.0055, 0.0085, 0.011])
     top = surf(0, 1.0, 1)
     revolve(mb, [(0.012, top.z - 0.035), (0.0165, top.z), (0.0175, top.z + 0.05), (0.0172, top.z + 0.11), (0.0185, top.z + 0.115),
@@ -1226,7 +1633,7 @@ def bucket(seed=0):
     pts = [Mb @ Vector((-Rb * math.cos(PI * k / 16), 0.0, Rb * math.sin(PI * k / 16) * 0.95)) for k in range(17)]
     xin = rw(zb) + 0.0035
     path = [(-xin, 0.0, zb)] + [tuple(p) for p in pts] + [(xin, 0.0, zb)]
-    mb.tube(_dedupe(path, 1e-4), 0.0025, seg=5, mat="steel")
+    tube(mb, _dedupe(path, 1e-4), 0.0025, seg=5, mat="steel")
     for sx in (-1, 1):                                             # remate del asa en la oreja
         lathe(mb, [(0.0045, 0.0), (0.0042, 0.0018), (0.0022, 0.003), (0.0, 0.0033)], seg=8, mat="steel",
               M=_T(sx * (xin + 0.0005), 0, zb) @ _Ry(90 * sx), caps=False)
@@ -1318,7 +1725,7 @@ def _vise(mb, M, rr, open_=0.03, paint="plastic_blue"):
     revolve(mb, prof, "steel", seg=8, M=M @ _T(0, ym - 0.055, zs) @ _Rx(90))
     revolve(mb, [(0.0, 0.0), (0.018, 0.0), (0.02, 0.008), (0.018, 0.03), (0.0, 0.03)], "steel", seg=12, M=M @ _T(0, ym - 0.05, zs) @ _Rx(90))
     hx = float(rr.uniform(-0.09, 0.09))
-    mb.cyl(M @ Vector((hx - 0.1, ym - 0.068, zs)), M @ Vector((hx + 0.1, ym - 0.068, zs)), 0.0055, seg=8, mat="steel")
+    cyl(mb, M @ Vector((hx - 0.1, ym - 0.068, zs)), M @ Vector((hx + 0.1, ym - 0.068, zs)), 0.0055, seg=8, mat="steel")
     for s_ in (-1, 1):
         revolve(mb, [(0.0, -0.011), (0.008, -0.009), (0.0115, 0.0), (0.008, 0.009), (0.0, 0.011)], "steel", seg=10,
                 M=M @ _T(hx + s_ * 0.105, ym - 0.068, zs) @ _Ry(90))
@@ -1391,7 +1798,7 @@ def _pliers(mb, M, rr):
         sweep_frame(mb, [(-0.006, -0.0035), (0.006, -0.0035), (0.0065, 0.0), (0.006, 0.0035), (-0.006, 0.0035), (-0.0065, 0.0)], P[:6],
                     "steel", up=tuple(M.to_3x3() @ Vector((0, 0, 1))), scale=lambda t: (0.55 + 0.45 * t, 1.0))
         g = [tuple(M @ R @ Vector(p)) for p in [(0.035, -s_ * 0.011, z), (0.08, -s_ * 0.017, z), (0.128, -s_ * 0.019, z)]]
-        mb.tube(g, 0.0062, seg=7, mat="sign_red" if s_ > 0 else "sign_red")
+        tube(mb, g, 0.0062, seg=7, mat="sign_red" if s_ > 0 else "sign_red")
     revolve(mb, [(0.0, 0.0), (0.0065, 0.0), (0.0065, 0.0162), (0.0045, 0.0168), (0.0, 0.017)], "steel", seg=10, M=M)
 
 
@@ -1472,9 +1879,9 @@ def workbench(w=2.0, seed=0):
     revolve(mb, [(0.0, 0.0), (0.046, 0.0), (0.05, 0.004), (0.05, 0.05), (0.045, 0.062), (0.03, 0.072), (0.016, 0.076), (0.0, 0.076)],
             "paint_yellow", seg=18, M=Mo)
     revolve(mb, [(0.0, 0.074), (0.016, 0.074), (0.016, 0.082), (0.012, 0.086), (0.0, 0.086)], "steel", seg=10, M=Mo)
-    mb.tube([tuple(Mo @ Vector(p)) for p in [(0.0, 0.0, 0.084), (0.04, 0.0, 0.12), (0.12, 0.0, 0.2), (0.17, 0.0, 0.245)]], 0.006, seg=6,
+    tube(mb, [tuple(Mo @ Vector(p)) for p in [(0.0, 0.0, 0.084), (0.04, 0.0, 0.12), (0.12, 0.0, 0.2), (0.17, 0.0, 0.245)]], 0.006, seg=6,
             mat="steel", radii=[0.006, 0.005, 0.0035, 0.002])
-    mb.tube([tuple(Mo @ Vector(p)) for p in [(-0.01, 0.0, 0.08), (-0.03, 0.0, 0.1), (-0.06, 0.0, 0.105)]], 0.003, seg=5, mat="steel")
+    tube(mb, [tuple(Mo @ Vector(p)) for p in [(-0.01, 0.0, 0.08), (-0.03, 0.0, 0.1), (-0.06, 0.0, 0.105)]], 0.003, seg=5, mat="steel")
     revolve(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.0, 0.007)], "steel", seg=8, M=Mo @ _T(-0.062, 0, 0.102) @ _Ry(-80))
     # lata de café con clavos
     Mc = _T(0.72 * w / 2, 0.18, H)
@@ -1497,13 +1904,13 @@ def workbench(w=2.0, seed=0):
             d = Vector((d.x * 2.2, d.y * 2.2, 0.25)).normalized()
         Ln = float(r.uniform(0.035, 0.065))
         tip = base + d * Ln
-        mb.cyl(base, tip, 0.0013, seg=4, mat="steel", caps=False)
+        cyl(mb, base, tip, 0.0013, seg=4, mat="steel", caps=False)
         q = d.to_track_quat("Z", "Y").to_matrix().to_4x4()
         revolve(mb, [(0.0, 0.0), (0.0038, 0.0), (0.0035, 0.0012), (0.0, 0.0014)], "steel", seg=6, M=Matrix.Translation(tip) @ q)
     for k in range(5):                                           # clavos regados en la cubierta
         p0 = Mc @ Vector((float(r.uniform(-0.14, 0.14)), float(r.uniform(-0.16, -0.07)), 0.0014))
         d = Vector((math.cos(k * 1.7 + 0.3), math.sin(k * 1.7 + 0.3), 0.0))
-        mb.cyl(p0, p0 + d * 0.06, 0.0013, seg=4, mat="steel", caps=False)
+        cyl(mb, p0, p0 + d * 0.06, 0.0013, seg=4, mat="steel", caps=False)
         revolve(mb, [(0.0, 0.0), (0.0038, 0.0), (0.0035, 0.0012), (0.0, 0.0014)], "steel", seg=6,
                 M=Matrix.Translation(p0 + d * 0.06 + Vector((0, 0, 0.0024))) @ d.to_track_quat("Z", "Y").to_matrix().to_4x4() @ _T(0, 0, -0.0))
     # trapo rojo: sobre la cubierta y colgando del canto frontal, con pliegues
@@ -1597,7 +2004,7 @@ def ladder(h=3.2, seed=0):
         if k in (2, n - 1):
             zr = z - 0.03
             xr = xs(zr) + rt
-            mb.cyl((-xr - 0.012, 0, zr), (xr + 0.012, 0, zr), 0.0045, seg=6, mat="metal_rust")
+            cyl(mb, (-xr - 0.012, 0, zr), (xr + 0.012, 0, zr), 0.0045, seg=6, mat="metal_rust")
             for sx in (-1, 1):
                 lathe(mb, [(0.016, 0.0), (0.016, 0.002)], seg=10, mat="metal_rust", M=_T(sx * xr, 0, zr) @ _Ry(90 * sx))
                 hexnut(mb, _T(sx * (xr + 0.002), 0, zr) @ _Ry(90 * sx), s=0.012, h=0.007, mat="metal_rust")
@@ -1623,7 +2030,7 @@ def hoist(drop=2.0, seed=0):
     hk = [(0.0, 0.0, -0.064), (0.014, 0.0, -0.062), (0.022, 0.0, -0.05), (0.02, 0.0, -0.036), (0.008, 0.0, -0.028), (-0.008, 0.0, -0.03),
           (-0.02, 0.0, -0.042), (-0.026, 0.0, -0.066), (-0.02, 0.0, -0.09), (0.0, 0.0, -0.1)]
     hk = [(x, y + 0.0, z - 0.011) for (x, y, z) in hk]
-    mb.tube(_dedupe(fillet(hk, 0.008, 2), 1e-4), 0.006, seg=6, mat="steel",
+    tube(mb, _dedupe(fillet(hk, 0.008, 2), 1e-4), 0.006, seg=6, mat="steel",
             radii=None)
     zb = -0.11
     revolve(mb, [(0.0, zb - 0.002), (0.012, zb - 0.002), (0.012, zb + 0.004), (0.009, zb + 0.008), (0.0, zb + 0.008)], "steel", seg=10)
@@ -1643,11 +2050,11 @@ def hoist(drop=2.0, seed=0):
     revolve(mb, [(0.012, -0.016), (Rs, -0.016), (Rs + 0.002, -0.013), (Rs - 0.006, -0.006), (Rs - 0.01, 0.0), (Rs - 0.006, 0.006),
                  (Rs + 0.002, 0.013), (Rs, 0.016), (0.012, 0.016)], "steel", seg=18, M=_T(0, 0, zc) @ _Rx(90), caps=False)
     revolve(mb, [(0.0, -0.016), (0.012, -0.016), (0.012, 0.016), (0.0, 0.016)], "steel", seg=10, M=_T(0, 0, zc) @ _Rx(90))
-    mb.cyl((0, -0.034, zc), (0, 0.034, zc), 0.0075, seg=8, mat="steel")
+    cyl(mb, (0, -0.034, zc), (0, 0.034, zc), 0.0075, seg=8, mat="steel")
     for sy in (-1, 1):
         hexnut(mb, _T(0, sy * 0.026, zc) @ _Rx(-90 * sy), s=0.019, h=0.009, mat="steel")
     for (x, z) in ((0.0, zc + Rs + 0.014), (0.0, zc - Rs - 0.012)):
-        mb.cyl((x, -0.026, z), (x, 0.026, z), 0.0055, seg=8, mat="steel")
+        cyl(mb, (x, -0.026, z), (x, 0.026, z), 0.0055, seg=8, mat="steel")
         for sy in (-1, 1):
             lathe(mb, [(0.0085, 0.0), (0.0075, 0.002), (0.0, 0.003)], seg=8, mat="steel", M=_T(x, sy * 0.026, z) @ _Rx(-90 * sy), caps=False)
     # cuerda: abraza la garrucha y baja en dos ramales
@@ -1681,14 +2088,15 @@ def hoist(drop=2.0, seed=0):
               0.005, seg=5, mat="steel", normal=(0, 0, 1))
     gh = [(0.0, 0.0, hz - 0.012), (0.0, 0.0, hz - 0.05), (0.004, 0.0, hz - 0.085), (0.028, 0.0, hz - 0.1), (0.045, 0.0, hz - 0.085),
           (0.047, 0.0, hz - 0.06), (0.04, 0.0, hz - 0.048)]
-    mb.tube([(x + lo.x, y + lo.y, z) for (x, y, z) in fillet(gh, 0.015, 3)], 0.007, seg=6, mat="steel",
+    tube(mb, [(x + lo.x, y + lo.y, z) for (x, y, z) in fillet(gh, 0.015, 3)], 0.007, seg=6, mat="steel",
             radii=None)
     return mb
 
 
-def _rope_fixed(mb, pts, r, mat, seg=6, dphi=0.7, depth=0.16):
+def _rope_fixed(mb, pts, r, mat, seg=18, dphi=0.7, depth=0.16):
     """Cuerda de 3 cabos sobre puntos ya muestreados: la sección de 3 lóbulos gira un ángulo fijo por anillo (sin aliasing
     donde el muestreo es ralo: ahí el torcido se alarga)."""
+    seg = max(seg, 18)
     P = [Vector(p) for p in pts]
     n = len(P)
     T = [(P[min(i + 1, n - 1)] - P[max(i - 1, 0)]).normalized() for i in range(n)]
@@ -1781,7 +2189,7 @@ def bare_bulb(drop=0.6, seed=0):
     zs = -drop
     sw = float(r.uniform(-0.01, 0.01))
     cord = [(0.0, 0.0, -0.02), (0.0, 0.0, -0.08), (sw * 0.5, 0.0, (zs + 0.06) * 0.6), (sw, 0.0, zs + 0.09), (sw, 0.0, zs + 0.06)]
-    mb.tube(cord, 0.0032, seg=5, mat="cable")
+    tube(mb, cord, 0.0032, seg=5, mat="cable")
     revolve(mb, [(0.0, -0.012), (0.0055, -0.009), (0.0065, 0.0), (0.0055, 0.008), (0.0, 0.011)], "cable", seg=6, M=_T(sw, 0, zs + 0.068))
     Ms = _T(sw, 0, zs)
     revolve(mb, [(0.0, 0.062), (0.008, 0.062), (0.016, 0.058), (0.019, 0.05), (0.021, 0.035), (0.023, 0.03), (0.023, 0.006),
@@ -1794,8 +2202,8 @@ def bare_bulb(drop=0.6, seed=0):
     revolve(mb, [(0.0128, -0.021), (0.015, -0.028), (0.025, -0.045), (0.03, -0.07), (0.029, -0.09), (0.024, -0.104), (0.014, -0.112),
                  (0.0, -0.114)], "glass", seg=12, M=Ms, caps=False)
     for s_ in (-1, 1):
-        mb.cyl(Ms @ Vector((s_ * 0.002, 0, -0.03)), Ms @ Vector((s_ * 0.007, 0, -0.068)), 0.0006, seg=3, mat="steel", caps=False)
-    mb.tube([tuple(Ms @ Vector(p)) for p in [(-0.007, 0, -0.068), (-0.003, 0, -0.072), (0.003, 0, -0.072), (0.007, 0, -0.068)]], 0.0009,
+        cyl(mb, Ms @ Vector((s_ * 0.002, 0, -0.03)), Ms @ Vector((s_ * 0.007, 0, -0.068)), 0.0006, seg=3, mat="steel", caps=False)
+    tube(mb, [tuple(Ms @ Vector(p)) for p in [(-0.007, 0, -0.068), (-0.003, 0, -0.072), (0.003, 0, -0.072), (0.007, 0, -0.068)]], 0.0009,
             seg=3, mat="amber")
     return mb
 
@@ -1875,7 +2283,7 @@ def metal_cabinet(seed=0):
         xh = x0 + 0.02 if sx < 0 else x1 - 0.02
         xh = sx * (W / 2 - 0.004)
         for zc in (0.2, H / 2, H - 0.22):
-            mb.cyl((xh + sx * 0.005, yd - 0.006, zc - 0.035 - sag), (xh + sx * 0.005, yd - 0.006, zc + 0.035 - sag), 0.0055, seg=8, mat="steel")
+            cyl(mb, (xh + sx * 0.005, yd - 0.006, zc - 0.035 - sag), (xh + sx * 0.005, yd - 0.006, zc + 0.035 - sag), 0.0055, seg=8, mat="steel")
             lathe(mb, [(0.0, 0.0), (0.0055, 0.0), (0.004, 0.003), (0.0, 0.0035)], seg=8, mat="steel",
                   M=_T(xh + sx * 0.005, yd - 0.006, zc + 0.035 - sag))
     # manija de palanca con portacandado (hoja derecha) y candado
@@ -1982,14 +2390,14 @@ def stall_partition(L=3.0, h=1.4, gate=True, seed=0):
         _strap_hinge(mb, _T(xp, yfront, z) @ _Rx(90) @ _Rz(0), L=0.42, rr=r)
         port.member(mb, (xp - 0.06, yfront + 0.004 - 0.011 * 0, z - 0.03), (xp - 0.002, yfront + 0.004, z - 0.03),
                     [(-0.01, 0.01, -0.012, 0.012)], "metal_rust")
-        mb.cyl((xp, yfront - 0.011, z - 0.05), (xp, yfront - 0.011, z + 0.03), 0.006, seg=8, mat="metal_rust")
+        cyl(mb, (xp, yfront - 0.011, z - 0.05), (xp, yfront - 0.011, z + 0.03), 0.006, seg=8, mat="metal_rust")
     # cerrojo de pasador en el lado de cierre
     zl_ = gz0 + gb * 2.5 + 0.07 * 2
     xl0 = xe - 0.16
     slab(mb, _T(xl0 + 0.06, yfront, zl_) @ _Rx(90), 0.12, 0.05, 0.004, rc=0.004, re=0.0012, mat="metal_rust", nc=1, ne=1)
     revolve(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.2), (0.006, 0.204), (0.0, 0.205)], "steel", seg=8,
             M=_T(xl0, yfront - 0.012, zl_) @ _Ry(90))
-    mb.tube([(xl0 + 0.05, yfront - 0.012, zl_), (xl0 + 0.05, yfront - 0.03, zl_), (xl0 + 0.05, yfront - 0.03, zl_ + 0.04)], 0.005, seg=6,
+    tube(mb, [(xl0 + 0.05, yfront - 0.012, zl_), (xl0 + 0.05, yfront - 0.03, zl_), (xl0 + 0.05, yfront - 0.03, zl_ + 0.04)], 0.005, seg=6,
             mat="steel")
     for dx in (0.01, 0.1):
         loop_tube(mb, [Vector((xl0 + dx + 0.012 * math.cos(2 * PI * k / 8) * 0, yfront - 0.012 + 0.012 * math.cos(2 * PI * k / 8),
@@ -2073,71 +2481,171 @@ def pen_fence(L=4.0, h=1.3, seed=0):
         for q in range(25):
             a = 2 * PI * q / 8
             pts.append((x + R * 0.55 * math.cos(a), -0.04 + R * 0.8 * math.sin(a), z - 0.035 + 0.011 * q / 8))
-        mb.tube(pts, 0.0018, seg=4, mat="aluminium")
+        tube(mb, pts, 0.0018, seg=4, mat="aluminium")
     return mb
 
 
-def wire_fence(L=6.0, seed=0):
-    """Cerca de alambre de púas: postes de rama chueca (mezquite) a cada ~2 m (≤ 2,5 m), enterrados, con grietas; 4 hilos de
-    alambre de púas con catenaria entre postes, grapas en cada poste y púas de 4 puntas (dos alambres cruzados) a cada ~30 cm.
-    Corre a lo largo de +X. ≤ 3 000 triángulos."""
+def _peanut(rw, n=12, waist=0.6):
+    """Sección de dos alambres de radio rw torcidos juntos (unión de dos círculos tangentes, cintura `waist`·rw)."""
+    out = []
+    for k in range(n):
+        a = 2 * PI * k / n
+        rho = max(2 * rw * abs(math.cos(a)), waist * rw)
+        out.append((rho * math.cos(a), rho * math.sin(a)))
+    return out
+
+
+def twisted_pair(mb, pts, rw=0.00126, lay=0.11, step=0.011, mat="galvanized", n=12, phase=0.0):
+    """Alambre de línea de púas: dos alambres de 12,5 ga (Ø 2,5 mm) torcidos entre sí con paso `lay`, barridos como una sola
+    sección de dos lóbulos que gira a lo largo (sombreado continuo). Devuelve [(punto, tangente, normal, giro)] de cada anillo
+    (para colocar púas y grapas sobre el torcido)."""
+    P = [Vector(p) for p in resample(_dedupe([tuple(p) for p in pts], 1e-5), step)]
+    m = len(P)
+    T = [(P[min(i + 1, m - 1)] - P[max(i - 1, 0)]).normalized() for i in range(m)]
+    ref = Vector((0, 0, 1)) if abs(T[0].z) < 0.9 else Vector((1, 0, 0))
+    N = (ref - T[0] * ref.dot(T[0])).normalized()
+    prof = _peanut(rw, n)
+    rings, frames, s_ = [], [], 0.0
+    for i in range(m):
+        if i:
+            s_ += (P[i] - P[i - 1]).length
+            N = (N - T[i] * N.dot(T[i])).normalized()
+        B = T[i].cross(N)
+        ph = phase + 2 * PI * s_ / lay
+        c, sn = math.cos(ph), math.sin(ph)
+        ring = []
+        for (u, v) in prof:
+            uu, vv = u * c - v * sn, u * sn + v * c
+            ring.append(P[i] + N * uu + B * vv)
+        rings.append(ring)
+        frames.append((P[i], T[i], N, ph, s_))
+    with mb.soft():
+        loft_rings(mb, rings, mat, cap0=True, cap1=True)
+    return frames
+
+
+def _barb_hero(rr, mat="galvanized", rb=0.00102, rw=0.00126):
+    """Púa de 4 puntas (dos alambres de 14 ga, Ø 2,0 mm) enrollada sobre el par de alambres de línea: cada alambre da vuelta y
+    cuarto apretado alrededor del par (hélice) y sus dos extremos salen cortados al sesgo en punta, 12-15 mm, en direcciones
+    abiertas ~90° entre sí. Local: el alambre de línea corre en X por el origen (sección del par en el plano YZ)."""
+    mb = MB()
+    R = 2 * rw * 0.82 + rb                                        # radio de la hélice sobre el par apretado
+    for w, x0 in ((0, -0.0028), (1, 0.0028)):
+        a0 = float(rr.uniform(0, 2 * PI)) + w * PI / 2
+        turns = 1.25
+        npt = 9
+        hel = []
+        for k in range(npt):
+            t = k / (npt - 1)
+            a = a0 + 2 * PI * turns * t
+            rad = R * (1.0 + 0.08 * math.sin(2 * a))              # el par no es redondo: la vuelta se aplana
+            hel.append(Vector((x0 + (t - 0.5) * 2.6 * rb * turns, rad * math.cos(a), rad * math.sin(a))))
+        with mb.soft():                                           # Ø 2 mm, se repite cientos de veces: 8 lados suaves (flecha 0,08 mm)
+            mb.tube([tuple(p) for p in hel], rb, seg=8, mat=mat)
+        for (p, q, sgn) in ((hel[0], hel[1], -1), (hel[-1], hel[-2], 1)):
+            radial = Vector((0.0, p.y, p.z)).normalized()
+            tang = (p - q).normalized()
+            d = (radial * 0.82 + tang * 0.45 + Vector((sgn * float(rr.uniform(0.05, 0.25)), 0, 0))).normalized()
+            Lp = float(rr.uniform(0.012, 0.015))
+            tip = p + d * Lp
+            n1, n2 = _perp(d)
+            # cuerpo de la punta y corte al sesgo (bisel del cortador): el último anillo se desplaza y se cierra en punta
+            rings = [[p + (n1 * math.cos(2 * PI * j / 8) + n2 * math.sin(2 * PI * j / 8)) * rb for j in range(8)],
+                     [p + d * (Lp * 0.72) + (n1 * math.cos(2 * PI * j / 8) + n2 * math.sin(2 * PI * j / 8)) * rb for j in range(8)],
+                     [tip - n1 * rb * 0.7]]
+            with mb.soft():
+                skin(mb, rings, mat, cap0=False, cap1=False)
+    return mb
+
+
+def wire_fence(L=6.0, seed=0, brace_ends=False):
+    """Cerca de alambre de púas de potrero: postes de rama chueca (mezquite) a cada ~2,4 m enterrados, con grietas; 4 hilos
+    de alambre de púas comercial (dos alambres de 12,5 ga torcidos, púas de 4 puntas de 14 ga a cada 5" = 12,7 cm) con
+    catenaria entre postes, grapas en U de alambre de 9 ga clavadas sobre el hilo en cada poste. brace_ends=True: postes de
+    extremo más gruesos con tornapunta en H (travesaño a 0,92 m y tirante diagonal de alambre doble torcido con su tarabilla) y
+    los hilos dan vuelta al poste y se amarran sobre sí mismos. Corre a lo largo de +X. Púas a 12,7 cm (Bekaert / Red Brand)."""
     r = rng(seed)
     mb = MB()
     nb = max(1, int(math.ceil(L / 2.5)))
     xs = [L * k / nb for k in range(nb + 1)]
     tops = []
     pm = MB()
-    for x in xs:
-        r0 = float(r.uniform(0.055, 0.07))
-        h = float(r.uniform(1.18, 1.35))
-        lean = (float(r.uniform(-0.05, 0.05)), float(r.uniform(-0.04, 0.04)))
-        log_post(pm, (x, 0.0, -0.08), (x + lean[0], lean[1], h), r0, r0 * 0.7, "wood_grey", r, seg=9, rings=7, crook=0.03, checks=1,
-                 rough=0.1)
+    for i, x in enumerate(xs):
+        end = brace_ends and i in (0, nb)
+        r0 = float(r.uniform(0.085, 0.095)) if end else float(r.uniform(0.055, 0.07))
+        h = float(r.uniform(1.25, 1.32)) if end else float(r.uniform(1.18, 1.35))
+        lean = (0.0, 0.0) if end else (float(r.uniform(-0.05, 0.05)), float(r.uniform(-0.04, 0.04)))
+        log_post(pm, (x, 0.0, -0.08), (x + lean[0], lean[1], h), r0, r0 * (0.85 if end else 0.7), "wood_grey", r, crook=0.02 if end else 0.03,
+                 checks=2 if end else 1, rough=0.1)
         tops.append((x, lean, r0, h))
+    if brace_ends and nb >= 2:                                   # tornapunta en H en cada extremo
+        for (ia, ib) in ((0, 1), (nb, nb - 1)):
+            xa, xb = xs[ia], xs[ib]
+            sgn = 1 if xb > xa else -1
+            zb = 0.92                                             # entre el 3er hilo (0,80) y el 4o (1,04)
+            log_post(pm, (xa + sgn * 0.05, 0.0, zb), (xb - sgn * 0.04, 0.0, zb + 0.01), 0.05, 0.045, "wood_grey", r, crook=0.01, top=False,
+                     checks=1, rough=0.08)
+            # tirante: alambre doble que va de lo alto del poste interior al pie del poste de extremo, torcido con una tarabilla
+            pa, pb = Vector((xb - sgn * 0.03, 0.0, zb + 0.06)), Vector((xa + sgn * 0.03, 0.0, 0.18))
+            for off in (-0.004, 0.004):
+                mid = pa.lerp(pb, 0.5) + Vector((0, off * 0.2, 0))
+                tube(mb, [tuple(pa + Vector((0, off, 0))), tuple(mid + Vector((0, -off, 0))), tuple(pb + Vector((0, off, 0)))], 0.0019, mat="galvanized")
+            tw_ = pa.lerp(pb, 0.5)
+            tube(mb, [tuple(tw_ + Vector((0, 0.008, 0.0))), tuple(tw_ + Vector((0, 0.008, 0.0)) + (pb - pa).normalized().cross(Vector((0, 1, 0))) * 0.2)],
+                 0.009, mat="wood_dark")
+            for c in (Vector((xa + sgn * 0.0, 0, 0.18)), Vector((xb, 0, zb + 0.06))):
+                for q in (-1, 1):                                # clavos de anclaje del tirante
+                    nail(mb, _T(c.x + q * 0.02, -0.075, c.z) @ _Rx(90), r=0.0045)
     tree = BVHTree.FromBMesh(pm.bm)
     mb.join(pm)
 
     def front(x, z):
         hit = tree.ray_cast(Vector((x, -1.0, z)), Vector((0, 1, 0)), 2.0)
         return (hit[0].y, hit[0].x) if hit[0] is not None else (-0.06, x)
-    zst = [0.32, 0.56, 0.8, 1.04]
-    for z in zst:
+    zst = [0.32, 0.56, 0.80, 1.04]
+    heroes = [_barb_hero(rng(seed * 13 + k), mat="galvanized") for k in range(3)] + \
+             [_barb_hero(rng(seed * 13 + 7 + k), mat="metal_rust") for k in range(2)]
+    for si, z in enumerate(zst):
+        old = r.uniform() < 0.4                                   # hilo viejo (oxidado) o más nuevo (galvanizado)
+        mat = "metal_rust" if old else "galvanized"
         pts = []
         for b in range(nb):
             xa, la, ra, ha = tops[b]
-            xb, lb, rb, hb = tops[b + 1]
-            sag = float(r.uniform(0.015, 0.04))
-            n = 8
+            xb, lb, rb_, hb = tops[b + 1]
+            sag = float(r.uniform(0.012, 0.035))
+            n = 24
+            fa, fb = front(xa + la[0] * z / ha, z), front(xb + lb[0] * z / hb, z)
+            pa = Vector((fa[1], fa[0] - 0.0026, z))
+            pb = Vector((fb[1], fb[0] - 0.0026, z))
             for q in range(n + (1 if b == nb - 1 else 0)):
                 u = q / n
-                fa, fb = front(xa + la[0] * z / ha, z), front(xb + lb[0] * z / hb, z)
-                pa = Vector((fa[1], fa[0] - 0.0022, z))
-                pb = Vector((fb[1], fb[0] - 0.0022, z))
                 p = pa.lerp(pb, u)
                 p.z -= sag * 4 * u * (1 - u)
                 pts.append(p)
-        mb.tube([tuple(p) for p in pts], 0.0021, seg=4, mat="metal_rust")
-        # grapas en cada poste
+        frames = twisted_pair(mb, pts, mat=mat, phase=float(r.uniform(0, PI)))
+        # púas a cada 12,7 cm sobre el torcido (no sobre los postes)
+        s_tot = frames[-1][4]
+        sb = float(r.uniform(0.02, 0.12))
+        fi = 0
+        while sb < s_tot - 0.02:
+            while fi < len(frames) - 2 and frames[fi + 1][4] < sb:
+                fi += 1
+            Pp, T, N, ph, _ = frames[fi]
+            if all(abs(Pp.x - t_[0]) > 0.09 for t_ in tops):
+                B = T.cross(N)
+                Mb = Matrix((T.to_4d(), N.to_4d(), B.to_4d(), (0, 0, 0, 1))).transposed()
+                Mb.translation = Pp
+                hero = heroes[(int(r.integers(0, 3)) + (3 if old else 0)) % 5] if not old else heroes[3 + int(r.integers(0, 2))]
+                mb.join(hero, Mb @ _Rx(math.degrees(ph) + float(r.uniform(-25, 25))))
+            sb += 0.127
+        # grapas en U (9 ga, Ø 3,8 mm) sobre el hilo en cada poste, clavadas en la madera
         for (x, lean, r0, h) in tops:
             fy, fx = front(x + lean[0] * z / h, z)
-            c = Vector((fx, fy + 0.002, z))
-            mb.tube([tuple(c + Vector((-0.008, 0.004, 0.0))), tuple(c + Vector((-0.006, -0.004, 0.0))), tuple(c + Vector((0.006, -0.004, 0.0))),
-                     tuple(c + Vector((0.008, 0.004, 0.0)))], 0.0014, seg=3, mat="steel")
-        # púas
-        total = 0.0
-        for i in range(len(pts) - 1):
-            seglen = (pts[i + 1] - pts[i]).length
-            k0 = int(total / 0.3)
-            total += seglen
-            for kb in range(k0 + 1, int(total / 0.3) + 1):
-                u = (kb * 0.3 - (total - seglen)) / seglen
-                c = pts[i].lerp(pts[i + 1], u)
-                d = (pts[i + 1] - pts[i]).normalized()
-                n1, n2 = _perp(d)
-                for q in range(2):
-                    a = float(r.uniform(0, PI)) + q * PI / 2
-                    sp = (n1 * math.cos(a) + n2 * math.sin(a) + d * float(r.uniform(-0.3, 0.3))).normalized()
-                    cq = c + d * (0.0028 * q)                    # los dos alambres de la púa van enrollados uno junto al otro
-                    ring = [cq + (d * math.cos(2 * PI * j / 3) + sp.cross(d) * math.sin(2 * PI * j / 3)) * 0.0016 for j in range(3)]
-                    skin(mb, [[cq - sp * 0.013], ring, [cq + sp * 0.013]], "metal_rust")
+            c = Vector((fx, fy, z))
+            ang = float(r.uniform(-25, 25))
+            Ms = _T(c.x, c.y, c.z) @ _Ry(ang)
+            u_ = [Ms @ Vector((-0.0055, 0.012, 0.0)), Ms @ Vector((-0.0055, -0.0015, 0.0)), Ms @ Vector((-0.0045, -0.0052, 0.0)),
+                  Ms @ Vector((0.0, -0.0068, 0.0)), Ms @ Vector((0.0045, -0.0052, 0.0)), Ms @ Vector((0.0055, -0.0015, 0.0)),
+                  Ms @ Vector((0.0055, 0.012, 0.0))]
+            tube(mb, [tuple(q) for q in _dedupe([tuple(p) for p in fillet([tuple(p) for p in u_], 0.002, 3)], 1e-5)], 0.0019, mat="galvanized")
     return mb

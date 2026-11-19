@@ -45,6 +45,7 @@ Todo cabe en 0 aristas no-manifold fuera de 'fabric' (verificado en 8 semillas �
 """
 import contextlib
 import math
+import sys
 
 import bpy  # noqa: F401  (bmesh/mathutils solo existen después de importar bpy)
 import bmesh
@@ -191,30 +192,75 @@ def _declump(mb, dist=0.00016):
 # NIVEL DE DETALLE (parámetro `detail` = 'high' | 'mid' | 'low' de todas las funciones públicas)
 # =====================================================================================================================
 DETAIL_LEVELS = ("high", "mid", "low")
+STATES = ("abandoned", "service")
+# Constructores de modelos EN USO (hospital, tienda, sitio de telecomunicaciones): si no pasan `state`, sus piezas salen en
+# estado 'service' (respaldo; lo correcto es pasar state="service" explícito, ver ESTADO.md).
+_SERVICE_CALLERS = ("hos_builder", "gra_builder", "com_builder")
 
 
 class _LOD:
     level = "high"
+    aaa = False          # True dentro de las funciones públicas de este módulo (reglas R-AAA de facetado y biseles)
+    state = "abandoned"
 
 
 @contextlib.contextmanager
-def _detail(level):
+def _detail(level, aaa=False, state=None):
     """Activa un nivel de detalle mientras se construye una pieza (cada función pública lo hace con su `detail`).
-      · 'high': geometría de primer plano (< 3 m), idéntica a la versión aprobada.
-      · 'mid' : 3–6 m. Sin biseles < 5 mm, tubos y cilindros con ~2/3 de los lados, polilíneas simplificadas
-                (Douglas-Peucker, tolerancia 0,35 × radio), retículas de chapa a paso doble, tornillos simplificados.
-      · 'low' : > 6 m / instancias repetidas. Sin biseles < 12 mm, tubos de 3–4 lados, tolerancia 1,2 × radio,
-                retículas a paso ×5, sin tornillería chica ni puntas deshiladas.
+      · 'high': geometría de primer plano.
+      · 'mid' / 'low': menos elementos repetidos (aletas, lamas, renglones de retícula), polilíneas con tolerancia fina.
+    aaa=True (lo usan TODAS las funciones públicas de services desde la segunda pasada R-AAA): ningún nivel baja de los
+    mínimos de suavidad — tubos y cables >= 14 lados, alambres Ø <= 6 mm de 12 lados con sombreado continuo (mb.soft()),
+    cilindros visibles >= 24 lados con canto achaflanado, esquinas de lámina redondeadas con 4 gajos, biseles conservados.
+    aaa=False (por omisión) conserva el comportamiento anterior: lo usa kit/damage.py, que importa estos auxiliares.
     El nivel NO cambia el consumo de la semilla: con la misma semilla los 3 niveles tienen el mismo estado (puertas,
     roturas, flechas, piezas faltantes), así el constructor puede cambiar de LOD sin que la pieza 'salte'."""
     if level not in DETAIL_LEVELS:
         raise ValueError(f"detail debe ser uno de {DETAIL_LEVELS}, no {level!r}")
-    prev = _LOD.level
+    prev = (_LOD.level, _LOD.aaa, _LOD.state)
     _LOD.level = level
+    _LOD.aaa = aaa
+    if state is not None:
+        _LOD.state = state
     try:
         yield level
     finally:
-        _LOD.level = prev
+        _LOD.level, _LOD.aaa, _LOD.state = prev
+
+
+def _resolve_state(state):
+    """'abandoned' | 'service'. None: 'service' si la pieza la pide un constructor de modelo en uso (_SERVICE_CALLERS),
+    si no 'abandoned' (departamentos, muelle)."""
+    if state is not None:
+        if state not in STATES:
+            raise ValueError(f"state debe ser uno de {STATES}, no {state!r}")
+        return state
+    f = sys._getframe(1)
+    for _ in range(8):
+        f = f.f_back
+        if f is None:
+            break
+        mod = f.f_globals.get("__name__", "")
+        if mod.split(".")[-1] in _SERVICE_CALLERS:
+            return "service"
+    return "abandoned"
+
+
+def _caller_is(modname):
+    """True si la pieza la pide el módulo `modname` (p. ej. 'gra_builder'), buscando unos marcos hacia arriba."""
+    f = sys._getframe(1)
+    for _ in range(8):
+        f = f.f_back
+        if f is None:
+            return False
+        if f.f_globals.get("__name__", "").split(".")[-1] == modname:
+            return True
+    return False
+
+
+def _svc():
+    """True si la pieza en construcción está en servicio (limpia, completa, sin roturas)."""
+    return _LOD.state == "service"
 
 
 def _lv(high, mid, low):
@@ -223,9 +269,42 @@ def _lv(high, mid, low):
     return high if lv == "high" else (mid if lv == "mid" else low)
 
 
+def _rseg(r):
+    """Lados mínimos (R-AAA) de un sólido de revolución de radio r: error de cuerda <= ~0,1–0,4 mm y nunca facetado."""
+    if r <= 0.003:
+        n = 12
+    elif r <= 0.006:
+        n = 16
+    elif r <= 0.016:
+        n = 24
+    elif r <= 0.045:
+        n = 32
+    elif r <= 0.1:
+        n = 48
+    elif r <= 0.25:
+        n = 64
+    else:
+        n = 80
+    return max(n if _LOD.level == "high" else int(round(n * _lv(1.0, 0.8, 0.65))), 12 if r <= 0.003 else 16)
+
+
+def _tseg(r):
+    """Lados mínimos (R-AAA) de un tubo / cable / alambre de radio r (12 con sombreado continuo si Ø <= 6 mm)."""
+    if r <= 0.003:
+        return 12
+    if r <= 0.008:
+        return 14
+    if r <= 0.012:
+        return 18
+    return 24 if r <= 0.03 else 32
+
+
 def _sseg(seg, r=None):
-    """Lados de tubos y cilindros según el nivel (high tal cual · mid × 0,67 · low × 0,45; mínimo 4, o 3 en hilos < 4 mm)."""
+    """Lados de tubos y cilindros según el nivel (high tal cual · mid × 0,67 · low × 0,45; mínimo 4, o 3 en hilos < 4 mm).
+    En modo R-AAA nunca baja de los mínimos de _tseg."""
     lv = _LOD.level
+    if _LOD.aaa:
+        return max(seg, _tseg(r if r is not None else 0.01))
     if lv == "high":
         return seg
     lo = 3 if (r is not None and r < 0.004) else 4
@@ -262,7 +341,10 @@ def _dp(P, tol):
 
 def _simplify(P, r, closed=False):
     """Índices de la polilínea P que sobreviven al nivel activo (tolerancia de cuerda relativa al radio del tubo)."""
-    tol = _lv(0.0, max(0.35 * r, 0.0006), max(1.2 * r, 0.002))
+    if _LOD.aaa:  # R-AAA: tolerancia fina (la curva sigue suave; solo quita puntos casi colineales)
+        tol = _lv(0.0, max(0.08 * r, 0.0002), max(0.18 * r, 0.0004))
+    else:
+        tol = _lv(0.0, max(0.35 * r, 0.0006), max(1.2 * r, 0.002))
     n = len(P)
     if tol <= 0 or n <= 2:
         return list(range(n))
@@ -280,7 +362,18 @@ def _simplify(P, r, closed=False):
 
 
 def _box(mb, mn, mx, mat="concrete", bevel=0.0, seg=2, m=None):
-    """MB.box con bisel según el nivel: mid quita biseles < 5 mm (el resto a 1 segmento), low quita los < 12 mm."""
+    """MB.box con bisel según el nivel: mid quita biseles < 5 mm (el resto a 1 segmento), low quita los < 12 mm.
+    R-AAA: el bisel se conserva en todos los niveles (1 segmento en mid / low) y una caja sin bisel de más de 2 mm por lado
+    recibe un canto de 0,6 mm (ninguna arista perfecta). bevel < 0 = arista viva a propósito."""
+    if _LOD.aaa:
+        if bevel < 0:
+            return mb.box(mn, mx, mat, bevel=0.0, seg=1, m=m)
+        dmin = min(abs(mx[0] - mn[0]), abs(mx[1] - mn[1]), abs(mx[2] - mn[2]))
+        if bevel == 0 and dmin > 0.002:
+            bevel, seg = min(0.0006, 0.2 * dmin), 1
+        elif _LOD.level != "high":
+            seg = 1
+        return mb.box(mn, mx, mat, bevel=bevel, seg=seg, m=m)
     if bevel > 0 and _LOD.level != "high":
         if bevel < _lv(0.0, 0.005, 0.012):
             bevel = 0.0
@@ -289,9 +382,25 @@ def _box(mb, mn, mx, mat="concrete", bevel=0.0, seg=2, m=None):
     return mb.box(mn, mx, mat, bevel=bevel, seg=seg, m=m)
 
 
-def _cyl(mb, p0, p1, r, seg=8, mat="metal_rust", caps=True, r1=None):
-    """MB.cyl con los lados según el nivel."""
-    return mb.cyl(p0, p1, r, seg=_sseg(seg, r), mat=mat, caps=caps, r1=r1)
+def _cyl(mb, p0, p1, r, seg=8, mat="metal_rust", caps=True, r1=None, chamfer=None):
+    """MB.cyl con los lados según el nivel.
+    R-AAA: lados >= _rseg(r) (24 a partir de 6 mm de radio) y, con tapas, canto achaflanado (0,4–1,5 mm) en ambos
+    extremos; los de Ø <= 6 mm llevan sombreado continuo."""
+    if not _LOD.aaa:
+        return mb.cyl(p0, p1, r, seg=_sseg(seg, r), mat=mat, caps=caps, r1=r1)
+    p0, p1 = _v(p0), _v(p1)
+    r1_ = r if r1 is None else r1
+    rm = max(r, r1_)
+    n = max(seg, _rseg(rm))
+    L = (p1 - p0).length
+    c = chamfer if chamfer is not None else min(0.0015, 0.12 * min(r, r1_), 0.18 * L)
+    ctx = mb.soft() if rm <= 0.003 else contextlib.nullcontext()
+    with ctx:
+        if not caps or c < 0.0002 or L < 1e-5:
+            return mb.cyl(p0, p1, r, seg=n, mat=mat, caps=caps, r1=r1)
+        M = _frame(p0, p1 - p0)
+        prof = [(0.0, 0.0), (r - c, 0.0), (r, c), (r1_, L - c), (r1_ - c, L), (0.0, L)]
+        return _lathe(mb, prof, seg=n, mat=mat, m=M, lod=False, exact=True)
 
 
 def _keep_idx(n, step):
@@ -331,6 +440,16 @@ def _sheet_lod(mb, grid, mat, skip=None, wrap=False, steps=((1, 1), (2, 2), (3, 
 def _tube(mb, pts, r, seg=6, mat="cable", caps=True, radii=None, closed=False, up=None, lod=True):
     """Tubo por una polilínea (transporte paralelo). closed=True: anillo cerrado (usar `up` = normal del plano).
     lod=True: en 'mid'/'low' reduce los lados (_sseg) y simplifica la polilínea (_simplify)."""
+    if _LOD.aaa and not getattr(mb, "_svc_tube", False):
+        rmax = max([r] + list(radii or []))
+        seg = max(seg, _tseg(rmax))
+        if rmax <= 0.003:  # alambre / cable delgado: 12 lados con sombreado continuo
+            mb._svc_tube = True
+            try:
+                with mb.soft():
+                    return _tube(mb, pts, r, seg, mat, caps, radii, closed, up, lod)
+            finally:
+                mb._svc_tube = False
     P, RR = [], []
     for i, p in enumerate(pts):
         q = _v(p)
@@ -340,7 +459,10 @@ def _tube(mb, pts, r, seg=6, mat="cable", caps=True, radii=None, closed=False, u
     if closed and len(P) > 2 and (P[0] - P[-1]).length < 2e-4:
         P.pop()
         RR.pop()
-    if lod and _LOD.level != "high":
+    if lod and _LOD.level != "high" and _LOD.aaa:
+        idx = _simplify(P, r, closed)
+        P, RR = [P[i] for i in idx], [RR[i] for i in idx]
+    elif lod and _LOD.level != "high":
         seg = _sseg(seg, r)
         idx = _simplify(P, r, closed)
         P, RR = [P[i] for i in idx], [RR[i] for i in idx]
@@ -384,11 +506,14 @@ def _tube(mb, pts, r, seg=6, mat="cable", caps=True, radii=None, closed=False, u
     return rings
 
 
-def _lathe(mb, prof, seg=32, mat="plastic", m=None, loop=False, deform=None, a0=0.0, caps=True, lod=True):
+def _lathe(mb, prof, seg=32, mat="plastic", m=None, loop=False, deform=None, a0=0.0, caps=True, lod=True, exact=False):
     """Sólido de revolución alrededor de Z local. prof = [(r, z), ...] de abajo hacia arriba por la cara exterior.
     r = 0 en un extremo -> polo (abanico de triángulos). loop=True: perfil cerrado (toro / anillo hueco).
-    lod=True: en 'mid'/'low' usa 60 % / 38 % de los gajos (mínimo 6)."""
-    if lod and _LOD.level != "high":
+    lod=True: en 'mid'/'low' usa 60 % / 38 % de los gajos (mínimo 6). R-AAA: nunca menos de _rseg(radio máximo);
+    exact=True respeta `seg` (prismas hexagonales de tuercas, cilindros ya calculados)."""
+    if _LOD.aaa and not exact:
+        seg = max(seg, _rseg(max(p_[0] for p_ in prof)))
+    elif lod and _LOD.level != "high" and not _LOD.aaa:
         seg = max(6, int(round(seg * _lv(1.0, 0.6, 0.38))))
     rings = []
     for (rr, zz) in prof:
@@ -431,6 +556,8 @@ def _lathe(mb, prof, seg=32, mat="plastic", m=None, loop=False, deform=None, a0=
 def _torus(mb, center, axis, R, r, n=24, seg=6, mat="metal_rust", arc=None, a0=0.0):
     """Anillo (toro) o arco de toro (arc en grados, con tapas) alrededor de `axis`."""
     M = _frame(center, axis)
+    if _LOD.aaa:  # anillo sin quiebres > 15° entre tramos
+        n = max(n, 24 if R > 0.012 else 16)
     if arc is None:
         pts = [M @ Vector((R * math.cos(a0 + 2 * PI * i / n), R * math.sin(a0 + 2 * PI * i / n), 0)) for i in range(n)]
         return _tube(mb, pts, r, seg=seg, mat=mat, closed=True, up=M.to_3x3() @ Vector((0, 0, 1)))
@@ -461,7 +588,11 @@ def _lattice(mn, mx, r=0.01, rseg=2, step=0.04, mat="metal_paint", skip=(), defo
     if r < 0.003:
         rseg = 1
     st = steps or (step, step, step)
-    if lod and _LOD.level != "high":
+    if _LOD.aaa:  # R-AAA: esquinas de lámina redondeadas con 4 gajos (22,5°: sombreado continuo) en todos los niveles
+        rseg = 4 if r >= 0.003 else max(rseg, 2)
+        if lod and _LOD.level != "high":
+            st = tuple(s_ * _lv(1.0, 1.5, 2.5) for s_ in st)
+    elif lod and _LOD.level != "high":
         st = tuple(s_ * _lv(1.0, 2.0, 5.0) for s_ in st)
         rseg = 1
     ax = [_axis_vals(mn[a], mx[a], r, rseg, st[a]) for a in range(3)]
@@ -631,6 +762,9 @@ def _bolt(mb, p, n, r=0.006, h=0.005, mat="metal_rust", washer=True, seg=6):
     """Cabeza hexagonal + arandela, apoyadas en una superficie de normal n (se empotran 0,6 mm).
     mid: arandela de 8 lados · low: sin arandela y sin pernos chicos (r < 12 mm)."""
     lv = _LOD.level
+    if _LOD.aaa:
+        _nut_aaa(mb, p, n, r, h, mat, washer)
+        return
     if lv == "low" and r < 0.012:
         return
     p, n = _v(p), _v(n).normalized()
@@ -641,9 +775,37 @@ def _bolt(mb, p, n, r=0.006, h=0.005, mat="metal_rust", washer=True, seg=6):
     mb.cyl(b, b + n * h, r, seg=seg, mat=mat)
 
 
+def _nut_aaa(mb, p, n, r, h, mat, washer=True, stud=True):
+    """R-AAA: tuerca hexagonal (r = radio entre vértices) con chaflán de 30° arriba y abajo, arandela plana de canto
+    redondeado y punta del espárrago roscado sobresaliendo con su chaflán. Apoyada en p, eje n, empotrada 0,6 mm."""
+    p, n = _v(p), _v(n).normalized()
+    M = _frame(p - n * 0.0006, n)
+    z = 0.0
+    if washer:
+        tw = max(0.0012, 0.22 * r)
+        R = r * 1.7
+        _lathe(mb, [(r * 0.62, 0.0), (R - 0.0004, 0.0), (R, 0.0004), (R, tw - 0.0004), (R - 0.0004, tw), (r * 0.62, tw)], seg=24,
+               mat=mat, m=M, loop=True, lod=False)
+        z = tw - 0.0002
+    c = min(0.14 * r, 0.25 * h)
+    _lathe(mb, [(r * 0.62, z), (r * 0.9, z), (r, z + c), (r, z + h - c), (r * 0.9, z + h), (r * 0.62, z + h)], seg=6, mat=mat,
+           m=M, a0=PI / 6, loop=True, exact=True)
+    if stud:
+        rs = 0.58 * r
+        _cyl(mb, M @ Vector((0, 0, z + 0.3 * h)), M @ Vector((0, 0, z + h + 0.55 * rs)), rs, mat=mat, chamfer=0.25 * rs)
+
+
 def _screw(mb, p, n, r=0.0042, h=0.0022, mat="metal_rust"):
-    """Tornillo de cabeza redonda (domo bajo), empotrado 0,6 mm. mid: domo de 6 gajos · low: se omite."""
+    """Tornillo de cabeza redonda (domo bajo), empotrado 0,6 mm. mid: domo de 6 gajos · low: se omite.
+    R-AAA: cabeza de gota de 16–24 gajos con ranura de cruz en todos los niveles."""
     lv = _LOD.level
+    if _LOD.aaa:
+        M = _frame(_v(p) - _v(n).normalized() * 0.0006, n)
+        _lathe(mb, [(r, 0.0), (r, h * 0.35), (r * 0.82, h * 0.75), (r * 0.5, h * 0.97), (0.0, h)], seg=16 if r < 0.005 else 20,
+               mat=mat, m=M, exact=True)
+        for ang in (0.0, 90.0):  # cruz Phillips: fondo oscuro que asoma 0,25 mm sobre la cúpula (sin coplanares)
+            mb.box((-r * 0.42, -r * 0.075, h * 0.5), (r * 0.42, r * 0.075, h + 0.00025), "cable", m=M @ _R("Z", ang + 20))
+        return
     if lv == "low":
         return
     M = _frame(_v(p) - _v(n).normalized() * 0.0006, n)
@@ -757,7 +919,7 @@ def _angle_iron(mb, p0, p1, normal, a=0.04, t=0.004, mat="metal_rust", flip=Fals
     s = -1.0 if flip else 1.0
     prof = [(0.0, c), (c, 0.0), (a - c, 0.0), (a, c), (a, t - c * 0.5), (a - c * 0.5, t), (t + c, t), (t, t + c),
             (t, a - c * 0.5), (t - c * 0.5, a), (c, a), (0.0, a - c)]
-    if _LOD.level != "high":  # sin chaflanes de 1,5 mm (invisibles a > 3 m)
+    if _LOD.level != "high" and not _LOD.aaa:  # sin chaflanes de 1,5 mm (invisibles a > 3 m)
         prof = [(0.0, 0.0), (a, 0.0), (a, t), (t, t), (t, a), (0.0, a)]
     prof = [(x * s, y) for x, y in prof]
     if flip:
@@ -889,7 +1051,74 @@ def _ac_window(r):
     return mb
 
 
+def _wrap_band(circles, z, gap):
+    """Contorno (casco convexo) de una cinta que abraza varios tubos paralelos a Z: circles = [(x, y, radio)]."""
+    pts = []
+    for (x, y, rad) in circles:
+        for k in range(32):
+            a = 2 * PI * k / 32
+            pts.append(((x + (rad + gap) * math.cos(a)), (y + (rad + gap) * math.sin(a))))
+    pts = sorted(set(pts))
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lo, hi = [], []
+    for p_ in pts:
+        while len(lo) >= 2 and cross(lo[-2], lo[-1], p_) <= 0:
+            lo.pop()
+        lo.append(p_)
+    for p_ in reversed(pts):
+        while len(hi) >= 2 and cross(hi[-2], hi[-1], p_) <= 0:
+            hi.pop()
+        hi.append(p_)
+    hull = [Vector((x, y, z)) for (x, y) in lo[:-1] + hi[:-1]]
+    out = []
+    for j in range(len(hull)):
+        out += _densify([hull[j], hull[(j + 1) % len(hull)]], 0.004)[:-1]
+    return out
+
+
+def _hexp(mb, p0, axis, af, L, mat="brass", hole=0.0, x_hint=(1.0, 0.0, 0.0)):
+    """Prisma hexagonal (af = medida entre caras) con chaflán de 30° en ambos extremos, de p0 a lo largo de `axis`
+    (tuercas cónicas, tapones, cuerpos de válvula). hole > 0: barreno pasado de ese radio."""
+    R = af / 2 / math.cos(PI / 6)
+    c = min(0.13 * R, 0.25 * L)
+    M = _frame(p0, axis, x_hint)
+    if hole > 0:
+        prof = [(hole, 0.0), (R * 0.87, 0.0), (R, c), (R, L - c), (R * 0.87, L), (hole, L)]
+    else:
+        prof = [(0.0, 0.0), (R * 0.87, 0.0), (R, c), (R, L - c), (R * 0.87, L), (0.0, L)]
+    _lathe(mb, prof, seg=6, mat=mat, m=M, a0=PI / 6, loop=hole > 0, exact=True)
+
+
+def _service_valve(mb, x1, vy, vz, rp, rr, port=False):
+    """Válvula de servicio de condensadora (2 o 3 vías) en el costado derecho (+X): placa de montaje con 2 tornillos,
+    cuerpo de latón forjado, espiga y tuerca cónica (flare) de 17 / 22 mm hacia +X, vástago con tapón hexagonal hacia el
+    frente y, en la de 3 vías, puerto de servicio con capuchón. Devuelve el punto donde sale el tubo de cobre."""
+    svc = _svc()
+    _box(mb, (x1 + 0.0004, vy - 0.031, vz - 0.027), (x1 + 0.0034, vy + 0.031, vz + 0.027), "galvanized" if svc else "metal_rust",
+         bevel=0.0012)
+    for sy in (-1, 1):
+        _screw(mb, (x1 + 0.0034, vy + sy * 0.0245, vz), (1, 0, 0), r=0.0042, mat="galvanized" if svc else "metal_rust")
+    bx = x1 + 0.0034
+    _box(mb, (bx - 0.0004, vy - 0.0155, vz - 0.0185), (bx + 0.029, vy + 0.0155, vz + 0.0185), "brass", bevel=0.0028)
+    af = 0.022 if rp > 0.0055 else 0.017
+    _cyl(mb, (bx + 0.0286, vy, vz), (bx + 0.035, vy, vz), rp + 0.0032, mat="brass")
+    _hexp(mb, Vector((bx + 0.034, vy, vz)), (1, 0, 0), af, 0.02, "brass", x_hint=(0, 0, 1))
+    _cyl(mb, (bx + 0.0535, vy, vz), (bx + 0.058, vy, vz), rp + 0.0018, mat="brass")       # cuello de la tuerca
+    # vástago (tapón hexagonal hacia el frente)
+    _cyl(mb, (bx + 0.0145, vy - 0.0151, vz), (bx + 0.0145, vy - 0.0235, vz), 0.0078, mat="brass")
+    _hexp(mb, Vector((bx + 0.0145, vy - 0.023, vz)), (0, -1, 0), 0.019, 0.017, "brass", x_hint=(0, 0, 1))
+    if port:  # puerto de servicio (válvula Schrader) con capuchón moleteado hacia arriba
+        _cyl(mb, (bx + 0.0145, vy + 0.004, vz + 0.0181), (bx + 0.0145, vy + 0.004, vz + 0.027), 0.0042, mat="brass")
+        _lathe(mb, [(0.0, 0.0), (0.0058, 0.0), (0.0062, 0.0008), (0.0062, 0.0105), (0.0054, 0.0118), (0.0, 0.012)], seg=20,
+               mat="brass" if svc else "metal_rust", m=_T(bx + 0.0145, vy + 0.004, vz + 0.026))
+    return Vector((bx + 0.058, vy, vz))
+
+
 def _ac_split(r):
+    """Condensadora de minisplit 12 000 BTU (0,80 × 0,55 × 0,28; ref. Panasonic CU-XU12: 780 × 542 × 289 mm)."""
+    svc = _svc()
     W, H, D = 0.80, 0.55, 0.28
     yb = -0.075
     yo = yb - D
@@ -897,112 +1126,173 @@ def _ac_split(r):
     x0, x1 = -W / 2, W / 2
     z1 = z0 + H
     nz = _Nz(r)
+    steel = "galvanized" if svc else "metal_rust"
     dents = _rand_dents(r, (x0, yo, z0), (x1, yb, z1), int(r.integers(2, 5)), faces=("+z", "-y", "+x", "-x"),
                         region=((x0 + 0.05, yo + 0.04, z0 + 0.05), (x1 - 0.05, yb - 0.04, z1 - 0.05)))
-    deform = _deformer(dents, nz, amp=0.0008, freq=5.0)
-    mb = _tray((x0, yo, z0), (x1, yb, z1), "-y", t=0.0015, r=0.012, step=0.03, mat="metal_paint", deform=deform,
-               matfn=_rust_fn(nz, z0, z1, thr=0.45))
+    if svc:
+        dents = []
+    deform = _deformer(dents, nz, amp=0.0003 if svc else 0.0008, freq=5.0)
+    # gabinete de lámina doblada: frente + tapa + costado derecho + fondo; el costado izquierdo es el serpentín con rejilla
+    mb = _tray((x0, yo, z0), (x1, yb, z1), ("-y", "-x"), t=0.0012, r=0.012, step=0.03, mat="metal_paint", deform=deform,
+               matfn=None if svc else _rust_fn(nz, z0, z1, thr=0.45))
+    # pestaña doblada del costado izquierdo (marco del serpentín): canal de 18 mm atornillado
+    for (a, b) in ((z0 + 0.002, z0 + 0.02), (z1 - 0.02, z1 - 0.002)):
+        _box(mb, (x0 + 0.0008, yo + 0.012, a), (x0 + 0.018, yb - 0.002, b), "metal_paint", bevel=0.0015)
+    for (ya, yb_) in ((yo + 0.0035, yo + 0.014), (yb - 0.0145, yb - 0.004)):
+        _box(mb, (x0 + 0.0008, ya, z0 + 0.02), (x0 + 0.018, yb_, z1 - 0.02), "metal_paint", bevel=0.0015)
+    # serpentín en L (costado izquierdo y fondo): tubo de cobre + aletas de aluminio; rejilla de alambre soldado al costado
+    side = MB()
+    _coil(side, -(yb - 0.012), -(yo + 0.024), z0 + 0.022, z1 - 0.022, 0.0, pitch=0.004, depth=0.022,
+          mat_core="copper" if svc else "metal_rust")
+    _wire_guard(side, -(yb - 0.006), -(yo + 0.016), z0 + 0.012, z1 - 0.012, -0.004, sx=0.03, sz=0.03, r=0.0019,
+                mat="metal_paint")
+    _merge(mb, side, _T(x0 + 0.0035, 0, 0) @ _R("Z", -90))
     # panel frontal con boca de ventilador
     cx, cz, R = 0.09, z0 + 0.285, 0.205
     inset = 0.0045
     py = yo + 0.0015
-    front = _holed_panel(x0 + inset, z0 + inset, x1 - inset, z1 - inset, cx, cz, R, 0.0015, "metal_paint", n=_lv(56, 40, 24),
-                         rings=_lv(3, 2, 1), y=py)
+    front = _holed_panel(x0 + inset, z0 + inset, x1 - inset, z1 - inset, cx, cz, R, 0.0015, "metal_paint", n=96, rings=4, y=py)
     fd = [dd for dd in dents if dd[1].y > 0.5]
     if fd:
         fdef = _deformer([(c + Vector((0, 0.0015, 0)), d, rr_, dep) for (c, d, rr_, dep) in fd])
         for v in front.bm.verts:
             v.co = fdef(v.co, Vector((0, -1, 0)))
     _merge(mb, front)
-    # campana (aro de la boca)
+    # canto enrollado del panel frontal (dobladillo de 3 mm)
+    rim = _fillet([(x0 + 0.002, py - 0.0006, z0 + 0.002), (x1 - 0.002, py - 0.0006, z0 + 0.002), (x1 - 0.002, py - 0.0006, z1 - 0.002),
+                   (x0 + 0.002, py - 0.0006, z1 - 0.002), (x0 + 0.002, py - 0.0006, z0 + 0.002), (x1 - 0.002, py - 0.0006, z0 + 0.002)],
+                  0.012, 6)[1:-1]
+    _tube(mb, [deform(Vector(p_), Vector((0, -1, 0))) for p_ in rim], 0.0021, mat="metal_paint", closed=True, up=(0, 1, 0))
+    # campana (venturi) de la boca
     Mb = _frame((cx, py + 0.0015, cz), (0, 1, 0))
     _lathe(mb, [(R + 0.0005, -0.0004), (R + 0.0005, 0.07), (R - 0.0012, 0.07), (R - 0.0012, 0.004), (R - 0.008, -0.0004)],
-           seg=56, mat="metal_paint", m=Mb, loop=True)
-    # rejilla del ventilador: anillos concéntricos + radios
+           seg=96, mat="metal_paint", m=Mb, loop=True)
+    # rejilla del ventilador: anillos concéntricos de alambre de 3,4 mm + 12 radios, 4 orejas atornilladas
     gy = yo - 0.007
     Mg = _frame((cx, gy, cz), (0, -1, 0))
-    nring = _lv(9, 7, 5)  # mid / low: menos anillos (mismo diámetro exterior) y menos puntos por anillo
+    nring = 9
     rings_r = [0.035 + (0.0215 * 8) * k / (nring - 1) for k in range(nring)]
     nsp = 12
     bent = r.uniform(0, 2 * PI)
+    bend_amp = 0.0 if svc else 0.006
     for k, rr_ in enumerate(rings_r):
+        npt = max(48, int(2 * PI * rr_ / 0.012))
         pts = []
-        npt = _lv(64, max(16, int(2 * PI * rr_ / 0.035)), max(10, int(2 * PI * rr_ / 0.06)))
         for i in range(npt):
             a = 2 * PI * i / npt
-            push = 0.006 * max(0.0, math.cos(a - bent)) ** 6 * (rr_ / 0.2)
+            push = bend_amp * max(0.0, math.cos(a - bent)) ** 6 * (rr_ / 0.2)
             pts.append(Mg @ Vector((rr_ * math.cos(a), rr_ * math.sin(a), -push - 0.0018)))
-        _tube(mb, pts, 0.0017, seg=6, mat="metal_paint", closed=True, up=(0, 1, 0))
+        _tube(mb, pts, 0.0017, mat="metal_paint", closed=True, up=(0, 1, 0))
     for i in range(nsp):
         a = 2 * PI * (i + 0.5) / nsp
-        pts = [Mg @ Vector((rr_ * math.cos(a), rr_ * math.sin(a), 0.0)) for rr_ in (0.03, 0.1, 0.17, rings_r[-1] + 0.012)]
-        _tube(mb, pts, 0.0019, seg=6, mat="metal_paint")
+        sp = [Mg @ Vector((rr_ * math.cos(a), rr_ * math.sin(a), 0.0)) for rr_ in (0.03, 0.1, 0.17, rings_r[-1] + 0.012)]
+        _tube(mb, _densify(sp, 0.02), 0.0019, mat="metal_paint")
         if i % 3 == 0:  # orejas atornilladas al panel
             p = Mg @ Vector(((rings_r[-1] + 0.014) * math.cos(a), (rings_r[-1] + 0.014) * math.sin(a), 0.0))
-            _cyl(mb, p + Vector((0, -0.001, 0)), Vector((p.x, py + 0.0004, p.z)), 0.006, seg=8, mat="metal_paint")
-            _screw(mb, Vector((p.x, gy - 0.001, p.z)), (0, -1, 0), r=0.0045)
-    _lathe(mb, [(0.0, 0.004), (0.028, 0.004), (0.034, 0.0), (0.034, -0.004), (0.0, -0.004)], seg=24, mat="plastic", m=Mg)
-    # ventilador (3 aspas) + motor + soporte
+            _cyl(mb, p + Vector((0, -0.001, 0)), Vector((p.x, py + 0.0004, p.z)), 0.006, mat="metal_paint")
+            _screw(mb, Vector((p.x, gy - 0.001, p.z)), (0, -1, 0), r=0.0045, mat=steel)
+    _lathe(mb, [(0.0, 0.004), (0.028, 0.004), (0.034, 0.0), (0.034, -0.004), (0.0, -0.004)], seg=40, mat="plastic", m=Mg)
+    # ventilador (3 aspas) + motor con aletas + soporte de lámina en U
     Mf = _frame((cx, yo + 0.055, cz), (0, -1, 0))
-    _fan(mb, Mf, 0.19, 0.055, 3, r, broken=r.random() < 0.5)
-    _cyl(mb, (cx, yo + 0.06, cz), (cx, yo + 0.13, cz), 0.06, seg=24, mat="metal_rust")
+    brk = r.random() < 0.5
+    _fan(mb, Mf, 0.19, 0.055, 3, r, broken=brk and not svc)
+    _lathe(mb, [(0.0, 0.0), (0.056, 0.0), (0.06, 0.004), (0.06, 0.066), (0.056, 0.07), (0.0, 0.07)], seg=48, mat=steel,
+           m=_frame((cx, yo + 0.06, cz), (0, 1, 0)))
+    for k in range(12):  # aletas de enfriamiento del motor
+        a = 2 * PI * k / 12
+        Mk = _T(cx, 0, cz) @ _R("Y", -math.degrees(a))
+        _box(mb, (0.058, yo + 0.07, -0.0012), (0.066, yo + 0.124, 0.0012), steel, m=Mk)
     for dz in (-1, 1):
-        _box(mb, (cx - 0.012, yo + 0.13, cz + dz * 0.06 if dz > 0 else z0 + 0.006),
-               (cx + 0.012, yo + 0.137, z1 - 0.006 if dz > 0 else cz - 0.06), "metal_rust", bevel=0.002, seg=1)
-    _coil(mb, x0 + 0.01, x1 - 0.01, z0 + 0.008, z1 - 0.008, yb - 0.06, pitch=0.009)
-    # lamas frontales izquierdas
+        _box(mb, (cx - 0.016, yo + 0.13, cz + 0.05 if dz > 0 else z0 + 0.006),
+             (cx + 0.016, yo + 0.137, z1 - 0.006 if dz > 0 else cz - 0.05), steel, bevel=0.0025)
+        for zz in ((cz + 0.06, z1 - 0.02) if dz > 0 else (z0 + 0.02, cz - 0.06)):
+            _bolt(mb, (cx, yo + 0.13, zz), (0, -1, 0), r=0.0045, h=0.0035)
+    _coil(mb, x0 + 0.07, x1 - 0.01, z0 + 0.008, z1 - 0.008, yb - 0.06, pitch=0.009, mat_core="copper" if svc else "metal_rust")
+    # rejilla de lamas estampadas del frente izquierdo
     _hood_louvers(mb, (x0 + 0.035, py, z1 - 0.05), (1, 0, 0), (0, 0, 1), (0, -1, 0), 1, 15, 0.18, 0.016, 0.0, 0.029,
                   out=0.006, deform=None)
-    # tapa de válvulas (lado derecho) + válvulas + tuberías
+    # placa de datos (calcomanía de aluminio en relieve) en el costado derecho
+    _box(mb, (x1 - 0.0008, yo + 0.07, z1 - 0.15), (x1 + 0.0007, yo + 0.16, z1 - 0.08), "aluminium", bevel=0.0004)
+    # tapa de válvulas (lado derecho) con 4 tornillos
     vy0, vy1, vz0, vz1 = yo + 0.05, yo + 0.20, z0 + 0.04, z0 + 0.26
     cover = _tray((x1 - 0.002, vy0, vz0), (x1 + 0.03, vy1, vz1), "-x", t=0.0012, r=0.006, step=0.03, mat="metal_paint",
-                  matfn=_rust_fn(nz, vz0, vz1, thr=0.2))
+                  matfn=None if svc else _rust_fn(nz, vz0, vz1, thr=0.2))
     _merge(mb, cover)
     for (yy, zz) in ((vy0 + 0.02, vz1 - 0.02), (vy1 - 0.02, vz1 - 0.02), (vy0 + 0.02, vz0 + 0.02), (vy1 - 0.02, vz0 + 0.02)):
-        _screw(mb, (x1 + 0.03, yy, zz), (1, 0, 0), r=0.004)
+        _screw(mb, (x1 + 0.03, yy, zz), (1, 0, 0), r=0.004, mat=steel)
+    # válvulas de servicio (líquido 1/4", succión 3/8") y líneas de cobre aisladas hasta el pasamuro
     runs = []
-    for k, (rp, ins) in enumerate(((0.0048, 0.0), (0.008, 0.016))):
+    vy = yo + 0.235
+    top = r.uniform(0.75, 1.05)
+    pxs = (x1 + 0.105, x1 + 0.139)
+    pyw = -0.042
+    for k, (rp, ins) in enumerate(((0.0032, 0.0105), (0.0048, 0.0125))):
         vz = z0 + 0.075 + 0.075 * k
-        vy = yo + 0.235
-        _box(mb, (x1 - 0.0032, vy - 0.02, vz - 0.022), (x1 + 0.035, vy + 0.02, vz + 0.022), "metal_rust", bevel=0.003, seg=1)
-        _cyl(mb, (x1 + 0.034, vy, vz), (x1 + 0.06, vy, vz), rp + 0.007, seg=6, mat="metal_rust")
-        top = r.uniform(0.75, 1.05) + 0.06 * k
-        px, py_ = x1 + 0.11 + 0.035 * k, -0.035 - 0.03 * k
-        path = _fillet([(x1 + 0.055, vy, vz), (px, vy, vz), (px, py_, vz + 0.02), (px, py_, top), (px, 0.03, top + 0.04)], 0.07, 6)
-        path = _densify(path, 0.03)
-        if ins > 0:
-            radii = [ins * (1.0 + 0.12 * (math.sin(i * 1.7) > 0.6)) for i in range(len(path))]
-            _tube(mb, path[2:], ins, seg=10, mat="cable", radii=radii[2:])
-            _tube(mb, path[:3], rp, seg=8, mat="metal_rust")
-        else:
-            _tube(mb, path, rp, seg=8, mat="metal_rust")
-        runs.append((px, py_, vz + 0.1, top - 0.08, ins if ins > 0 else rp))
-    # cable eléctrico que sale de la tapa y acompaña a la tubería aislada, con cinchos de plástico
-    px, py_, zb_, zt_, ri = runs[1]
-    cx_ = px + 0.03
-    cab = _fillet([(x1 + 0.015, vy1 - 0.03, vz0 + 0.01), (x1 + 0.015, vy1 - 0.03, vz0 - 0.05), (cx_, py_, vz0 - 0.03),
-                   (cx_, py_, zt_ + 0.12), (cx_, 0.03, zt_ + 0.16)], 0.06, 5)
-    _tube(mb, _densify(cab, 0.04), 0.006, seg=6, mat="cable")
-    for t_ in (0.15, 0.45, 0.8):
-        z = zb_ + (zt_ - zb_) * t_
-        loop = [Vector((px + (ri + 0.0022) * math.cos(a), py_ + (ri + 0.0022) * math.sin(a), z))
-                for a in [PI / 2 + PI * i / 10 for i in range(11)]]
-        loop += [Vector((cx_ + 0.0082 * math.cos(a), py_ + 0.0082 * math.sin(a), z)) for a in [-PI / 2 + PI * i / 6 for i in range(7)]]
-        _tube(mb, loop, 0.0015, seg=4, mat="plastic", closed=True, up=(0, 0, 1))
-        _box(mb, (cx_ + 0.008, py_ - 0.003, z - 0.004), (cx_ + 0.016, py_ + 0.003, z + 0.004), "plastic", bevel=0.001, seg=1)
-    # patas + amortiguadores + ménsulas
+        p0 = _service_valve(mb, x1, vy, vz, rp, r, port=(k == 1))
+        px = pxs[k]
+        path = _fillet([p0, (px, vy, vz), (px, pyw, vz + 0.03), (px, pyw, top), (px, 0.03, top + 0.045)], 0.06, 8)
+        path = _densify(path, 0.02)
+        _tube(mb, path, rp, mat="copper")
+        # aislamiento de espuma elastomérica: empieza 3 cm después de la tuerca; en abandono, tramos rotos o faltantes
+        acc, S = [0.0], 0.0
+        for a, b in zip(path[:-1], path[1:]):
+            S += (b - a).length
+            acc.append(S)
+        gaps = [] if svc else [(g, g + r.uniform(0.04, 0.12)) for g in (r.uniform(0.15, S - 0.4),) if r.random() < 0.7]
+        segs, cur = [], []
+        for p_, s_ in zip(path, acc):
+            inside = s_ > 0.03 and s_ < S - 0.004 and not any(g0 < s_ < g1 for (g0, g1) in gaps)
+            if inside:
+                cur.append(p_)
+            elif cur:
+                segs.append(cur)
+                cur = []
+        if cur:
+            segs.append(cur)
+        for sg in segs:
+            if len(sg) < 2:
+                continue
+            radii = [ins * (1.0 + (0.0 if svc else 0.08 * nz(p_ * 9.0))) for p_ in sg]
+            _tube(mb, sg, ins, mat="rubber", radii=radii)
+        runs.append((px, pyw, vz + 0.1, top - 0.08, ins))
+    # cinta de PVC que amarra las dos líneas y el cable de control (cada ~25 cm)
+    cx_ = pxs[1] + 0.022
+    cab = _fillet([(x1 + 0.03, vy1 - 0.03, vz0 + 0.03), (x1 + 0.045, vy1 - 0.03, vz0 - 0.03), (cx_, pyw, vz0 - 0.01),
+                   (cx_, pyw, top + 0.01), (cx_, 0.03, top + 0.055)], 0.05, 6)
+    _cyl(mb, (x1 + 0.03, vy1 - 0.03, vz0 + 0.03), (x1 + 0.042, vy1 - 0.03, vz0 + 0.03), 0.0085, mat="plastic")  # prensacable
+    _tube(mb, _densify(cab, 0.03), 0.0055, mat="cable")
+    zb_, zt_ = runs[1][2], runs[1][3]
+    nb = max(2, int((zt_ - zb_) / 0.25))
+    for i in range(nb + 1):
+        z = zb_ + (zt_ - zb_) * i / nb
+        if not svc and r.random() < 0.35:
+            continue
+        band = _wrap_band([(pxs[0], pyw, 0.0105), (pxs[1], pyw, 0.0125), (cx_, pyw, 0.0055)], z, 0.0012)
+        mb.sweep([(-0.0004, -0.0095), (0.0004, -0.0095), (0.0004, 0.0095), (-0.0004, 0.0095)], band, mat="plastic",
+                 closed_path=True, normal=(0, 0, 1))
+    # pasamuro: tapa de PVC Ø 90 donde entran líneas y cable
+    pc = Vector(((pxs[0] + cx_) / 2, 0.0, top + 0.05))
+    _lathe(mb, [(0.05, 0.0), (0.062, 0.0), (0.062, 0.006), (0.058, 0.012), (0.05, 0.013)], seg=64, mat="plastic",
+           m=_frame(pc + Vector((0, -0.0005, 0)), (0, -1, 0)), loop=True)
+    # patas de lámina en U + amortiguadores de hule con tornillo, sobre las ménsulas
     for x in (-0.28, 0.28):
-        _box(mb, (x - 0.025, yo + 0.01, 0.016), (x + 0.025, yb - 0.01, z0 + 0.004), "metal_paint", bevel=0.003, seg=1)
+        _box(mb, (x - 0.025, yo + 0.01, 0.016), (x + 0.025, yb - 0.01, z0 + 0.004), "metal_paint", bevel=0.003)
         for y in (yo + 0.05, yb - 0.05):
-            _cyl(mb, (x, y, -0.0002), (x, y, 0.0165), 0.017, seg=12, mat="plastic")
-            _cyl(mb, (x, y, 0.012), (x, y, z0 + 0.012), 0.005, seg=6, mat="metal_rust")
-        _wall_bracket(mb, x + r.uniform(-0.006, 0.006), yo - 0.06, -0.0012, 0.42, nz, r)
-    # manguera de desagüe
+            _lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.0175, 0.003), (0.0175, 0.0135), (0.016, 0.0165), (0.0, 0.0165)], seg=32,
+                   mat="rubber", m=_T(x, y, -0.0002))
+            _cyl(mb, (x, y, 0.012), (x, y, z0 + 0.012), 0.005, mat=steel)
+            _nut_aaa(mb, (x, y, z0 + 0.004), (0, 0, 1), 0.0075, 0.0055, steel, washer=True)
+        _wall_bracket(mb, x + (0.0 if svc else r.uniform(-0.006, 0.006)), yo - 0.06, -0.0012, 0.42, nz, r)
+    # desagüe: codo de condensado y manguera
     dxx = -0.355
-    _cyl(mb, (dxx, yo + 0.12, z0 + 0.004), (dxx, yo + 0.12, z0 - 0.04), 0.008, seg=10, mat="plastic")
+    _lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.006), (0.0082, 0.008), (0.0082, 0.04), (0.0, 0.04)], seg=32, mat="plastic",
+           m=_T(dxx, yo + 0.12, z0 + 0.004) @ _R("X", 180))
     L = r.uniform(0.5, 0.9)
-    _tube(mb, _spline([(dxx, yo + 0.12, z0 - 0.03), (dxx - 0.02, yo + 0.14, -0.12), (dxx - 0.05, yo + 0.2, -0.4 * L),
-                       (dxx - 0.04, yo + 0.25, -L)], 0.03), 0.009, seg=8, mat="plastic")
+    if svc:
+        L = 0.25
+    hose = _spline([(dxx, yo + 0.12, z0 - 0.03), (dxx - 0.02, yo + 0.14, -0.12), (dxx - 0.05, yo + 0.2, -0.4 * L),
+                    (dxx - 0.04, yo + 0.25, -L)], 0.02)
+    _tube(mb, hose, 0.0095, mat="plastic")
     return mb
 
 
@@ -1139,7 +1429,7 @@ def _ac_box_old(r):
     return mb
 
 
-def ac_unit(kind="window", seed=0, detail="high"):
+def ac_unit(kind="window", seed=0, detail="high", state=None):
     """Equipo de aire acondicionado envejecido. kind: 'window' (de ventana 0,60 × 0,40 × 0,45, sobresale 0,31),
     'split_outdoor' (condensadora 0,80 × 0,55 × 0,28 sobre ménsulas, a 7,5 cm del muro) o 'box_old' (equipo viejo de
     ventana 0,66 × 0,44 × 0,56 dentro de una jaula antirrobo, con un panel lateral arrancado).
@@ -1148,7 +1438,7 @@ def ac_unit(kind="window", seed=0, detail="high"):
     0,666 × 0,446 o lo coloca dentro de una ventana. Carcasa de chapa biselada con abolladuras y manchas metal_rust.
     detail: costo por equipo (high / mid / low): window 18,0 / 5,0–5,3 / 2,2–2,3 k · split_outdoor 28,4 / 8,2 / 3,5 k ·
     box_old 17,1 / 5,4 / 2,4 k. mid y low conservan rejilla, lamas, ménsulas, desagüe y óxido por cara (retícula más gruesa)."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         r = rng(seed)
         if kind == "window":
             mb = _ac_window(r)
@@ -1207,7 +1497,7 @@ def _frayed(mb, p, t, rr, n=3, r=0.0011, L=0.04, mat="aluminium"):
         _tube(mb, pts, r, seg=4, mat=mat, up=b)  # marco fijo: sin anillos torcidos en hilos tan finos
 
 
-def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0), loose=True, detail="high"):
+def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0), loose=True, detail="high", state=None):
     """Acometida aérea: haz de n cables (Ø 9 mm) en catenaria entre puntos de anclaje, con bastidor de aisladores de
     carrete en cada anclaje, abrazaderas y cinchos cerca de los bastidores, puentes colgantes en anclajes intermedios,
     bucles de goteo hacia una mufa de PVC en los extremos y (loose=True) cables sueltos colgando con puntas deshiladas.
@@ -1216,7 +1506,7 @@ def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0)
     cable cuelga entre 0 y 50 % más que el haz (distinta flecha).
     detail: high / mid / low = 23,4 / 9,3 / 5,0 k para 4 cables y 2 vanos de 5 m (≈ 1,1 k / 0,45 k / 0,25 k por cable y
     metro de vano); mid y low simplifican la catenaria (Douglas-Peucker) y los carretes; low omite las puntas deshiladas."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         mb = MB()
         P = [_v(p) for p in points]
@@ -1433,11 +1723,13 @@ def _junction_box(mb, c, nz, rr, size=0.10, depth=0.055, cover="on", wires=False
     x0, z0, x1, z1 = c.x - hs, c.z - hs, c.x + hs, c.z + hs
     yb, yf = c.y - 0.0015, c.y - 0.0015 - depth
     n0 = len(mb.bm.faces)
+    svc = _svc()
     box = _tray((x0, yf, z0), (x1, yb, z1), "-y", t=0.0014, r=0.005, step=0.025, mat="metal_paint",
-                matfn=_rust_fn(nz, z0, z1, thr=0.25))
+                matfn=None if svc else _rust_fn(nz, z0, z1, thr=0.25))
     _merge(mb, box)
     for (xx, zz) in ((c.x - hs + 0.012, c.z + hs - 0.012), (c.x + hs - 0.012, c.z - hs + 0.012)):
-        _cyl(mb, (xx, yf + 0.03, zz), (xx, yf + 0.0005, zz), 0.0045, seg=8, mat="metal_rust")  # orejas con rosca
+        _cyl(mb, (xx, yf + 0.03, zz), (xx, yf + 0.0005, zz), 0.0045, seg=8, mat="metal_paint" if svc else "metal_rust")  # orejas
+    _screw(mb, (c.x, yb - 0.0014, c.z), (0, -1, 0), r=0.0045)          # pija de fijación al muro (fondo de la caja)
     for (xx, zz) in ((c.x, c.z + hs), (c.x - hs, c.z), (c.x + hs, c.z), (c.x, c.z - hs)):
         if rr.random() < 0.5:  # tapones de knock-out
             d = Vector((xx - c.x, 0, zz - c.z)).normalized()
@@ -1445,7 +1737,8 @@ def _junction_box(mb, c, nz, rr, size=0.10, depth=0.055, cover="on", wires=False
                    seg=12, mat="metal_paint")
     if cover == "on":
         M = _T(c.x, yf - 0.0011, c.z) @ _R("Y", rr.uniform(-2, 2))
-        _box(mb, (-hs - 0.004, -0.0012, -hs - 0.004), (hs + 0.004, 0.0012, hs + 0.004), "metal_paint", bevel=0.0009, seg=1, m=M)
+        cov = _lattice((-hs - 0.004, -0.0012, -hs - 0.004), (hs + 0.004, 0.0012, hs + 0.004), r=0.0011, step=0.03, mat="metal_paint")
+        _merge(mb, cov, M)
         for (xx, zz) in ((-hs + 0.012, hs - 0.012), (hs - 0.012, -hs + 0.012)):
             _screw(mb, M @ Vector((xx, -0.0012, zz)), (0, -1, 0), r=0.0045)
     elif cover == "hanging":
@@ -1466,13 +1759,13 @@ def _junction_box(mb, c, nz, rr, size=0.10, depth=0.055, cover="on", wires=False
     return n0
 
 
-def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="high"):
+def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="high", state=None):
     """Tubería conduit EMT 3/4" (Ø 23 mm) sobre el muro, con curvas de radio 0,12, coples cada 3,05 m, abrazaderas de
     2 orejas cada ~1,2 m (una falta y el tubo se despega), cajas de registro 4×4" en los extremos (la final abierta con
     cables saliendo) y, al azar, cajas en las esquinas en vez de curva.
     points: polilínea SOBRE la cara del muro (plano y = 0 local; se usan x, z). El tubo corre a y = -(r + standoff).
     detail: high / mid / low = 7,5 / 2,7 / 1,5 k para 3 tramos y 4 cajas (4,5 m); el costo crece con el número de cajas."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -1490,11 +1783,22 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
             db = (seg_[-1] - seg_[-2]).normalized()
             seg_ = [seg_[0] + da * 0.044] + seg_[1:-1] + [seg_[-1] - db * 0.044]
             runs.append(seg_)
+        svc = _svc()
         end_cover = ["on", "hanging", "off"][int(rr.integers(0, 3))]
         for bi, idx in enumerate(boxes):
             last = bi == len(boxes) - 1
             cov = end_cover if last else ("on" if rr.random() < 0.8 else "hanging")
+            if svc:
+                cov = "on"
             _junction_box(mb, Vector((P[idx].x, -0.0, P[idx].z)), nz, rr, cover=cov, wires=last and cov != "on")
+        # conector EMT de compresión (tuerca hexagonal + cuerpo) donde cada tramo entra a una caja
+        for run in runs:
+            for (pe, d) in ((run[0], (run[0] - run[1]).normalized()), (run[-1], (run[-1] - run[-2]).normalized())):
+                wall = pe + d * 0.006                      # pared de la caja (a 50 mm del centro)
+                _lathe(mb, [(0.0, 0.0), (r + 0.0028, 0.0), (r + 0.0028, 0.006), (r + 0.0018, 0.0075), (0.0, 0.0075)], seg=32,
+                       mat="metal_paint", m=_frame(wall - d * 0.0175, d))
+                _hexp(mb, wall - d * 0.0175, -d, 0.03, 0.009, "metal_paint", hole=r + 0.0006)
+                _hexp(mb, wall - d * 0.0005, d, 0.033, 0.0028, "metal_paint", hole=r + 0.0012)     # contratuerca (dentro)
         missing_done = False
         for run in runs:
             path = _fillet(run, 0.12, 8)
@@ -1507,7 +1811,7 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
             if L > 0.6:
                 straps.append(L - 0.22)
             miss = -1
-            if not missing_done and len(straps) >= 3:
+            if not missing_done and len(straps) >= 3 and not svc:
                 miss = int(rr.integers(1, len(straps) - 1))
                 missing_done = True
             # deformación: arqueo leve y despegue donde falta la abrazadera
@@ -1518,9 +1822,10 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
             for p, s in zip(path, acc):
                 q = p.copy()
                 w = math.sin(PI * min(max(s / max(L, 1e-6), 0), 1))
-                q.y -= 0.003 * w * (0.5 + 0.5 * nz(q, 0.7))
-                q.x += 0.002 * nz(q + Vector((3, 0, 0)), 1.3) * w
-                q.z += 0.002 * nz(q + Vector((0, 0, 7)), 1.3) * w
+                k_ = 0.25 if svc else 1.0                  # en servicio: tubo bien alineado, solo la holgura de montaje
+                q.y -= 0.003 * w * (0.5 + 0.5 * nz(q, 0.7)) * k_
+                q.x += 0.002 * nz(q + Vector((3, 0, 0)), 1.3) * w * k_
+                q.z += 0.002 * nz(q + Vector((0, 0, 7)), 1.3) * w * k_
                 if miss >= 0:
                     dist = abs(s - straps[miss])
                     if dist < 0.9:
@@ -1529,16 +1834,21 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
             path = newp
             n0 = len(mb.bm.faces)
             _tube(mb, path, r, seg=10, mat="metal_paint")
-            _paint_new(mb, n0, lambda c, n: "metal_rust" if nz(c, 2.5) + 0.3 * nz(c, 9.0) > 0.38 else None)
-            # coples
+            if not svc:
+                _paint_new(mb, n0, lambda c, n: "metal_rust" if nz(c, 2.5) + 0.3 * nz(c, 9.0) > 0.38 else None)
+            # coples de tornillo opresor (cuerpo de 44 mm con resalte central y 2 opresores con ranura)
             s = rr.uniform(0.6, 2.4)
             while s < L - 0.1:
                 p, t = _along(path, s)
-                _cyl(mb, p - t * 0.022, p + t * 0.022, r + 0.0022, seg=12, mat="metal_paint")
-                side = t.cross(Vector((0, 1, 0))).normalized() if abs(t.y) < 0.9 else Vector((1, 0, 0))
+                ro = r + 0.0022
+                _lathe(mb, [(0.0, 0.0), (ro - 0.0008, 0.0), (ro, 0.0008), (ro, 0.019), (ro + 0.0006, 0.0205), (ro + 0.0006, 0.0235),
+                            (ro, 0.025), (ro, 0.0432), (ro - 0.0008, 0.044), (0.0, 0.044)], seg=32, mat="metal_paint",
+                       m=_frame(p - t * 0.022, t))
                 for o in (-0.011, 0.011):
-                    q = p + t * o
-                    _cyl(mb, q - Vector((0, 1, 0)) * 0.0, q - Vector((0, 1, 0)) * (r + 0.006), 0.0028, seg=6, mat="metal_rust")
+                    q = p + t * o - Vector((0, 1, 0)) * (ro - 0.0012)
+                    _lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, 0.0045), (0.0036, 0.0052), (0.0, 0.0052)], seg=16, mat="metal_rust" if not svc else "metal_paint",
+                           m=_frame(q, (0, -1, 0)))
+                    _box(mb, (-0.0032, -0.0005, 0.0042), (0.0032, 0.0005, 0.0056), "cable", m=_frame(q, (0, -1, 0), t))
                 s += 3.05
             # abrazaderas de 2 orejas
             for i, s in enumerate(straps):
@@ -1551,12 +1861,16 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
                 R_ = r + 0.0009
                 c = Vector((p.x, p.y, p.z))
                 yw = -0.0016
-                na = _lv(12, 6, 4)
+                na = 16
                 arc = [c + (w * math.cos(ph) + Vector((0, -1, 0)) * math.sin(ph)) * R_ for ph in [PI * k / na for k in range(na + 1)]]
                 path_s = ([Vector((c.x, yw, c.z)) - w * (R_ + 0.026), Vector((c.x, yw, c.z)) - w * (R_ + 0.003)]
                           + list(reversed(arc)) + [Vector((c.x, yw, c.z)) + w * (R_ + 0.003), Vector((c.x, yw, c.z)) + w * (R_ + 0.026)])
-                mb.sweep([(0.0, -0.009), (0.0015, -0.009), (0.0015, 0.009), (0.0, 0.009)], path_s, mat="metal_rust", normal=t)
-                for sg in (-1, 1):
+                sm = "metal_paint" if svc else "metal_rust"
+                mb.sweep([(0.0, -0.009), (0.0004, -0.0094), (0.0011, -0.0094), (0.0015, -0.009), (0.0015, 0.009), (0.0011, 0.0094),
+                          (0.0004, 0.0094), (0.0, 0.009)], path_s, mat=sm, normal=t)
+                for sg in (-1, 1):  # orejas de remate redondeadas + pija con arandela
+                    _cyl(mb, Vector((c.x, yw, c.z)) + w * sg * (R_ + 0.026), Vector((c.x, yw - 0.0015, c.z)) + w * sg * (R_ + 0.026),
+                         0.0094, mat=sm, chamfer=0.0004)
                     _screw(mb, Vector((c.x, yw - 0.0015, c.z)) + w * sg * (R_ + 0.016), (0, -1, 0), r=0.0042)
         _declump(mb)
         return mb
@@ -1590,141 +1904,230 @@ def _shard_plate(mb, pts2, t, mat, M, rr, i):
 
 def _hinge(mb, p, h=0.05, r=0.0055, mat="metal_rust"):
     p = _v(p)
+    if _LOD.aaa:  # bisagra de 3 nudillos con holgura de 0,6 mm y perno con cabeza
+        k = (h - 0.0012) / 3
+        for i in range(3):
+            z0 = -h / 2 + i * (k + 0.0006)
+            _cyl(mb, p + Vector((0, 0, z0)), p + Vector((0, 0, z0 + k)), r, mat=mat, chamfer=0.0006)
+        _cyl(mb, p + Vector((0, 0, h / 2 - 0.001)), p + Vector((0, 0, h / 2 + 0.0035)), r * 0.62, mat=mat)
+        _cyl(mb, p - Vector((0, 0, h / 2 + 0.002)), p - Vector((0, 0, h / 2 - 0.001)), r * 0.45, mat=mat)
+        return
     _cyl(mb, p - Vector((0, 0, h / 2)), p + Vector((0, 0, h / 2)), r, seg=10, mat=mat)
     _cyl(mb, p + Vector((0, 0, h / 2 - 0.001)), p + Vector((0, 0, h / 2 + 0.004)), r * 0.6, seg=8, mat=mat)
 
 
 def _padlock(mb, p, rr, open_=True):
-    """Candado colgando de un alambre: p = punto superior del alambre donde se apoya el interior del arco.
-    Arco rígido en U (pierna larga dentro del cuerpo); abierto = arco subido 10 mm y girado 35° sobre la pierna larga
-    (la corta queda fuera del cuerpo). Cuerpo con bisel y bocallave."""
+    """Candado de latón de 40 mm colgando de un alambre / armella: p = punto superior del alambre donde se apoya el
+    interior del arco. Arco de acero Ø 6,4 en U (pierna larga dentro del cuerpo); abierto = arco subido 10 mm y girado 35°
+    sobre la pierna larga. Cuerpo de esquinas redondeadas con canto achaflanado, cilindro de cerradura y bocallave."""
     p = _v(p)
     rot = _R("Z", rr.uniform(-25, 25)) @ _R("X", rr.uniform(-12, 12))
     lift = 0.010 if open_ else 0.0
     M = _T(p) @ rot @ _T(0, 0, 0.004 + 0.0032 - lift)
-    U = [Vector((0.012 * math.cos(a), 0, -0.02 + 0.016 * math.sin(a))) for a in [PI * i / 12 for i in range(13)]]
+    U = [Vector((0.012 * math.cos(a), 0, -0.02 + 0.016 * math.sin(a))) for a in [PI * i / 16 for i in range(17)]]
     pts = [Vector((0.012, 0, -0.035))] + U[1:] + [Vector((-0.012, 0, -0.05))]
     if open_:
         S_ = _about((-0.012, 0, 0), _R("Z", 35)) @ _T(0, 0, lift)
         pts = [S_ @ q for q in pts]
-    _tube(mb, [M @ q for q in pts], 0.0032, seg=6, mat="aluminium")
-    _box(mb, (-0.021, -0.008, -0.07), (0.021, 0.008, -0.03), "metal_rust", bevel=0.004, seg=2, m=M)
-    _cyl(mb, M @ Vector((0, -0.0085, -0.058)), M @ Vector((0, -0.0075, -0.058)), 0.004, seg=10, mat="aluminium")
+    _tube(mb, [M @ q for q in pts], 0.0032, mat="steel" if _svc() else "aluminium")
+    body = _lattice((-0.021, -0.008, -0.07), (0.021, 0.008, -0.03), r=0.0045, step=0.01, mat="brass" if _svc() else "metal_rust")
+    _merge(mb, body, M)
+    _cyl(mb, M @ Vector((0, -0.0086, -0.058)), M @ Vector((0, -0.0074, -0.058)), 0.0045, mat="brass")
+    _box(mb, (-0.0006, -0.0092, -0.0615), (0.0006, -0.0084, -0.0545), "cable", m=M)          # bocallave
 
 
-def meter_box(seed=0, open_door=True, detail="high"):
-    """Gabinete de medidor de chapa (0,36 × 0,50 × 0,17) con puerta de ventanilla redonda (vidrio roto) abierta o
-    entreabierta, base de medidor (con medidor o con las mordazas vacías), interruptor, tubo conduit que baja del muro
-    y un enredo de cables colgando por abajo. Origen: cara del muro, centro del gabinete en X, z = 0 = fondo del gabinete.
-    detail: high / mid / low = 10,2 / 3,6 / 1,7 k."""
-    with _detail(detail):
+def _meter(mb, Mm, rr, broken, svc):
+    """Medidor de energía tipo enchufe (ANSI forma 2S, Ø 0,14 base / 0,145 cubierta): base negra con brida, carátula de
+    aluminio con display, placa de datos y disco; cubierta de vidrio con hombro, aro de sellado de acero inoxidable con
+    cerrojo y sello de plástico con alambre. Mm: marco en la cara del enchufe (Z hacia fuera)."""
+    _lathe(mb, [(0.0, 0.0), (0.071, 0.0), (0.0735, 0.003), (0.0735, 0.009), (0.072, 0.012), (0.07, 0.03), (0.068, 0.034),
+                (0.0, 0.034)], seg=72, mat="cable" if svc else "plastic", m=Mm @ _T(0, 0, 0.0155))
+    zf = 0.0155 + 0.034
+    # carátula: disco de aluminio con placa de datos, display LCD y marcas
+    _lathe(mb, [(0.0, 0.0), (0.06, 0.0), (0.06, 0.003), (0.0, 0.003)], seg=64, mat="aluminium", m=Mm @ _T(0, 0, zf))
+    _box(mb, (-0.026, 0.008, zf + 0.003), (0.026, 0.026, zf + 0.0055), "cable", bevel=0.0008, m=Mm)
+    _box(mb, (-0.022, 0.011, zf + 0.0055), (0.022, 0.023, zf + 0.0062), "glass", bevel=0.0003, m=Mm)
+    _box(mb, (-0.04, -0.035, zf + 0.003), (0.04, -0.006, zf + 0.0042), "sign_white", bevel=0.0005, m=Mm)
+    for k in range(4):
+        _box(mb, (-0.034, -0.012 - 0.0055 * k, zf + 0.0042), (-0.034 + (0.05 if k % 2 else 0.064), -0.0098 - 0.0055 * k, zf + 0.0049),
+             "cable", m=Mm)
+    _lathe(mb, [(0.0, 0.0), (0.0075, 0.0), (0.0075, 0.004), (0.0, 0.0045)], seg=24, mat="cable", m=Mm @ _T(0.045, -0.02, zf + 0.003))
+    # cubierta de vidrio (pared de 2,5 mm) con hombro y domo
+    dome = MB()
+    prof = [(0.0715, 0.0), (0.0722, 0.008), (0.0712, 0.011), (0.0705, 0.07), (0.068, 0.088), (0.06, 0.1), (0.045, 0.108),
+            (0.025, 0.1115), (0.0, 0.112)]
+    _lathe(dome, prof, seg=72, mat="glass", caps=False, m=Mm @ _T(0, 0, 0.033))
+    if broken:
+        cut = rr.uniform(0.0, 2 * PI)
+        c0 = Mm @ Vector((0, 0, 0.033))
+        ax = Mm.to_3x3() @ Vector((0, 0, 1))
+        rm = []
+        for f in dome.bm.faces:
+            q = f.calc_center_median() - c0
+            hgt = q.dot(ax)
+            rad = q - ax * hgt
+            ang = math.atan2((Mm.to_3x3().inverted() @ rad).y, (Mm.to_3x3().inverted() @ rad).x)
+            if hgt > 0.03 + 0.03 * math.sin(3 * ang + cut) and math.cos(ang - cut) > -0.2:
+                rm.append(f)
+        bmesh.ops.delete(dome.bm, geom=rm, context="FACES")
+    _solidify(dome, 0.0025)
+    _merge(mb, dome)
+    # aro de sellado: canal en V de acero inoxidable que abraza las dos bridas, con cerrojo y sello
+    ring_z = 0.0155 + 0.006
+    pr = [(0.0705, ring_z - 0.006), (0.0785, ring_z - 0.0055), (0.0795, ring_z - 0.002), (0.0795, ring_z + 0.008),
+          (0.0785, ring_z + 0.0112), (0.0718, ring_z + 0.0118), (0.0718, ring_z + 0.0095), (0.0765, ring_z + 0.0085),
+          (0.0765, ring_z - 0.0028), (0.0705, ring_z - 0.0038)]
+    _lathe(mb, pr, seg=72, mat="steel" if svc else "metal_rust", m=Mm, loop=True)
+    Ml = Mm @ _R("Z", -90) @ _T(0.0795, 0, ring_z + 0.0025)
+    _box(mb, (-0.0004, -0.009, -0.007), (0.012, 0.009, 0.007), "steel" if svc else "metal_rust", bevel=0.0012, m=Ml)
+    _cyl(mb, Ml @ Vector((0.006, -0.012, 0.0)), Ml @ Vector((0.006, 0.012, 0.0)), 0.0022, mat="steel")
+    if svc or rr.random() < 0.4:  # sello de garantía: alambre trenzado por el cerrojo y marbete de plástico
+        w0 = Ml @ Vector((0.006, 0.0124, 0.0))
+        wire = _spline([w0, w0 + Ml.to_3x3() @ Vector((0.004, 0.008, -0.004)), w0 + Ml.to_3x3() @ Vector((0.006, 0.006, -0.03))], 0.003)
+        _tube(mb, wire, 0.0006, mat="steel")
+        tag = wire[-1]
+        _box(mb, (-0.007, -0.0018, -0.016), (0.007, 0.0018, 0.0), "sign_red" if svc else "plastic", bevel=0.0012,
+             m=_T(tag) @ _R("Z", rr.uniform(-20, 20)))
+
+
+def meter_box(seed=0, open_door=True, detail="high", state=None):
+    """Gabinete de medidor de lámina (0,36 × 0,50 × 0,17) con puerta de ventanilla redonda (por ella asoma la cubierta del
+    medidor), base (enchufe) de medidor tipo anillo con su medidor, interruptor termomagnético en caja, tubo conduit que baja del muro con conector y contratuerca.
+    Origen: cara del muro, centro del gabinete en X, z = 0 = fondo del gabinete.
+    state='abandoned' (deptos., muelle): medidor arrancado (mordazas vacías) o con la cubierta
+    rota, puerta abierta o entreabierta, cables cortados colgando por abajo, candado abierto, abolladuras y óxido.
+    state='service' (hospital, tienda): medidor completo con cubierta íntegra, aro y sello de garantía, puerta cerrada,
+    candado cerrado, sin cables sueltos.
+    Medidas: enchufe tipo anillo 100 A 4 mordazas ≈ 8 × 11,5 × 3,3" (Eaton/Elliott U5929XLINS); medidor ANSI Ø ~0,17."""
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
+        svc = _svc()
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
         W, H, D = 0.36, 0.50, 0.17
         x0, x1, yb, yf = -W / 2, W / 2, -0.0015, -0.0015 - D
+        steel = "galvanized" if svc else "metal_rust"
         dents = _rand_dents(rr, (x0, yf, 0), (x1, yb, H), int(rr.integers(1, 4)), faces=("+x", "-x", "+z"),
                             region=((x0 + 0.04, yf + 0.04, 0.05), (x1 - 0.04, yb - 0.04, H - 0.05)), R=(0.03, 0.07), depth=(0.002, 0.006))
-        deform = _deformer(dents, nz, amp=0.0006, freq=6.0)
+        if svc:
+            dents = []
+        deform = _deformer(dents, nz, amp=0.0002 if svc else 0.0006, freq=6.0)
         body = _tray((x0, yf, 0.0), (x1, yb, H), "-y", t=0.0015, r=0.008, step=0.03, mat="metal_paint", deform=deform,
-                     matfn=_rust_fn(nz, 0.0, H, thr=0.3))
+                     matfn=None if svc else _rust_fn(nz, 0.0, H, thr=0.3))
         _merge(mb, body)
         # ceja enrollada del marco
         rim = _fillet([(x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, H - 0.0008),
-                       (x0 + 0.0008, yf + 0.0012, H - 0.0008), (x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008)], 0.008, 3)[1:-1]
-        _tube(mb, rim, 0.0024, seg=6, mat="metal_paint", closed=True, up=(0, 1, 0))
-        # tablero de fondo + base de medidor + interruptor
-        _box(mb, (x0 + 0.025, yb - 0.016, 0.03), (x1 - 0.025, yb - 0.004, H - 0.03), "wood_dark", bevel=0.002, seg=1)
+                       (x0 + 0.0008, yf + 0.0012, H - 0.0008), (x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008)],
+                      0.008, 6)[1:-1]
+        _tube(mb, rim, 0.0024, mat="metal_paint", closed=True, up=(0, 1, 0))
+        # tablero de fondo (triplay) con 4 pijas
+        _box(mb, (x0 + 0.025, yb - 0.016, 0.03), (x1 - 0.025, yb - 0.004, H - 0.03), "plywood" if svc else "wood_dark", bevel=0.002)
         sy = yb - 0.016
-        _box(mb, (-0.085, sy - 0.035, 0.20), (0.085, sy + 0.002, 0.44), "metal_paint", bevel=0.006, seg=2)
+        for (xx, zz) in ((x0 + 0.04, 0.045), (x1 - 0.04, 0.045), (x0 + 0.04, H - 0.045), (x1 - 0.04, H - 0.045)):
+            _screw(mb, (xx, sy, zz), (0, -1, 0), r=0.0045, mat=steel)
+        # base (enchufe) de medidor: caja estampada con esquinas redondeadas, boss del anillo y 2 tornillos
+        sock = _lattice((-0.085, sy - 0.035, 0.20), (0.085, sy + 0.0005, 0.44), r=0.009, step=0.02, mat="metal_paint")
+        _merge(mb, sock)
+        for zz in (0.215, 0.425):
+            _screw(mb, (0.0, sy - 0.035, zz), (0, -1, 0), r=0.004, mat=steel)
         Mm = _frame((0, sy - 0.035, 0.32), (0, -1, 0))
-        _lathe(mb, [(0.0, 0.0), (0.082, 0.0), (0.084, 0.004), (0.084, 0.012), (0.078, 0.016), (0.0, 0.016)], seg=40, mat="metal_paint",
-               m=Mm @ _T(0, 0, -0.0005))
+        _lathe(mb, [(0.0, -0.0005), (0.082, -0.0005), (0.084, 0.0035), (0.084, 0.0115), (0.0805, 0.0155), (0.0, 0.0155)], seg=72,
+               mat="metal_paint", m=Mm)
         meter = rr.random() < 0.55
-        if meter:
-            _lathe(mb, [(0.0, 0.0), (0.07, 0.0), (0.072, 0.03), (0.07, 0.034), (0.0, 0.034)], seg=36, mat="plastic", m=Mm @ _T(0, 0, 0.0155))
-            _box(mb, (-0.045, -0.02, 0.0), (0.045, 0.02, 0.012), "aluminium", bevel=0.002, seg=1, m=Mm @ _T(0, 0.01, 0.049))
-            dome = MB()
-            prof = [(0.071, 0.0), (0.072, 0.06), (0.068, 0.085), (0.055, 0.1), (0.03, 0.108), (0.0, 0.11)]
-            _lathe(dome, prof, seg=36, mat="glass", caps=False, m=Mm @ _T(0, 0, 0.033))
-            cut = rr.uniform(0.0, 2 * PI)
-            rm = [f for f in dome.bm.faces if f.calc_center_median().z > 0.30 and
-                  math.cos(math.atan2(f.calc_center_median().x, -(f.calc_center_median().z - 0.32)) - cut) > 0.3]
-            bmesh.ops.delete(dome.bm, geom=rm, context="FACES")
-            _solidify(dome, 0.0025)
-            _merge(mb, dome)
-        else:
+        if meter or svc:
+            _meter(mb, Mm, rr, broken=not svc, svc=svc)
+        else:  # mordazas vacías (4) y bloque de terminales
             for (xx, zz) in ((-0.035, 0.36), (0.035, 0.36), (-0.035, 0.28), (0.035, 0.28)):
-                _box(mb, (xx - 0.004, sy - 0.07, zz - 0.012), (xx + 0.004, sy - 0.03, zz + 0.012), "aluminium", bevel=0.0012, seg=1)
-                _box(mb, (xx - 0.0045 + 0.0035 * (1 if xx > 0 else -1), sy - 0.072, zz - 0.010), (xx + 0.0045 + 0.0035 * (1 if xx > 0 else -1), sy - 0.06, zz + 0.010),
-                       "aluminium", bevel=0.001, seg=1)
-        _box(mb, (-0.05, sy - 0.07, 0.07), (0.05, sy + 0.002, 0.17), "plastic", bevel=0.005, seg=2)
+                _box(mb, (xx - 0.004, sy - 0.07, zz - 0.012), (xx + 0.004, sy - 0.034, zz + 0.012), "aluminium", bevel=0.0012)
+                o_ = 0.0035 * (1 if xx > 0 else -1)
+                _box(mb, (xx - 0.0045 + o_, sy - 0.072, zz - 0.010), (xx + 0.0045 + o_, sy - 0.06, zz + 0.010), "aluminium", bevel=0.001)
+            _box(mb, (-0.05, sy - 0.051, 0.305), (0.05, sy - 0.034, 0.335), "plastic", bevel=0.002)
+        # interruptor termomagnético en caja de lámina con tapa atornillada, palanca y etiqueta
+        _box(mb, (-0.05, sy - 0.07, 0.07), (0.05, sy + 0.002, 0.17), "metal_paint", bevel=0.005)
+        _box(mb, (-0.018, sy - 0.074, 0.098), (0.018, sy - 0.069, 0.142), "plastic", bevel=0.0015)
         lev = rr.uniform(-30, 30)
-        _box(mb, (-0.008, -0.03, -0.006), (0.008, 0.0, 0.006), "plastic", bevel=0.002, seg=1, m=_T(0, sy - 0.069, 0.12) @ _R("X", lev))
-        # conduit que baja del muro al techo del gabinete + cables internos
-        cpath = _fillet([(0.05, 0.03, H + 0.32), (0.05, -0.06, H + 0.32), (0.05, -0.06, H - 0.01)], 0.1, 8)
-        _tube(mb, cpath, 0.0117, seg=10, mat="metal_paint")
-        _cyl(mb, (0.05, -0.06, H + 0.004), (0.05, -0.06, H + 0.03), 0.016, seg=12, mat="metal_rust")
+        if svc:
+            lev = 25.0
+        _box(mb, (-0.007, -0.024, -0.005), (0.007, 0.0, 0.005), "cable", bevel=0.0018, m=_T(0, sy - 0.072, 0.12) @ _R("X", lev))
+        for (xx, zz) in ((-0.04, 0.08), (0.04, 0.08), (-0.04, 0.16), (0.04, 0.16)):
+            _screw(mb, (xx, sy - 0.07, zz), (0, -1, 0), r=0.0032, mat=steel)
+        # conduit que baja del muro al techo del gabinete: conector EMT con contratuerca, cables THHN 6 AWG
+        cpath = _fillet([(0.05, 0.03, H + 0.32), (0.05, -0.06, H + 0.32), (0.05, -0.06, H + 0.034)], 0.115, 12)
+        _tube(mb, cpath, 0.0117, mat="steel" if svc else "metal_paint")
+        _lathe(mb, [(0.0, 0.0), (0.0135, 0.0), (0.0135, 0.022), (0.0128, 0.0235), (0.0, 0.0235)], seg=32, mat=steel,
+               m=_T(0.05, -0.06, H + 0.0035))
+        _hexp(mb, Vector((0.05, -0.06, H + 0.012)), (0, 0, 1), 0.03, 0.007, steel, hole=0.012)
+        _hexp(mb, Vector((0.05, -0.06, H - 0.0095)), (0, 0, 1), 0.034, 0.003, steel, hole=0.013)    # contratuerca
         for i in range(3):
-            o = (i - 1) * 0.012
-            p0 = Vector((0.05 + o, -0.06, H + 0.01))
-            # baja del conduit hacia el tablero sin volver a subir (antes hacía un gancho de 150°)
-            top_to_meter = _spline([p0, p0 + Vector((0, 0, -0.03)), Vector((0.06 + o, sy - 0.035, 0.455)), Vector((0.02 + o, sy - 0.05, 0.43))], 0.02)
-            _tube(mb, top_to_meter, 0.0045, seg=6, mat="cable")
-            b0 = Vector((o * 2, sy - 0.04, 0.205))
-            _tube(mb, _spline([b0, b0 + Vector((0, -0.01, -0.02)), Vector((o * 2, sy - 0.06, 0.16))], 0.02), 0.0035, seg=6, mat="cable")
-        # cables que salen por abajo y cuelgan enredados
-        for i in range(int(rr.integers(4, 8))):
-            p0 = Vector((rr.uniform(-0.08, 0.08), rr.uniform(yf + 0.03, yb - 0.04), 0.075))
-            hang = rr.uniform(0.25, 1.1)
-            sw = Vector((rr.uniform(-0.25, 0.25), rr.uniform(-0.15, 0.05), 0))
-            pts = _spline([Vector((p0.x * 0.6, sy - 0.06, 0.08)), p0 + Vector((0, 0, -0.06)), p0 + Vector((0, 0, -0.12)),
-                           p0 + sw * 0.4 + Vector((0, 0, -hang * 0.5)), p0 + sw * 0.7 + Vector((rr.uniform(-0.1, 0.1), 0, -hang * 0.8)),
-                           p0 + sw + Vector((0, 0, -hang))], 0.025)
-            rad = rr.choice([0.0025, 0.0035, 0.0045])
-            _tube(mb, pts, rad, seg=6, mat="cable")
-            if rr.random() < 0.6:
-                _frayed(mb, pts[-1], pts[-1] - pts[-2], rr, n=2, r=0.0008, L=0.02, mat="metal_rust")
-        for xx in (-0.06, 0.0, 0.06):  # pasacables en el fondo
-            _cyl(mb, (xx, (yf + yb) / 2, -0.004), (xx, (yf + yb) / 2, 0.006), 0.012, seg=12, mat="plastic")
-        # puerta con ventanilla redonda (vidrio roto), bisagras a la izquierda, porta-candado a la derecha
+            o = (i - 1) * 0.0085
+            p0 = Vector((0.05 + o, -0.06, H - 0.004))
+            top_to_meter = _spline([p0, p0 + Vector((0, 0, -0.03)), Vector((0.055 + o, sy - 0.04, 0.455)),
+                                    Vector((0.02 + o * 1.5, sy - 0.05, 0.432))], 0.01)
+            _tube(mb, top_to_meter, 0.0039, mat="cable" if i != 1 else "plastic")
+            b0 = Vector((o * 2, sy - 0.04, 0.208))
+            _tube(mb, _spline([b0, b0 + Vector((0, -0.01, -0.02)), Vector((o * 2, sy - 0.06, 0.168))], 0.008), 0.0039,
+                  mat="cable" if i != 1 else "plastic")
+        if not svc:  # cables cortados que salen por abajo y cuelgan enredados
+            for i in range(int(rr.integers(4, 8))):
+                p0 = Vector((rr.uniform(-0.08, 0.08), rr.uniform(yf + 0.03, yb - 0.04), 0.075))
+                hang = rr.uniform(0.25, 1.1)
+                sw = Vector((rr.uniform(-0.25, 0.25), rr.uniform(-0.15, 0.05), 0))
+                pts = _spline([Vector((p0.x * 0.6, sy - 0.06, 0.08)), p0 + Vector((0, 0, -0.06)), p0 + Vector((0, 0, -0.12)),
+                               p0 + sw * 0.4 + Vector((0, 0, -hang * 0.5)), p0 + sw * 0.7 + Vector((rr.uniform(-0.1, 0.1), 0, -hang * 0.8)),
+                               p0 + sw + Vector((0, 0, -hang))], 0.02)
+                rad = rr.choice([0.0025, 0.0035, 0.0045])
+                _tube(mb, pts, rad, mat="cable")
+                if rr.random() < 0.6:
+                    _frayed(mb, pts[-1], pts[-1] - pts[-2], rr, n=2, r=0.0008, L=0.02, mat="copper")
+        for xx in (-0.06, 0.0, 0.06):  # pasacables de hule en el fondo
+            _lathe(mb, [(0.006, -0.004), (0.012, -0.004), (0.013, -0.002), (0.013, 0.004), (0.0105, 0.006), (0.006, 0.006)], seg=32,
+                   mat="rubber", m=_T(xx, (yf + yb) / 2, 0.0), loop=True)
+        # puerta con ventanilla redonda, bisagras a la izquierda, porta-candado a la derecha
         ang = rr.uniform(100, 155) if open_door else rr.uniform(3, 12)
         droop = rr.uniform(0.5, 4.0)
+        if svc:
+            ang, droop = 0.6, 0.0
         piv = Vector((x0 - 0.004, yf - 0.006, 0.0))
         Md = _T(piv) @ _R("Z", -ang) @ _R("Y", -droop)
         dw, dh = W + 0.008, H + 0.008
-        door = _holed_panel(0.004, -0.004, 0.004 + dw, -0.004 + dh, 0.004 + dw / 2, 0.33, 0.058, 0.0015, "metal_paint",
-                            n=_lv(40, 28, 16), rings=_lv(3, 2, 1), y=-0.0015)
+        door = _holed_panel(0.004, -0.004, 0.004 + dw, -0.004 + dh, 0.004 + dw / 2, 0.32, 0.077, 0.0015, "metal_paint",
+                            n=80, rings=4, y=-0.0015)
+        if not svc:
+            dd = _deformer([(Vector((0.004 + dw * rr.uniform(0.3, 0.7), -0.0015, dh * rr.uniform(0.15, 0.35))), Vector((0, 1, 0)), 0.06,
+                             rr.uniform(0.002, 0.006))])
+            for v in door.bm.verts:
+                v.co = dd(v.co, Vector((0, -1, 0)))
         _merge(mb, door, Md)
-        # marco de la puerta: 0,5 mm dentro del canto del panel (sin biseles en mid/low quedaba coplanar con el canto)
+        # dobleces de la puerta (pestañas de 11 mm) a 0,5 mm del canto del panel
         for (a, b, c, d) in ((0.0045, 0.0035 + dw, -0.0035, 0.006), (0.0045, 0.0035 + dw, dh - 0.014, dh - 0.0045),
                              (0.0045, 0.014, 0.0065, dh - 0.0145), (dw - 0.006, dw + 0.0035, 0.0065, dh - 0.0145)):
-            _box(mb, (a, -0.0005, c), (b, 0.011, d), "metal_paint", bevel=0.0006, seg=1, m=Md)
-        Mw = Md @ _T(0.004 + dw / 2, -0.0019, 0.33) @ _R("X", 90)
-        _tube(mb, [Mw @ Vector((0.0625 * math.cos(a), 0.0625 * math.sin(a), 0.0)) for a in [2 * PI * i / 28 for i in range(28)]], 0.003,
-              seg=6, mat="plastic", closed=True, up=Mw.to_3x3() @ Vector((0, 0, 1)))
-        _shards_ring(mb, Mw @ _T(0, 0, 0.004), 0.058, rr, n=int(rr.integers(3, 7)))
-        _box(mb, (dw - 0.02, -0.012, 0.22), (dw + 0.002, -0.0005, 0.25), "metal_rust", bevel=0.0015, seg=1, m=Md)  # aldaba
+            _box(mb, (a, -0.0005, c), (b, 0.011, d), "metal_paint", bevel=0.0006, m=Md)
+        # ventanilla Ø 154 por donde asoma la cubierta del medidor, con empaque de hule en U
+        Mw = Md @ _T(0.004 + dw / 2, -0.0019, 0.32) @ _R("X", 90)
+        _lathe(mb, [(0.0745, -0.0012), (0.0795, -0.0012), (0.0805, 0.0008), (0.0795, 0.0045), (0.0745, 0.0045)], seg=80,
+               mat="rubber", m=Mw @ _T(0, 0, -0.0035), loop=True)
+        rr.integers(3, 7)  # (antes: esquirlas del vidrio; se consume igual)
+        _box(mb, (dw - 0.02, -0.012, 0.22), (dw + 0.002, -0.0005, 0.25), steel, bevel=0.0015, m=Md)  # aldaba
         for zh in (0.07, H - 0.07):
-            _hinge(mb, piv + Vector((0, 0, zh)))
-            _box(mb, (x0 - 0.002, yf - 0.004, zh - 0.02), (x0 + 0.02, yf + 0.0015, zh + 0.02), "metal_rust", bevel=0.001, seg=1)
-        # armella + candado abierto en el gabinete
+            _hinge(mb, piv + Vector((0, 0, zh)), mat=steel)
+            _box(mb, (x0 - 0.002, yf - 0.004, zh - 0.02), (x0 + 0.02, yf + 0.0015, zh + 0.02), steel, bevel=0.001)
+        # armella + candado en el gabinete
         st = Vector((x1 + 0.006, yf + 0.02, 0.235))
-        _box(mb, (x1 - 0.002, yf + 0.008, 0.215), (x1 + 0.004, yf + 0.032, 0.255), "metal_rust", bevel=0.0012, seg=1)
+        _box(mb, (x1 - 0.002, yf + 0.008, 0.215), (x1 + 0.004, yf + 0.032, 0.255), steel, bevel=0.0012)
         _tube(mb, _fillet([(x1 + 0.002, yf + 0.012, 0.235), (x1 + 0.022, yf + 0.012, 0.235), (x1 + 0.022, yf + 0.028, 0.235),
-                           (x1 + 0.002, yf + 0.028, 0.235)], 0.006, 4), 0.0028, seg=6, mat="metal_rust")
-        if rr.random() < 0.7:
-            _padlock(mb, st + Vector((0.016, 0.0, 0.0028)), rr)
+                           (x1 + 0.002, yf + 0.028, 0.235)], 0.006, 6), 0.0028, mat=steel)
+        if svc or rr.random() < 0.7:
+            _padlock(mb, st + Vector((0.016, 0.0, 0.0028)), rr, open_=not svc)
         _declump(mb)
         return mb
 
 
-def light_fixture(kind="wall", seed=0, detail="high"):
+def light_fixture(kind="wall", seed=0, detail="high", state=None):
     """Luminaria exterior rota. kind='wall': arbotante tipo tortuga (base fundida Ø 0,24, rejilla de 4 arcos, globo de
     vidrio partido, socket con el bulbo roto). kind='bracket': brazo de cuello de ganso con pantalla de lámina abollada
     colgando chueca y cable suelto. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa).
     detail: high / mid / low = wall 3,6 / 1,7 / 0,8 k · bracket 3,0 / 1,5 / 0,8 k."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -1829,12 +2232,12 @@ def light_fixture(kind="wall", seed=0, detail="high"):
         return mb
 
 
-def tv_antenna(seed=0, detail="high"):
+def tv_antenna(seed=0, detail="high", state=None):
     """Antena yagi de TV en azotea: trípode de ángulo con zapatas atornilladas, mástil Ø 32 inclinado, 3 vientos (uno
     flojo), botalón cuadrado de 1,4 m con reflector, dipolo plegado con caja de bornes y 8 directores (doblados, uno
     falta), coaxial encintado bajando por el mástil. Origen: base del mástil sobre la losa (z = 0).
     detail: high / mid / low = 8,1 / 3,4 / 1,8 k."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -1948,12 +2351,12 @@ def tv_antenna(seed=0, detail="high"):
         return mb
 
 
-def satellite_dish(seed=0, detail="high"):
+def satellite_dish(seed=0, detail="high", state=None):
     """Antena parabólica offset (0,62 × 0,56) en ménsula de muro: placa con 4 taquetes, brazo, mástil Ø 42, soporte de
     elevación con ranuras, plato abollado y vencido hacia abajo, brazo del LNB doblado y coaxial con bucle de goteo
     entrando al muro. Origen: cara del muro, centro de la placa de anclaje (z = 0 = centro de la placa).
     detail: high / mid / low = 5,1 / 2,4 / 1,1 k."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -2061,8 +2464,9 @@ def satellite_dish(seed=0, detail="high"):
 # =====================================================================================================================
 def _brick_wall(mb, x0, x1, yc, courses, rr, nz, z0=0.0, missing=0.03, BL=0.24, BW=0.12, BH=0.06, J=0.01):
     """Murete de tabique a soga (0,24 × 0,12 × 0,06, junta 1 cm) con juntas de mortero rehundidas 6 mm, ladrillos
-    ligeramente desalineados, alguno partido o faltante. Devuelve la altura superior."""
+    ligeramente desalineados, alguno partido o faltante (en servicio: completo y alineado). Devuelve la altura superior."""
     joints = _LOD.level == "high"
+    svc = _svc()
     if not joints:  # mid / low: núcleo de mortero rehundido 6 mm (se ve en todas las juntas) en vez de una caja por junta
         top = z0 + J + courses * (BH + J) - J
         _box(mb, (x0 + 0.004, yc - BW / 2 + 0.006, z0 + 0.001), (x1 - 0.004, yc + BW / 2 - 0.006, top - 0.002), "mortar")
@@ -2076,110 +2480,191 @@ def _brick_wall(mb, x0, x1, yc, courses, rr, nz, z0=0.0, missing=0.03, BL=0.24, 
         while x < x1 - 0.02:
             a, b = max(x, x0), min(x + BL, x1)
             if b - a > 0.03:
-                if rr.random() > missing:
-                    broken = rr.random() < 0.06
+                if rr.random() > missing or svc:
+                    broken = rr.random() < 0.06 and not svc
                     bb = a + (b - a) * rr.uniform(0.45, 0.8) if broken else b
-                    M = _about(((a + bb) / 2, yc, zb + BH / 2), _R("Z", rr.uniform(-0.6, 0.6)) @ _R("X", rr.uniform(-0.5, 0.5)))
-                    M = _T(rr.uniform(-0.0015, 0.0015), rr.uniform(-0.002, 0.002), 0) @ M
-                    _box(mb, (a, yc - BW / 2, zb), (bb, yc + BW / 2, zb + BH), "brick", bevel=0.004, seg=1, m=M)
+                    k = 0.4 if svc else 1.0
+                    M = _about(((a + bb) / 2, yc, zb + BH / 2), _R("Z", rr.uniform(-0.6, 0.6) * k) @ _R("X", rr.uniform(-0.5, 0.5) * k))
+                    M = _T(rr.uniform(-0.0015, 0.0015) * k, rr.uniform(-0.002, 0.002) * k, 0) @ M
+                    _box(mb, (a, yc - BW / 2, zb), (bb, yc + BW / 2, zb + BH), "brick", bevel=0.004, seg=2, m=M)
                 if joints and b < x1 - 0.005:  # junta vertical
                     _box(mb, (b + 0.001, yc - BW / 2 + 0.006, zb + 0.001), (b + J - 0.001, yc + BW / 2 - 0.006, zb + BH - 0.001), "mortar")
             x += BL + J
     return z0 + J + courses * (BH + J) - J
 
 
-def water_tank(seed=0, detail="high"):
-    """Tinaco de polietileno de 1100 L (Ø 1,10 × 1,40) con nervaduras, cuello y tapa (puesta, corrida o tirada), sobre
-    losa de concreto de 1,32 × 1,16 apoyada en 3 muretes de tabique de 6 hiladas; salida con válvula, jarro de aire y
-    alimentación de PVC. Origen: centro de la base sobre la losa de azotea (z = 0).
-    detail: high / mid / low = 16,6 / 5,3 / 3,3 k (mid / low: un núcleo de mortero por murete en vez de una caja
-    por junta, nervaduras con 4 / 3 puntos de perfil)."""
-    with _detail(detail):
+def _pvc_run(mb, pts, r, rad, mat="plastic", hubs=True):
+    """Tubería de PVC hidráulico por una polilínea: tubo con codos de radio `rad` y, en cada codo, el cuerpo del codo
+    (2,5 mm más grueso) con sus dos campanas de 30 mm. Devuelve la trayectoria."""
+    P = [_v(p) for p in pts]
+    path = _densify(_fillet(P, rad, 10), 0.05)
+    _tube(mb, path, r, mat=mat)
+    if not hubs:
+        return path
+    for i in range(1, len(P) - 1):
+        a, b, c = P[i - 1], P[i], P[i + 1]
+        d0, d1 = (b - a).normalized(), (c - b).normalized()
+        ang = d0.angle(d1)
+        if ang < 0.05:
+            continue
+        t = min(rad * math.tan(ang / 2), 0.45 * (b - a).length, 0.45 * (c - b).length)
+        pin, pout = b - d0 * t, b + d1 * t
+        arc = [pin * (1 - s) ** 2 + b * 2 * (1 - s) * s + pout * s * s for s in [k / 10 for k in range(11)]]
+        _tube(mb, arc, r + 0.0025, mat=mat)
+        for (q, d) in ((pin, -d0), (pout, d1)):
+            _lathe(mb, [(0.0, -0.001), (r + 0.0035, -0.001), (r + 0.0035, 0.026), (r + 0.003, 0.03), (0.0, 0.03)], seg=_rseg(r + 0.004),
+                   mat=mat, m=_frame(q, d))
+    return path
+
+
+def _ball_valve(mb, c, d, r, rr, mat="brass", handle="sign_red"):
+    """Válvula de esfera roscada (llave de paso) en c, eje d: dos extremos hexagonales, cuerpo abombado, vástago con
+    tuerca y maneral de palanca con forro de plástico."""
+    d = _v(d).normalized()
+    M = _frame(c, d)
+    _lathe(mb, [(0.0, -0.032), (r + 0.006, -0.032), (r + 0.011, -0.012), (r + 0.013, 0.0), (r + 0.011, 0.012), (r + 0.006, 0.032),
+                (0.0, 0.032)], seg=40, mat=mat, m=M)
+    for sg in (-1, 1):
+        _hexp(mb, c + d * (sg * 0.03 - (0.016 if sg > 0 else 0.0)), d, 2 * (r + 0.0075), 0.016, mat)
+    up = Vector((0, 0, 1)) - d * d.z
+    up = up.normalized() if up.length > 1e-4 else d.orthogonal().normalized()
+    st = c + up * (r + 0.011)
+    _cyl(mb, st, st + up * 0.012, 0.0055, mat=mat)
+    _hexp(mb, st + up * 0.006, up, 0.013, 0.005, mat, hole=0.003)
+    side = d.cross(up).normalized()
+    yaw = rr.uniform(-20, 20)
+    hd = (d * math.cos(math.radians(yaw)) + side * math.sin(math.radians(yaw))).normalized()
+    Mh = _basis(st + up * 0.014, hd, hd.cross(up), up)
+    _box(mb, (-0.008, -0.009, -0.0015), (0.11, 0.009, 0.0015), "steel", bevel=0.0012, m=Mh)
+    _merge(mb, _lattice((0.04, -0.011, -0.0035), (0.112, 0.011, 0.0035), r=0.003, step=0.02, mat=handle), Mh)
+
+
+def water_tank(seed=0, detail="high", state=None, stand=None):
+    """Tinaco de polietileno de 1100 L (Ø 1,10 × 1,40; ref. Rotoplas tanque 1100 L: Ø 1,10 × 1,40 m) con nervaduras,
+    cuello y tapa roscada de 0,52 (puesta, corrida o tirada), multiconector de salida con tuerca, llave de esfera,
+    tee y jarro de aire, alimentación por arriba con flotador; todo en PVC hidráulico con codos y campanas.
+    Base: losa de concreto de 1,32 × 1,16 sobre 3 muretes de tabique de 6 hiladas (stand=None) o, con stand = altura en m
+    de una base de ángulo que pone el constructor, el tinaco directo sobre esa base (sin muretes ni losa; las bajadas
+    llegan a z = -stand).
+    Origen: centro de la base sobre la losa de azotea (z = 0) o sobre la base de ángulo.
+    state='service': tapa puesta, muretes completos, sin abolladura.
+    detail: mid / low: un núcleo de mortero por murete en vez de una caja por junta."""
+    st_ = _resolve_state(state)
+    if stand is None and st_ == "service" and _caller_is("gra_builder"):
+        stand = 0.93          # GRA_1: base de ángulo de 0,93 m (gra_builder.store_services)
+    with _detail(detail, aaa=True, state=st_):
+        svc = _svc()
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
         top = 0.0
-        for yc in (-0.46, 0.0, 0.46):
-            top = _brick_wall(mb, -0.6, 0.6, yc, 6, rr, nz)
-        zs = top + 0.0015
-        slab = _lattice((-0.66, -0.58, zs), (0.66, 0.58, zs + 0.08), r=0.012, step=0.08, mat="concrete",
-                        deform=_deformer([], nz, amp=0.003, freq=4.0))
-        _merge(mb, slab)
-        zt = zs + 0.08 + 0.001
+        if stand is None:
+            for yc in (-0.46, 0.0, 0.46):
+                top = _brick_wall(mb, -0.6, 0.6, yc, 6, rr, nz)
+            zs = top + 0.0015
+            slab = _lattice((-0.66, -0.58, zs), (0.66, 0.58, zs + 0.08), r=0.012, step=0.08, mat="concrete",
+                            deform=_deformer([], nz, amp=0.003, freq=4.0))
+            _merge(mb, slab)
+            zt = zs + 0.08 + 0.001
+            zfloor = 0.0
+        else:
+            zt = 0.0005
+            zfloor = -float(stand)
         # tanque
         prof = [(0.0, 0.0), (0.50, 0.0), (0.53, 0.012), (0.545, 0.04), (0.55, 0.085)]
         z = 0.11
         while z < 1.08:
-            prof += _lv([(0.55, z), (0.556, z + 0.012), (0.563, z + 0.028), (0.563, z + 0.046), (0.556, z + 0.062), (0.55, z + 0.074)],
-                        [(0.55, z), (0.5615, z + 0.02), (0.5615, z + 0.054), (0.55, z + 0.074)],
-                        [(0.55, z), (0.562, z + 0.037), (0.55, z + 0.074)])
+            prof += [(0.55, z), (0.556, z + 0.012), (0.563, z + 0.028), (0.563, z + 0.046), (0.556, z + 0.062), (0.55, z + 0.074)]
             z += 0.17
-        prof += [(0.55, 1.17), (0.535, 1.235), (0.49, 1.29), (0.41, 1.33), (0.31, 1.356), (0.245, 1.366), (0.245, 1.40), (0.236, 1.407),
-                 (0.218, 1.40), (0.218, 1.12), (0.0, 1.12)]
+        prof += [(0.55, 1.17), (0.535, 1.235), (0.49, 1.29), (0.41, 1.33), (0.31, 1.356), (0.255, 1.364), (0.245, 1.366),
+                 (0.245, 1.40), (0.236, 1.407), (0.218, 1.40), (0.218, 1.12), (0.0, 1.12)]
         dent_a, dent_z = rr.uniform(0, 2 * PI), rr.uniform(0.3, 0.9)
         bul = rr.uniform(0.004, 0.012)
+        dent_k = 0.0 if svc else 1.0
 
         def tdef(p, a, rad, zz):
             if rad < 0.3 or zz > 1.37:
                 return p
-            k = 1.0 + (0.006 * nz(Vector((math.cos(a) * 2, math.sin(a) * 2, zz * 3))) + bul * math.sin(PI * min(zz / 1.2, 1.0))) * (rad / 0.55)
+            k = 1.0 + (0.006 * nz(Vector((math.cos(a) * 2, math.sin(a) * 2, zz * 3))) * (0.4 if svc else 1.0)
+                       + bul * math.sin(PI * min(zz / 1.2, 1.0))) * (rad / 0.55)
             d = math.hypot((a - dent_a + PI) % (2 * PI) - PI, (zz - dent_z) * 2.0)
             if d < 0.35:
-                k -= 0.035 * 0.5 * (1 + math.cos(PI * d / 0.35))
+                k -= 0.035 * dent_k * 0.5 * (1 + math.cos(PI * d / 0.35))
             return Vector((p.x * k, p.y * k, p.z))
 
         Mt = _T(0, 0, zt)
-        _lathe(mb, prof, seg=56, mat="plastic", m=Mt, deform=tdef)
-        # tapa
-        lid = [(0.0, 0.0), (0.262, 0.0), (0.262, 0.035), (0.255, 0.045), (0.21, 0.052), (0.0, 0.056)]
-        state = rr.choice(["on", "ajar", "off"])
-        if state == "on":
+        _lathe(mb, prof, seg=96, mat="plastic", m=Mt, deform=tdef)
+        # rosca exterior del cuello (2 hilos)
+        for k in range(2):
+            hel = [Mt @ Vector((0.2465 * math.cos(a), 0.2465 * math.sin(a), 1.372 + 0.0065 * k + 0.013 * a / (2 * PI)))
+                   for a in [2 * PI * i / 64 for i in range(65)]]
+            _tube(mb, hel, 0.0022, mat="plastic")
+        # tapa roscada Ø 0,52 con 24 nervios de agarre y domo
+        lid = [(0.0, 0.0), (0.262, 0.0), (0.262, 0.032), (0.258, 0.038), (0.24, 0.042), (0.2, 0.046), (0.12, 0.052), (0.0, 0.054)]
+        state_l = rr.choice(["on", "ajar", "off"])
+        if svc:
+            state_l = "on"
+        if state_l == "on":
             Ml = _T(0, 0, zt + 1.371) @ _R("Z", rr.uniform(0, 90))
-        elif state == "ajar":
+        elif state_l == "ajar":
             Ml = _T(rr.uniform(0.12, 0.2), rr.uniform(-0.05, 0.05), zt + 1.395) @ _R("Y", rr.uniform(8, 14)) @ _R("Z", rr.uniform(0, 90))
         else:
             a = rr.uniform(0, 2 * PI)
-            Ml = _T(0.95 * math.cos(a), 0.95 * math.sin(a), 0.0015) @ _R("X", 180) @ _T(0, 0, -0.056)
-        _lathe(mb, lid, seg=40, mat="plastic", m=Ml)
-        for k in range(16):  # nervios de agarre de la tapa
-            a = 2 * PI * k / 16
-            _box(mb, (0.258, -0.006, 0.006), (0.268, 0.006, 0.03), "plastic", bevel=0.002, seg=1, m=Ml @ _R("Z", math.degrees(a)))
-        # salida: niple + válvula + tee + jarro de aire + bajada
+            Ml = _T(0.95 * math.cos(a), 0.95 * math.sin(a), 0.0015 + zfloor) @ _R("X", 180) @ _T(0, 0, -0.054)
+        _lathe(mb, lid, seg=80, mat="plastic", m=Ml)
+        _lathe(mb, [(0.252, 0.0), (0.262, 0.0), (0.262, 0.004), (0.252, 0.004)], seg=80, mat="plastic", m=Ml @ _T(0, 0, -0.004),
+               loop=True)                                                         # faldón interior (encaja en el cuello)
+        for k in range(24):  # nervios de agarre
+            a = 2 * PI * k / 24
+            _box(mb, (0.259, -0.0045, 0.004), (0.2665, 0.0045, 0.03), "plastic", bevel=0.0018, m=Ml @ _R("Z", math.degrees(a)))
+        for k in range(8):  # nervios radiales del domo
+            a = 2 * PI * k / 8
+            _box(mb, (0.07, -0.004, 0.044), (0.235, 0.004, 0.05), "plastic", bevel=0.002, m=Ml @ _R("Z", math.degrees(a) + 11) @
+                 _about((0.15, 0, 0.047), _R("Y", -3.6)))
+        # salida: multiconector (brida + tuerca), niple, llave de esfera, tee, jarro de aire y bajada
         ao = rr.uniform(0, 2 * PI)
         d = Vector((math.cos(ao), math.sin(ao), 0))
         s_ = Vector((-d.y, d.x, 0))
         zo = zt + 0.13
-        p0 = d * 0.53 + Vector((0, 0, zo))
-        _cyl(mb, p0 - d * 0.02, p0 + d * 0.05, 0.034, seg=16, mat="plastic")
-        _cyl(mb, p0 + d * 0.05, p0 + d * 0.2, 0.021, seg=12, mat="plastic")
-        vc = p0 + d * 0.13
-        _bolt(mb, vc + Vector((0, 0, 0.018)), (0, 0, 1), r=0.016, h=0.02, washer=False, seg=8)
-        _box(mb, (-0.012, -0.004, 0.0), (0.09, 0.004, 0.006), "metal_rust", bevel=0.002, seg=1,
-               m=_T(vc + Vector((0, 0, 0.04))) @ _R("Z", math.degrees(ao) + rr.uniform(-70, 70)))
-        tee = p0 + d * 0.22
-        _cyl(mb, tee - d * 0.025, tee + d * 0.025, 0.028, seg=12, mat="plastic")
-        jar = _fillet([tee, tee + Vector((0, 0, 1.75)), tee + Vector((0, 0, 1.75)) + d * 0.1, tee + Vector((0, 0, 1.6)) + d * 0.1], 0.06, 6)
-        _tube(mb, _densify(jar, 0.1), 0.021, seg=12, mat="plastic")
-        low = _fillet([tee, tee - Vector((0, 0, zo - 0.05)), tee - Vector((0, 0, zo - 0.05)) + d * 0.6 + s_ * 0.2], 0.07, 6)
-        _tube(mb, _densify(low, 0.1), 0.021, seg=12, mat="plastic")
-        # alimentación por arriba (sube por fuera del tanque)
+        p0 = d * 0.548 + Vector((0, 0, zo))
+        _lathe(mb, [(0.0, 0.0), (0.045, 0.0), (0.047, 0.003), (0.047, 0.01), (0.0, 0.01)], seg=48, mat="plastic",
+               m=_frame(p0 - d * 0.004, d))
+        _hexp(mb, p0 + d * 0.006, d, 0.07, 0.016, "plastic", hole=0.0)
+        _cyl(mb, p0 + d * 0.02, p0 + d * 0.06, 0.0245, mat="plastic")
+        _ball_valve(mb, p0 + d * 0.11, d, 0.0135, rr, handle="sign_red" if svc else "metal_rust")
+        _cyl(mb, p0 + d * 0.14, p0 + d * 0.2, 0.0167, mat="plastic")
+        tee = p0 + d * 0.23
+        _lathe(mb, [(0.0, -0.03), (0.0205, -0.03), (0.0215, -0.028), (0.0215, 0.028), (0.0205, 0.03), (0.0, 0.03)], seg=40,
+               mat="plastic", m=_frame(tee, d))
+        _lathe(mb, [(0.0, 0.0), (0.0215, 0.0), (0.0215, 0.028), (0.0205, 0.03), (0.0, 0.03)], seg=40, mat="plastic",
+               m=_frame(tee + Vector((0, 0, 0.012)), (0, 0, 1)))
+        _lathe(mb, [(0.0, 0.0), (0.0215, 0.0), (0.0215, 0.028), (0.0205, 0.03), (0.0, 0.03)], seg=40, mat="plastic",
+               m=_frame(tee - Vector((0, 0, 0.012)), (0, 0, -1)))
+        _pvc_run(mb, [tee + Vector((0, 0, 0.03)), tee + Vector((0, 0, 1.75)), tee + Vector((0, 0, 1.75)) + d * 0.1,
+                      tee + Vector((0, 0, 1.6)) + d * 0.1], 0.0167, 0.05)
+        zl = zfloor + 0.05
+        _pvc_run(mb, [tee - Vector((0, 0, 0.03)), Vector((tee.x, tee.y, zl)), Vector((tee.x, tee.y, zl)) + d * 0.6 + s_ * 0.2], 0.0167, 0.06)
+        if stand is None:  # silleta de concreto bajo la bajada
+            q = Vector((tee.x, tee.y, 0.0)) + d * 0.35 + s_ * 0.115
+            _box(mb, (-0.05, -0.05, 0.0), (0.05, 0.05, 0.03), "concrete", bevel=0.006, m=_T(q) @ _R("Z", math.degrees(ao)))
+        # alimentación por arriba: sube por fuera, entra con un codo a la válvula de flotador (adaptador con tuerca)
         ai = ao + rr.uniform(0.9, 1.6)
         di = Vector((math.cos(ai), math.sin(ai), 0))
         pin = di * 0.535 + Vector((0, 0, zt + 1.22))
-        _cyl(mb, pin - di * 0.02, pin + di * 0.05, 0.026, seg=12, mat="plastic")
-        feed = _fillet([pin + di * 0.05, pin + di * 0.12, pin + di * 0.12 - Vector((0, 0, 1.22 + zt - 0.04)),
-                        pin + di * 0.9 - Vector((0, 0, 1.22 + zt - 0.04))], 0.06, 6)
-        _tube(mb, _densify(feed, 0.1), 0.0135, seg=10, mat="plastic")
+        _hexp(mb, pin + di * 0.008, di, 0.052, 0.012, "plastic", hole=0.0)
+        _cyl(mb, pin + di * 0.018, pin + di * 0.05, 0.0145, mat="plastic")
+        _pvc_run(mb, [pin + di * 0.05, pin + di * 0.12, pin + di * 0.12 - Vector((0, 0, 1.22 + zt - zl)),
+                      pin + di * 0.9 - Vector((0, 0, 1.22 + zt - zl))], 0.0107, 0.045)
         _declump(mb)
         return mb
 
 
-def mailboxes(n=8, seed=0, detail="high"):
+def mailboxes(n=8, seed=0, detail="high", state=None):
     """Batería de n buzones de chapa (celda 0,27 × 0,135 × 0,26) con marco, divisiones, puertas con ranura, tarjetero y
     chapa: unas cerradas, otras abiertas, colgando de una bisagra o arrancadas (quedan los muñones de bisagra), papeles
     viejos dentro. Origen: cara del muro, centro inferior del gabinete.
     detail: high / mid / low = 15,8 / 5,2 / 3,1 k con n = 8 (≈ 1,9 / 0,6 / 0,4 k por buzón)."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -2261,67 +2746,169 @@ def mailboxes(n=8, seed=0, detail="high"):
         return mb
 
 
-def extinguisher_cabinet(seed=0, detail="high"):
-    """Gabinete de extintor de sobreponer (0,30 × 0,64 × 0,20), VACÍO: gancho doblado al fondo, puerta de marco con el
-    vidrio roto (esquirlas en el marco) abierta o colgando, letrero de lámina arriba colgando de un tornillo.
-    Origen: cara del muro, centro inferior del gabinete.
-    detail: high / mid / low = 4,9 / 1,6 / 0,8 k."""
-    with _detail(detail):
+def _extinguisher(mb, c, rr, svc, yaw=0.0):
+    """Extintor PQS de 4,5 kg (10 lb; Ø 0,127 × 0,52 a la palanca): cilindro con faldón y domo, etiqueta envolvente con
+    franjas, tuerca moleteada de cuello, cuerpo de válvula, manija y palanca de lámina en canal, pasador con argolla y
+    cincho, manómetro, manguera con casquillo y boquilla sujeta al cuerpo por un fleje. c = centro de la base."""
+    M = _T(c) @ _R("Z", yaw)
+    R = 0.0635
+    red = "sign_red" if svc else "metal_rust"
+    body = [(0.0, 0.0), (0.055, 0.0), (0.058, 0.002), (0.0605, 0.008), (R, 0.014), (R, 0.33), (0.0626, 0.342), (0.0598, 0.356),
+            (0.0545, 0.37), (0.0465, 0.382), (0.036, 0.391), (0.025, 0.397), (0.0175, 0.4), (0.0175, 0.418)]
+    _lathe(mb, body, seg=64, mat=red, m=M)
+    _lathe(mb, [(R - 0.0004, 0.11), (R + 0.0009, 0.111), (R + 0.0009, 0.289), (R - 0.0004, 0.29)], seg=64,
+           mat="sign_white" if svc else "paper", m=M, loop=True)                                # etiqueta envolvente
+    for z in (0.255, 0.268, 0.135):
+        _lathe(mb, [(R + 0.0008, z), (R + 0.0016, z + 0.0004), (R + 0.0016, z + 0.006), (R + 0.0008, z + 0.0064)], seg=64,
+               mat="sign_red" if z > 0.2 else "cable", m=M, loop=True)
+    _lathe(mb, [(R - 0.0004, 0.062), (R + 0.0014, 0.0625), (R + 0.0014, 0.076), (R - 0.0004, 0.0765)], seg=64, mat="steel", m=M,
+           loop=True)                                                                            # fleje porta-boquilla
+    zt = 0.418
+    knurl = lambda p, a, rad, z: Vector((p.x, p.y, p.z)) * 1.0 if rad < 0.02 else Vector((p.x * (1 + 0.04 * (0.5 + 0.5 * math.cos(18 * a))),
+                                                                                      p.y * (1 + 0.04 * (0.5 + 0.5 * math.cos(18 * a))), p.z))
+    _lathe(mb, [(0.0, 0.0), (0.0225, 0.001), (0.0225, 0.012), (0.0, 0.013)], seg=72, mat="brass" if svc else "metal_rust",
+           m=M @ _T(0, 0, zt - 0.001), deform=knurl)
+    _lathe(mb, [(0.0, 0.0), (0.0155, 0.0), (0.0155, 0.008), (0.0135, 0.012), (0.0135, 0.026), (0.015, 0.03), (0.0, 0.03)], seg=32,
+           mat="brass" if svc else "metal_rust", m=M @ _T(0, 0, zt + 0.011))
+    zh = zt + 0.04
+    _box(mb, (-0.011, -0.02, zh), (0.011, 0.028, zh + 0.02), "brass" if svc else "metal_rust", bevel=0.003, m=M)
+    ch = [(-0.012, -0.0042), (0.012, -0.0042), (0.012, 0.0042), (0.0101, 0.0042), (0.0101, -0.0022), (-0.0101, -0.0022),
+          (-0.0101, 0.0042), (-0.012, 0.0042)]
+    hm = "steel" if svc else "metal_rust"
+    mb.sweep(ch, [M @ p for p in _densify(_fillet([Vector((0, 0.02, zh + 0.006)), Vector((0, 0.05, zh + 0.004)),
+                                                   Vector((0, 0.085, zh - 0.006))], 0.03, 8), 0.01)], mat=hm,
+             normal=M.to_3x3() @ Vector((1, 0, 0)))                                              # manija de transporte
+    mb.sweep([(x, -y) for (x, y) in ch], [M @ p for p in _densify(_fillet([Vector((0, -0.016, zh + 0.026)), Vector((0, 0.03, zh + 0.035)),
+                                                                         Vector((0, 0.09, zh + 0.05))], 0.04, 8), 0.01)],
+             mat=hm, normal=M.to_3x3() @ Vector((1, 0, 0)))                                      # palanca de disparo
+    _cyl(mb, M @ Vector((-0.015, -0.016, zh + 0.026)), M @ Vector((0.015, -0.016, zh + 0.026)), 0.0022, mat=hm)
+    zp = zh + 0.016
+    _cyl(mb, M @ Vector((-0.017, 0.006, zp)), M @ Vector((0.015, 0.006, zp)), 0.0016, mat="steel")
+    _torus(mb, M @ Vector((-0.028, 0.006, zp)), M.to_3x3() @ Vector((0, 1, 0)), 0.01, 0.0013, mat="steel")
+    if svc:  # cincho de garantía
+        _tube(mb, [M @ p for p in _spline([Vector((-0.03, 0.006, zp + 0.01)), Vector((-0.02, 0.02, zp + 0.02)),
+                                           Vector((0.0, 0.032, zp + 0.018)), Vector((0.012, 0.028, zp + 0.014))], 0.004)],
+              0.0008, mat="paint_yellow")
+    # manómetro
+    Mg = M @ _T(0, -0.02, zt + 0.03) @ _R("X", 90)
+    _cyl(mb, M @ Vector((0, -0.011, zt + 0.03)), M @ Vector((0, -0.022, zt + 0.03)), 0.0045, mat="brass")
+    _lathe(mb, [(0.0, 0.0), (0.014, 0.0), (0.015, 0.003), (0.015, 0.009), (0.0135, 0.0105), (0.0, 0.0095)], seg=40, mat="steel",
+           m=Mg @ _T(0, 0, 0.002))
+    _lathe(mb, [(0.0, 0.0), (0.0125, 0.0), (0.0125, 0.0007), (0.0, 0.0007)], seg=40, mat="sign_white", m=Mg @ _T(0, 0, 0.0108))
+    _box(mb, (-0.0004, -0.001, 0.0), (0.0004, 0.009, 0.0006), "cable", m=Mg @ _T(0, 0, 0.0116) @ _R("Z", rr.uniform(-40, 40)))
+    # salida, manguera y boquilla
+    _hexp(mb, M @ Vector((0.011, 0.0, zt + 0.022)), M.to_3x3() @ Vector((1, 0, 0)), 0.014, 0.008, "brass" if svc else "metal_rust")
+    _lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.022), (0.0078, 0.024), (0.0, 0.024)], seg=24, mat="steel",
+           m=_frame(M @ Vector((0.019, 0, zt + 0.022)), M.to_3x3() @ Vector((1, 0, 0))))
+    hp = [Vector((0.04, 0.0, zt + 0.022)), Vector((0.058, 0.002, zt + 0.012)), Vector((R + 0.012, 0.006, zt - 0.05)),
+          Vector((R + 0.009, 0.004, 0.25)), Vector((R + 0.0085, -0.002, 0.11)), Vector((R + 0.008, -0.004, 0.085))]
+    hose = _spline(hp, 0.01)
+    _tube(mb, [M @ p for p in hose], 0.0074, mat="rubber")
+    pe, dn = hose[-1], (hose[-1] - hose[-2]).normalized()
+    _lathe(mb, [(0.0, -0.004), (0.009, -0.004), (0.009, 0.012), (0.0082, 0.014), (0.0066, 0.016), (0.0066, 0.05), (0.0056, 0.064),
+                (0.0034, 0.064), (0.0, 0.06)], seg=24, mat="cable", m=M @ _frame(pe, dn))
+
+
+def extinguisher_cabinet(seed=0, detail="high", state=None):
+    """Gabinete de extintor de sobreponer (0,30 × 0,64 × 0,20; ref. JL Industries clase 10 lb: tina 9,5 × 25,75 × 6,25" a
+    13,9 × 27,4 × 6,5" con marco) de lámina doblada con ceja enrollada, gancho de solera y letrero de lámina
+    "FIRE EXTINGUISHER" arriba. Puerta de marco de lámina en canal con vidrio de 3 mm, empaque y jaladera.
+    state='abandoned' (deptos.): vidrio roto (esquirlas en el marco), puerta abierta, entreabierta o colgando, letrero
+    colgando de un tornillo, gancho doblado; el extintor (rojo con etiqueta y manguera) sigue colgado en ~45 % de los
+    casos, si no queda vacío. state='service': puerta cerrada con vidrio íntegro, extintor con cincho de garantía.
+    Origen: cara del muro, centro inferior del gabinete."""
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
+        svc = _svc()
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
         W, H, D = 0.30, 0.64, 0.20
         x0, x1, yb, yf = -W / 2, W / 2, -0.0015, -0.0015 - D
-        body = _tray((x0, yf, 0.0), (x1, yb, H), "-y", t=0.0015, r=0.007, step=0.035, mat="metal_paint",
-                     deform=_deformer(_rand_dents(rr, (x0, yf, 0), (x1, yb, H), 2, faces=("+x", "-x", "+z"),
-                                                  region=((x0 + 0.04, yf + 0.04, 0.06), (x1 - 0.04, yb - 0.04, H - 0.06))), nz, amp=0.0005),
-                     matfn=_rust_fn(nz, 0.0, H, thr=0.3))
+        steel = "steel" if svc else "metal_rust"
+        dents = _rand_dents(rr, (x0, yf, 0), (x1, yb, H), 2, faces=("+x", "-x", "+z"),
+                            region=((x0 + 0.04, yf + 0.04, 0.06), (x1 - 0.04, yb - 0.04, H - 0.06)))
+        body = _tray((x0, yf, 0.0), (x1, yb, H), "-y", t=0.0015, r=0.007, step=0.03, mat="metal_paint",
+                     deform=_deformer([] if svc else dents, nz, amp=0.0002 if svc else 0.0005),
+                     matfn=None if svc else _rust_fn(nz, 0.0, H, thr=0.3))
         _merge(mb, body)
         rim = _fillet([(x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, H - 0.0008),
-                       (x0 + 0.0008, yf + 0.0012, H - 0.0008), (x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008)], 0.007, 3)[1:-1]
-        _tube(mb, rim, 0.0024, seg=6, mat="metal_paint", closed=True, up=(0, 1, 0))
-        # gancho de solera doblado
-        hk = _fillet([(0.0, yb - 0.0016, 0.40), (0.0, yb - 0.0016, 0.47), (0.0, yb - 0.06, 0.47), (0.0, yb - 0.075, 0.5)], 0.012, 4)
-        hk = [p + Vector((0.0, 0.0, 0.0)) for p in hk]
-        hk[-1] = hk[-1] + Vector((rr.uniform(-0.03, 0.03), 0, -0.02))
-        mb.sweep([(-0.015, 0.0), (0.015, 0.0), (0.015, 0.003), (-0.015, 0.003)], hk, mat="metal_rust", normal=(1, 0, 0))
-        _screw(mb, (0.0, yb - 0.0046, 0.43), (0, -1, 0), r=0.005)
-        # puerta: marco tubular + vidrio roto
+                       (x0 + 0.0008, yf + 0.0012, H - 0.0008), (x0 + 0.0008, yf + 0.0012, 0.0008), (x1 - 0.0008, yf + 0.0012, 0.0008)],
+                      0.007, 6)[1:-1]
+        _tube(mb, rim, 0.0024, mat="metal_paint", closed=True, up=(0, 1, 0))
+        for (xx, zz) in ((0.0, 0.06), (0.0, H - 0.06)):  # pijas de fijación al muro (fondo)
+            _screw(mb, (xx, yb - 0.0015, zz), (0, -1, 0), r=0.0045, mat=steel)
+        # gancho de solera (doblado en abandono)
+        hk = _fillet([(0.0, yb - 0.0016, 0.40), (0.0, yb - 0.0016, 0.47), (0.0, yb - 0.06, 0.47), (0.0, yb - 0.075, 0.5)], 0.012, 6)
+        dx_ = rr.uniform(-0.03, 0.03)
+        if not svc:
+            hk[-1] = hk[-1] + Vector((dx_, 0, -0.02))
+        mb.sweep([(-0.015, 0.0), (-0.0142, -0.0008), (0.0142, -0.0008), (0.015, 0.0), (0.015, 0.003), (0.0142, 0.0038),
+                  (-0.0142, 0.0038), (-0.015, 0.003)], hk, mat=steel, normal=(1, 0, 0))
+        _screw(mb, (0.0, yb - 0.0046, 0.43), (0, -1, 0), r=0.005, mat=steel)
+        # extintor (siempre en servicio; en abandono ~45 %)
+        has_ext = rr.random() < 0.45
+        if svc or has_ext:
+            _extinguisher(mb, Vector((0.0, yb - 0.0016 - 0.0705, 0.045)), rr, svc, yaw=180.0 + (0.0 if svc else rr.uniform(-25, 25)))
+        # puerta: marco de lámina en canal (28 mm) con vidrio de 3 mm sobre empaque
         st = rr.choice(["open", "hanging", "ajar"])
         piv = Vector((x0 - 0.004, yf - 0.006, 0.0))
-        if st == "open":
+        if svc:
+            Md = _T(piv) @ _R("Z", -0.4)
+        elif st == "open":
             Md = _T(piv) @ _R("Z", -rr.uniform(95, 160))
         elif st == "ajar":
             Md = _T(piv) @ _R("Z", -rr.uniform(10, 35))
         else:
             Md = _T(piv) @ _R("Z", -rr.uniform(40, 90)) @ _about((0, 0, H - 0.08), _R("Y", -rr.uniform(8, 20)))
         dw, dh, fw = W + 0.008, H + 0.008, 0.028
-        for (a, b, c, d) in ((0.004, 0.004 + dw, -0.004, -0.004 + fw), (0.004, 0.004 + dw, dh - 0.004 - fw, dh - 0.004),
-                             (0.0045, 0.0035 + fw, fw - 0.0035, dh - fw - 0.0045), (dw + 0.0045 - fw, dw + 0.0035, fw - 0.0035, dh - fw - 0.0045)):
-            side = (b - a) < fw
-            _box(mb, (a, -0.0155 if side else -0.016, c), (b, -0.0005 if side else 0.0, d), "metal_paint", bevel=0.003, seg=1, m=Md)
-        gi = [(0.004 + fw - 0.006, -0.004 + fw - 0.006), (dw + 0.004 - fw + 0.006, -0.004 + fw - 0.006),
-              (dw + 0.004 - fw + 0.006, dh - 0.004 - fw + 0.006), (0.004 + fw - 0.006, dh - 0.004 - fw + 0.006)]
+        frame = _fillet([(0.004 + fw / 2, -0.008, -0.004 + fw / 2), (0.004 + dw - fw / 2, -0.008, -0.004 + fw / 2),
+                         (0.004 + dw - fw / 2, -0.008, dh - 0.004 - fw / 2), (0.004 + fw / 2, -0.008, dh - 0.004 - fw / 2),
+                         (0.004 + fw / 2, -0.008, -0.004 + fw / 2), (0.004 + dw - fw / 2, -0.008, -0.004 + fw / 2)], 0.004, 4)[1:-1]
+        prof = [(-fw / 2, -0.008), (-fw / 2 + 0.0015, -0.0095), (fw / 2 - 0.0015, -0.0095), (fw / 2, -0.008), (fw / 2, 0.008),
+                (fw / 2 - 0.0015, 0.008), (fw / 2 - 0.0015, -0.0068), (-fw / 2 + 0.0015, -0.0068), (-fw / 2 + 0.0015, 0.008),
+                (-fw / 2, 0.008)]
+        fr = MB()
+        fr.sweep(prof, frame, mat="metal_paint", closed_path=True, normal=(0, 1, 0))
+        _merge(mb, fr, Md)
+        gx0, gz0, gx1, gz1 = 0.004 + fw - 0.006, -0.004 + fw - 0.006, dw + 0.004 - fw + 0.006, dh - 0.004 - fw + 0.006
+        for (a, b, c_, d_) in ((gx0 - 0.001, gx1 + 0.001, gz0 - 0.001, gz0 + 0.003), (gx0 - 0.001, gx1 + 0.001, gz1 - 0.003, gz1 + 0.001),
+                               (gx0 - 0.001, gx0 + 0.003, gz0 + 0.003, gz1 - 0.003), (gx1 - 0.003, gx1 + 0.001, gz0 + 0.003, gz1 - 0.003)):
+            _box(mb, (a, -0.0066, c_), (b, -0.0034, d_), "rubber", m=Md)                             # empaque
         Mg = Md @ _T(0, -0.0085, 0) @ _R("X", 90)
-        for e in range(4):
-            a, b = Vector(gi[e] + (0,)), Vector(gi[(e + 1) % 4] + (0,))
-            nsh = int(rr.integers(1, 4))
-            for k in range(nsh):
-                t0 = rr.uniform(0.0, 0.7)
-                t1 = min(1.0, t0 + rr.uniform(0.15, 0.4))
-                pa, pb = a.lerp(b, t0), a.lerp(b, t1)
-                inward = Vector(((dw / 2 + 0.004) - (pa.x + pb.x) / 2, (dh / 2 - 0.004) - (pa.y + pb.y) / 2, 0)).normalized()
-                tip = pa.lerp(pb, rr.uniform(0.2, 0.8)) + inward * rr.uniform(0.03, 0.12)
-                _shard_plate(mb, [(pa.x, pa.y), (pb.x, pb.y), (tip.x, tip.y)], 0.003, "glass", Mg, rr, e * 3 + k)
-        _cyl(mb, Md @ Vector((dw - 0.01, -0.016, dh / 2)), Md @ Vector((dw - 0.01, -0.03, dh / 2)), 0.007, seg=10, mat="aluminium")
+        if svc:
+            _box(mb, (gx0 + 0.002, -0.0098, gz0 + 0.002), (gx1 - 0.002, -0.0068, gz1 - 0.002), "glass", bevel=0.0008, m=Md)
+        else:
+            gi = [(gx0, gz0), (gx1, gz0), (gx1, gz1), (gx0, gz1)]
+            for e in range(4):
+                a, b = Vector(gi[e] + (0,)), Vector(gi[(e + 1) % 4] + (0,))
+                nsh = int(rr.integers(1, 4))
+                for k in range(nsh):
+                    t0 = rr.uniform(0.0, 0.7)
+                    t1 = min(1.0, t0 + rr.uniform(0.15, 0.4))
+                    pa, pb = a.lerp(b, t0), a.lerp(b, t1)
+                    inward = Vector(((dw / 2 + 0.004) - (pa.x + pb.x) / 2, (dh / 2 - 0.004) - (pa.y + pb.y) / 2, 0)).normalized()
+                    tip = pa.lerp(pb, rr.uniform(0.2, 0.8)) + inward * rr.uniform(0.03, 0.12)
+                    _shard_plate(mb, [(pa.x, pa.y), (pb.x, pb.y), (tip.x, tip.y)], 0.003, "glass", Mg, rr, e * 3 + k)
+        # jaladera
+        _lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.004), (0.006, 0.006), (0.006, 0.018), (0.0085, 0.02), (0.0085, 0.026),
+                    (0.0065, 0.028), (0.0, 0.028)], seg=32, mat="aluminium", m=Md @ _frame((dw - 0.01, -0.0095, dh / 2), (0, -1, 0)))
         for zh in (0.08, H - 0.08):
-            _hinge(mb, piv + Vector((0, 0, zh)), h=0.06)
-        # letrero de lámina arriba, colgando de un tornillo
+            _hinge(mb, piv + Vector((0, 0, zh)), h=0.06, mat=steel)
+        # letrero de lámina arriba: atornillado (servicio) o colgando de un tornillo (abandono)
         sp = Vector((-0.11, -0.004, H + 0.1))
-        Ms = _T(sp) @ _R("Y", rr.uniform(8, 35))
-        _box(mb, (0.0, -0.0012, -0.08), (0.24, 0.0, 0.0), "metal_paint", bevel=0.0008, seg=1, m=Ms @ _T(-0.012, 0, 0.012))
-        _screw(mb, sp + Vector((0, -0.0012, 0)), (0, -1, 0), r=0.005)
-        _cyl(mb, (0.11, 0.02, H + 0.1), (0.11, -0.006, H + 0.1), 0.0025, seg=6, mat="metal_rust")
+        ang = rr.uniform(8, 35)
+        Ms = _T(sp) @ _R("Y", 0.0 if svc else ang)
+        Mp = Ms @ _T(-0.012, 0, 0.012)
+        sign = _lattice((0.0, -0.0012, -0.08), (0.24, 0.0, 0.0), r=0.0005, step=0.03, mat="sign_red")
+        _merge(mb, sign, Mp)
+        from kit.fonts import text_font
+        text_font(mb, "FIRE", 0.03, 0.0008, "sign_white", Mp @ _T(0.12, -0.0012, -0.037) @ _R("X", 90), font="sign", bold=True, res=2)
+        text_font(mb, "EXTINGUISHER", 0.019, 0.0008, "sign_white", Mp @ _T(0.12, -0.0012, -0.066) @ _R("X", 90), font="sign", res=2)
+        _screw(mb, sp + Vector((0, -0.0012, 0)), (0, -1, 0), r=0.005, mat=steel)
+        if svc:
+            _screw(mb, (0.11, -0.0052, H + 0.1), (0, -1, 0), r=0.005, mat=steel)
+        else:
+            _cyl(mb, (0.11, 0.02, H + 0.1), (0.11, -0.006, H + 0.1), 0.0025, mat="metal_rust")
         _declump(mb)
         return mb
 
@@ -2342,14 +2929,14 @@ def _torn_panel(x0, x1, zt, frac_lo, frac_hi, rr, jag=0.04, from_top=True, nu=No
     return cols
 
 
-def sign_torn(w=2.4, h=0.6, seed=0, detail="high"):
+def sign_torn(w=2.4, h=0.6, seed=0, detail="high", state=None):
     """Letrero luminoso de comercio (caja de lámina de 0,14 de fondo con marco de aluminio) con la cara de acrílico
     arrancada: quedan jirones colgando enroscados del marco superior y un pedazo en la esquina inferior; tubos
     fluorescentes rotos, caídos o faltantes con sus sockets, balastro y cable entrando desde el muro.
     Origen: cara del muro, centro inferior del letrero; ocupa x = -w/2..w/2, z = 0..h.
     detail: high / mid / low = 8,7 / 2,3 / 1,1 k para 2,4 × 0,6 (los jirones se generan a resolución completa y se
     submuestrean: misma silueta de desgarro en los 3 niveles)."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -2523,7 +3110,7 @@ def _garment_grid(kind, xa, xb, ztop, rr, nz, fallen=False):
     return [[(p.x, p.y, p.z) for p in col] for col in grid], skip
 
 
-def laundry_line(length=3.0, seed=0, detail="high"):
+def laundry_line(length=3.0, seed=0, detail="high", state=None):
     """Tendedero: alambre galvanizado Ø 3 mm entre dos armellas, con catenaria y quiebres bajo el peso de cada prenda
     (funicular), prendas de tela con pliegues mecidas por el viento (toallas y sábanas dobladas sobre el alambre,
     camisas, pantalones, trapos rotos; una colgando de una sola pinza) y pinzas sueltas.
@@ -2532,7 +3119,7 @@ def laundry_line(length=3.0, seed=0, detail="high"):
     Las telas son LÁMINAS (material 'fabric', una cara): usar DoubleSide.
     detail: high / mid / low = 11,3 / 3,1 / 1,6 k para 2,9 m (telas submuestreadas × 2 / × 3; los cortes de
     mangas, entrepierna y desgarros se conservan)."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -2599,13 +3186,13 @@ def laundry_line(length=3.0, seed=0, detail="high"):
         return mb
 
 
-def curtain_torn(w=1.4, h=1.5, seed=0, detail="high"):
+def curtain_torn(w=1.4, h=1.5, seed=0, detail="high", state=None):
     """Cortina rasgada colgando de una barra con argollas: 2 lienzos con pliegues, tiras desgarradas (con tela faltante)
     que se mecen, agujeros, bastilla deshilachada y, al azar, un lienzo medio desprendido de la barra (o la barra vencida).
     Coordenadas del vano: u = 0..w en X, v = 0..h en Z; la tela cuelga en el plano y ≈ 0 y las ménsulas de la barra van
     a un muro en y = +0,07 (cara interior). La tela es LÁMINA ('fabric', una cara): usar DoubleSide.
     detail: high / mid / low = 9,7 / 3,2 / 1,3 k para 1,4 × 1,5 y 14,5 / 4,6 / 1,8 k para 1,8 × 2,0."""
-    with _detail(detail):
+    with _detail(detail, aaa=True, state=_resolve_state(state)):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()

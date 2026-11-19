@@ -249,6 +249,184 @@ def _torus(mb, c, axis, R, r, seg=8, segr=4, mat="metal_rust"):
             mb.face([rings[i][j], rings[ii][j], rings[ii][jj], rings[i][jj]], mat)
 
 
+# --- herrajes y soldaduras (segunda pasada AAA): todo redondo con >= 12 lados y sombreado continuo -----------------------
+def _lathe(mb, prof, M, seg=16, mat="metal_rust", soft=True, closed=False):
+    """Sólido de revolución cerrado en el marco M (eje Z local). prof: [(r, z)]; r = 0 en un extremo = polo (abanico).
+    closed=True: el perfil es un lazo cerrado (anillo hueco: casquillos, abrazaderas) y no lleva tapas."""
+    def build():
+        rings = []
+        for r, z in prof:
+            if r <= 1e-7:
+                rings.append([mb.bm.verts.new(M @ Vector((0.0, 0.0, z)))])
+            else:
+                rings.append([mb.bm.verts.new(M @ Vector((r * math.cos(2 * math.pi * k / seg), r * math.sin(2 * math.pi * k / seg), z)))
+                              for k in range(seg)])
+        pairs = list(zip(rings, rings[1:])) + ([(rings[-1], rings[0])] if closed else [])
+        for a, b in pairs:
+            if len(a) == 1 and len(b) == 1:
+                continue
+            for k in range(seg):
+                kk = (k + 1) % seg
+                if len(a) == 1:
+                    mb.face([a[0], b[kk], b[k]], mat)
+                elif len(b) == 1:
+                    mb.face([a[k], a[kk], b[0]], mat)
+                else:
+                    mb.face([a[k], a[kk], b[kk], b[k]], mat)
+        if closed:
+            return
+        if len(rings[0]) > 1:
+            mb.face(rings[0][::-1], mat)
+        if len(rings[-1]) > 1:
+            mb.face(rings[-1], mat)
+    if soft:
+        with mb.soft():
+            build()
+    else:
+        build()
+
+
+def _axis_m(p, axis, spin=0.0):
+    """Marco con origen p y Z = axis (X horizontal si se puede), girado `spin` rad alrededor de Z."""
+    X, Y, Z = _frame(_v(axis))
+    c, s = math.cos(spin), math.sin(spin)
+    X, Y = X * c + Y * s, Y * c - X * s
+    return _mat(X, Y, Z, _v(p))
+
+
+def _hexnut(mb, M, af, h, mat="metal_rust", ch=0.12):
+    """Tuerca / cabeza hexagonal con chaflán de 30° en ambas caras (anillos de 12 puntos: esquinas despuntadas), z de 0 a h."""
+    rc = af / math.sqrt(3.0)                      # radio a las esquinas
+    corners = [Vector((rc * math.cos(math.pi / 3 * k + math.pi / 6), rc * math.sin(math.pi / 3 * k + math.pi / 6), 0.0))
+               for k in range(6)]
+
+    def ring(cut, z):
+        pts = []
+        for k in range(6):
+            c, a, b = corners[k], corners[k - 1], corners[(k + 1) % 6]
+            pts += [c + (a - c) * cut, c + (b - c) * cut]
+        return [mb.bm.verts.new(M @ Vector((p.x, p.y, z))) for p in pts]
+    rings = [ring(0.30, 0.0), ring(0.06, ch * h), ring(0.06, (1 - ch) * h), ring(0.30, h)]
+    for a, b in zip(rings, rings[1:]):
+        for k in range(12):
+            kk = (k + 1) % 12
+            mb.face([a[k], a[kk], b[kk], b[k]], mat)
+    mb.face(rings[0][::-1], mat)
+    mb.face(rings[-1], mat)
+
+
+def _washer(mb, M, ri, ro, t, mat="metal_rust", seg=16):
+    e = min(0.0006, t * 0.3)
+    _lathe(mb, [(ri, 0.0), (ro - e, 0.0), (ro, e), (ro, t - e), (ro - e, t), (ri, t)], M, seg=seg, mat=mat)
+
+
+def _anchor(mb, p, up, rs, d=0.010, mat="metal_rust"):
+    """Taquete de expansión / ancla: arandela + tuerca hexagonal + espárrago con punta achaflanada que asoma 4–7 mm."""
+    up = _v(up).normalized()
+    M = _axis_m(p, up, rs.uniform(0, math.pi))
+    t = 0.0022
+    _washer(mb, M @ Matrix.Translation((0, 0, -0.0005)), d * 0.55, d * 1.05, t + 0.0005, mat=mat)
+    _hexnut(mb, M @ Matrix.Translation((0, 0, t - 0.0003)), d * 1.6, d * 0.85, mat=mat)
+    top = t + d * 0.85 + rs.uniform(0.004, 0.007)
+    _lathe(mb, [(0.0, t + 0.002), (d * 0.5, t + 0.002), (d * 0.5, top - 0.0012), (d * 0.38, top), (0.0, top)], M, seg=12, mat=mat)
+
+
+def _nailhead(mb, p, axis, r=0.0038, h=0.0018, mat="metal_rust", sink=0.003):
+    """Cabeza de clavo / tornillo de cabeza redonda: disco abombado de 12 lados (soft) que entra `sink` en la madera."""
+    _lathe(mb, [(0.0, -sink), (r * 0.45, -sink), (r * 0.45, -0.0004), (r, -0.0004), (r * 0.97, h * 0.45), (r * 0.72, h * 0.85),
+                (r * 0.35, h), (0.0, h)], _axis_m(p, axis), seg=12, mat=mat)
+
+
+def _loop_tube(mb, pts, r, seg=8, mat="metal_rust", ripple=0.0, rs=None, nrm=None):
+    """Cordón cerrado (soldadura) de sección circular r a lo largo del lazo `pts`; ripple = rizado de las pasadas."""
+    P = [_v(p) for p in pts]
+    n = len(P)
+    ph = rs.uniform(0, 6.28) if rs is not None else 0.0
+    rings = []
+    for i in range(n):
+        T = (P[(i + 1) % n] - P[i - 1]).normalized()
+        N = _v(nrm[i]) if nrm is not None else ZV
+        N = (N - T * N.dot(T))
+        if N.length < 1e-6:
+            N = T.orthogonal()
+        N.normalize()
+        B = T.cross(N)
+        rr = r * (1.0 + ripple * math.sin(i * 2.4 + ph))
+        rings.append([mb.bm.verts.new(P[i] + (N * math.cos(2 * math.pi * k / seg) + B * math.sin(2 * math.pi * k / seg)) * rr)
+                      for k in range(seg)])
+    with mb.soft():
+        for i in range(n):
+            a, b = rings[i], rings[(i + 1) % n]
+            for k in range(seg):
+                kk = (k + 1) % seg
+                mb.face([a[k], a[kk], b[kk], b[k]], mat)
+
+
+def _rrect_loop(hx, hy, rc, n=3):
+    """Rectángulo de esquinas redondeadas (centro 0, semilados hx, hy, radio rc) como lista (x, y) en sentido antihorario."""
+    out = []
+    for cx, cy, a0 in ((hx - rc, hy - rc, 0.0), (-hx + rc, hy - rc, 0.5 * math.pi), (-hx + rc, -hy + rc, math.pi),
+                       (hx - rc, -hy + rc, 1.5 * math.pi)):
+        for j in range(n + 1):
+            a = a0 + 0.5 * math.pi * j / n
+            out.append((cx + rc * math.cos(a), cy + rc * math.sin(a)))
+    return out
+
+
+def _saddle_weld(mb, c, T, R, rb, below, rs, r=0.0026, seg=14, mat="metal_rust", hd=None):
+    """Soldadura de filete donde un barrote vertical (radio rb, eje por c) entra en un tubo de radio R y eje de dirección T
+    que pasa por c: el cordón sigue la curva de intersección (silla). below=True: el barrote llega por debajo del tubo."""
+    T = _v(T).normalized()
+    h = Vector((T.x, T.y, 0.0))
+    h = h.normalized() if h.length > 1e-6 else Vector((1.0, 0.0, 0.0))
+    side = Vector((h.y, -h.x, 0.0))
+    tana = T.z / max(math.hypot(T.x, T.y), 1e-6)
+    cosa = 1.0 / math.sqrt(1.0 + tana * tana)
+    rr = rb + 0.6 * r
+    pts = []
+    for k in range(seg):
+        a = 2 * math.pi * k / seg
+        dx, dy = rr * math.cos(a), rr * math.sin(a)
+        y = min(abs(dy), 0.97 * R)
+        dz = tana * dx + (-1.0 if below else 1.0) * math.sqrt(R * R - y * y) / cosa
+        pts.append(c + h * dx + side * dy + ZV * dz)
+    _loop_tube(mb, pts, r, seg=6, mat=mat, ripple=0.12, rs=rs, nrm=[ZV * (-1.0 if below else 1.0)] * seg)
+
+
+def _rail_z(pts, q):
+    """(z, T) del eje de una polilínea 3D en el punto de planta más cercano a q (z interpolada, T tangente 3D)."""
+    best = None
+    for a, b in zip(pts, pts[1:]):
+        d = b - a
+        dh = Vector((d.x, d.y, 0.0))
+        L2 = dh.length_squared
+        t = 0.0 if L2 < 1e-12 else min(max(Vector((q.x - a.x, q.y - a.y, 0.0)).dot(dh) / L2, 0.0), 1.0)
+        p = a + d * t
+        dist = math.hypot(p.x - q.x, p.y - q.y)
+        if best is None or dist < best[0]:
+            best = (dist, p, d.normalized() if d.length > 1e-9 else Vector((1.0, 0.0, 0.0)))
+    return best[1], best[2], best[0]
+
+
+def _sq_post(mb, base_xy, z0, top_fn, w, ang, mat="metal_rust", rc=0.004, rs=None):
+    """Poste de tubo cuadrado w x w con esquinas redondeadas (radio de doblez del PTR) cuya tapa superior sigue `top_fn(p)`
+    (cota del eje del pasamanos sobre ese punto: el poste muere DENTRO del pasamanos, también en pendiente)."""
+    loop = _rrect_loop(w / 2, w / 2, rc, n=4)
+    c, s = math.cos(ang), math.sin(ang)
+    P = [Vector((base_xy.x + x * c - y * s, base_xy.y + x * s + y * c, 0.0)) for x, y in loop]
+    zs = [z0, z0 + 0.03]
+    rings = [[mb.bm.verts.new(Vector((p.x, p.y, z))) for p in P] for z in zs]
+    rings.append([mb.bm.verts.new(Vector((p.x, p.y, top_fn(p)))) for p in P])
+    n = len(P)
+    for a, b in zip(rings, rings[1:]):
+        for k in range(n):
+            kk = (k + 1) % n
+            mb.face([a[k], a[kk], b[kk], b[k]], mat)
+    mb.face(rings[0][::-1], mat)
+    mb.face(rings[-1], mat)
+    return P
+
+
 def _revolve(mb, prof, m, seg=12, mat="concrete", jag_top=None, jag_bot=None, rs=None):
     """Sólido de revolución cerrado. prof: [(r, z)] de abajo arriba (en el espacio de `m`, eje Z local).
     jag_top/jag_bot: amplitud (m) de rotura en la tapa superior/inferior (anillo dentado + tapa en abanico)."""
@@ -283,7 +461,7 @@ def _chunk(mb, center, size, rs, mat="rubble", flat=1.0):
     """Trozo de escombro: caja biselada deformada y girada al azar (los triángulos aquí los exige la forma)."""
     c = MB()
     s = np.array([rs.uniform(0.7, 1.3), rs.uniform(0.55, 1.05), rs.uniform(0.3, 0.6) * flat]) * size
-    c.box(tuple(-s / 2), tuple(s / 2), mat, bevel=float(min(s)) * 0.2, seg=1)
+    c.box(tuple(-s / 2), tuple(s / 2), mat, bevel=float(min(s)) * 0.2, seg=2 if size > 0.03 else 1)
     # cada esquina (octante) se desplaza en bloque: forma irregular sin plegar las caras del bisel
     oct_off = {(a, b, d): Vector(rs.normal(0.0, 0.07, 3)) * float(min(s)) for a in (0, 1) for b in (0, 1) for d in (0, 1)}
     for v in c.bm.verts:
@@ -742,7 +920,8 @@ def _sand_wedge(mb, M, uc, zf, va, vb, rs, wd=0.06, hd=0.025, dirn=-1.0, lens=Fa
         pr = [(uc + dirn * w_, zf - zb0), (uc - dirn * bk, zf - zb0), (uc - dirn * bk, zf + h_),
               (uc + dirn * w_ * 0.35, zf + h_ * 0.55), (uc + dirn * w_ * 0.75, zf + h_ * 0.15 - 0.0015)]
         secs.append([M @ Vector((p[0], v, p[1])) for p in pr])
-    _loft(mb, secs, mat)
+    with mb.soft():                       # arena/polvo: sin aristas (montoncito barrido)
+        _loft(mb, secs, mat)
 
 
 def _landing(mb, M, L, v0, v1, lt, rs, *, push_from=None, push=0.03, nb=0.018, bev=0.012, broken=0.1, chip_vmax=None,
@@ -840,8 +1019,10 @@ def _landing(mb, M, L, v0, v1, lt, rs, *, push_from=None, push=0.03, nb=0.018, b
 
 
 def _rebar_run(mb, pts, rs, r=0.005, bulge=0.004):
-    """Varilla corrugada aproximada: tubo de 6 lados con leve ondulación (corrosión, pandeo)."""
+    """Varilla corrugada (NMX-B-506 / ASTM A615): núcleo de 8 lados con sombreado continuo, corrugaciones transversales
+    cada ~0,7 d (anillos alternos de cresta y valle) y dos costillas longitudinales; leve ondulación por corrosión/pandeo."""
     P = [_v(p) for p in pts]
+    pitch = 1.4 * r                       # corrugación cada 0,7 d
     out = [P[0]]
     for a, b in zip(P, P[1:]):
         m = max(1, int((b - a).length / 0.06))
@@ -850,7 +1031,41 @@ def _rebar_run(mb, pts, rs, r=0.005, bulge=0.004):
             if j < m:
                 q = q + Vector(rs.normal(0.0, bulge * 0.35, 3))
             out.append(q)
-    _ptube(mb, out, r, None, seg=6, mat="metal_rust")
+    # remuestreo a medio paso de corrugación
+    dense = [out[0]]
+    for a, b in zip(out, out[1:]):
+        n = max(1, int(round((b - a).length / (pitch / 2))))
+        dense += [a.lerp(b, j / n) for j in range(1, n + 1)]
+    n = len(dense)
+    seg = 8
+    T = []
+    for i in range(n):
+        t = dense[min(i + 1, n - 1)] - dense[max(i - 1, 0)]
+        T.append(t.normalized() if t.length > 1e-9 else Vector((0, 0, 1)))
+    ref = ZV if abs(T[0].z) < 0.9 else Vector((1.0, 0.0, 0.0))
+    N = (ref - T[0] * ref.dot(T[0])).normalized()
+    rings = []
+    ph = int(rs.integers(0, 2))
+    for i in range(n):
+        if i > 0:
+            N = (N - T[i] * N.dot(T[i])).normalized()
+        B = T[i].cross(N)
+        crest = (i + ph) % 2 == 0 and 0 < i < n - 1
+        ring = []
+        for k in range(seg):
+            a = 2 * math.pi * k / seg
+            rr = r * (1.10 if crest else 0.97)
+            if k in (0, seg // 2):
+                rr = max(rr, r * 1.10)          # costillas longitudinales
+            ring.append(mb.bm.verts.new(dense[i] + (N * math.cos(a) + B * math.sin(a)) * rr))
+        rings.append(ring)
+    with mb.soft():
+        for i in range(n - 1):
+            for k in range(seg):
+                kk = (k + 1) % seg
+                mb.face([rings[i][k], rings[i][kk], rings[i + 1][kk], rings[i + 1][k]], "metal_rust")
+    for ring, rev, i in ((rings[0], True, 0), (rings[-1], False, n - 1)):   # punta cortada con el centro algo hundido
+        _fan_cap(mb, ring, dense[i] + T[i] * (-0.0012 if rev else 0.0012) * -1, "metal_rust", rev)
 
 
 def stair_u(width=1.2, floor_h=2.9, landing_depth=1.3, gap=0.15, seed=0, broken=0.1, *, going=0.28, waist=0.15,
@@ -960,6 +1175,15 @@ def stair_u(width=1.2, floor_h=2.9, landing_depth=1.3, gap=0.15, seed=0, broken=
     if debris:
         rd = _sub(rs)
         lo_v, hi_v = (0.0, width + gap), (width, W)
+
+        from mathutils.bvhtree import BVHTree
+        surf_tree = BVHTree.FromBMesh(mb.bm)        # huellas y descanso reales (desgaste, ruido, despostillados)
+
+        def on_surf(p, s):
+            """Asienta un trozo de tamaño s sobre la superficie real bajo p (sin piedras flotando ni sumergidas)."""
+            p = _v(p)
+            loc, _, _, _ = surf_tree.ray_cast(Vector((p.x, p.y, p.z + 0.25)), Vector((0.0, 0.0, -1.0)), 0.6)
+            return Vector((p.x, p.y, (loc.z if loc is not None else p.z) + 0.03 * s))
         for f, Mx in ((f1, M1), (f2, M2)):
             for (k, vc, du, dz) in f["chips"]:
                 for _ in range(int(rd.integers(1, 4))):
@@ -967,30 +1191,31 @@ def stair_u(width=1.2, floor_h=2.9, landing_depth=1.3, gap=0.15, seed=0, broken=
                     s = rd.uniform(0.02, 0.05) * (0.6 + 6 * du)
                     vv = min(max(vc + rd.normal(0, 0.06), lo_v[Mx is M2] + 0.04), hi_v[Mx is M2] - 0.04)
                     p = Mx @ Vector(((kk - 1) * g + rd.uniform(0.1, 0.25), vv, kk * r + 0.12 * s))
-                    _chunk(mb, p, s, rd)
+                    _chunk(mb, on_surf(p, s), s, rd)
         for _ in range(int(rd.integers(2, 6))):
             s = rd.uniform(0.02, 0.06)
             y = rd.choice([rd.uniform(0.02, 0.15), rd.uniform(W - 0.15, W - 0.02)])
-            _chunk(mb, (uL + rd.uniform(ld * 0.4, ld - 0.08), y, zl + 0.12 * s), s, rd)
+            _chunk(mb, on_surf((uL + rd.uniform(ld * 0.4, ld - 0.08), y, zl + 0.12 * s), s), s, rd)
         # gravilla y esquirlas sueltas (también con poco daño): el paso las barre contra el muro y los rincones
         for f, Mx, wv, sg in ((f1, M1, 0.0, 1.0), (f2, M2, W, -1.0)):
             for _ in range(int(rd.poisson(6 + 16 * broken))):
                 k = int(rd.integers(1, f["n_draw"] + 1))
                 vv = wv + sg * (rd.uniform(0.02, 0.28) if rd.random() < 0.7 else rd.uniform(0.28, width - 0.12))
                 s = rd.uniform(0.008, 0.026)
-                _chunk(mb, Mx @ Vector(((k - 1) * g + rd.uniform(0.1, 0.25), vv, k * r + 0.08 * s)), s, rd, flat=0.7)
+                _chunk(mb, on_surf(Mx @ Vector(((k - 1) * g + rd.uniform(0.1, 0.25), vv, k * r + 0.08 * s)), s), s, rd, flat=0.7)
         for _ in range(int(rd.poisson(8 + 12 * broken))):
             s = rd.uniform(0.008, 0.03)
             y = rd.uniform(0.03, W - 0.03) if rd.random() < 0.4 else rd.choice([rd.uniform(0.02, 0.2), rd.uniform(W - 0.2, W - 0.02)])
-            _chunk(mb, (uL + rd.uniform(0.12, ld - 0.04), y, zl + 0.08 * s), s, rd, flat=0.7)
+            _chunk(mb, on_surf((uL + rd.uniform(0.12, ld - 0.04), y, zl + 0.08 * s), s), s, rd, flat=0.7)
 
     # --- pasamanos del ojo (opcional)
-    ya, yb = width - 0.055, width + gap + 0.055
-    # vértices sobre huellas (cada <= 4 peldaños) para que todos los postes apoyen en una huella
+    ya, yb = width - 0.07, width + gap + 0.07
+    # vértices a media huella (cada <= 4 peldaños) para que todas las placas base apoyen enteras en concreto sano: a 2 cm
+    # del canto libre y lejos de los despostillados de la nariz (antes la placa volaba sobre el canto boleado)
     ks1 = sorted(set(list(range(1, n1, 4)) + [n1 - 1]))
     ks2 = sorted(set(list(range(1, n2, 4)) + [n2 - 1]))
-    path = [(eps + (k - 1) * g + 0.07, ya, k * r) for k in ks1] + [(uL + 0.07, ya, zl), (uL + 0.07, yb, zl)] + \
-           [(uL - (k - 1) * g - 0.07, yb, zl + k * r) for k in ks2]
+    path = [(eps + (k - 1) * g + 0.14, ya, k * r) for k in ks1] + [(uL + 0.12, ya, zl), (uL + 0.12, yb, zl)] + \
+           [(uL - (k - 1) * g - 0.14, yb, zl + k * r) for k in ks2]
     if rail:
         mb.join(stair_railing(path, h=rail_h, kind=rail, seed=int(rs.integers(1 << 30))))
     mb.meta = dict(fp, kind="stair_u", footprint=(L, W), floor_h=floor_h, rail_path=path, landing_thickness=lt)
@@ -1043,8 +1268,9 @@ def stair_straight(width=1.2, rise_total=1.0, seed=0, *, kind="concrete", string
                     secs.append([Vector((q[0], v, q[1])) for q in q2])
                 _loft(mb, secs, "concrete")
         info = dict(N=N, riser=r, going=g, top_x=ue, top_z=rise_total,
-                    rail_paths={key: [((k - 1) * g + 0.07, y, k * r) for k in sorted(set(list(range(1, N + 1, 4)) + [N]))] +
-                                [(ue - 0.05, y, N * r)] for key, y in (("left", 0.06), ("right", width - 0.06))})
+                    rail_paths={key: [((k - 1) * g + 0.14, y, k * r) for k in sorted(set(list(range(1, N + 1, 4)) + [N]))] +
+                                ([(ue - 0.06, y, N * r)] if ue - 0.06 - ((N - 1) * g + 0.14) > 0.25 else [])
+                                for key, y in (("left", 0.075), ("right", width - 0.075))})
         if stringers:
             for key, y in (("left", -0.054), ("right", width + 0.054)):
                 info["rail_paths"][key] = [(0.06, y, 2 * r + 0.12 - 0.06 * r / g), ((N - 1) * g, y, N * r + 0.12),
@@ -1128,7 +1354,7 @@ def _stair_wood(mb, width, rise, rs, g, broken, stringers):
             for k in range(1, N):
                 for du in (0.06, 0.19):
                     p = Vector(((k - 1) * g + du, vo, k * r - 0.018))
-                    mb.cyl(p - Vector((0, sgn * 0.002, 0)), p + Vector((0, sgn * 0.0015, 0)), 0.0038, seg=6, mat="metal_rust")
+                    _nailhead(mb, p, Vector((0, sgn, 0)))
     # huellas
     for k in range(1, N):
         ua, ub = (k - 1) * g - 0.02, min((k - 1) * g + g + 0.01, u_top - 0.004)
@@ -1153,6 +1379,25 @@ def _stair_wood(mb, width, rise, rs, g, broken, stringers):
         tzk = zt - z_sup + rr.uniform(0.002, 0.005)
         tprof = [(ua + 0.012, zt), (ua + 0.002, zt - 0.006), (ua, zt - 0.012), (ua, zt - tzk + c), (ua + c, zt - tzk),
                  (ub - c, zt - tzk), (ub, zt - tzk + c), (ub, zt - c), (ub - c, zt)]
+        # cara pisada: puntos intermedios para el ahuecado de la tabla (las orillas suben ~1 mm) y el desgaste de la línea de
+        # paso (hasta 2–4 mm junto a la nariz, más hondo cuanto más vieja/rota)
+        tprof += [(ub - c - (ub - c - ua - 0.012) * f, zt) for f in (0.2, 0.4, 0.6, 0.8)]
+        wear_d = rr.uniform(0.0015, 0.0025) + 0.004 * broken
+        cup = rr.uniform(0.0006, 0.0014)
+
+        def worn(prof, v, va_=None, vb_=None):
+            vm, sw = 0.5 * width, 0.28 * width
+            wv = wear_d * math.exp(-((v - vm) / sw) ** 2)
+            out = []
+            for i_, (u_, z_) in enumerate(prof):
+                if i_ in (0, 1) or i_ >= 9:
+                    fu = 1.0 - 0.7 * (u_ - ua) / max(ub - ua, 1e-6)
+                    t_ = 2.0 * (u_ - 0.5 * (ua + ub)) / max(ub - ua, 1e-6)
+                    dz_ = -wv * fu * (0.5 if i_ == 1 else 1.0) + (cup * (t_ * t_ - 0.5) if i_ >= 9 else 0.0)
+                    out.append((u_ + (0.3 * wv if i_ == 1 else 0.0), z_ + dz_))
+                else:
+                    out.append((u_, z_))
+            return out
         if split:  # tabla partida a lo ancho: dos mitades hundidas en V
             vm = rr.uniform(va + 0.35 * (vb - va), va + 0.65 * (vb - va))
             for (a_, b_) in ((va, vm - 0.006), (vm + 0.006, vb)):
@@ -1161,22 +1406,24 @@ def _stair_wood(mb, width, rise, rs, g, broken, stringers):
                     d = _round_inset(v, a_, b_, 0.004)
                     t = (v - a_) / (b_ - a_) if a_ == va else (b_ - v) / (b_ - a_)
                     dzv = -sag * t * 1.4
-                    q2 = _inset2d(tprof, d) if d > 0 else tprof
+                    tp_ = worn(tprof, v)
+                    q2 = _inset2d(tp_, d) if d > 0 else tp_
                     secs.append([Vector((q[0], v, q[1] + dzv + tw * (q[0] - ua))) for q in q2])
                 _loft(mb, secs, WD)
         else:
             secs = []
-            for v in _stations(va, vb, 0.15, bev=0.004, tol=0.002):
+            for v in _stations(va, vb, 0.08, bev=0.004, tol=0.002):
                 d = _round_inset(v, va, vb, 0.004)
                 dzv = -sag * math.sin(math.pi * (v - va) / (vb - va)) * (1.0 if stringers else 0.4)
-                q2 = _inset2d(tprof, d) if d > 0 else tprof
+                tp_ = worn(tprof, v)
+                q2 = _inset2d(tp_, d) if d > 0 else tp_
                 secs.append([Vector((q[0], v, q[1] + dzv + tw * (q[0] - ua))) for q in q2])
             _loft(mb, secs, WD)
             if not stringers:  # clavos en la cara de la huella sobre cada zanca
                 for (sa, sb) in sv:
                     for du in (0.07, 0.19):
                         p = Vector(((k - 1) * g + du + sh_, (sa + sb) / 2 + rr.normal(0, 0.004), zt))
-                        mb.cyl(p - ZV * 0.003, p + ZV * 0.0012, 0.0038, seg=6, mat="metal_rust")
+                        _nailhead(mb, p, ZV)
     # dado de concreto al pie
     if uf > u0 + 0.01:
         mb.box((u0 - 0.10, -0.07, -0.12), (uf + 0.12, width + 0.07, 0.04), "concrete", bevel=0.015, seg=2)
@@ -1203,51 +1450,96 @@ def _stair_wood(mb, width, rise, rs, g, broken, stringers):
 # BARANDALES
 # =====================================================================================================================
 def _rail_tube(mb, path, h, rs, missing, *, ends=(0.025, 0.025), post_max=1.4, sp=0.11):
-    """Barandal de tubo: postes de tubo cuadrado 40x40 con placa y pernos, pasamanos Ø42, travesaño inferior Ø24,
-    barrotes Ø14 cada 0,11 con cordones de soldadura; faltantes con muñones, algunos rotos y doblados."""
+    """Barandal de herrería soldada (medidas: IBC 1014/1015 y perfiles comerciales):
+    - pasamanos de tubo Ø42 (cédula 40 de 1 1/4", dentro de 32–51 mm) con codos de radio real (R 70 mm) y tapas abombadas
+      soldadas en los extremos;
+    - postes de PTR 40x40 con radio de doblez de 4 mm que mueren DENTRO del pasamanos (su tapa sigue la pendiente) y van
+      soldados con un cordón en silla; en los quiebres del recorrido el poste se corre bajo el codo del pasamanos;
+    - placa base 100x100x8 con cantos matados, cordón de filete alrededor del poste y 4 anclas (arandela, tuerca, espárrago);
+    - travesaño inferior Ø24 a 10 cm que atraviesa los postes (cordón a cada lado);
+    - barrotes Ø14 cada 0,11 (claro libre 96 mm < 102 mm) con soldadura en silla arriba y abajo.
+    Abandono: barrotes arrancados (muñones con su cordón), podridos abajo y doblados colgando del pasamanos."""
     rt, rb, rbar, hb = 0.021, 0.012, 0.007, 0.10
     MR = "metal_rust"
+    rh = rng(int(abs(path.P[0].x * 1e4 + path.P[0].y * 7e3 + path.P[0].z * 3e3 + path.L * 1e3)) % (2 ** 31 - 1))
     sposts = _bays(path, ends, post_max)
     st = path.stations(sposts[0] - 0.04, sposts[-1] + 0.04, 0.12)
-    _ptube(mb, _fillet([path.at(s) + Vector((0, 0, h - rt)) for s in st], 0.07), rt, None, seg=14, mat=MR)
+    hr = _fillet([path.at(s) + Vector((0, 0, h - rt)) for s in st], 0.07, nseg=8)
+    _ptube(mb, hr, rt, None, seg=24, mat=MR)
+    for i0, i1 in ((0, 1), (-1, -2)):          # tapa abombada soldada (con su cordón: 0,4 mm más ancha que el tubo)
+        dd = (hr[i0] - hr[i1]).normalized()
+        _lathe(mb, [(rt + 0.0006, -0.003), (rt + 0.0006, 0.0008), (rt * 0.95, 0.0042), (rt * 0.78, 0.0082), (rt * 0.45, 0.0108),
+                    (0.0, 0.0118)], _axis_m(hr[i0], dd), seg=24, mat=MR)
     st = path.stations(sposts[0], sposts[-1], 0.15)
-    _ptube(mb, _fillet([path.at(s) + Vector((0, 0, hb)) for s in st], 0.05), rb, None, seg=10, mat=MR)
-    for s in sposts:
+    br = _fillet([path.at(s) + Vector((0, 0, hb)) for s in st], 0.05, nseg=6)
+    _ptube(mb, br, rb, None, seg=16, mat=MR)
+
+    def rail_surf(pts, R, p, below):
+        q, T, dist = _rail_z(pts, p)
+        tana = T.z / max(math.hypot(T.x, T.y), 1e-6)
+        y = min(dist, 0.97 * R)
+        return q.z + (-1.0 if below else 1.0) * math.sqrt(R * R - y * y) * math.sqrt(1.0 + tana * tana)
+
+    w = 0.04
+    for si, s in enumerate(sposts):
         base = path.at(s)
+        q, Tq, dist = _rail_z(hr, base)
+        pxy = Vector((q.x, q.y, 0.0)) if dist > 0.003 else Vector((base.x, base.y, 0.0))
         hd = path.hdir(s)
-        m = Matrix.Translation(base) @ Matrix.Rotation(math.atan2(hd.y, hd.x), 4, "Z")
-        mb.box((-0.02, -0.02, 0.004), (0.02, 0.02, h - rt), MR, bevel=0.004, seg=1, m=m)
-        mb.box((-0.05, -0.05, -0.002), (0.05, 0.05, 0.006), MR, bevel=0.002, seg=1, m=m)
+        ang = math.atan2(hd.y, hd.x)
+        _sq_post(mb, pxy, base.z + 0.004, lambda p: _rail_z(hr, p)[0].z - 0.002, w, ang, MR)
+        m = Matrix.Translation((pxy.x, pxy.y, base.z)) @ Matrix.Rotation(ang, 4, "Z")
+        mb.box((-0.05, -0.05, -0.002), (0.05, 0.05, 0.008), MR, bevel=0.002, seg=2, m=m)
         for sx, sy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
-            mb.cyl(m @ Vector((0.035 * sx, 0.035 * sy, 0.004)), m @ Vector((0.035 * sx, 0.035 * sy, 0.0115)), 0.0065, seg=6, mat=MR)
-        _torus(mb, base + Vector((0, 0, hb)), ZV, 0.029, 0.003, seg=8, segr=4)  # soldadura poste-travesaño
+            _anchor(mb, m @ Vector((0.034 * sx, 0.034 * sy, 0.008)), ZV, rh, d=0.008)
+        # cordones: poste-placa (filete) y poste-pasamanos (silla siguiendo la cara inferior del tubo)
+        loop = _rrect_loop(w / 2 + 0.0004, w / 2 + 0.0004, 0.0044, n=4)
+        c, sn = math.cos(ang), math.sin(ang)
+        Lw = [Vector((pxy.x + x * c - y * sn, pxy.y + x * sn + y * c, 0.0)) for x, y in loop]
+        _loop_tube(mb, [p + ZV * (base.z + 0.008) for p in Lw], 0.003, seg=6, ripple=0.1, rs=rh)
+        _loop_tube(mb, [p + ZV * (rail_surf(hr, rt, p, True) + 0.0005) for p in Lw], 0.0026, seg=6, ripple=0.1, rs=rh)
+        # travesaño que atraviesa el poste: cordón alrededor del tubo en cada cara (en los extremos solo la de adentro)
+        qb, Tb, _ = _rail_z(br, pxy)
+        Th = Vector((Tb.x, Tb.y, 0.0)).normalized()
+        for sg in (-1.0, 1.0):
+            if (si == 0 and sg < 0) or (si == len(sposts) - 1 and sg > 0):
+                continue
+            cc = qb + Tb * (sg * (w / 2 + 0.0008) / max(abs(Tb.dot(Th)), 0.5))
+            N0 = Tb.orthogonal().normalized()
+            B0 = Tb.cross(N0)
+            _loop_tube(mb, [cc + (N0 * math.cos(2 * math.pi * k / 14) + B0 * math.sin(2 * math.pi * k / 14)) * (rb + 0.0012)
+                            for k in range(14)], 0.0024, seg=6, ripple=0.1, rs=rh)
     for a, b in zip(sposts, sposts[1:]):
         for s in _spaced(a, b, sp, 0.06):
             base = path.at(s)
-            sl = path.slope(s)
-            cs = 1.0 / math.sqrt(1.0 + sl * sl)
-            zb_c, zt_c = base.z + hb, base.z + h - rt
+            qt, Tt, _ = _rail_z(hr, base)
+            qb, Tb, _ = _rail_z(br, base)
+            zb_c, zt_c = qb.z, qt.z
             plo = Vector((base.x, base.y, zb_c))
             phi = Vector((base.x, base.y, zt_c))
-            wlo = Vector((base.x, base.y, zb_c + rb / cs - 0.0012))
-            whi = Vector((base.x, base.y, zt_c - rt / cs + 0.0012))
+            sl = Tt.z / max(math.hypot(Tt.x, Tt.y), 1e-6)
+            cs = 1.0 / math.sqrt(1.0 + sl * sl)
             roll = rs.random()
             if roll < missing:  # barrote arrancado: quedan muñones soldados arriba y abajo
-                mb.cyl(phi, phi - ZV * (rt / cs + rs.uniform(0.008, 0.05)), rbar, seg=8, mat=MR)
-                _torus(mb, whi, ZV, rbar + 0.0022, 0.0028, seg=6, segr=3)
-                mb.cyl(plo, plo + ZV * (rb / cs + rs.uniform(0.004, 0.03)), rbar, seg=8, mat=MR)
-                _torus(mb, wlo, ZV, rbar + 0.0022, 0.0028, seg=6, segr=3)
+                with mb.soft():
+                    mb.cyl(phi, phi - ZV * (rt / cs + rs.uniform(0.008, 0.05)), rbar, seg=16, mat=MR)
+                    mb.cyl(plo, plo + ZV * (rb / cs + rs.uniform(0.004, 0.03)), rbar, seg=16, mat=MR)
+                _saddle_weld(mb, phi, Tt, rt, rbar, True, rh)
+                _saddle_weld(mb, plo, Tb, rb, rbar, False, rh)
             elif roll < missing * 1.4:  # barrote podrido abajo, doblado hacia fuera, colgando del pasamanos
                 zc = zb_c + (zt_c - zb_c) * rs.uniform(0.25, 0.6)
                 sd = path.side(s) * rs.uniform(0.03, 0.09) + path.hdir(s) * rs.normal(0, 0.02)
                 pts = [phi, phi - ZV * ((zt_c - zc) * 0.45), Vector((base.x, base.y, zc)) + sd]
-                _ptube(mb, _fillet(pts, 0.1), rbar, None, seg=8, mat=MR)
-                _torus(mb, whi, ZV, rbar + 0.0022, 0.0028, seg=6, segr=3)
-                mb.cyl(plo, plo + ZV * (rb / cs + rs.uniform(0.004, 0.02)), rbar, seg=8, mat=MR)
+                with mb.soft():
+                    _ptube(mb, _fillet(pts, 0.1, nseg=6), rbar, None, seg=16, mat=MR)
+                    mb.cyl(plo, plo + ZV * (rb / cs + rs.uniform(0.004, 0.02)), rbar, seg=16, mat=MR)
+                _saddle_weld(mb, phi, Tt, rt, rbar, True, rh)
+                _saddle_weld(mb, plo, Tb, rb, rbar, False, rh)
             else:
-                mb.cyl(plo, phi, rbar, seg=8, mat=MR)
-                _torus(mb, wlo, ZV, rbar + 0.0022, 0.0028, seg=6, segr=3)
-                _torus(mb, whi, ZV, rbar + 0.0022, 0.0028, seg=6, segr=3)
+                with mb.soft():
+                    mb.cyl(plo, phi, rbar, seg=16, mat=MR)
+                _saddle_weld(mb, phi, Tt, rt, rbar, True, rh)
+                _saddle_weld(mb, plo, Tb, rb, rbar, False, rh)
     return sposts
 
 
@@ -1277,7 +1569,8 @@ _BAL = [(0.0, 0.046), (0.035, 0.050), (0.07, 0.046), (0.095, 0.036), (0.12, 0.03
         (0.80, 0.040), (0.83, 0.037), (0.86, 0.031), (0.92, 0.034), (0.97, 0.040), (1.0, 0.043)]
 
 
-BAL_SEG = 12   # lados del fuste torneado (los constructores lo bajan a 8 para galerías vistas a > 10 m)
+BAL_SEG = 24   # lados del fuste torneado (R-AAA: redondo visible >= 24 lados)
+BAL_MIN_SEG = 24   # piso: un constructor que baje BAL_SEG (p. ej. apt_b a 8) ya no factea los balaustres
 
 
 def _baluster(mb, base, z0, z1, ang, rs, part=None, rod=False):
@@ -1288,25 +1581,25 @@ def _baluster(mb, base, z0, z1, ang, rs, part=None, rod=False):
     H = z1 - z0 - 2 * dh + 0.008
     zt0 = z0 + dh - 0.004
     if part is None or part[0] == "low":
-        mb.box((-0.055, -0.055, z0), (0.055, 0.055, z0 + dh), "concrete", bevel=0.006, seg=1, m=m0)
+        mb.box((-0.055, -0.055, z0), (0.055, 0.055, z0 + dh), "concrete", bevel=0.006, seg=2, m=m0)
     if part is None or part[0] == "high":
-        mb.box((-0.052, -0.052, z1 - dh), (0.052, 0.052, z1), "concrete", bevel=0.006, seg=1, m=m0)
+        mb.box((-0.052, -0.052, z1 - dh), (0.052, 0.052, z1), "concrete", bevel=0.006, seg=2, m=m0)
     rot = Matrix.Translation((base.x, base.y, zt0)) @ Matrix.Rotation(ang + rs.uniform(0, 0.5), 4, "Z")
     if part is None:
         prof = [(r, t * H) for t, r in _BAL]
-        _revolve(mb, prof, rot, seg=BAL_SEG)
+        _revolve(mb, prof, rot, seg=max(BAL_SEG, BAL_MIN_SEG))
         return
     kind, tb = part
     rint = float(np.interp(tb, [p[0] for p in _BAL], [p[1] for p in _BAL]))
     if kind == "low":
         prof = [(r, t * H) for t, r in _BAL if t < tb - 0.02] + [(rint, tb * H)]
-        _revolve(mb, prof, rot, seg=BAL_SEG, jag_top=0.035, rs=rs)
+        _revolve(mb, prof, rot, seg=max(BAL_SEG, BAL_MIN_SEG), jag_top=0.035, rs=rs)
         if rod:
             _rebar_run(mb, [rot @ Vector((0.004, 0.0, 0.0)), rot @ Vector((0.004, 0.0, tb * H)),
                             rot @ Vector((rs.normal(0, 0.03), rs.normal(0, 0.03), tb * H + rs.uniform(0.05, 0.2)))], rs, r=0.004)
     else:
         prof = [(rint, tb * H)] + [(r, t * H) for t, r in _BAL if t > tb + 0.02]
-        _revolve(mb, prof, rot, seg=BAL_SEG, jag_bot=0.035, rs=rs)
+        _revolve(mb, prof, rot, seg=max(BAL_SEG, BAL_MIN_SEG), jag_bot=0.035, rs=rs)
 
 
 def _concrete_sweep(mb, path, s0, s1, prof, rs, *, dz=0.0, step=0.08, corners=(), rate=0.0, end_jag=(0.0, 0.0),
@@ -1546,6 +1839,51 @@ def _rail_concrete(mb, path, h, rs, missing, bend, stair=False):
     return sorted(sposts + [0.5 * (n["a"] + n["b"]) for n in newels])
 
 
+def _wood_post(mb, M, w, z0, z1, mat, rk, rc=0.005):
+    """Poste de madera escuadrado (w x w) a la intemperie: cantos redondeados (r 5 mm) y 1–2 grietas de secado (checks) que
+    corren a lo largo de la veta en caras al azar, más hondas al centro y cerradas en sus extremos."""
+    hw = w / 2
+    faces = []
+    for k in range(int(rk.integers(1, 3))):
+        L_ = rk.uniform(0.25, 0.7) * (z1 - z0)
+        za = rk.uniform(z0 + 0.03, z1 - L_ - 0.03)
+        fi_, c_ = int(rk.integers(0, 4)), rk.uniform(-hw + 0.02, hw - 0.02)
+        if all(f[0] != fi_ or abs(f[1] - c_) > 0.01 for f in faces):
+            faces.append((fi_, c_, rk.uniform(0.0008, 0.0014), rk.uniform(0.002, 0.005), za, za + L_))
+    faces.sort(key=lambda f: (f[0], f[1]))
+    zs = sorted(set(list(np.linspace(z0, z1, max(2, int((z1 - z0) / 0.2)) + 1)) +
+                    [z for f in faces for z in (f[4], f[4] + 0.05, f[5] - 0.05, f[5])]))
+
+    def ring(z):
+        pts = []
+        corners = [(hw, -hw), (hw, hw), (-hw, hw), (-hw, -hw)]
+        for i, (cx, cy) in enumerate(corners):          # cara i: de la esquina i-1 a la esquina i
+            px, py = corners[i - 1]
+            dx, dy = (cx - px) / w, (cy - py) / w           # dirección de la cara
+            nx, ny = dy, -dx                                # normal hacia fuera
+            for (fi, c, gw, dp, za, zb) in faces:
+                if fi == i:
+                    e = _ss((z - za) / 0.05) * _ss((zb - z) / 0.05)
+                    for t, d in ((c - gw, 0.0), (c, dp * e), (c + gw, 0.0)):
+                        mx, my = (px + cx) / 2 + dx * t, (py + cy) / 2 + dy * t
+                        pts.append((mx - nx * d, my - ny * d))
+            # esquina redondeada (4 tramos de 22,5°: sombreado continuo) al final de la cara
+            ox, oy = cx - dx * rc - nx * rc, cy - dy * rc - ny * rc
+            for a in (0.0, 0.125 * math.pi, 0.25 * math.pi, 0.375 * math.pi, 0.5 * math.pi):
+                vx = nx * math.cos(a) + dx * math.sin(a)
+                vy = ny * math.cos(a) + dy * math.sin(a)
+                pts.append((ox + vx * rc, oy + vy * rc))
+        return pts
+    rings = [[mb.bm.verts.new(M @ Vector((x, y, z))) for x, y in ring(z)] for z in zs]
+    n = len(rings[0])
+    for a, b in zip(rings, rings[1:]):
+        for k in range(n):
+            kk = (k + 1) % n
+            mb.face([a[k], a[kk], b[kk], b[k]], mat)
+    mb.face(rings[0][::-1], mat)
+    mb.face(rings[-1], mat)
+
+
 def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
     """Barandal de madera: postes 9x9, tapa 14x3,2 continua, travesaños 4,5x9 y 4,5x7, balaustres 3,5x3,5 cada 0,115,
     clavos. Tablas alabeadas, faltantes y rotas; bend > 0: un vano con la tapa partida y el travesaño caído."""
@@ -1559,12 +1897,14 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
         j = int(rr.integers(0, len(sposts) - 1))
         sa, sb = sposts[j], sposts[j + 1]
         brk = (j, sa, sb, sa + (sb - sa) * rr.uniform(0.35, 0.65))
+    post_nails = []
     for s in sposts:
         base = path.at(s)
         hd = path.hdir(s)
         rot = Euler((rr.normal(0, 0.01), rr.normal(0, 0.01), math.atan2(hd.y, hd.x) + rr.normal(0, 0.03))).to_matrix().to_4x4()
-        mb.box((-pw / 2, -pw / 2, z_post0), (pw / 2, pw / 2, h - ct + 0.006), WD, bevel=0.007, seg=1,
-               m=Matrix.Translation(base) @ rot)
+        _wood_post(mb, Matrix.Translation(base) @ rot, pw, z_post0, h - ct + 0.006, WD,
+                   rng(int(abs(base.x * 7.3e3 + base.y * 3.1e3 + base.z * 1.7e3)) % (2 ** 31 - 1)))
+        post_nails.append(s)
     # tapa (con alabeo y torsión suaves); en el vano roto se parte y cuelga
     cprof = [(-cw / 2 + 0.006, 0.0), (cw / 2 - 0.006, 0.0), (cw / 2, 0.006), (cw / 2, ct - 0.006), (cw / 2 - 0.006, ct),
              (-cw / 2 + 0.006, ct), (-cw / 2, ct - 0.006), (-cw / 2, 0.006)]
@@ -1572,14 +1912,33 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
     warp = _N1(rr, cs0, cs1, 0.7, 0.003)
     twist = _N1(rr, cs0, cs1, 0.9, 0.03)
 
+    # grietas de secado (checks) a lo largo de la veta en la cara de arriba de la tapa: madera a la intemperie años
+    rk = rng(int(abs(path.L * 7919 + path.P[0].x * 1e3 + path.P[0].y * 3e3 + path.P[0].z * 17)) % (2 ** 31 - 1))
+    checks = []
+    for _ in range(int(rk.integers(2, 5))):
+        L_ = rk.uniform(0.25, 0.9)
+        a_ = rk.uniform(cs0 + 0.02, max(cs1 - L_ - 0.02, cs0 + 0.03))
+        xc = rk.uniform(-cw / 2 + 0.025, cw / 2 - 0.025)
+        if all(abs(xc - q[0]) > 0.014 for q in checks):
+            checks.append((xc, rk.uniform(0.0008, 0.0015), rk.uniform(0.0015, 0.0035), a_, a_ + L_, _N1(rk, a_, a_ + L_, 0.12, 0.002)))
+    checks.sort(key=lambda q: -q[0])
+    chk_st = [x for q in checks for x in [q[3], q[3] + 0.04, q[3] + 0.08, q[4] - 0.08, q[4] - 0.04, q[4]] +
+              list(np.arange(q[3] + 0.15, q[4] - 0.08, 0.12))]
+
     def cap_piece(a, b, dzf):
-        ss = path.stations(a, b, 0.25, extra=[x for x in ((brk[1], brk[2]) if brk else ())])
+        ss = path.stations(a, b, 0.25, extra=[x for x in ((brk[1], brk[2]) if brk else ())] + chk_st)
         pts = [path.at(s) + Vector((0, 0, h - ct + warp(s) + dzf(s))) for s in ss]
 
         def pr(i):
             tw = twist(ss[i])
+            top = []
+            for (xc, hw_, dp, ca, cb, wob) in checks:
+                e = _ss((ss[i] - ca) / 0.08) * _ss((cb - ss[i]) / 0.08)
+                xw = xc + wob(ss[i])
+                top += [(xw + hw_, ct), (xw, ct - dp * e), (xw - hw_, ct)]
+            prof = cprof[:5] + top + cprof[5:]
             return [(x * math.cos(tw) - (y - ct / 2) * math.sin(tw), (y - ct / 2) * math.cos(tw) + x * math.sin(tw) + ct / 2)
-                    for x, y in cprof]
+                    for x, y in prof]
         _sweep(mb, pr, pts, [ZV] * len(pts), WD, end_jag=(0.0, 0.0), rs=rr)
 
     if brk is None:
@@ -1589,8 +1948,16 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
         d1, d2 = bend * rr.uniform(0.8, 1.2), bend * rr.uniform(0.5, 1.0)
         cap_piece(cs0, sbk - 0.006, lambda s: -max(0.0, s - sa) / (sbk - sa) * d1)
         cap_piece(sbk + 0.006, cs1, lambda s: -max(0.0, sb - s) / (sb - sbk) * d2)
-    rprof_t = [(-rw / 2, 0.0), (rw / 2, 0.0), (rw / 2, trh), (-rw / 2, trh)]
-    rprof_b = [(-rw / 2, 0.0), (rw / 2, 0.0), (rw / 2, brh), (-rw / 2, brh)]
+    def _chf(wd, ht, c=0.004):     # sección de tabla cepillada con cantos matados
+        return [(-wd / 2 + c, 0.0), (wd / 2 - c, 0.0), (wd / 2, c), (wd / 2, ht - c), (wd / 2 - c, ht), (-wd / 2 + c, ht),
+                (-wd / 2, ht - c), (-wd / 2, c)]
+    rprof_t, rprof_b = _chf(rw, trh), _chf(rw, brh)
+    for s in post_nails:                  # dos clavos de la tapa sobre cada poste, en la cara de arriba real (alabeo, pendiente)
+        base, hd = path.at(s), path.hdir(s)
+        sl = path.slope(s)
+        ztop = base.z + h - ct + warp(s) + ct * math.sqrt(1.0 + sl * sl)
+        for dx in (-0.022, 0.022):
+            _nailhead(mb, Vector((base.x, base.y, ztop + sl * dx)) + hd * dx + path.side(s) * (0.35 * dx), ZV, r=0.0042)
     for jb, (a, b) in enumerate(zip(sposts, sposts[1:])):
         ra, rb_ = a + pw / 2 - 0.012, b - pw / 2 + 0.012
         drop = 0.0
@@ -1624,12 +1991,12 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
                 ztop = zlo + (zhi - zlo) * rr.uniform(0.35, 0.7)
                 _splinter_stick(mb, plo, ztop, 0.035, side, rr)
             else:
-                _beam(mb, plo, phi, 0.035, 0.035, WD, bevel=0.003, side=side)
+                _beam(mb, plo, phi, 0.035, 0.035, WD, bevel=0.003, seg=2, side=side)
             for zz, ok in ((zlo, True), (zhi, roll >= missing * 1.5)):
                 if not ok:
                     continue
                 p = Vector((base.x, base.y, zz)) + sd * (rw / 2)
-                mb.cyl(p - sd * 0.002, p + sd * 0.0015, 0.0035, seg=6, mat="metal_rust")
+                _nailhead(mb, p, sd, r=0.0035)
     return sposts
 
 
@@ -1908,21 +2275,26 @@ def balcony_slab(w=1.8, d=1.2, t=0.15, seed=0, spalled=0.3, *, embed=0.06, drip=
 # CANALÓN Y BAJANTE
 # =====================================================================================================================
 def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=True, outlets=(), section_len=3.0,
-           mat="metal_paint"):
+           mat="metal_paint", hangers_at=None):
     """Canalón de media caña (Ø0,12, chapa de 2,5 mm con bocel enrollado en el borde frontal) barrido por `path`. Devuelve MB.
     path: [(x, y, z)] eje del canalón a la altura del borde superior (centro de la media caña). La fascia queda a la
     IZQUIERDA del sentido de avance (recorrido en +X -> fascia en +Y), con su cara a meta['fascia_offset'] = R + 0,0265
     (0,0865 m) del eje: las pestañas de los ganchos quedan 1 mm por delante (sin caras coplanares con la fascia).
     Quiebres del recorrido (esquinas de alero a 90° o en ángulo): inglete real + pieza de esquina con dos bocas.
-    Ganchos de fleje cada `hanger_step` (0,8 m) abrazando el canalón y atornillados a la fascia; uniones (manguitos)
+    Ganchos de fleje cada `hanger_step` (0,8 m; como máximo 0,9 m, que es lo que piden los fabricantes de media caña) de
+    fleje 22 x 3 con cantos redondeados, abrazando el canalón y atornillados a la fascia con tornillo de cabeza hexagonal con
+    arandela; uniones (manguitos con 2 remaches pop por lado)
     cada `section_len`; tapas en los extremos; tierra y matas de pasto en el fondo (dirt).
     fault: 'fallen' (una sección se soltó y cuelga girada desde su unión), 'bent' (un tramo vencido y volcado hacia
     fuera, con sus ganchos estirados), 'none' o 'auto' (según la semilla).
     outlets: distancias a lo largo del recorrido donde va una boquilla de bajante. meta['outlets'] = puntos (mundo) del
     extremo inferior de cada boquilla, en el mismo orden (úsalos como `top` de `downpipe`). Una sección con boquilla
-    nunca es la que se cae."""
+    nunca es la que se cae.
+    hangers_at: distancias a lo largo del recorrido donde HAY dónde atornillar (p. ej. cada cola de cabio cuando el alero no
+    tiene fascia): los ganchos van solo ahí (se saltan los que dejarían un claro > 0,9 m sin remedio: el canalón cuelga)."""
     rs = rng(seed)
     R, th = radius, 0.0025
+    hanger_step = min(hanger_step, 0.9)       # fabricantes de media caña: ganchos a 24–36" (0,6–0,9 m) a ejes
     pth = _Path(path)
     L = pth.L
     na = 14
@@ -1975,11 +2347,16 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
              for _ in range(int(rs.poisson(L / 1.1)))]
     # ganchos: cada hanger_step; ~12 % perdidos (queda la pestaña); el canalón cuelga entre los que quedan
     hangers = []
-    sh = hanger_step / 2
-    while sh < L - 0.08:
-        if sh >= 0.08 and not any(abs(sh - j) < 0.08 for j in joints):
-            hangers.append((off_corner(sh, 0.24), rs.random() < 0.12))
-        sh += hanger_step
+    if hangers_at is not None:
+        for sh in sorted(hangers_at):
+            if 0.08 <= sh <= L - 0.08 and not any(abs(sh - j) < 0.08 for j in joints):
+                hangers.append((sh, rs.random() < 0.12))
+    else:
+        sh = hanger_step / 2
+        while sh < L - 0.08:
+            if sh >= 0.08 and not any(abs(sh - j) < 0.08 for j in joints):
+                hangers.append((off_corner(sh, 0.24), rs.random() < 0.12))
+            sh += hanger_step
     hangers = sorted((s, lost) for s, lost in hangers if 0.08 <= s <= L - 0.08 and not any(abs(s - j) < 0.08 for j in joints))
     held = [h for h, lost in hangers if not lost]
     spans = [(a, b, rs.uniform(0.002, 0.006) * ((b - a) / hanger_step) ** 2) for a, b in zip(held, held[1:])]
@@ -2042,7 +2419,8 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
             rings.append([P + S * x + U * y for x, y in prof_at(s)])
         _loft(part, rings, mat)
         # bocel del borde frontal
-        _ptube(part, [fr[0] + fr[3] * (R + 0.0035) + fr[2] * 0.0035 for fr in frs], 0.0045, None, seg=8, mat=mat)
+        with part.soft():
+            _ptube(part, [fr[0] + fr[3] * (R + 0.0035) + fr[2] * 0.0035 for fr in frs], 0.0045, None, seg=12, mat=mat)
         # tapas de extremo
         for s_end, sgn, is_end in ((sa, 1.0, si == 0), (sb_, -1.0, si == len(secs) - 1)):
             if not is_end:
@@ -2057,8 +2435,8 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
         for oi, so in enumerate(outlets):
             if sa + 0.08 < so < sb_ - 0.08 and si != fallen:
                 P, T, U, S = frame(so)
-                _ptube(part, [P - U * (R - 0.01), P - U * (R + 0.09)], 0.042, 0.038, seg=16, mat=mat)
-                _ptube(part, [P - U * (R - 0.004), P - U * (R + 0.018)], 0.049, 0.039, seg=16, mat=mat)
+                _ptube(part, [P - U * (R - 0.01), P - U * (R + 0.09)], 0.042, 0.038, seg=24, mat=mat)
+                _ptube(part, [P - U * (R - 0.004), P - U * (R + 0.018)], 0.049, 0.039, seg=24, mat=mat)
                 meta_out.append((oi, P - U * (R + 0.09)))
         # tierra y pasto
         if dirt and si != fallen:
@@ -2138,12 +2516,18 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
         # dos bocas de la pieza de esquina y su cuerpo sobre el inglete (separados 5 mm: se leen como rebordes)
         sleeves += [(c - 0.17, c - 0.12, c - 0.07), (c + 0.07, c + 0.12, c + 0.17)]
         sleeves.append(tuple(pth.stations(c - 0.065, c + 0.065, 0.2)))
-    for sts in sleeves:
+    for si_, sts in enumerate(sleeves):
         rings = []
         for s in sts:
             P, T, U, S = frame(s)
             rings.append([P + S * x + U * y for x, y in sl])
         _loft(mb, rings, mat)
+        if si_ < len(joints):           # manguito de unión: 2 remaches pop por lado, en la cara frontal baja
+            for s_r in (sts[0] + 0.022, sts[-1] - 0.022):
+                P, T, U, S = frame(s_r)
+                for a_r in (math.radians(215.0), math.radians(250.0)):
+                    nrm = S * math.cos(a_r) + U * math.sin(a_r)
+                    _nailhead(mb, P + nrm * (Ro + 0.0002), nrm, r=0.0042, h=0.0016, mat=mat, sink=0.003)
     # ganchos de fleje
     Rh = R + 0.0035
     sp2 = [(R - 0.002, 0.0115), (R + 0.0095, 0.0115), (R + 0.0095, -0.004)]
@@ -2152,7 +2536,8 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
         sp2.append((Rh * math.cos(a), Rh * math.sin(a)))
     sp2 += [(-Rh, 0.004), (-Rh, 0.03), (-(R + 0.024), 0.05), (-(R + 0.024), 0.10)]
     n_tab = 2
-    strap = [(-0.0015, -0.011), (0.0015, -0.011), (0.0015, 0.011), (-0.0015, 0.011)]
+    strap = [(-0.0015, -0.0102), (-0.0007, -0.011), (0.0007, -0.011), (0.0015, -0.0102), (0.0015, 0.0102), (0.0007, 0.011),
+             (-0.0007, 0.011), (-0.0015, 0.0102)]          # fleje 22 x 3 con cantos redondeados
     fall_rng = secs[fallen] if fallen is not None else None
     rh = _sub(rs)
     for s, lost in hangers:
@@ -2165,8 +2550,10 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
         else:
             pts = [P1 + S1 * x + U1 * y for x, y in sp2[:-n_tab]] + [P0 + S0 * x + U0 * y for x, y in sp2[-n_tab:]]
         _sweep(mb, strap, pts, [T0] * len(pts), "metal_rust")
-        hp = P0 + S0 * (-(R + 0.024) + 0.001) + U0 * 0.08
-        mb.cyl(hp, hp + S0 * 0.004, 0.0055, seg=8, mat="metal_rust")
+        hp = P0 + S0 * (-(R + 0.024) + 0.0015) + U0 * 0.08
+        Mh = _axis_m(hp, S0, rh.uniform(0, 1.0))
+        _washer(mb, Mh, 0.0, 0.0072, 0.0012, mat="metal_rust", seg=14)
+        _hexnut(mb, Mh @ Matrix.Translation((0, 0, 0.0009)), 0.008, 0.0042, mat="metal_rust")
     mb.meta = dict(kind="gutter", fault=fault, length=L, outlets=[tuple(p) for _, p in sorted(meta_out, key=lambda q: q[0])],
                    fascia_offset=R + 0.0265, corners=[tuple(pth.P[i]) for i in corner_i])
     return mb
@@ -2239,7 +2626,7 @@ def downpipe(top, bottom, wall_offset=0.06, seed=0, *, radius=0.05, mat="plastic
         return [axis(z) for z in zs_]
 
     def jag(amp):
-        return list(rs.uniform(0.0, amp, 16))
+        return list(rs.uniform(0.0, amp, 24))
 
     # tramo superior (codos + vertical hasta el hueco o hasta la zapata)
     upper = _fillet(up_pts + [Vector((Bp.x, Bp.y, z_v_top - 0.25))], 0.08, nseg=5) if len(up_pts) > 1 else [Tq]
@@ -2248,29 +2635,31 @@ def downpipe(top, bottom, wall_offset=0.06, seed=0, *, radius=0.05, mat="plastic
     if gap is None and fault == "shoe":  # zapata arrancada: el tubo termina roto y la zapata yace en el suelo
         z_cut = z_shoe + rs.uniform(0.06, 0.3)
         run1 = [q for q in run1 if q.z > z_cut + 0.03] + [axis(z_cut)]  # nada por debajo del corte (sin pliegues)
-        _ptube(mb, run1, R, Ri, seg=16, mat=mat, jag1=jag(0.035))
+        _ptube(mb, run1, R, Ri, seg=24, mat=mat, jag1=jag(0.035))
         piece = MB()
         _ptube(piece, _fillet([Vector((-0.16, 0.0, R)), Vector((0.0, 0.0, R)), Vector((0.1, 0.1, R))], 0.09, nseg=5), R, Ri,
-               seg=16, mat=mat, jag0=jag(0.03))
+               seg=24, mat=mat, jag0=jag(0.03))
         mb.join(piece, Matrix.Translation((Bp.x + rs.uniform(0.15, 0.35), Bp.y - rs.uniform(0.2, 0.45), Bp.z - 0.004)) @
                 Matrix.Rotation(rs.uniform(0, 2 * math.pi), 4, "Z"))
         piece.bm.free()
     elif gap is None:  # solo se redondea el pie (el cuello de cisne ya viene redondeado: no se redondea dos veces)
         run1 = run1[:-2] + _fillet([run1[-2], Vector((Bp.x, Bp.y, z_shoe)), shoe_end], 0.09, nseg=5)
-        _ptube(mb, run1, R, Ri, seg=16, mat=mat)
+        _ptube(mb, run1, R, Ri, seg=24, mat=mat)
     else:
-        _ptube(mb, run1, R, Ri, seg=16, mat=mat, jag1=jag(0.03))
+        _ptube(mb, run1, R, Ri, seg=24, mat=mat, jag1=jag(0.03))
         if fault == "broken":  # el tramo partido cuelga del casquillo de arriba, girado hacia fuera
-            pv = Vector((Bp.x, Bp.y, gap[1]))
+            # gira sobre el labio inferior del casquillo de la unión (que cubre el corte): su cabeza sigue DENTRO del
+            # casquillo (antes quedaba 1–4 cm por debajo del tubo de arriba, flotando)
+            pv = Vector((Bp.x, Bp.y, gap[1] - 0.03))
             piece = MB()
-            seg_pts = [pv - ZV * 0.012, pv - ZV * ((gap[1] - gap[0]) * 0.5), pv - ZV * (gap[1] - gap[0] + 0.25)]
-            _ptube(piece, seg_pts, R, Ri, seg=16, mat=mat, jag0=jag(0.02), jag1=jag(0.035))
-            ang = rs.uniform(0.12, 0.26)
+            seg_pts = [pv + ZV * 0.06, pv - ZV * ((gap[1] - gap[0]) * 0.5), pv - ZV * (gap[1] - gap[0] + 0.22)]
+            _ptube(piece, seg_pts, R - 0.0006, Ri, seg=24, mat=mat, jag1=jag(0.035))
+            ang = rs.uniform(0.12, 0.2)
             rot = Matrix.Rotation(-ang, 4, "X") @ Matrix.Rotation(rs.normal(0, 0.08), 4, "Y")
             mb.join(piece, Matrix.Translation(pv) @ rot @ Matrix.Translation(-pv))
             piece.bm.free()
         lower = vrun(gap[0], z_shoe + 0.0)[:-1] + [Vector((Bp.x, Bp.y, z_shoe)), shoe_end]
-        _ptube(mb, _fillet(lower, 0.09, nseg=5), R, Ri, seg=16, mat=mat, jag0=jag(0.03))
+        _ptube(mb, _fillet(lower, 0.09, nseg=5), R, Ri, seg=24, mat=mat, jag0=jag(0.03))
     # casquillos: en codos y cada ~2,5 m
     # casquillo de la boca (sobresale 4 mm del canto del tubo: sin caras coplanares) y del codo inferior
     sockets = [(axis(Tq.z) + ZV * 0.004, axis(Tq.z - 0.065))] if straight else [(Tq + ZV * 0.004, Tq - ZV * 0.065)]
@@ -2282,37 +2671,55 @@ def downpipe(top, bottom, wall_offset=0.06, seed=0, *, radius=0.05, mat="plastic
         if not (gap and gap[0] - 0.1 < z < gap[1] + 0.05):
             sockets.append((axis(z + 0.04), axis(z - 0.04)))
         z -= rs.uniform(2.2, 2.8)
-    if gap:
+    if gap and fault == "broken":
+        sockets.append((Vector((Bp.x, Bp.y, gap[1] + 0.045)), Vector((Bp.x, Bp.y, gap[1] - 0.03))))
+    elif gap:
         sockets.append((Vector((Bp.x, Bp.y, gap[1] + 0.13)), Vector((Bp.x, Bp.y, gap[1] + 0.055))))
     if fault != "shoe":
         sockets.append((Vector((Bp.x, Bp.y, z_shoe + 0.11)), Vector((Bp.x, Bp.y, z_shoe + 0.04))))
-    for a, b in sockets:
-        _ptube(mb, [a, b], R + 0.0055, R - 0.0015, seg=16, mat=mat)
+    for a, b in sockets:              # casquillo con labios boleados (no un anillo de canto vivo)
+        ax_ = b - a
+        Ls = ax_.length
+        _lathe(mb, [(R - 0.0015, 0.0), (R + 0.0032, 0.0), (R + 0.0050, 0.0012), (R + 0.0056, 0.0035), (R + 0.0056, Ls - 0.0035),
+                    (R + 0.0050, Ls - 0.0012), (R + 0.0032, Ls), (R - 0.0015, Ls)], _axis_m(a, ax_), seg=24, mat=mat, soft=False,
+               closed=True)
     # abrazaderas
+    zcl = []
     z = z_v_top - 0.3
     while z > z_shoe + 0.25:
         if any((a.z + 0.05 > z > b.z - 0.05) for a, b in sockets):
             z -= 0.12
             continue
+        zcl.append(z)
+        z -= clamp_step
+    if gap is not None and not any(z_shoe + 0.2 < zz < gap[0] - 0.08 for zz in zcl) and gap[0] - z_shoe > 0.45:
+        zcl.append(0.5 * (z_shoe + 0.2 + gap[0] - 0.08))    # el tramo de abajo también va sujeto al muro (no flota)
+    for z in zcl:
         in_gap = gap is not None and gap[0] - 0.05 < z < gap[1] + 0.03
         cx, cy = axis(z).x, axis(z).y
         c = Vector((cx, cy, z))
         # orejas: del anillo hasta DENTRO de la placa del muro (la atraviesan: sin caras coplanares con ella)
         e1 = min(cy + R + 0.016, y_wall - 0.0015)
         if not (in_gap and fault == "broken"):
-            _ptube(mb, [c + ZV * 0.014, c - ZV * 0.014], R + 0.0045, R - 0.0015, seg=16, mat=MR)
+            # abrazadera de fleje 28 x 1,5 con cantos boleados (anillo de 24 lados con labios redondeados)
+            _lathe(mb, [(R - 0.0015, -0.014), (R + 0.0035, -0.014), (R + 0.0045, -0.013), (R + 0.0045, 0.013), (R + 0.0035, 0.014),
+                        (R - 0.0015, 0.014)], Matrix.Translation(c), seg=24, mat=MR, soft=False, closed=True)
             for sx in (-1, 1):
                 mb.box((cx + sx * 0.004 - 0.003, cy + R - 0.002, z - 0.012), (cx + sx * 0.004 + 0.003, e1, z + 0.012),
-                       MR, bevel=0.0012, seg=1)
+                       MR, bevel=0.0012, seg=2)
             yb_ = min(cy + R + 0.008, e1 - 0.004)
-            mb.cyl((cx - 0.012, yb_, z), (cx + 0.012, yb_, z), 0.0035, seg=6, mat=MR)
+            # perno M6 que aprieta las orejas: cabeza hexagonal de un lado, tuerca del otro, rosca asomando
+            Mb = _axis_m(Vector((cx + 0.007, yb_, z)), Vector((1.0, 0.0, 0.0)), rs.uniform(0, 1.0))
+            _hexnut(mb, Mb, 0.010, 0.004, mat=MR)
+            Mn = _axis_m(Vector((cx - 0.007, yb_, z)), Vector((-1.0, 0.0, 0.0)), rs.uniform(0, 1.0))
+            _hexnut(mb, Mn, 0.010, 0.005, mat=MR)
+            _lathe(mb, [(0.0, -0.016), (0.003, -0.016), (0.003, 0.0085), (0.0024, 0.0094), (0.0, 0.0094)], Mn, seg=12, mat=MR)
         # anillo arrancado (tramo partido): quedan la placa y, si hay holgura, la ménsula
         y0 = cy + R + 0.012
         if y_wall - 0.0015 - (cy + R + 0.016) > 0.003:  # muro lejano: ménsula entre las orejas y la placa
-            mb.box((cx - 0.006, y0, z - 0.009), (cx + 0.006, y_wall + 0.01, z + 0.009), MR, bevel=0.0015, seg=1)
-        mb.box((cx - 0.025, y_wall - 0.005, z - 0.032), (cx + 0.025, y_wall + 0.003, z + 0.032), MR, bevel=0.0015, seg=1)
-        for dz in (-0.021, 0.021):
-            mb.cyl((cx, y_wall - 0.0045, z + dz), (cx, y_wall - 0.0085, z + dz), 0.0055, seg=6, mat=MR)
-        z -= clamp_step
+            mb.box((cx - 0.006, y0, z - 0.009), (cx + 0.006, y_wall + 0.01, z + 0.009), MR, bevel=0.0015, seg=2)
+        mb.box((cx - 0.025, y_wall - 0.005, z - 0.032), (cx + 0.025, y_wall + 0.003, z + 0.032), MR, bevel=0.0015, seg=2)
+        for dz in (-0.021, 0.021):          # pija de cabeza redonda con taquete
+            _nailhead(mb, Vector((cx, y_wall - 0.005, z + dz)), Vector((0.0, -1.0, 0.0)), r=0.0055, h=0.0028, mat=MR, sink=0.002)
     mb.meta = dict(kind="downpipe", wall_y=y_wall, path=[tuple(p) for p in full], fault=fault, gap=gap)
     return mb

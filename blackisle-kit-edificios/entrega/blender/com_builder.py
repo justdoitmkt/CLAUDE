@@ -58,6 +58,29 @@ WALKS = [   # banquetas (x0, x1, y0, y1): del portón a la caseta, ramal a los g
 APRON = (GATE_X0 + 0.15, GATE_X1 - 0.15, CY0 - 0.60, CY0 + 0.15)    # losa del portón (pasa bajo la malla, sale 0,6 m)
 
 
+def _bx(mb, mn, mx, mat="concrete", bevel=0.0, seg=2, m=None):
+    """MB.box con el bisel armado en un MB temporal: el bisel de bmesh recorre la malla destino completa (O(n) por caja)."""
+    if bevel > 0:
+        t = MB()
+        t.box(mn, mx, mat, bevel=bevel, seg=seg)
+        mb.join(t, m)
+    else:
+        mb.box(mn, mx, mat, bevel=0.0, seg=seg, m=m)
+
+
+def _rbox(mb, mn, mx, mat, r=0.01, m=None):
+    """clinic.rbox (12 aristas redondeadas) armada en un MB temporal."""
+    _bx(mb, mn, mx, mat, bevel=r, seg=3, m=m)
+
+
+def _text(mb, s, size, depth, mat, M, res=6, bold=True):
+    """Texto en relieve con la tipografía de señalización (kit.fonts 'sign', Overpass) y curvas finas, armado aparte."""
+    from kit.fonts import text_font
+    t = MB()
+    text_font(t, s, size, depth, mat, M, font="sign", res=res, bold=bold)
+    mb.join(t)
+
+
 def _T(x=0.0, y=0.0, z=0.0):
     return Matrix.Translation((x, y, z))
 
@@ -202,7 +225,7 @@ def roof_details(det):
         y = SH_Y1 - 0.25
         z = roof_z(y)
         # base de lastre (bloque de hule reciclado) con mástil
-        cl.rbox(det, (x - 0.14, y - 0.14, z), (x + 0.14, y + 0.14, z + 0.06), "rubber", r=0.012)
+        _rbox(det, (x - 0.14, y - 0.14, z), (x + 0.14, y + 0.14, z + 0.06), "rubber", r=0.012)
         det.cyl((x, y, z + 0.06), (x, y, z + 0.075), 0.045, seg=32, mat="galvanized")
         det.cyl((x, y, z + 0.075), (x, y, z + 0.42), 0.0167, seg=24, mat="galvanized")
         det.cyl((x, y, z + 0.42), (x, y, z + 0.44), 0.020, seg=24, mat="galvanized")
@@ -221,7 +244,7 @@ def roof_details(det):
                          (xc, PORT[0] + 0.30, zc), (xc + 0.03, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.20),
                          (SH_X1 + 0.08, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.085), (SH_X1 + 0.05, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.085)],
                         0.035, 6)
-        det.tube(pts, 0.0045, seg=12, mat="cable")
+        det.tube(pts, 0.0045, seg=16, mat="cable")
         cl.rtube(det, ((x + SH_X1) / 2 - 0.012, yc, zc), ((x + SH_X1) / 2 + 0.012, yc, zc), 0.014, 0.016, "plastic",
                  up=(0, 0, 1), r=0.002)                               # grapas al muro
         cl.rtube(det, (xc, (SH_Y1 + PORT[0]) / 2 + 0.15 - 0.012, zc), (xc, (SH_Y1 + PORT[0]) / 2 + 0.15 + 0.012, zc), 0.014, 0.016,
@@ -236,38 +259,38 @@ def door(det, ang=72.0):
     zf = Z_FLOOR
     # marco: jambas y cabezal (tubo de lámina 50 x 112 mm) con el tope de 16 mm
     for (xa, xb) in ((DX0 - FRAME, DX0), (DX1, DX1 + FRAME)):
-        cl.rbox(det, (xa, y0 - 0.006, zf), (xa + (xb - xa), y0 + SH_T + 0.006, zf + DOOR_H), "enamel", r=0.003)
-    cl.rbox(det, (DX0 - FRAME, y0 - 0.006, zf + DOOR_H), (DX1 + FRAME, y0 + SH_T + 0.006, zf + DOOR_H + FRAME), "enamel", r=0.003)
+        _rbox(det, (xa, y0 - 0.006, zf), (xa + (xb - xa), y0 + SH_T + 0.006, zf + DOOR_H), "enamel", r=0.003)
+    _rbox(det, (DX0 - FRAME, y0 - 0.006, zf + DOOR_H), (DX1 + FRAME, y0 + SH_T + 0.006, zf + DOOR_H + FRAME), "enamel", r=0.003)
     for (xa, xb) in ((DX0, DX0 + 0.016), (DX1 - 0.016, DX1)):
-        cl.rbox(det, (xa, y0 + 0.052, zf), (xb, y0 + 0.068, zf + DOOR_H), "enamel", r=0.002)
-    cl.rbox(det, (DX0, y0 + 0.052, zf + DOOR_H - 0.016), (DX1, y0 + 0.068, zf + DOOR_H), "enamel", r=0.002)
+        _rbox(det, (xa, y0 + 0.052, zf), (xb, y0 + 0.068, zf + DOOR_H), "enamel", r=0.002)
+    _rbox(det, (DX0, y0 + 0.052, zf + DOOR_H - 0.016), (DX1, y0 + 0.068, zf + DOOR_H), "enamel", r=0.002)
     # burlete sobre el tope (lado exterior)
     for (xa, xb) in ((DX0 + 0.016, DX0 + 0.024), (DX1 - 0.024, DX1 - 0.016)):
-        det.box((xa, y0 + 0.046, zf + 0.01), (xb, y0 + 0.052, zf + DOOR_H - 0.016), "rubber", bevel=0.002)
-    det.box((DX0 + 0.024, y0 + 0.046, zf + DOOR_H - 0.024), (DX1 - 0.024, y0 + 0.052, zf + DOOR_H - 0.016), "rubber", bevel=0.002)
+        _bx(det, (xa, y0 + 0.046, zf + 0.01), (xb, y0 + 0.052, zf + DOOR_H - 0.016), "rubber", bevel=0.002)
+    _bx(det, (DX0 + 0.024, y0 + 0.046, zf + DOOR_H - 0.024), (DX1 - 0.024, y0 + 0.052, zf + DOOR_H - 0.016), "rubber", bevel=0.002)
     # sello entre marco y vano (cordón de sellador)
     for x in (DX0 - FRAME - 0.002, DX1 + FRAME + 0.002):
-        det.cyl((x, y0 - 0.002, zf), (x, y0 - 0.002, zf + DOOR_H + FRAME + 0.002), 0.004, seg=12, mat="rubber")
+        det.cyl((x, y0 - 0.002, zf), (x, y0 - 0.002, zf + DOOR_H + FRAME + 0.002), 0.004, seg=16, mat="rubber")
     det.cyl((DX0 - FRAME - 0.002, y0 - 0.002, zf + DOOR_H + FRAME + 0.002), (DX1 + FRAME + 0.002, y0 - 0.002, zf + DOOR_H + FRAME + 0.002),
-            0.004, seg=12, mat="rubber")
+            0.004, seg=16, mat="rubber")
     # umbral de aluminio con estrías
-    cl.rbox(det, (DX0, y0 - 0.035, zf), (DX1, y0 + SH_T, zf + 0.010), "aluminium", r=0.003)
+    _rbox(det, (DX0, y0 - 0.035, zf), (DX1, y0 + SH_T, zf + 0.010), "aluminium", r=0.003)
     for k in range(6):
         y = y0 - 0.025 + k * 0.018
-        det.box((DX0 + 0.01, y, zf + 0.010), (DX1 - 0.01, y + 0.004, zf + 0.012), "aluminium", bevel=0.0008)
+        _bx(det, (DX0 + 0.01, y, zf + 0.010), (DX1 - 0.01, y + 0.004, zf + 0.012), "aluminium", bevel=0.0008)
     # gotero sobre la puerta
     gz = zf + DOOR_H + FRAME + 0.05
     # (sweep sobre +X con normal +Z: la x del perfil va hacia -Y, afuera del muro)
     det.sweep([(0.0, 0.0), (0.0, 0.025), (0.065, 0.006), (0.072, -0.012), (0.066, -0.014), (0.060, 0.000), (0.006, 0.016),
                (0.006, 0.0)], [(DX0 - 0.13, y0, gz), (DX1 + 0.13, y0, gz)], mat="aluminium", normal=(0, 0, 1))
     for x in (DX0 - 0.13, DX1 + 0.13):                              # tapas de los extremos del gotero
-        det.box((x - 0.0015 if x < DOOR_CX else x, y0 - 0.068, gz - 0.012), (x if x < DOOR_CX else x + 0.0015, y0, gz + 0.022),
+        _bx(det, (x - 0.0015 if x < DOOR_CX else x, y0 - 0.068, gz - 0.012), (x if x < DOOR_CX else x + 0.0015, y0, gz + 0.022),
                 "aluminium", bevel=0.0)
     # hoja
     M = _T(DX0 + 0.002, y0 + 0.002, zf + 0.006) @ _Rz(-ang)
     leaf = cl.MB()
     W, H, T = 0.905, DOOR_H - 0.010, 0.045
-    cl.rbox(leaf, (0.004, 0.0, 0.0), (W, T, H), "enamel", r=0.004)
+    _rbox(leaf, (0.004, 0.0, 0.0), (W, T, H), "enamel", r=0.004)
     # junta de las caras (lámina de 18 ga en bandeja): canal fino en el canto
     leaf.box((0.004 - 0.0006, T * 0.5 - 0.001, 0.02), (0.0046, T * 0.5 + 0.001, H - 0.02), "rubber", bevel=0.0)
     # placa de patada de acero inoxidable (exterior: cara y = 0)
@@ -301,7 +324,7 @@ def door(det, ang=72.0):
             leaf.box((lx - 0.004, yy + 0.016, 1.18 - 0.018), (lx + 0.004, yy + 0.030, 1.18 + 0.018), "steel", bevel=0.002)
     # cierrapuertas por dentro (cara y = T, arriba): cuerpo, tapas, brazo paralelo a la zapata del marco
     cz = H - 0.12
-    cl.rbox(leaf, (0.10, T, cz - 0.03), (0.40, T + 0.055, cz + 0.035), "aluminium", r=0.012)
+    _rbox(leaf, (0.10, T, cz - 0.03), (0.40, T + 0.055, cz + 0.035), "aluminium", r=0.012)
     for x in (0.10, 0.40):
         leaf.cyl((x - 0.003 if x < 0.2 else x, T + 0.0275, cz + 0.002), (x + 0.003 if x < 0.2 else x + 0.006, T + 0.0275, cz + 0.002),
                  0.026, seg=24, mat="plastic")
@@ -312,7 +335,7 @@ def door(det, ang=72.0):
     arm_b = arm_a.lerp(arm_c, 0.55) + Vector((0.0, 0.10, 0.0))
     for (p, q) in ((arm_a, arm_b), (arm_b, arm_c)):
         cl.rtube(det, tuple(p), tuple(q), 0.016, 0.006, "steel", r=0.002)
-    cl.rbox(det, (arm_c.x - 0.05, y0 + SH_T + 0.006, arm_c.z - 0.012), (arm_c.x + 0.05, y0 + SH_T + 0.03, arm_c.z + 0.02),
+    _rbox(det, (arm_c.x - 0.05, y0 + SH_T + 0.006, arm_c.z - 0.012), (arm_c.x + 0.05, y0 + SH_T + 0.03, arm_c.z + 0.02),
             "aluminium", r=0.004)
     return M
 
@@ -348,18 +371,18 @@ def wall_services(det, r):
         det.cyl(tuple(c_ + n_ * 0.001), tuple(c_ + n_ * 0.07), 0.062, seg=32, mat="plastic")
         # desagüe del condensado
         det.tube(cl.fillet([(x - 0.25, y0 - 0.18, 0.80), (x - 0.25, y0 - 0.18, 0.60), (x - 0.25, y0 - 0.26, Z_PAD + 0.12),
-                            (x - 0.25, y0 - 0.34, Z_PAD + 0.12)], 0.04, 6), 0.008, seg=12, mat="plastic")
+                            (x - 0.25, y0 - 0.34, Z_PAD + 0.12)], 0.04, 6), 0.008, seg=16, mat="plastic")
     # arbotante LED sobre la puerta: carcasa de aluminio fundido de corte total (trapecio con aletas arriba, difusor plano abajo)
     wz = Z_FLOOR + DOOR_H + 0.32
     wp = cl.MB()
     cl.zloft(wp, [(-0.100, 0.280, 0.150, -0.077), (-0.094, 0.286, 0.156, -0.078), (-0.070, 0.286, 0.156, -0.078),
                   (0.020, 0.262, 0.120, -0.060), (0.058, 0.250, 0.080, -0.040), (0.066, 0.244, 0.072, -0.036)],
              seg=32, mat="aluminium", ex=5.0)
-    cl.rbox(wp, (-0.150, -0.012, -0.110), (0.150, -0.001, 0.090), "aluminium", r=0.004)        # placa de montaje
+    _rbox(wp, (-0.150, -0.012, -0.110), (0.150, -0.001, 0.090), "aluminium", r=0.004)        # placa de montaje
     for k in range(9):                                                                       # aletas de disipación
         x = -0.104 + k * 0.026
         wp.box((x - 0.0018, -0.068, 0.060), (x + 0.0018, -0.012, 0.084), "aluminium", bevel=0.0007)
-    cl.rbox(wp, (-0.118, -0.140, -0.108), (0.118, -0.016, -0.098), "plastic", r=0.004)      # difusor
+    _rbox(wp, (-0.118, -0.140, -0.108), (0.118, -0.016, -0.098), "plastic", r=0.004)      # difusor
     for x in (-0.12, 0.12):
         ce.screw(wp, _T(x, -0.012, 0.075) @ _Rx(90), d=0.008, mat="steel")
     wp.cyl((0.0, -0.001, -0.02), (0.0, 0.004, -0.02), 0.012, seg=24, mat="rubber")           # pasacables al muro
@@ -373,15 +396,15 @@ def wall_services(det, r):
     gx = SH_X0
     gy = 3.30
     cab = cl.MB()
-    cl.rbox(cab, (-0.30, -0.22, 0.0), (0.30, 0.0, 0.70), "enamel", r=0.008)
-    cl.rbox(cab, (-0.29, -0.235, 0.02), (0.29, -0.218, 0.68), "enamel", r=0.004)
+    _rbox(cab, (-0.30, -0.22, 0.0), (0.30, 0.0, 0.70), "enamel", r=0.008)
+    _rbox(cab, (-0.29, -0.235, 0.02), (0.29, -0.218, 0.68), "enamel", r=0.004)
     for z in (0.12, 0.58):
         cab.cyl((0.292, -0.226, z - 0.04), (0.292, -0.226, z + 0.04), 0.007, seg=16, mat="steel")
-    cl.rbox(cab, (-0.27, -0.25, 0.32), (-0.23, -0.235, 0.40), "steel", r=0.003)
+    _rbox(cab, (-0.27, -0.25, 0.32), (-0.23, -0.235, 0.40), "steel", r=0.003)
     cab.cyl((-0.25, -0.255, 0.36), (-0.25, -0.265, 0.36), 0.008, seg=16, mat="steel")
     cab.box((-0.22, -0.2362, 0.48), (0.10, -0.2352, 0.62), "sign_white", bevel=0.0)
-    cl.text(cab, "GENERATOR CONNECTION", 0.018, 0.0006, "cable", M=_T(-0.06, -0.2362, 0.575) @ _Rx(90))
-    cl.text(cab, "DANGER 240V", 0.016, 0.0006, "sign_red", M=_T(-0.06, -0.2362, 0.52) @ _Rx(90))
+    _text(cab, "GENERATOR CONNECTION", 0.018, 0.0006, "cable", _T(-0.06, -0.2362, 0.575) @ _Rx(90))
+    _text(cab, "DANGER 240V", 0.016, 0.0006, "sign_red", _T(-0.06, -0.2362, 0.52) @ _Rx(90))
     det.join(cab, _T(gx, gy, 1.00) @ _Rz(-90))
     for dx in (-0.12, 0.12):                       # conduit del fondo de la caja al firme (plano del muro: x local = gy - y)
         det.join(cl.remap(sv.conduit([(dx, 0.0, 1.00), (dx, 0.0, Z_PAD - 0.03)], seed=int(r.integers(1e6)), detail="high"),
@@ -401,10 +424,10 @@ def wall_services(det, r):
     for k, dy in enumerate((-0.16, -0.08, 0.0, 0.08, 0.16)):
         pts = cl.fillet([(SH_X1 + 0.045, py + dy, 1.24), (SH_X1 + 0.06, py + dy, 1.05), (SH_X1 + 0.06, py + dy * 0.4, Z_PAD + 0.30),
                          (SH_X1 + 0.22, py + dy * 0.2, Z_PAD + 0.05), (SH_X1 + 0.30, py + dy * 0.2, Z_PAD - 0.04)], 0.05, 6)
-        det.tube(pts, 0.0055, seg=12, mat="sign_green" if k % 2 == 0 else "copper")
+        det.tube(pts, 0.0055, seg=16, mat="sign_green" if k % 2 == 0 else "copper")
     # puerto de entrada de cables (12 botas de hule de 4") con capucha
     port = cl.MB()
-    cl.rbox(port, (-0.28, -0.012, -0.16), (0.28, 0.0, 0.16), "galvanized", r=0.004)
+    _rbox(port, (-0.28, -0.012, -0.16), (0.28, 0.0, 0.16), "galvanized", r=0.004)
     for i in range(4):
         for j in range(3):
             u, v = -0.195 + i * 0.13, -0.085 + j * 0.085
@@ -447,11 +470,11 @@ def rain_hood(mb, x, z, w, h, d, screen=True, mat="galvanized", t=0.0012):
     # nervaduras de rigidez del frente y dobladillo inferior
     for zz in (zb + (zt - zb) * 0.38, zb + (zt - zb) * 0.68):
         cl.rtube(mb, (x0 + 0.004, -d - 0.0005, zz), (x1 - 0.004, -d - 0.0005, zz), 0.010, 0.005, mat, up=(0, -1, 0), r=0.002)
-    mb.cyl((x0, -d + 0.002, zb + 0.003), (x1, -d + 0.002, zb + 0.003), 0.004, seg=12, mat=mat)
+    mb.cyl((x0, -d + 0.002, zb + 0.003), (x1, -d + 0.002, zb + 0.003), 0.004, seg=16, mat=mat)
     for xx in (x0, x1):                                    # remaches de los costados
         for k in range(3):
             zz = zb + 0.03 + k * (h - rise - 0.06) / 2
-            mb.cyl((xx, -d + 0.015, zz), (xx + (-0.002 if xx == x0 else 0.002), -d + 0.015, zz), 0.0035, seg=12, mat="steel")
+            mb.cyl((xx, -d + 0.015, zz), (xx + (-0.002 if xx == x0 else 0.002), -d + 0.015, zz), 0.0035, seg=16, mat="steel")
     # ceja de fijación al muro con pijas
     mb.box((x0 - 0.025, -0.002, zt - 0.005), (x1 + 0.025, 0.0, zt + 0.035), mat, bevel=0.0005)
     for k in range(5):
@@ -499,16 +522,16 @@ def anchor_clips(det):
 
 def foundation(det):
     """Firme de desplante de la caseta (sobresale 25 cm) con su chaflán y el cordón de sellador entre caseta y firme."""
-    cl.rbox(det, (SH_X0 - 0.25, SH_Y0 - 0.25, Z_GRAVEL - 0.08), (SH_X1 + 0.25, SH_Y1 + 0.25, Z_PAD), "concrete", r=0.015)
+    _rbox(det, (SH_X0 - 0.25, SH_Y0 - 0.25, Z_GRAVEL - 0.08), (SH_X1 + 0.25, SH_Y1 + 0.25, Z_PAD), "concrete", r=0.015)
     pts = [(SH_X0 + CH, SH_Y0 - 0.004), (DX0 - FRAME - 0.004, SH_Y0 - 0.004)], [(DX1 + FRAME + 0.004, SH_Y0 - 0.004),
                                                                               (SH_X1 - CH, SH_Y0 - 0.004)]
     for run in pts:
-        det.cyl((run[0][0], run[0][1], Z_PAD + 0.004), (run[1][0], run[1][1], Z_PAD + 0.004), 0.008, seg=12, mat="rubber")
+        det.cyl((run[0][0], run[0][1], Z_PAD + 0.004), (run[1][0], run[1][1], Z_PAD + 0.004), 0.008, seg=24, mat="rubber")
     for (a, b) in (((SH_X1 + 0.004, SH_Y0 + CH), (SH_X1 + 0.004, SH_Y1 - CH)), ((SH_X1 - CH, SH_Y1 + 0.004), (SH_X0 + CH, SH_Y1 + 0.004)),
                    ((SH_X0 - 0.004, SH_Y1 - CH), (SH_X0 - 0.004, SH_Y0 + CH))):
-        det.cyl((a[0], a[1], Z_PAD + 0.004), (b[0], b[1], Z_PAD + 0.004), 0.008, seg=12, mat="rubber")
+        det.cyl((a[0], a[1], Z_PAD + 0.004), (b[0], b[1], Z_PAD + 0.004), 0.008, seg=24, mat="rubber")
     # escalón prefabricado frente a la puerta (del firme al piso interior: 15 cm)
-    cl.rbox(det, (DX0 - 0.20, SH_Y0 - 0.42, Z_PAD - 0.01), (DX1 + 0.20, SH_Y0 - 0.006, Z_PAD + 0.075), "concrete", r=0.012)
+    _rbox(det, (DX0 - 0.20, SH_Y0 - 0.42, Z_PAD - 0.01), (DX1 + 0.20, SH_Y0 - 0.006, Z_PAD + 0.075), "concrete", r=0.012)
 
 
 # ------------------------------------------------------------------------------------------------------------ plataforma
@@ -526,9 +549,9 @@ def compound(det, r):
         for k in range(n):
             u0, u1 = a + k * step + 0.004, a + (k + 1) * step - 0.004
             if axis == "x":
-                cl.rbox(det, (u0, c - CURB_W / 2, -0.05), (u1, c + CURB_W / 2, CURB_TOP), "concrete", r=0.012)
+                _rbox(det, (u0, c - CURB_W / 2, -0.05), (u1, c + CURB_W / 2, CURB_TOP), "concrete", r=0.012)
             else:
-                cl.rbox(det, (c - CURB_W / 2, u0, -0.05), (c + CURB_W / 2, u1, CURB_TOP), "concrete", r=0.012)
+                _rbox(det, (c - CURB_W / 2, u0, -0.05), (c + CURB_W / 2, u1, CURB_TOP), "concrete", r=0.012)
     h = CURB_W / 2
     curb_run(CX0 - h, GATE_X0 + h, "x", CY0)          # dado de esquina bajo el poste del portón
     curb_run(GATE_X1 - h, CX1 + h, "x", CY0)
@@ -545,10 +568,10 @@ def compound(det, r):
         for k in range(n):
             if along_x:
                 a, b = x0 + (x1 - x0) * k / n, x0 + (x1 - x0) * (k + 1) / n
-                cl.rbox(det, (a + 0.003, y0, Z_GRAVEL - 0.10), (b - 0.003, y1, top), "concrete", r=0.010)
+                _rbox(det, (a + 0.003, y0, Z_GRAVEL - 0.10), (b - 0.003, y1, top), "concrete", r=0.010)
             else:
                 a, b = y0 + (y1 - y0) * k / n, y0 + (y1 - y0) * (k + 1) / n
-                cl.rbox(det, (x0, a + 0.003, Z_GRAVEL - 0.10), (x1, b - 0.003, top), "concrete", r=0.010)
+                _rbox(det, (x0, a + 0.003, Z_GRAVEL - 0.10), (x1, b - 0.003, top), "concrete", r=0.010)
         slabs.append((x0, x1, y0, y1))
     for w in WALKS:
         slab(*w, Z_WALK)
@@ -620,7 +643,7 @@ def compound(det, r):
     for (x, y) in ((-7.3, 7.3), (7.3, 1.6), (7.3, -7.3), (-0.25, 6.2)):
         det.cyl((x, y, Z_GRAVEL - 0.02), (x, y, Z_GRAVEL + 0.022), 0.13, seg=40, mat="plastic")
         det.cyl((x, y, Z_GRAVEL + 0.022), (x, y, Z_GRAVEL + 0.030), 0.115, seg=40, mat="sign_green")
-        cl.text(det, "GROUND", 0.035, 0.002, "sign_white", M=_T(x, y, Z_GRAVEL + 0.030))
+        _text(det, "GROUND", 0.035, 0.002, "sign_white", _T(x, y, Z_GRAVEL + 0.030))
         for a in range(2):
             xx = x + 0.075 * math.cos(math.pi * a)
             det.cyl((xx, y, Z_GRAVEL + 0.030), (xx, y, Z_GRAVEL + 0.034), 0.008, seg=16, mat="steel")
@@ -649,7 +672,7 @@ def _mod(name):
         return None
 
 
-def dress(det, furn, r):
+def dress(det, furn, r, per=None, wire=None):
     """Equipo de los agentes (kit/tower.py, kit/antennas.py, kit/telecom.py). Si un módulo aún no existe, se omite.
     Lo que se puede chocar deja su caja en PROXIES."""
     tel = _mod("telecom")
@@ -671,12 +694,22 @@ def dress(det, furn, r):
     # gabinetes exteriores en su losa (frente a la banqueta)
     zc = Z_WALK + 0.06
     for (x, kind) in ((2.35, "power"), (3.50, "battery"), (4.65, "telecom")):
-        put(tel.outdoor_cabinet(kind, seed=int(r.integers(1e6))), x, -1.50, zc)
+        sd = int(r.integers(1e6))
+        try:                                          # el de energía con la puerta abierta: se ve su equipo real
+            cab = tel.outdoor_cabinet(kind, seed=sd, door_deg=105.0 if kind == "power" else 0.0)
+        except TypeError:
+            cab = tel.outdoor_cabinet(kind, seed=sd)
+        put(cab, x, -1.50, zc)
     # generador y tanque de diésel en su losa
     zg = Z_WALK + 0.08
     # tanque al poniente y generador al oriente con su tablero (-x) viendo al pasillo entre los dos
     put(tel.fuel_tank(seed=int(r.integers(1e6))), 2.75, -5.95, zg)
-    put(tel.generator(seed=int(r.integers(1e6))), 5.85, -5.65, zg)
+    sd = int(r.integers(1e6))
+    try:                                              # puerta del motor abierta (servicio en curso): compartimiento a la vista
+        gen = tel.generator(seed=sd, door_open=95.0)
+    except TypeError:
+        gen = tel.generator(seed=sd)
+    put(gen, 5.85, -5.65, zg)
     # mangueras de alimentación y retorno del tanque al generador, tendidas sobre la losa
     for k in range(2):
         xa, ya = 2.75 - 0.5 + 0.15 * k, -5.95 + 0.56 + 0.4
@@ -693,7 +726,7 @@ def dress(det, furn, r):
     LIGHTS.append([-6.9, -1.0, 6.0])
     LIGHTS.append([7.0, 6.65, 6.0])
     # malla ciclónica perimetral con brazos y púas (lado público hacia afuera: perímetro en sentido antihorario) y portón doble
-    fence(furn, tel, r)
+    fence(per if per is not None else furn, wire if wire is not None else furn, tel, r)
     # torre, equipo RF y puente de cables a la caseta
     tw, an = _mod("tower"), _mod("antennas")
     if tw is not None:
@@ -706,29 +739,33 @@ def dress(det, furn, r):
     det.join(sg["DANGER HIGH VOLTAGE"], _T(SH_X0 - 0.001, 3.30, 1.82) @ _Rz(-90))
 
 
-def fence(furn, tel, r):
+def fence(per, wire, tel, r):
     """Cerca de malla ciclónica de 2,4 m + brazos a 45° con 3 hilos de púas, anclada en la guarnición, en sentido antihorario
     (lado público -Y local hacia afuera), y portón doble de 4 m de claro en el lado sur, al eje de la banqueta de la caseta.
-    Modo "lite" de kit/telecom.py: tela tejida real en una sola malla (~13,5 k triángulos por metro)."""
+    Modo "lite_hq" de kit/telecom.py (el de MIL_1): tela tejida en una sola malla con alambre de 12 lados de sombreado
+    continuo y herrajes completos (~53 k triángulos por metro). Son ~3,4 M triángulos: no caben en un grupo (límite ~3,3 M),
+    así que van en dos mallas propias: `per` (Perímetro: portón, tramos sur-oriente y oriente, letreros) y `wire` (Malla:
+    tramos norte, poniente y sur-poniente)."""
     try:
-        tel.fence_run(1.0, fabric="lite")
+        tel.fence_run(1.0, fabric="lite", lite_hq=True)
     except TypeError:
         return                                            # versión sin modo realizado ligero: no se puede unir al pipeline
     z = CURB_TOP
     zg = Z_WALK + 0.01                                    # piso del portón (losa del portón)
     gx = (GATE_X0 + GATE_X1) / 2
-    furn.join(tel.fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite", base="curb",
-                             fence_lift=z - zg), _T(gx, CY0, zg))
-    runs = [  # (origen, giro, largo, postes de los extremos)
-        ((GATE_X1, CY0), 0, CX1 - GATE_X1, (None, True)),          # sur, del portón a la esquina SE
-        ((CX1, CY0), 90, CY1 - CY0, ("corner", True)),             # oriente
-        ((CX1, CY1), 180, CX1 - CX0, ("corner", True)),            # norte
-        ((CX0, CY1), -90, CY1 - CY0, ("corner", True)),            # poniente
-        ((CX0, CY0), 0, GATE_X0 - CX0, ("corner", None)),          # sur, de la esquina SO al portón
+    per.join(tel.fence_gate(w=4.0, h=2.4, open_deg=(0, 0), seed=int(r.integers(1e6)), fabric="lite", base="curb",
+                            fence_lift=z - zg, lite_hq=True), _T(gx, CY0, zg))
+    runs = [  # (origen, giro, largo, postes de los extremos, grupo)
+        ((GATE_X1, CY0), 0, CX1 - GATE_X1, (None, True), per),     # sur, del portón a la esquina SE
+        ((CX1, CY0), 90, CY1 - CY0, ("corner", True), per),        # oriente
+        ((CX1, CY1), 180, CX1 - CX0, ("corner", True), wire),      # norte
+        ((CX0, CY1), -90, CY1 - CY0, ("corner", True), wire),      # poniente
+        ((CX0, CY0), 0, GATE_X0 - CX0, ("corner", None), wire),    # sur, de la esquina SO al portón
     ]
-    for (o, rot, L, ends) in runs:
-        furn.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite", base="curb"),
-                  _T(o[0], o[1], z) @ _Rz(rot))
+    for (o, rot, L, ends, grp) in runs:
+        grp.join(tel.fence_run(L, h=2.4, seed=int(r.integers(1e6)), end_posts=ends, fabric="lite", base="curb", lite_hq=True),
+                 _T(o[0], o[1], z) @ _Rz(rot))
+    furn = per
     for (a, b) in (((CX0 - 0.08, CY0 - 0.35), (GATE_X0 + 0.08, CY0 + 0.25)), ((GATE_X1 - 0.08, CY0 - 0.35), (CX1 + 0.08, CY0 + 0.25)),
                    ((CX0 - 0.08, CY1 - 0.25), (CX1 + 0.08, CY1 + 0.35)), ((CX0 - 0.35, CY0), (CX0 + 0.25, CY1)),
                    ((CX1 - 0.25, CY0), (CX1 + 0.35, CY1))):
@@ -820,7 +857,7 @@ def tower_site(det, furn, tw, an, tel, r):
                     if k == 3:                                           # tierra: a la zapata del tubo
                         det.tube(_sfillet([tuple(pe), (pe.x, pe.y, pe.z - 0.25), tuple(M0 @ Vector((0.0, -0.05, 40.25)))], 0.05, 6),
                                  0.004, seg=14, mat="cable")
-                        cl.rbox(det, tuple(M0 @ Vector((-0.02, -0.052, 40.22))), tuple(M0 @ Vector((0.02, -0.036, 40.27))), "copper", r=0.003)
+                        _rbox(det, tuple(M0 @ Vector((-0.02, -0.052, 40.22))), tuple(M0 @ Vector((0.02, -0.036, 40.27))), "copper", r=0.003)
                     else:
                         to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k)
             else:                                                        # panel pasivo + RRU abajo con 4 jumpers
@@ -904,7 +941,7 @@ def tower_site(det, furn, tw, an, tel, r):
                 (x, yc + 0.205, z_bed - 0.004)]
         rect_sweep(furn, _sfillet(loop, 0.012, 3), 0.0127, 0.0008, 0.0003, "steel", lambda p: (0, 0, 1) if p[2] > z_bed + 0.03 else
                    ((0, -1, 0) if p[1] < yc else (0, 1, 0)), n=1)
-        cl.rbox(furn, (x - 0.009, yc + 0.06, z_bed + 0.0628), (x + 0.009, yc + 0.085, z_bed + 0.0665), "steel", r=0.0015)
+        _rbox(furn, (x - 0.009, yc + 0.06, z_bed + 0.0628), (x + 0.009, yc + 0.085, z_bed + 0.0665), "steel", r=0.0015)
 
 
 # ------------------------------------------------------------------------------------------------- ensamble
@@ -914,10 +951,10 @@ def build_com(bid="COM_1_antena", collection_root=None, dress_on=True, **kw):
     LIGHTS.clear()
     PROXIES.clear()
     root = collection_root or get_collection(cid)
-    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")
+    keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture", "Fence", "Wire")
     cols = {k: get_collection(f"{cid}_{k}", root) for k in keys}
     out = {k: [] for k in cols}
-    shell, det, inter, roof, furn = MB(), MB(), MB(), MB(), MB()
+    shell, det, inter, roof, furn, per, wire = MB(), MB(), MB(), MB(), MB(), MB(), MB()
     r = rng(cfg["seed"])
     shelter_shell(shell, roof, inter)
     roof_details(det)
@@ -929,8 +966,9 @@ def build_com(bid="COM_1_antena", collection_root=None, dress_on=True, **kw):
     foundation(det)
     compound(det, r)
     if dress_on and kw.get("dress", True):
-        dress(det, furn, r)
-    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Furniture", furn)):
+        dress(det, furn, r, per, wire)
+    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Furniture", furn), ("Fence", per),
+                   ("Wire", wire)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
     out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), proxies=list(PROXIES))

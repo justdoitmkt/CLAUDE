@@ -36,6 +36,7 @@ import bmesh  # noqa: F401
 from mathutils import Matrix, Vector
 
 from kit.common import MB, rng
+from kit.circulation import _axis_m, _hexnut, _lathe, _washer
 
 PI = math.pi
 LAMINA_MATS = ("roof_metal", "roof_metal_light")
@@ -168,6 +169,26 @@ def _beam(mb, pts, up, w, y0, y1, mat, c=0.004, cut0=None, cut1=None, jag0=0.0, 
 
 def _box(mb, mn, mx, mat, bevel=0.004, seg=1, m=None):
     mb.box(mn, mx, mat, bevel=bevel, seg=seg, m=m)
+
+
+def _nail8(mb, p, axis, r=0.0045, h=0.0016, mat="metal_rust", sink=0.004, seg=8):
+    """Cabeza de clavo económica (8 lados con sombreado continuo, abombada) para fijaciones que se repiten por miles."""
+    _lathe(mb, [(0.0, -sink), (r, -sink), (r * 0.98, 0.0003), (r * 0.72, h * 0.8), (0.0, h)], _axis_m(p, axis), seg=seg, mat=mat)
+
+
+def _bolt_thru(mb, p_nut, p_head, mat="metal_rust", d=0.012, r=None):
+    """Perno pasante (carriage bolt) de p_head a p_nut: cabeza de hongo de un lado, arandela + tuerca hexagonal + rosca que
+    asoma del otro. Los puntos están SOBRE las caras de la madera."""
+    a = (_vec(p_nut) - _vec(p_head)).normalized()
+    spin = r.uniform(0, 1.0) if r is not None else 0.3
+    Mh = _axis_m(_vec(p_head), -a, spin)
+    _lathe(mb, [(0.0, -0.004), (d * 0.5, -0.004), (d * 0.5, 0.0), (d * 1.05, 0.0003), (d * 0.95, d * 0.28), (d * 0.6, d * 0.5),
+                (0.0, d * 0.58)], Mh, seg=14, mat=mat)
+    Mn = _axis_m(_vec(p_nut), a, spin)
+    _washer(mb, Mn @ _T(0, 0, -0.0006), d * 0.55, d * 1.6, 0.003, mat=mat, seg=16)
+    _hexnut(mb, Mn @ _T(0, 0, 0.0022), d * 1.5, d * 0.8, mat=mat)
+    top = 0.0022 + d * 0.8 + 0.006
+    _lathe(mb, [(0.0, 0.002), (d * 0.5, 0.002), (d * 0.5, top - 0.0015), (d * 0.38, top), (0.0, top)], Mn, seg=12, mat=mat)
 
 
 def _nail(mb, p, axis, r=0.0055, h=0.004, mat="metal_rust", seg=6):
@@ -535,6 +556,7 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
         Mup = _about(piv, _R(M_axis, -sgn * ang))
         return [(a0, ab, 0.0, 0.07, Mup), (ab + 0.012, a1, 0.05, 0.0, None)]
 
+    seats = []                                # (eje, coord, lado, va a la cumbrera, intacto) para la clavazón
     for x in raf_x:
         for sgn in (-1, 1):
             if kind == "hip" and abs(x) > xr - 0.03:
@@ -544,15 +566,19 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 if a_tail - yh < 0.25:
                     continue
                 plane, _ = _hip_side_plane(R, sx, sgn, (x, sgn * a_tail))
+                pcs = damaged_pieces(x, sgn, yh, a_tail, "X")
                 _rafter(mb, R, "y", x, sgn, yh, _tail_end(a_tail, r.uniform(-0.012, 0.012), tails), r, tails, cut0=plane,
-                        pieces=damaged_pieces(x, sgn, yh, a_tail, "X"))
+                        pieces=pcs)
+                seats.append(("y", x, sgn, False, pcs is None))
             else:
                 at = _tail_end(a_tail, r.uniform(-0.015, 0.012), tails)
                 pcs = damaged_pieces(x, sgn, a_ridge, at, "X")
                 if pcs is None and tails and r.uniform() < 0.08:
                     # cola podrida/partida
                     pcs = [(a_ridge, at - r.uniform(0.08, 0.25), 0.0, 0.04, None)]
+                dmg = pcs is not None and len(pcs) > 1
                 _rafter(mb, R, "y", x, sgn, a_ridge, at, r, tails, pieces=pcs, straight=x in tie_x)
+                seats.append(("y", x, sgn, True, not dmg))
 
     # ---------------- limatesas y cabios de testero ----------------
     test_y = {}
@@ -592,11 +618,44 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                 test_y.setdefault(sx, []).append(yj)
                 plane, _ = _hip_side_plane(R, sx, sy, (sx * a_t, yj))
                 _rafter(mb, R, "x", yj, sx, xh, a_t, r, tails, cut0=plane)
+                seats.append(("x", yj, sx, False, True))
+
+    # ---------------- clavazón de cabios (segunda pasada AAA) ----------------
+    # clavos lanceros del pájaro a la solera (2 por cara, inclinados ~30°, fuera de los frisos) y de la cabeza del cabio a la
+    # tabla de cumbrera (1 por cara). Los cabios de remate que vuelan fuera del muro no tienen solera debajo.
+    rn = rng(seed * 31 + 7)
+    for axis, c, sg, to_ridge, ok in seats:
+        h_e, lim = (hd, hw) if axis == "y" else (hw, hd)
+        on_plate = abs(c) < lim - RAFTER_W / 2 - 0.01
+        for side in (-1, 1):
+            face = c + side * (RAFTER_W / 2 + 0.0003)
+            pts_ = []
+            if on_plate:
+                for da in (0.03, 0.065):
+                    pts_.append((h_e - PLATE_W + da + rn.uniform(-0.006, 0.006), PLATE_H + 0.022 + rn.uniform(-0.004, 0.004),
+                                 0.55, 0.0))
+            if to_ridge and ok:
+                a_n = a_ridge + 0.045 + rn.uniform(-0.01, 0.01)
+                pts_.append((a_n, R.zt0 + (hd - a_n) * tp - 0.055 + rn.uniform(-0.01, 0.01), 0.0, 0.6))
+            for a_n, z_n, up_, back_ in pts_:
+                if axis == "y":
+                    _nail8(mb, Vector((face, sg * a_n, z_n)), Vector((side, sg * back_, up_)).normalized())
+                else:
+                    _nail8(mb, Vector((sg * a_n, face, z_n)), Vector((sg * back_, side, up_)).normalized())
 
     # ---------------- rastreles / correas ----------------
     cov_top = {"tile": BAT_T + 0.012, "sheet": PUR_T - 0.002, "boards": -0.003}[cover]
+
+    def raf_us(s):
+        """(u del cabio en la vertiente, a mínima del cabio en función de |coord|) de los cabios bajo la vertiente s."""
+        if s in ("front", "back"):
+            sg_ = 1.0 if s == "front" else -1.0
+            return [(sg_ * x, (abs(x) - (hw - hd) + 0.037) if (kind == "hip" and abs(x) > xr - 0.03) else 0.0) for x in raf_x], hd
+        sg_ = 1.0 if s == "right" else -1.0
+        return [(sg_ * y, abs(y) + (hw - hd) + 0.037) for y in test_y.get(1 if s == "right" else -1, [])], hw
     for s in R.slopes:
         O, U, V, N = R.frame(s)
+        rus, h_e_s = raf_us(s)
         vlist = _batten_vs(R.vlen) if cover == "tile" else (_purlin_vs(R.vlen) if cover == "sheet" else [])
         bw, bt = (BAT_W, BAT_T) if cover == "tile" else (PUR_W, PUR_T)
         mat = "wood" if cover == "tile" else "wood_grey"
@@ -640,6 +699,23 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
                             dn -= droop * max(0.0, (t - 0.55) / 0.45) ** 2 * 1.0
                         pts.append(O + U * u + V * (vb + r.uniform(-0.003, 0.003)) + N * (0.001 + dn))
                     _beam(mb, pts, N, bw, 0.0, bt, mat, c=0.003, jag0=0.03 if brk0 else 0.0, jag1=0.03 if brk1 else 0.0, r=r)
+                    if droop:
+                        continue
+                    # clavos del rastrel / correa en cada cabio que cruza (1 en el rastrel de 5 cm, 2 en la correa de 7,5)
+                    nl = [((p_ - O).dot(U), (p_ - O).dot(N) - 0.001) for p_ in pts]
+                    a_v = h_e_s + ov - vb * R.cp
+                    for (ur, amin) in rus:
+                        if not (sa2 + 0.03 < ur < sb2 - 0.03) or a_v < amin + 0.03:
+                            continue
+                        if sp is not None:
+                            px_, py_ = R.to_plan(s, ur, vb)
+                            if math.hypot(px_ - sp[0], py_ - sp[1]) < sp[2] * 1.15:
+                                continue
+                        k_ = max(0, min(len(nl) - 2, int((ur - nl[0][0]) / max(nl[1][0] - nl[0][0], 1e-6))))
+                        t_ = (ur - nl[k_][0]) / max(nl[k_ + 1][0] - nl[k_][0], 1e-6)
+                        dn_ = nl[k_][1] + (nl[k_ + 1][1] - nl[k_][1]) * t_
+                        for dv_ in ((0.0,) if cover == "tile" else (-0.02, 0.02)):
+                            _nail8(mb, O + U * (ur + rn.uniform(-0.006, 0.006)) + V * (vb + dv_) + N * (0.001 + dn_ + bt), N)
         # tabla de alero / calza de arranque (sobre las colas)
         u0, u1 = R.u_limits(s, 0.07)
         if kind == "hip":
@@ -655,8 +731,15 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
         for sg in (-1, 1):
             y0 = sg * (hd + ov + 0.0135)
             xe = (hw + ov + 0.026) if kind == "hip" else (hw + R.ovr + 0.026)
-            _beam(mb, [(-xe, y0, 0), (0, y0 + sg * abs(r.uniform(-0.003, 0.003)), 0), (xe, y0, 0)], Z, 0.025,
+            dyf = sg * abs(r.uniform(-0.003, 0.003))
+            _beam(mb, [(-xe, y0, 0), (0, y0 + dyf, 0), (xe, y0, 0)], Z, 0.025,
                   ze - 0.20, ze + cov_top / R.cp, "wood_grey", c=0.004)
+            for x in raf_x:                   # dos clavos de la fascia en la testa de cada cabio
+                if abs(x) > xe - 0.04:
+                    continue
+                yf = y0 + dyf * (1.0 - abs(x) / xe) + sg * 0.0125
+                for zz in (ze - 0.045, ze - 0.115):
+                    _nail8(mb, Vector((x + rn.uniform(-0.008, 0.008), yf, zz + rn.uniform(-0.006, 0.006))), Vector((0, sg, 0)))
             if kind == "hip":
                 x0 = sg * (hw + ov + 0.0135)
                 ye = hd + ov - 0.001
@@ -685,16 +768,42 @@ def roof_frame(kind, w, d, pitch_deg, overhang=0.6, seed=0, spacing=0.6, tails=T
             # tirante sobre las soleras, extremos cortados por el faldón
             _beam(mb, [(xt, -yy - 0.2, 0), (xt, 0, 0), (xt, yy + 0.2, 0)], Z, 0.05, z0, z0 + 0.15, "wood", c=0.004,
                   cut0=((0, -hd, R.zt0 - 0.015), Vector((0, -R.sp, R.cp))), cut1=((0, hd, R.zt0 - 0.015), Vector((0, R.sp, R.cp))))
+
+            def bolts(a_from, zlo, zhi, cut_dn, xt_, n_max=2, step=0.02, gap=0.08, x=x, side=side):
+                """Pernos pasantes tirante/nudillo–cabio donde ambos se traslapan (banda útil >= 5 cm)."""
+                spots = []
+                for k in range(40):
+                    a = a_from + step * k
+                    lo = max(zlo, R.zt0 + (hd - a) * tp - R.Dv) + 0.025
+                    hi = min(zhi, R.zt0 + (hd - a) * tp - cut_dn) - 0.025
+                    if hi > lo and (not spots or abs(a - spots[-1][0]) >= gap):
+                        spots.append((a, (lo + hi) / 2))
+                    if len(spots) >= n_max:
+                        break
+                for a, zz in spots:
+                    for sgn in (-1, 1):
+                        _bolt_thru(mb, Vector((xt_ + side * 0.0255, sgn * a, zz)), Vector((x - side * (RAFTER_W / 2 + 0.0003), sgn * a, zz)),
+                                   r=rn)
+            # perno del tirante (por dentro del muro, donde el tirante y el cabio se traslapan)
+            bolts(hd - PLATE_W - 0.03, z0, z0 + 0.15, 0.015, xt, step=-0.02)
             # nudillo a 2/3 de la altura
             zc = PLATE_H + (R.z_ridge - PLATE_H) * 0.62
             ac = hd - (zc + 0.12 - R.zt0 + 0.02) / tp
             if ac > 0.4:
                 _beam(mb, [(xt, -ac - 0.3, 0), (xt, ac + 0.3, 0)], Z, 0.05, zc, zc + 0.12, "wood", c=0.004,
                       cut0=((0, -hd, R.zt0 - 0.012), Vector((0, -R.sp, R.cp))), cut1=((0, hd, R.zt0 - 0.012), Vector((0, R.sp, R.cp))))
+                bolts(ac + 0.02, zc, zc + 0.12, 0.012, xt, step=0.015, gap=0.07)
             # pendolón bajo la cumbrera en luces grandes
             if kingposts and d > 5.0 and i % 4 == 0:
                 xp = x - side * 0.08
-                _box(mb, (xp - 0.05, -0.05, 0.001), (xp + 0.05, 0.05, ridge_bot - 0.012), "wood", bevel=0.006)
+                # la cabeza entra 1 cm en la cumbrera (que tiene flecha): sin rendija entre pendolón y cumbrera
+                fx = (xp + rb_end) / (2 * rb_end) * (nrs - 1)
+                i_ = max(0, min(nrs - 2, int(fx)))
+                sag_x = rsag[i_] + (rsag[i_ + 1] - rsag[i_]) * (fx - i_)
+                _box(mb, (xp - 0.05, -0.05, 0.001), (xp + 0.05, 0.05, ridge_bot + sag_x + 0.01), "wood", bevel=0.005, seg=2)
+                for sy in (-1, 1):            # clavos lanceros del pendolón a la cumbrera (inclinados hacia arriba)
+                    for dx_ in (-0.025, 0.025):
+                        _nail8(mb, Vector((xp + dx_, sy * 0.0503, ridge_bot + sag_x - 0.045)), Vector((0, sy, -0.55)).normalized())
 
     # ---------------- frisos entre cabios en los muros de alero ----------------
     if blocking:
@@ -749,10 +858,14 @@ CAP_L, CAP_RN, CAP_RW, CAP_T, CAP_TH, CAP_STEP = 0.42, 0.105, 0.135, 0.014, math
 #   boq / bead / tube: puntos del arco de las boquillas del alero, (puntos del perfil, paso de estaciones x 0,14 m) del cordón de
 #                     mortero de los caballetes y segmentos del remate de limatesas.
 TILE_LOD = {
-    "high": dict(cob=6, can=6, cap=7, open=None, cap_mode="closed", boq=9, bead=(6, 1), tube=12, eave_extra=0, eave_cob=0),
-    "mid": dict(cob=5, can=5, cap=6, open="sides", cap_mode="sides", boq=7, bead=(6, 2), tube=10, eave_extra=1, eave_cob=1),
-    "low": dict(cob=5, can=3, cap=5, open="lip", cap_mode="lip", boq=4, bead=(4, 3), tube=8, eave_extra=1, eave_cob=1),
+    # Segunda pasada AAA (2026-11-19): ningún nivel factea el arco (8 tramos de 17,5° en la cobija, >= 7 en el canal, 9 en el
+    # caballete) y todas las piezas llevan la boca baja con canto matado de 3 mm (TILE_BEV). Los niveles solo difieren en las
+    # caras OCULTAS que se omiten y en el detalle del cordón de mortero.
+    "high": dict(cob=8, can=8, cap=9, open=None, cap_mode="closed", boq=12, bead=(6, 1), tube=16, eave_extra=0, eave_cob=0),
+    "mid": dict(cob=8, can=8, cap=9, open="sides", cap_mode="sides", boq=12, bead=(6, 1), tube=16, eave_extra=1, eave_cob=1),
+    "low": dict(cob=8, can=7, cap=9, open="lip", cap_mode="lip", boq=10, bead=(6, 2), tube=14, eave_extra=1, eave_cob=1),
 }
+TILE_BEV = 0.003                        # canto matado de la boca baja (barro cocido: aristas boleadas de 2–4 mm)
 _CAN_LOW = tuple(math.radians(a) for a in (-70.0, -25.0, 25.0, 70.0))
 _CAN_HALF = math.radians(25.0)          # semiancho angular de la franja del canal-prisma
 _FULL = frozenset(("sides", "hid", "cap"))
@@ -760,7 +873,7 @@ _MODES = {"closed": _FULL, "sides": frozenset(("sides",)), "lip": frozenset()}
 
 
 def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0, jag1=0.0, rn=TILE_RN, rw=TILE_RW,
-                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile", mode="closed", angles=None, lip_c=False, taper=1.0):
+                t=TILE_T, th=TILE_TH, L=TILE_L, mat="tile", mode="closed", angles=None, lip_c=False, taper=1.0, bev=TILE_BEV):
     """Teja troncocónica en local: X = largo (0..L, x = 0 es la boca de ABAJO), arco en YZ con centro en el eje X.
     x0/x1 recortan (pieza rota); jag0/jag1 astillan esos extremos con `r` (rng propio de la pieza). El cono es recto, así que
     bastan dos anillos (un anillo intermedio no añade forma, solo triángulos).
@@ -814,37 +927,94 @@ def _tile_piece(mb, M, seg, r, convex, wide_bottom, x0=0.0, x1=TILE_L, jag0=0.0,
         o1 = [p - Vector((d1[k], 0, 0)) for k, p in enumerate(o1)]
         i1 = [p - Vector((d1[n + 1 + k], 0, 0)) for k, p in enumerate(i1)]
     V0, H0, V1, H1 = (o0, i0, o1, i1) if convex else (i0, o0, i1, o1)
+    # pieza de barro hecha a mano: anillo intermedio con comba hacia fuera (0,4–1,2 mm, nunca hacia la pieza vecina: las
+    # holguras de anidado de 3 mm se conservan) e irregularidad del arco; pseudoaleatorio por posición (no gasta el rng)
+    VM = HM = None
+    if x1 - x0 > 0.12:
+        tq = M.translation
+        hsh = math.sin(tq.x * 127.1 + tq.y * 311.7 + tq.z * 74.7) * 43758.5453
+        u1_, u2_, u3_ = (hsh % 1.0), (hsh * 7.31) % 1.0, (hsh * 13.7) % 1.0
+        cb = 0.0004 + 0.0008 * u1_
+        xm = 0.5 * (x0 + x1) + 0.06 * (u2_ - 0.5)
+        f_ = (1.0 - xm / L) if wide_bottom else xm / L
+        km = taper + (1.0 - taper) * f_
+        dr = [cb * (1.0 + 0.35 * math.sin(2 * a + 6.28 * u2_) + 0.25 * math.sin(3 * a + 6.28 * u3_)) for a in A]
+
+        def arc_m(rad):
+            return [Vector((xm, (rad + dr[k]) * math.sin(a * km), s * (rad + dr[k]) * math.cos(a * km))) for k, a in enumerate(A)]
+        om, im_ = arc_m(ri(xm) + t), arc_m(ri(xm))
+        VM, HM = (om, im_) if convex else (im_, om)
 
     def mk(pts):
         return [mb.bm.verts.new(M @ p) for p in pts]
     g = _MODES[mode] if isinstance(mode, str) else mode
+    C0 = None
+    if bev > 0 and not jag0 and x1 - x0 > 4 * bev:
+        # boca baja con canto matado: la cara vista arranca bev más arriba y un chaflán la une con el labio
+        C0 = [V0[k] + (H0[k] - V0[k]).normalized() * bev for k in range(n + 1)]
+        V0 = [p + Vector((bev, 0.0, 0.0)) for p in V0]
     v0, v1 = mk(V0), mk(V1)
+    vm = mk(VM) if VM is not None else None
     for i in range(n):
-        F([v0[i], v0[i + 1], v1[i + 1], v1[i]], mat)          # cara vista
+        if vm is None:
+            F([v0[i], v0[i + 1], v1[i + 1], v1[i]], mat)      # cara vista
+        else:
+            F([v0[i], v0[i + 1], vm[i + 1], vm[i]], mat)
+            F([vm[i], vm[i + 1], v1[i + 1], v1[i]], mat)
+    if C0 is not None:
+        c0 = mk(C0)
+        for i in range(n):
+            F([v0[i + 1], v0[i], c0[i], c0[i + 1]], mat)      # canto matado
+    else:
+        c0 = v0
     if not g and lip_c:
         # solo el labio central (|ángulo| < 45°): los costados de la boca se ven de canto y casi no cuentan
         keep = [i for i in range(n) if abs(A[i] + A[i + 1]) / 2 < math.radians(45.0)]
         h0 = {i: mb.bm.verts.new(M @ H0[i]) for i in sorted({q for i in keep for q in (i, i + 1)})}
         for i in keep:
-            F([v0[i + 1], v0[i], h0[i], h0[i + 1]], mat)
+            F([c0[i + 1], c0[i], h0[i], h0[i + 1]], mat)
         return
     h0 = mk(H0)
     for i in range(n):
-        F([v0[i + 1], v0[i], h0[i], h0[i + 1]], mat)          # labio (testa de la boca baja)
+        F([c0[i + 1], c0[i], h0[i], h0[i + 1]], mat)          # labio (testa de la boca baja)
     if not g:
         return
     if "hid" in g or "cap" in g:
         h1 = mk(H1)
     else:
         h1 = {0: mb.bm.verts.new(M @ H1[0]), n: mb.bm.verts.new(M @ H1[n])}
+    hm = None
+    if vm is not None:
+        hm = mk(HM) if "hid" in g else {0: mb.bm.verts.new(M @ HM[0]), n: mb.bm.verts.new(M @ HM[n])}
     for i in range(n):
         if "hid" in g:
-            F([h0[i], h0[i + 1], h1[i + 1], h1[i]], mat)      # cara oculta
+            if hm is None:
+                F([h0[i], h0[i + 1], h1[i + 1], h1[i]], mat)  # cara oculta
+            else:
+                F([h0[i], h0[i + 1], hm[i + 1], hm[i]], mat)
+                F([hm[i], hm[i + 1], h1[i + 1], h1[i]], mat)
         if "cap" in g:
             F([v1[i], v1[i + 1], h1[i + 1], h1[i]], mat)      # testa alta
     if "sides" in g:
         for i in (0, n):
-            F([v0[i], v1[i], h1[i], h0[i]], mat)              # cantos laterales
+            sv = [v0[i]] + ([vm[i]] if vm is not None else []) + [v1[i], h1[i]] + ([hm[i]] if hm is not None else []) + [h0[i]]
+            F(sv + ([c0[i]] if C0 is not None else []), mat)  # cantos laterales
+
+
+def _plug(mb, outline, th, m, mat="mortar", e=0.004):
+    """Tapón de mortero (boquilla de alero / tapón de caballete) con la cara vista de canto boleado a mano: el anillo de la
+    cara (z = 0) se encoge e hacia el centro y el cuerpo llega a th (en el espacio de m)."""
+    cx = sum(p[0] for p in outline) / len(outline)
+    cy = sum(p[1] for p in outline) / len(outline)
+
+    def shrink(p, k_e):
+        dx, dy = p[0] - cx, p[1] - cy
+        L = math.hypot(dx, dy)
+        k = max(L - k_e, 0.4 * L) / L if L > 1e-9 else 1.0
+        return (cx + dx * k, cy + dy * k)
+    rings = [[m @ Vector((*shrink(p, e), 0.0)) for p in outline], [m @ Vector((*shrink(p, 0.3 * e), 0.6 * e)) for p in outline],
+             [m @ Vector((p[0], p[1], 1.5 * e)) for p in outline], [m @ Vector((p[0], p[1], th)) for p in outline]]
+    _loft(mb, rings, mat)
 
 
 def _frame_m(X, Y, Z, O):
@@ -1003,7 +1173,7 @@ def _cap_run(mb, R, P0, P1, b, normals, r, seg, h_layer, gap=0.004, beads=True, 
         pts[-1] = (pts[-1][0], low)
         outline = list(reversed(pts))
         m = base @ _T(x, 0, 0) @ _frame_m(Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 0, 0)))
-        mb.plate(outline, 0.035, "mortar", m=m)
+        _plug(mb, outline, 0.035, m)
     if not beads:
         return H
     # cordones de mortero a ambos lados (con tramos desprendidos). Los cortes salen de un rng propio sobre la rejilla fija de
@@ -1211,7 +1381,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                     g.add("hid")
                 if bad(j, k + 1):
                     g.add("cap")
-            mode = "prism" if (is_canal and detail == "low" and not g) else frozenset(g)
+            mode = frozenset(g)
         if is_canal:
             nb, nt = TILE_N + lb_c + TILE_RN + TILE_T + lift, TILE_N + TILE_RW + TILE_T + lift
         else:
@@ -1223,8 +1393,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
                 extra_lift[(s, j, k)] = lb + base
         M = Ms @ _tile_m(u, vb + dv, nb, nt) @ _about((TILE_L / 2, 0, 0), _R("X", roll) @ _R("Z", yaw))
         _tile_piece(mb, M, lod["can"] if is_canal else lod["cob"], rng(jseed) if jag0 else None, not is_canal, not is_canal,
-                    x0=x0, jag0=jag0, mode=mode, angles=_CAN_LOW if (is_canal and detail == "low") else None,
-                    lip_c=detail == "low", taper=0.975)
+                    x0=x0, jag0=jag0, mode=mode, taper=0.975)
         if boq:
             # boquilla de mortero en la boca de la cobija del alero
             rr = TILE_RW - 0.004
@@ -1233,7 +1402,7 @@ def barrel_tiles(w, d, kind, pitch_deg, overhang, seed=0, missing=0.04, hole=Non
             low = rr * math.cos(TILE_TH) - 0.05
             pts = [(pts[0][0], low)] + pts + [(pts[-1][0], low)]
             m = M @ _T(0.012, 0, 0) @ _frame_m(Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 0, 0)))
-            mb.plate(list(reversed(pts)), 0.03, "mortar", m=m)
+            _plug(mb, list(reversed(pts)), 0.03, m)
 
     # ---- caballetes ----
     ns = {s: R.frame(s)[3] for s in R.slopes}
@@ -1326,9 +1495,11 @@ CORR_LAP_E = 0.15                       # solape de testa
 # qué tornillo falta o está flojo) es la misma en los tres niveles. Las láminas que tocan el desgarro o la esquina levantada
 # conservan filas de 0,18 en esa franja en todos los niveles (el borde rasgado no se degrada).
 CORR_LOD = {
+    # Segunda pasada AAA: 8 tramos por onda en todos los niveles y chapa con sombreado continuo (la onda nunca se factea);
+    # los niveles solo cambian filas a lo largo del faldón, abolladuras y el número de lados del tornillo.
     "high": dict(seg=8, row=0.0, dents=True, screw="full", sag=True),
-    "mid": dict(seg=6, row=0.30, dents=True, screw="head", sag=True),
-    "low": dict(seg=4, row=99.0, dents=False, screw="button", sag=False),
+    "mid": dict(seg=8, row=0.30, dents=True, screw="head", sag=True),
+    "low": dict(seg=8, row=99.0, dents=False, screw="button", sag=False),
 }
 
 
@@ -1350,21 +1521,38 @@ def _lamina(mb, P, mat, keep=None):
 
 
 def _screw(mb, p, N, r, tilt=0.0, mat="metal_rust", kind="full"):
-    """Tornillo autorroscante sobre una cresta (p en la superficie, N normal). kind: 'full' arandela de neopreno de 8 lados +
-    cabeza hexagonal que arranca DENTRO de la arandela (sólidos que se cruzan, sin caras coplanares) · 'head' solo la cabeza
-    hexagonal (20 tris) · 'button' botón de 4 lados (12 tris)."""
+    """Pija autotaladrante para lámina (#12–#14, cabeza hexagonal de 5/16" = 8 mm entre caras con brida) sobre arandela
+    de acero abombada de 16 mm con sello de EPDM vulcanizado que asoma por debajo (ficha: TEK + arandela BAZ/EPDM).
+    p en la superficie, N normal. kind = 'full' | 'head' | 'button': 16 / 12 / 10 lados en la arandela (siempre redonda y con
+    sombreado continuo; la cabeza es un hexágono real con chaflán en los tres niveles)."""
     N = _vec(N).normalized()
     if tilt:
         ax = N.orthogonal().normalized()
         N = (Matrix.Rotation(math.radians(tilt), 3, ax) @ N).normalized()
     p = _vec(p)
-    if kind == "full":
-        mb.cyl(p + N * 0.0006, p + N * 0.0031, 0.0105, seg=8, mat="cable")
-        mb.cyl(p + N * 0.0021, p + N * 0.0085, 0.0056, seg=6, mat=mat)
-    elif kind == "head":
-        mb.cyl(p + N * 0.0006, p + N * 0.0085, 0.0075, seg=6, mat=mat, r1=0.0058)
-    else:
-        mb.cyl(p + N * 0.0006, p + N * 0.0085, 0.0075, seg=4, mat=mat, r1=0.006)
+    seg = {"full": 16, "head": 12}.get(kind, 10)
+    M = _axis_m(p, N, r.uniform(0.0, 1.0))
+    # sello de EPDM (negro) aplastado bajo la arandela: labio abultado que asoma 0,6 mm
+    _lathe(mb, [(0.0, -0.0004), (0.0084, -0.0010), (0.0087, 0.0003), (0.0082, 0.0013), (0.0, 0.0013)], M, seg=seg, mat="cable")
+    # arandela de acero abombada (16 mm) y cabeza hexagonal con brida
+    _lathe(mb, [(0.0, 0.0011), (0.0080, 0.0011), (0.0080, 0.0016), (0.0062, 0.0027), (0.0, 0.0029)], M, seg=seg, mat=mat)
+    _lathe(mb, [(0.0, 0.0024), (0.0060, 0.0024), (0.0058, 0.0037), (0.0, 0.0037)], M, seg=seg, mat=mat)
+    _hex6(mb, M @ _T(0, 0, 0.0034), 0.008, 0.0045, mat=mat)
+
+
+def _hex6(mb, M, af, h, mat="metal_rust"):
+    """Cabeza hexagonal chica (8 mm) económica: prisma de 6 caras con la cara superior achaflanada (pirámide truncada)."""
+    rc = af / math.sqrt(3.0)
+    rings = []
+    for z, k in ((0.0, 1.0), (0.78 * h, 1.0), (h, 0.84)):
+        rings.append([mb.bm.verts.new(M @ Vector((rc * k * math.cos(math.pi / 3 * i + math.pi / 6),
+                                                   rc * k * math.sin(math.pi / 3 * i + math.pi / 6), z))) for i in range(6)])
+    for a, b in zip(rings, rings[1:]):
+        for i in range(6):
+            ii = (i + 1) % 6
+            mb.face([a[i], a[ii], b[ii], b[i]], mat)
+    mb.face(rings[0][::-1], mat)
+    mb.face(rings[-1], mat)
 
 
 def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, rake=None, row=0.18, lifted=True, detail="high"):
@@ -1563,7 +1751,8 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
                 def keep(ii, jj, inside=inside):
                     return not (inside[jj][ii] and inside[jj][ii + 1] and inside[jj + 1][ii] and inside[jj + 1][ii + 1]) and \
                         sum((inside[jj][ii], inside[jj][ii + 1], inside[jj + 1][ii], inside[jj + 1][ii + 1])) < 3
-                _lamina(mb, P, mat, keep if tl is not None else None)
+                with mb.soft():               # chapa ondulada: sombreado continuo (la onda real no tiene aristas)
+                    _lamina(mb, P, mat, keep if tl is not None else None)
 
                 # ---- tornillos en crestas sobre correas ----
                 m0 = int(math.ceil((ua + ue - CORR_P / 2) / CORR_P))
@@ -1800,7 +1989,7 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
                             continue
                         f = 0.045 / BOARD_W
                         p = O + U * (uu + r.uniform(-0.01, 0.01)) + V * (vb + 0.045) + N * (nb + (nt - nb) * f) + Nb * BOARD_T
-                        _nail(mb, p, Nb, r=0.0045, h=0.003)
+                        _nail8(mb, p, Nb, r=0.0048, h=0.0022, seg=10)
             # canecillo bajo las testas largas del remate
             if k % 2 == 0 and 0 < k < len(courses) - 1:
                 for sx in (-1, 1):
@@ -1808,7 +1997,7 @@ def board_roof_stepped(w, d, pitch_deg, overhang, seed=0, rake=None, missing=0.0
                     u_lo, u_hi = (uu, uu + sx * 0.06) if sx > 0 else (uu + sx * 0.06, uu)
                     nbot = nb + (nt - nb) * 0.35 - 0.002
                     m = R.matrix(s)
-                    mb.box((u_lo, vb + 0.03, nbot - 0.10), (u_hi, vb + 0.11, nbot), "wood_grey", bevel=0.006, seg=1, m=m)
+                    mb.box((u_lo, vb + 0.03, nbot - 0.10), (u_hi, vb + 0.11, nbot), "wood_grey", bevel=0.005, seg=2, m=m)
         # fascia escalonada (segunda tabla por delante de la fascia de roof_frame)
         ze = R.zt0 - R.ov * R.tp
         sg = -1 if s == "front" else 1

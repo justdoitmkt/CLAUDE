@@ -59,6 +59,79 @@ def remap(mb, table):
     return mb
 
 
+def soften_facets(mb, wmax=0.025, amin=12.0, amax=50.0):
+    """Segunda pasada R-AAA (2026-11-19): marca 'soft' (sombreado continuo, ver kit.common.MB.soft) las caras ANGOSTAS
+    (<= wmax medido a lo ancho de la arista) de redondos con pocos lados — cilindros y toros chicos, biseles de 2 segmentos,
+    letras curvas, dobleces de tela — cuya arista con la vecina forma entre amin y amax grados: finish() ya no las deja
+    facetadas. Las aristas contra caras anchas (tapas, caras planas grandes) conservan su arista dura; nada cambia de forma."""
+    bm = mb.bm
+    sl = mb._soft_layer()
+    bm.normal_update()
+    lo, hi = math.radians(amin), math.radians(amax)
+    for e in bm.edges:
+        lf = e.link_faces
+        if len(lf) != 2:
+            continue
+        f1, f2 = lf
+        if f1[sl] and f2[sl]:
+            continue
+        try:
+            ang = e.calc_face_angle()
+        except ValueError:
+            continue
+        ang = min(ang, PI - ang)
+        if not (lo < ang < hi):
+            continue
+        a = e.verts[0].co
+        d = e.verts[1].co - a
+        L = d.length
+        if L < 1e-9:
+            continue
+        d = d / L
+        ok = True
+        for f in lf:
+            w = 0.0
+            for v in f.verts:
+                c = v.co - a
+                w = max(w, (c - d * c.dot(d)).length)
+            if w > wmax:
+                ok = False
+                break
+        if ok:
+            f1[sl] = 1
+            f2[sl] = 1
+    return mb
+
+
+def fillet2d_closed(pts, r, n=2):
+    """Redondea con radio r las esquinas convexas y cóncavas de un polígono 2D cerrado (perfiles barridos: marcos, guarniciones)."""
+    out = []
+    m = len(pts)
+    for i in range(m):
+        a, b, c = Vector((*pts[i - 1], 0)), Vector((*pts[i], 0)), Vector((*pts[(i + 1) % m], 0))
+        d0, d1 = (a - b), (c - b)
+        if d0.length < 1e-9 or d1.length < 1e-9:
+            out.append(pts[i])
+            continue
+        tt = min(r, d0.length * 0.45, d1.length * 0.45)
+        p0, p1 = b + d0.normalized() * tt, b + d1.normalized() * tt
+        for k in range(n + 1):
+            u = k / n
+            q = p0.lerp(b, u).lerp(b.lerp(p1, u), u)
+            out.append((q.x, q.y))
+    return out
+
+
+def _aaa(fn):
+    """Envuelve una pieza pública: la construye y le aplica soften_facets (mismas firmas, mismo resultado geométrico)."""
+    def f(*a, **k):
+        return soften_facets(fn(*a, **k))
+    f.__name__ = fn.__name__
+    f.__doc__ = fn.__doc__
+    f.__wrapped__ = fn
+    return f
+
+
 # ------------------------------------------------------------------------------------------------------------- texto 3D
 def text(mb, s, size, depth, mat, M=None, align="CENTER", spacing=1.0, bold=False):
     """Letras 3D (fuente del sistema de Blender) en el plano XY local, de cara a +Z, con `depth` de relieve desde z = 0.
@@ -125,11 +198,33 @@ def hanging_sign(s, w=1.1, h=0.26, drop=0.32, bg="sign_white", fg="sign_green"):
 
 
 def exit_sign(lit=True):
-    """Letrero luminoso de salida (caja 0,36 × 0,07 × 0,16, letras blancas en fondo verde). Origen: cara del muro, centro inferior."""
+    """Letrero de salida LED de termoplástico (NFPA 101 / UL 924: letras de 6" con trazo de 3/4"): caja de 0,34 × 0,19 × 0,05
+    con esquinas y cantos redondeados, cara verde con EXIT en relieve y flechas de dirección, placa de montaje al muro, 2
+    tornillos de la tapa, botón de prueba e indicador LED en el canto inferior. Origen: cara del muro, centro inferior; sale
+    hacia -Y."""
+    from kit import clinic_servicios as cs
+    from kit.fonts import text_font
     mb = MB()
-    mb.box((-0.18, -0.07, 0.0), (0.18, 0.0, 0.16), "sign_white")
-    mb.box((-0.165, -0.072, 0.012), (0.165, -0.07, 0.148), "sign_green")
-    text(mb, "EXIT", 0.085, 0.002, "sign_white", _T(0, -0.072, 0.05) @ _Rx(90))
+    W, H, D = 0.34, 0.19, 0.05
+    cs.slab(mb, _T(0, 0, H / 2) @ _Rx(90), 0.20, 0.10, 0.003, rc=0.01, re=0.001, mat="sign_white", nc=3, ne=1)
+    cs.slab(mb, _T(0, -0.003, H / 2) @ _Rx(90), W, H, D - 0.003, rc=0.014, re=0.006, mat="sign_white", nc=4, ne=3)
+    cs.slab(mb, _T(0, -D + 0.0002, H / 2) @ _Rx(90), W - 0.03, H - 0.03, 0.0007, rc=0.006, re=0.0003, mat="sign_green", nc=3, ne=1)
+    yf = -D - 0.0005
+    tmp = MB()
+    wtxt = text_font(tmp, "EXIT", 0.152 / 0.72, 0.003, "sign_white", font="sign", bold=True, res=3)
+    sx_ = min(1.0, 0.215 / max(wtxt, 1e-6))
+    text_font(mb, "EXIT", 0.152 / 0.72, 0.003, "sign_white", _T(0, yf, H / 2 - 0.152 / 2) @ _Rx(90) @ Matrix.Diagonal((sx_, 1, 1, 1)),
+              font="sign", bold=True, res=3)
+    for sx in (-1, 1):                                        # chevrones de dirección
+        x = sx * (W / 2 - 0.032)
+        pts = [(x + sx * 0.014, H / 2), (x - sx * 0.002, H / 2 + 0.016), (x - sx * 0.002, H / 2 + 0.007), (x - sx * 0.01, H / 2 + 0.007),
+               (x - sx * 0.01, H / 2 - 0.007), (x - sx * 0.002, H / 2 - 0.007), (x - sx * 0.002, H / 2 - 0.016)]
+        mb.plate(pts if sx < 0 else list(reversed(pts)), 0.001, "sign_white", m=_T(0, yf + 0.0003, 0) @ _Rx(90))
+    for x in (-0.07, 0.07):
+        cs.screw(mb, _T(x, -D, H - 0.0075) @ _Rx(90), r=0.003, seg=12, cross=True)
+    cs.lathe(mb, [(0.0, 0.0), (0.0035, 0.0), (0.0035, 0.002), (0.0, 0.003)], seg=16, mat="sign_red", M=_T(0.06, -0.03, 0.0) @ _Rx(180))
+    cs.lathe(mb, [(0.0, 0.0), (0.0025, 0.0), (0.0025, 0.0015), (0.0, 0.0022)], seg=12, mat="sign_green", M=_T(0.09, -0.03, 0.0) @ _Rx(180))
+    del lit
     return mb
 
 
@@ -509,24 +604,95 @@ def hospital_bed(seed=0, rails_up=True, fowler=0.0, blanket=True, made=True, rai
 
 
 def iv_stand(seed=0, bag=True):
-    """Portasueros: base de 5 patas con rodajas, poste de 1,9 m, cabeza de 4 ganchos y bolsa de solución."""
+    """Portasueros de 5 patas (Ø base ~0,58 m, poste de 1" con tubo telescópico de 3/4", perilla de fricción, cabeza de 4
+    ganchos de cuerno de carnero; referencia Blickman 1350 / Medline MDS80494): araña de aluminio fundido con brazos de sección
+    redondeada que bajan curvos a los alojamientos de 5 rodajas de 2", cubo torneado, collarín y perilla moleteada, tapón en la
+    punta; bolsa de solución de 1 L con sello, ojal y puertos, cámara de goteo, línea con pinza de rodillo (opcional)."""
+    from kit import clinic_servicios as cs
     r = rng(seed)
     mb = MB()
+    a0 = float(r.uniform(0, 1))
+    zc = 0.059                                                  # placa de la rodaja de 2" (2R + 0.009): el alojamiento arranca aquí
     for k in range(5):
-        a = 2 * PI * k / 5 + float(r.uniform(0, 1))
-        p = (0.27 * math.cos(a), 0.27 * math.sin(a))
-        mb.tube([(0, 0, 0.1), (p[0], p[1], 0.075)], 0.011, seg=6, mat="steel")
-        caster(mb, (p[0], p[1], 0.0), r=0.025, swivel=math.degrees(a))
-    mb.cyl((0, 0, 0.06), (0, 0, 0.13), 0.03, seg=10, mat="steel")
-    mb.cyl((0, 0, 0.13), (0, 0, 1.95), 0.012, seg=8, mat="steel")
-    for k in range(4):
-        a = PI / 2 * k
-        mb.tube([(0, 0, 1.93), (0.11 * math.cos(a), 0.11 * math.sin(a), 1.95), (0.13 * math.cos(a), 0.13 * math.sin(a), 2.0)],
-                0.004, seg=5, mat="steel")
+        a = 2 * PI * k / 5 + a0
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        lat = Vector((-d.y, d.x, 0.0))
+        loops = []
+        for i in range(9):
+            t = i / 8
+            rad = 0.035 + (0.262 - 0.035) * t
+            z = 0.115 - (0.115 - zc - 0.012) * (math.sin(t * PI / 2) ** 1.4)
+            w, h = 0.034 - 0.012 * t, 0.024 - 0.008 * t
+            c = d * rad + Vector((0, 0, z))
+            loops.append([tuple(c + lat * x + Vector((0, 0, y))) for (x, y) in cs.rr_pts(w, h, min(w, h) * 0.45, 3)])
+        cs.skin(mb, loops, "aluminium")
+        p = d * 0.27
+        cs.lathe(mb, [(0.0, zc + 0.003), (0.013, zc + 0.003), (0.0145, zc + 0.008), (0.0145, zc + 0.024), (0.012, zc + 0.028), (0.0, zc + 0.029)],
+                 seg=24, mat="aluminium", M=_T(p.x, p.y, 0.0))
+        cs._small_caster(mb, _T(p.x, p.y, 0.0), R=0.025, swivel=math.degrees(a) + float(r.uniform(-40, 40)))
+    cs.lathe(mb, [(0.0, 0.085), (0.045, 0.085), (0.048, 0.09), (0.048, 0.128), (0.04, 0.142), (0.024, 0.15), (0.0, 0.15)], seg=32, mat="aluminium")
+    # poste inferior de 1", collarín con perilla de fricción, tubo superior de 3/4", tapón
+    mb.cyl((0, 0, 0.15), (0, 0, 1.16), 0.0127, seg=24, mat="steel")
+    cs.lathe(mb, [(0.0127, 1.155), (0.017, 1.155), (0.0185, 1.162), (0.0185, 1.2), (0.016, 1.206), (0.0095, 1.208)], seg=24, mat="plastic",
+             caps=False)
+    cs.lathe(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.012), (0.0, 0.012)], seg=12, mat="steel", M=_T(0.0185, 0, 1.18) @ _Ry(90))
+    cs.knob(mb, _T(0.0305, 0, 1.18) @ _Ry(90), r=0.017, h=0.016, mat="plastic", ribs=14, rib_d=0.0012)
+    mb.cyl((0, 0, 1.1), (0, 0, 1.93), 0.0095, seg=24, mat="steel")
+    # cabeza de 4 ganchos de cuerno de carnero
+    cs.lathe(mb, [(0.0, 1.925), (0.016, 1.925), (0.018, 1.932), (0.018, 1.955), (0.014, 1.962), (0.0, 1.964)], seg=24, mat="steel")
+    with mb.soft():
+        for k in range(4):
+            a = PI / 2 * k + a0
+            d = Vector((math.cos(a), math.sin(a), 0.0))
+            pts = [Vector((0, 0, 1.944)) + d * 0.012]
+            for j in range(1, 23):
+                t = j / 22
+                rr = 0.012 + 0.11 * t
+                z = 1.944 + 0.02 * math.sin(t * PI) - 0.012 * t
+                pts.append(Vector((0, 0, z)) + d * rr)
+            c = pts[-1] + Vector((0, 0, 0.022))
+            for j in range(1, 15):
+                ph = -PI / 2 + 1.5 * PI * j / 14
+                pts.append(c + d * (0.022 * math.cos(ph)) + Vector((0, 0, 0.022 * math.sin(ph))))
+            mb.tube([tuple(p) for p in pts], 0.0042, seg=12, mat="steel")
+            q = pts[-1]
+            cs.lathe(mb, [(0.0, -0.002), (0.0055, -0.002), (0.0055, 0.004), (0.0, 0.007)], seg=12, mat="plastic",
+                     M=Matrix.Translation(q) @ (pts[-1] - pts[-2]).normalized().to_track_quat("Z", "Y").to_matrix().to_4x4())
     if bag:
-        port.loft(mb, [(-0.11, 0.0, 0.0, 0.0), (-0.09, 0.11, 0.04, 0.0), (0.06, 0.12, 0.045, 0.0), (0.1, 0.06, 0.02, 0.0)], seg=8,
-                  mat="plastic", M=_T(0.13, 0, 1.86) @ _Ry(90), ex=2.2)
-        mb.tube([(0.13, 0, 1.76), (0.11, 0.02, 1.4), (0.05, 0.1, 1.1), (0.0, 0.25, 0.95)], 0.002, seg=4, mat="plastic")
+        a = a0
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        lat = Vector((-d.y, d.x, 0.0))
+        hook = Vector((0, 0, 1.944)) + d * 0.122
+        top = hook + Vector((0, 0, -0.03))
+        loops = []
+        for (dz, w, t) in ((0.0, 0.07, 0.003), (-0.02, 0.12, 0.004), (-0.035, 0.14, 0.012), (-0.08, 0.145, 0.034), (-0.15, 0.142, 0.042),
+                           (-0.21, 0.136, 0.036), (-0.235, 0.125, 0.016), (-0.25, 0.11, 0.004)):
+            c = top + Vector((0, 0, dz))
+            loop = []
+            for j in range(20):
+                ph = 2 * PI * j / 20
+                x = w / 2 * math.copysign(abs(math.cos(ph)) ** 0.35, math.cos(ph))
+                y = t / 2 * math.sin(ph)
+                loop.append(tuple(c + lat * x + d * y))
+            loops.append(loop)
+        with mb.soft():
+            cs.skin(mb, loops, "plastic")
+        ce_loop = [tuple(top + Vector((0, 0, 0.012)) + lat * (0.009 * math.cos(2 * PI * j / 12)) + Vector((0, 0, 0.006 * math.sin(2 * PI * j / 12))))
+                   for j in range(12)]
+        mb.tube(ce_loop + [ce_loop[0]], 0.0016, seg=12, mat="plastic")
+        bot = top + Vector((0, 0, -0.25))
+        for dx in (-0.025, 0.025):
+            mb.cyl(tuple(bot + lat * dx), tuple(bot + lat * dx + Vector((0, 0, -0.035))), 0.0045, seg=16, mat="plastic")
+        cham = bot + lat * 0.025 + Vector((0, 0, -0.035))
+        cs.lathe(mb, [(0.0, 0.0), (0.004, 0.0), (0.0075, -0.008), (0.0075, -0.055), (0.006, -0.062), (0.0018, -0.066), (0.0, -0.067)],
+                 seg=20, mat="glass", M=Matrix.Translation(cham))
+        q = cham + Vector((0, 0, -0.066))
+        line = [q, q + Vector((0, 0, -0.12)), q + d * 0.03 + Vector((0, 0, -0.35)), q + d * 0.11 + lat * 0.05 + Vector((0, 0, -0.62)),
+                q + d * 0.16 + lat * 0.03 + Vector((0, 0, -0.78)), q + d * 0.2 + Vector((0, 0, -0.7)), q + d * 0.24 - lat * 0.05 + Vector((0, 0, -0.52))]
+        mb.tube(fillet([tuple(p) for p in line], 0.05, 6), 0.0019, seg=12, mat="plastic")
+        cl_ = q + d * 0.012 + Vector((0, 0, -0.25))
+        rbox(mb, (-0.011, -0.008, -0.03), (0.011, 0.008, 0.03), "plastic_blue", r=0.004,
+             m=Matrix.Translation(cl_) @ _Rz(math.degrees(a)))
     return mb
 
 
@@ -842,12 +1008,58 @@ def shelving(w=1.0, d=0.4, h=2.0, shelves=5, seed=0, stock=True, stock_kind="pha
     return mb
 
 
+_POSTER_TEXT = {
+    "WASH YOUR HANDS": ("Use soap and clean water", "Scrub for 20 seconds", "Rinse and dry well"),
+    "VACCINATION DAY": ("Every Saturday 9 AM - 1 PM", "Bring your health card", "Free for children"),
+    "STAY HYDRATED": ("Drink clean water every day", "Boil or filter tap water", "Ask your nurse"),
+}
+
+
 def poster(s, w=0.42, h=0.6, bg="sign_white", fg="sign_blue", art="plastic_blue"):
-    """Cartel de salud pegado al muro (hoja + texto + bloque de ilustración)."""
+    """Cartel de salud enmicado pegado al muro con cinta: hoja de 0,4 mm con leve ondulación y esquinas despegadas, franja de
+    encabezado impresa, título, pictograma en relieve de tinta (gota, jeringa o vaso según el tema), 3 renglones de texto,
+    pie con el nombre de la clínica y 4 tiras de cinta transparente en las esquinas. Origen: cara del muro, centro inferior."""
+    from kit import clinic_oficina as co
+    from kit import clinic_servicios as cs
     mb = MB()
-    mb.box((-w / 2, -0.002, 0.0), (w / 2, 0.0, h), bg)
-    text(mb, s, w * 0.09, 0.0008, fg, _T(0, -0.002, h * 0.82) @ _Rx(90))
-    mb.box((-w * 0.35, -0.0026, h * 0.15), (w * 0.35, -0.002, h * 0.72), art)
+    t = 0.0004
+    co.paper_sheet(mb, _T(0, -0.0006, h / 2) @ _Rx(90), w, h, t=t, curl=0.0, lift=0.004, wave=0.0006,
+                   seed=len(s), nu=9, nv=13, mat=bg)
+    yf = -0.0006 - t - 0.0015                                  # cara impresa (sobre la ondulación máxima)
+
+    def ink(pts, mat, d=0.0004):
+        mb.plate(pts, d, mat, m=_T(0, yf, 0) @ _Rx(90))
+    ink([(-w / 2 + 0.012, h - 0.012), (w / 2 - 0.012, h - 0.012), (w / 2 - 0.012, h * 0.83), (-w / 2 + 0.012, h * 0.83)], art)
+    text(mb, s, min(w * 0.075, (w - 0.06) / max(len(s), 1) * 1.6), 0.0006, "sign_white", _T(0, yf - 0.0004, h * 0.875) @ _Rx(90))
+    cx, cz = 0.0, h * 0.55
+    key = s.upper()
+    if "WASH" in key or "HYDRAT" in key:
+        for (dx, dz, sc) in ((0.0, 0.0, 1.0), (-0.07, -0.05, 0.6), (0.07, -0.04, 0.5)):
+            pts = []
+            R = 0.04 * sc
+            for k in range(25):
+                a = -PI / 2 + 2 * PI * k / 24
+                pts.append((cx + dx + R * math.cos(a) * (1 - 0.15 * math.sin(a)), cz + dz + R * math.sin(a) + (R * 0.9 * max(0.0, math.sin(a)) ** 3)))
+            ink(pts[:-1], fg)
+        if "HYDRAT" in key:
+            ink([(cx - 0.05, cz - 0.08), (cx + 0.05, cz - 0.08), (cx + 0.06, cz + 0.08), (cx + 0.052, cz + 0.08), (cx + 0.043, cz - 0.072),
+                 (cx - 0.043, cz - 0.072), (cx - 0.052, cz + 0.08), (cx - 0.06, cz + 0.08)], "cable")
+    else:
+        ink([(cx - 0.1, cz - 0.012), (cx + 0.04, cz - 0.012), (cx + 0.04, cz + 0.012), (cx - 0.1, cz + 0.012)], fg)
+        ink([(cx + 0.04, cz - 0.004), (cx + 0.1, cz - 0.0008), (cx + 0.1, cz + 0.0008), (cx + 0.04, cz + 0.004)], "cable")
+        ink([(cx - 0.13, cz - 0.025), (cx - 0.1, cz - 0.025), (cx - 0.1, cz + 0.025), (cx - 0.13, cz + 0.025)], fg)
+        for k in range(4):
+            x = cx - 0.085 + k * 0.03
+            ink([(x, cz + 0.012), (x + 0.004, cz + 0.012), (x + 0.004, cz + 0.022), (x, cz + 0.022)], "sign_white")
+    lines = _POSTER_TEXT.get(key, ("Ask at the reception desk", "Open Monday to Saturday", "Community Health Program"))
+    for k, ln in enumerate(lines):
+        text(mb, ln, w * 0.042, 0.0004, "cable", _T(0, yf - 0.0004, h * (0.3 - 0.075 * k)) @ _Rx(90))
+    ink([(-w / 2 + 0.012, 0.05), (w / 2 - 0.012, 0.05), (w / 2 - 0.012, 0.012), (-w / 2 + 0.012, 0.012)], art)
+    text(mb, "COMMUNITY HOSPITAL", w * 0.035, 0.0004, "sign_white", _T(0, yf - 0.0004, 0.022) @ _Rx(90))
+    for (sx, sz) in ((-1, 1), (1, 1), (-1, -1), (1, -1)):        # cinta transparente en diagonal en las esquinas
+        M = _T(sx * (w / 2 - 0.01), -0.0006 - t - 0.0002, (h if sz > 0 else 0.0) - sz * 0.01) @ _Ry(sx * sz * 45.0)
+        cs.slab(mb, M @ _Rx(90), 0.06, 0.019, 0.00012, rc=0.0005, re=0.00005, mat="plastic", nc=1, ne=1)
+    del bg
     return mb
 
 
@@ -1037,27 +1249,91 @@ def door_panel(w, h=2.1, depth=0.12, seed=0, ang=45.0, mat="paint_mint", frame_m
 
 
 def door_steel(w, h=2.1, depth=0.2, seed=0, ang=0.0, panic=True, mat="paint_green"):
-    """Puerta de servicio de acero: marco de lámina, hoja lisa con refuerzos, barra de pánico por dentro, manija por fuera,
-    cierrapuertas, mirilla de vidrio armado y placa pateadora. Local: u 0..w, v 0..h, muro y 0..depth; abre hacia -Y (afuera)."""
+    """Puerta de servicio de acero (puerta hueca de 1 3/4" calibre 18 en marco de lámina calibre 16, referencia SDI-100):
+    marco de doble rebajo que envuelve el vano con tope de 5/8" y chambranas de 2", hoja con cantos redondeados, mirilla de
+    vidrio armado con junquillos atornillados, 3 bisagras de 4 1/2" con nudillos y remates, barra de pánico de sobreponer (caja
+    del mecanismo, barra de empuje, ménsula), manija de palanca con roseta y cilindro por fuera, cierrapuertas de brazo
+    paralelo, placas pateadoras y umbral de aluminio. Local: u 0..w, v 0..h, muro y 0..depth; abre hacia -Y (afuera)."""
+    from kit import clinic_servicios as cs
     mb = MB()
     jw = 0.05
-    for (u0, v0, u1, v1) in ((0.0, 0.0, jw, h), (w - jw, 0.0, w, h), (0.0, h - jw, w, h)):
-        mb.box((u0, depth * 0.2, v0), (u1, depth * 0.8, v1), mat, bevel=0.003)
-    lw, lh, T = w - 2 * jw - 0.006, h - jw - 0.006, 0.045
+    ys = min(0.25 * depth, depth - 0.03)                          # cara exterior del tope
+    tr = jw + 0.05                                               # chambrana de 2" sobre el muro, por fuera del vano
+    prof = [(tr, -0.012), (0.0, -0.012), (0.0, ys), (-0.016, ys), (-0.016, ys + 0.016), (0.0, ys + 0.016), (0.0, depth + 0.012),
+            (tr, depth + 0.012), (tr, depth), (jw, depth), (jw, 0.0), (tr, 0.0)]
+    prof = fillet2d_closed(prof, 0.0015)
+    e = 0.001                                                    # puntos a 1 mm de cada esquina: inglete a 45° exacto
+    mb.sweep(prof, [(jw, 0.0, 0.0), (jw, 0.0, h - jw - e), (jw, 0.0, h - jw), (jw + e, 0.0, h - jw), (w - jw - e, 0.0, h - jw),
+                    (w - jw, 0.0, h - jw), (w - jw, 0.0, h - jw - e), (w - jw, 0.0, 0.0)], mat=mat, closed_profile=True, normal=(0, 1, 0))
+    # umbral de aluminio con estrías
+    cs.slab(mb, _T(w / 2, depth * 0.4, 0.0), w - 2 * jw + 0.04, depth * 0.8 + 0.06, 0.012, rc=0.004, re=0.006, re0=0.0,
+            mat="aluminium", nc=2, ne=2)
+    lw, lh, T = w - 2 * jw - 0.008, h - jw - 0.012, 0.0445
     leaf = MB()
-    leaf.box((0.0, -T / 2, 0.0), (lw, T / 2, lh), mat, bevel=0.004)
-    for v in (0.35, 1.05, 1.75):
-        leaf.box((0.04, -T / 2 - 0.002, v - 0.02), (lw - 0.04, -T / 2, v + 0.02), mat, bevel=0.001)
-    leaf.box((lw / 2 - 0.12, -T / 2 - 0.004, 1.45), (lw / 2 + 0.12, T / 2 + 0.004, 1.75), mat, bevel=0.003)
-    leaf.box((lw / 2 - 0.1, -0.003, 1.47), (lw / 2 + 0.1, 0.003, 1.73), "glass", bevel=0.0)
-    leaf.box((0.02, -T / 2 - 0.0015, 0.02), (lw - 0.02, -T / 2, 0.25), "steel", bevel=0.0)
-    if panic:
-        leaf.box((0.08, T / 2, 0.92), (lw - 0.06, T / 2 + 0.07, 0.98), "steel", bevel=0.01)
-        leaf.box((lw - 0.16, T / 2, 0.88), (lw - 0.04, T / 2 + 0.08, 1.02), "sign_red", bevel=0.01)
-    leaf.tube([(lw - 0.06, -T / 2, 1.0), (lw - 0.06, -T / 2 - 0.05, 1.0), (lw - 0.18, -T / 2 - 0.055, 1.0)], 0.009, seg=10, mat="steel")
-    leaf.box((0.03, -T / 2 - 0.04, lh - 0.12), (0.32, -T / 2, lh - 0.06), "steel", bevel=0.005)
-    M = _T(jw + 0.003, depth * 0.5, 0.004) @ _Rz(-ang)
+    vx0, vx1, vz0, vz1 = lw - 0.36, lw - 0.16, 1.47, 1.77            # mirilla de 8" × 12"
+    for (a, b, c, d) in ((0.0, 0.0, vx0, lh), (vx1, 0.0, lw, lh), (vx0, 0.0, vx1, vz0), (vx0, vz1, vx1, lh)):
+        rbox(leaf, (a, -T / 2, b), (c, T / 2, d), mat, r=0.003)
+    leaf.box((vx0 - 0.001, -0.003, vz0 - 0.001), (vx1 + 0.001, 0.003, vz1 + 0.001), "glass", bevel=0.0)
+    with leaf.soft():
+        for k in range(1, 8):                                       # malla de vidrio armado (alambre de 0,5 mm a cada 1/2")
+            x = vx0 + (vx1 - vx0) * k / 8
+            leaf.box((x - 0.0003, -0.0003, vz0), (x + 0.0003, 0.0003, vz1), "steel", bevel=0.0)
+        for k in range(1, 12):
+            z = vz0 + (vz1 - vz0) * k / 12
+            leaf.box((vx0, -0.0003, z - 0.0003), (vx1, 0.0003, z + 0.0003), "steel", bevel=0.0)
+    for sg in (-1, 1):                                               # junquillos
+        for (a, b, c, d) in ((vx0 - 0.012, vz0 - 0.012, vx1 + 0.012, vz0), (vx0 - 0.012, vz1, vx1 + 0.012, vz1 + 0.012),
+                             (vx0 - 0.012, vz0, vx0, vz1), (vx1, vz0, vx1 + 0.012, vz1)):
+            rbox(leaf, (a, sg * T / 2 - (0.008 if sg < 0 else 0.0), b), (c, sg * T / 2 + (0.008 if sg > 0 else 0.0), d), mat, r=0.002)
+        for (x, z) in ((vx0 - 0.006, vz0 + 0.03), (vx1 + 0.006, vz0 + 0.03), (vx0 - 0.006, vz1 - 0.03), (vx1 + 0.006, vz1 - 0.03)):
+            cs.screw(leaf, _T(x, sg * (T / 2 + 0.008), z) @ _Rx(-90 * sg), r=0.0022, seg=10, cross=False)
+    for sg in (-1, 1):                                               # placas pateadoras de acero inoxidable
+        y0 = sg * T / 2
+        rbox(leaf, (0.02, min(y0, y0 + sg * 0.0012), 0.02), (lw - 0.02, max(y0, y0 + sg * 0.0012), 0.27), "steel", r=0.0005)
+        for x in (0.04, lw / 2, lw - 0.04):
+            for z in (0.04, 0.25):
+                cs.screw(leaf, _T(x, y0 + sg * 0.0012, z) @ _Rx(-90 * sg), r=0.0022, seg=10, cross=False)
+    if panic:                                                        # barra de pánico por dentro (+Y)
+        y0 = T / 2
+        cs.slab(leaf, _T(lw - 0.11, y0, 0.985) @ _Rx(-90), 0.17, 0.075, 0.055, rc=0.012, re=0.008, re0=0.0, mat="steel", nc=3, ne=2)
+        cs.slab(leaf, _T(0.07, y0, 0.985) @ _Rx(-90), 0.05, 0.06, 0.05, rc=0.01, re=0.007, re0=0.0, mat="steel", nc=3, ne=2)
+        cs.rtube_p(leaf, (0.07, y0 + 0.042, 0.985), (lw - 0.19, y0 + 0.042, 0.985), 0.032, 0.038, "steel", r=0.012, n=3)
+        cs.rtube_p(leaf, (lw - 0.25, y0 + 0.06, 0.985), (lw - 0.2, y0 + 0.06, 0.985), 0.012, 0.02, "cable", r=0.004, n=2)
+        for x in (lw - 0.17, lw - 0.05, 0.05, 0.09):
+            for z in (0.96, 1.01):
+                cs.screw(leaf, _T(x, y0 + (0.055 if x > 0.5 else 0.05), z) @ _Rx(-90), r=0.0022, seg=10, cross=False)
+    # manija de palanca con roseta y cilindro por fuera (-Y)
+    xh = lw - 0.07
+    y0 = -T / 2
+    cs.lathe(leaf, [(0.0, 0.0), (0.03, 0.0), (0.03, 0.004), (0.026, 0.009), (0.012, 0.012), (0.0, 0.012)], seg=32, mat="steel",
+             M=_T(xh, y0, 1.0) @ _Rx(90))
+    cs.lathe(leaf, [(0.0, 0.0), (0.011, 0.0), (0.011, 0.055), (0.0, 0.055)], seg=24, mat="steel", M=_T(xh, y0 - 0.008, 1.0) @ _Rx(90))
+    leaf.tube(fillet([(xh, y0 - 0.055, 1.0), (xh - 0.03, y0 - 0.062, 1.0), (xh - 0.125, y0 - 0.062, 0.995)], 0.02, 6), 0.009, seg=16, mat="steel")
+    cs.lathe(leaf, [(0.0, 0.0), (0.016, 0.0), (0.016, 0.006), (0.012, 0.009), (0.0, 0.009)], seg=24, mat="brass", M=_T(xh, y0, 1.08) @ _Rx(90))
+    # bisagras de 4 1/2": nudillos con remates por fuera, en el canto del lado de las bisagras
+    for zc in (0.25, lh / 2 + 0.1, lh - 0.18):
+        for k in range(5):
+            za = zc - 0.057 + 0.114 * k / 5 + 0.0008
+            zb = zc - 0.057 + 0.114 * (k + 1) / 5 - 0.0008
+            cs.lathe(leaf, [(0.0, za), (0.0068, za), (0.0068, zb), (0.0, zb)], seg=24, mat="steel", M=_T(-0.004, -T / 2 - 0.002, 0.0))
+        for zz, sg in ((zc - 0.057, -1), (zc + 0.057, 1)):
+            cs.lathe(leaf, [(0.0, 0.0), (0.0068, 0.0), (0.006, 0.004), (0.003, 0.0075), (0.0, 0.008)], seg=24, mat="steel",
+                     M=_T(-0.004, -T / 2 - 0.002, zz) @ (Matrix() if sg > 0 else _Rx(180)))
+        rbox(leaf, (-0.003, -T / 2 - 0.0035, zc - 0.057), (0.024, -T / 2 + 0.0002, zc + 0.057), "steel", r=0.0008)
+    M = _T(jw + 0.004, ys - T / 2, 0.006) @ _Rz(-ang)
     mb.join(leaf, M)
+    # cierrapuertas de brazo paralelo (lado de empuje): cuerpo en la hoja, brazo y zapata en el marco
+    Mc = M @ _T(0.12, T / 2, lh - 0.1)
+    cs.slab(mb, Mc @ _T(0.15, 0.0, 0.0) @ _Rx(-90), 0.30, 0.065, 0.055, rc=0.012, re=0.012, re0=0.0, mat="aluminium", nc=3, ne=3)
+    for xx in (0.0, 0.3):
+        cs.lathe(mb, [(0.0, 0.0), (0.03, 0.0), (0.03, 0.05), (0.0, 0.055)], seg=24, mat="aluminium", M=Mc @ _T(xx, 0.0275, -0.0325) @ _Rx(-90) @ _T(0, 0, -0.0275) @ _Rx(0))
+    piv = Mc @ Vector((0.22, 0.06, 0.0))
+    cs.lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.012), (0.0, 0.012)], seg=20, mat="steel", M=Matrix.Translation(Mc @ Vector((0.22, 0.055, 0.02))))
+    shoe = Vector((jw + 0.45, ys + 0.016 + 0.03, h - jw - 0.03))
+    elbow = piv.lerp(shoe, 0.5) + Vector((0, 0.05, 0.0))
+    cs.rtube_p(mb, tuple(piv + Vector((0, 0, 0.03))), tuple(elbow + Vector((0, 0, 0.03))), 0.012, 0.022, "aluminium", r=0.004, n=2)
+    cs.rtube_p(mb, tuple(elbow + Vector((0, 0, 0.03))), tuple(shoe), 0.012, 0.018, "aluminium", r=0.004, n=2)
+    cs.slab(mb, _T(shoe.x, shoe.y - 0.01, shoe.z), 0.08, 0.04, 0.025, rc=0.008, re=0.004, re0=0.0, mat="aluminium", nc=2, ne=2)
     del seed
     return mb
 
@@ -1178,7 +1454,7 @@ def kitchen_table(w=1.6, d=0.9, h=0.75, seed=0):
 def _impl(mod, name):
     def f(*a, **k):
         import importlib
-        return getattr(importlib.import_module("kit." + mod), name)(*a, **k)
+        return soften_facets(getattr(importlib.import_module("kit." + mod), name)(*a, **k))
     f.__name__ = name
     f.__doc__ = f"Ver kit/{mod}.py::{name}."
     return f
@@ -1211,3 +1487,11 @@ xray_unit = _impl("clinic_equipo", "xray_unit")
 wall_bucky = _impl("clinic_equipo", "wall_bucky")
 lead_screen = _impl("clinic_equipo", "lead_screen")
 wall_lamp = _impl("clinic_equipo", "wall_lamp")
+
+
+# segunda pasada R-AAA: sombreado continuo en los redondos de pocos lados de todas las piezas públicas de este módulo
+for _n in ("sign_plate", "hanging_sign", "exit_sign", "chair_row", "hospital_bed", "iv_stand", "exam_table", "wheelchair", "stretcher",
+           "shelving", "poster", "window_grille", "window_clean", "door_glass_double", "door_panel", "door_steel", "handrail",
+           "kitchen_table"):
+    globals()[_n] = _aaa(globals()[_n])
+del _n

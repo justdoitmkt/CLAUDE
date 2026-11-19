@@ -215,7 +215,7 @@ def _plank(L, W, Tk, r, mat="wood_grey", step=0.15, bow=0.004, twist=1.2, cut=(0
     (cut = desfase en X del canto superior respecto al inferior en cada extremo) y aristas achaflanadas."""
     mb = MB()
     n = max(2, int(math.ceil(L / step)))
-    prof = _cprof(W, Tk, ch)
+    prof = [(x, y) for x, y in _rrect(W, Tk, ch * 1.4, 2)]   # aristas gastadas (radio ~4 mm), no un octágono
     tw = math.radians(r.uniform(-twist, twist))
     bw = r.uniform(-bow, bow)
     bz = r.uniform(-bow, bow) * 0.5
@@ -275,24 +275,209 @@ def _prism(mb, pts, t, mat, m=None):
         mb.face([a[i], a[j], b[j], b[i]], mat)
 
 
-def _nail(mb, x, y, z, r, d=-1, mat="metal_rust", head=0.0045, m=None):
-    """Cabeza de clavo sobre una cara que mira a d*Y (empotrada 0,8 mm, sobresale 2,5 mm), ligeramente ladeada."""
-    tilt = Vector((r.normal(0, 0.0007), 0, r.normal(0, 0.0007)))
-    p0 = Vector((x, y - d * 0.0008, z))
-    p1 = Vector((x, y + d * 0.0025, z)) + tilt
+def _frame_on(p0, p1, up=(0.0, 0.0, 1.0)):
+    """Matriz con Z local de p0 a p1 (X local = `up` proyectado). Devuelve (M, largo)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = p1 - p0
+    L = d.length
+    z = d / L if L > 1e-12 else Vector((0.0, 0.0, 1.0))
+    u = Vector(up)
+    if abs(u.dot(z)) > 0.95:
+        u = Vector((1.0, 0.0, 0.0)) if abs(z.x) < 0.9 else Vector((0.0, 1.0, 0.0))
+    x = (u - z * u.dot(z)).normalized()
+    y = z.cross(x)
+    return Matrix(((x.x, y.x, z.x, p0.x), (x.y, y.y, z.y, p0.y), (x.z, y.z, z.z, p0.z), (0.0, 0.0, 0.0, 1.0))), L
+
+
+def _lathe(mb, prof, seg=24, mat="metal_rust", M=None, phase=0.0, caps=True):
+    """Sólido de revolución alrededor del Z local: prof [(r, z)] de un extremo al otro; r = 0 en un extremo = polo (abanico
+    de triángulos, sin caras degeneradas). Los extremos con r > 0 se tapan (caps) para cerrar el sólido."""
+    rings = []
+    for (rr, z) in prof:
+        if rr < 1e-7:
+            rings.append(mb._verts([(0.0, 0.0, z)], M))
+        else:
+            rings.append(mb._verts([(rr * math.cos(phase + 2 * PI * k / seg), rr * math.sin(phase + 2 * PI * k / seg), z)
+                                    for k in range(seg)], M))
+    for a, b in zip(rings[:-1], rings[1:]):
+        if len(a) == 1 and len(b) == 1:
+            continue
+        for k in range(seg):
+            kk = (k + 1) % seg
+            if len(a) == 1:
+                mb.face([a[0], b[kk], b[k]], mat)
+            elif len(b) == 1:
+                mb.face([a[k], a[kk], b[0]], mat)
+            else:
+                mb.face([a[k], a[kk], b[kk], b[k]], mat)
+    if caps:
+        if len(rings[0]) > 1:
+            mb.face(list(reversed(rings[0])), mat)
+        if len(rings[-1]) > 1:
+            mb.face(rings[-1], mat)
+    return rings
+
+
+def _arc(cx, cy, r, a0, a1, n):
+    return [(cx + r * math.cos(a0 + (a1 - a0) * k / n), cy + r * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
+
+
+def _rrect(w, h, r, n=3, cx=0.0, cy=0.0):
+    """Rectángulo w x h centrado en (cx, cy) con esquinas de radio r (CCW, 4(n+1) puntos)."""
+    r = max(1e-5, min(r, 0.49 * min(w, h)))
+    pts = []
+    for (ox, oy, a0) in ((w / 2 - r, h / 2 - r, 0.0), (-w / 2 + r, h / 2 - r, PI / 2), (-w / 2 + r, -h / 2 + r, PI),
+                         (w / 2 - r, -h / 2 + r, 1.5 * PI)):
+        pts += _arc(cx + ox, cy + oy, r, a0, a0 + PI / 2, n)
+    return pts
+
+
+def _fillet2d(pts, rad, n=3, closed=True):
+    """Polígono/polilínea 2D con cada esquina redondeada: rad = radio único o lista por vértice (0 = esquina viva).
+    El radio se acota a 0,45 de los tramos vecinos (perfiles de 2–3 mm de pared sin auto-cruces)."""
+    P = [Vector(p) for p in pts]
+    k = len(P)
+    rr = rad if isinstance(rad, (list, tuple)) else [rad] * k
+    out = []
+    for i in range(k):
+        if (not closed and i in (0, k - 1)) or rr[i] <= 0:
+            out.append((P[i].x, P[i].y))
+            continue
+        a, b, c = P[i - 1], P[i], P[(i + 1) % k]
+        d0, d1 = (a - b), (c - b)
+        l0, l1 = d0.length, d1.length
+        if l0 < 1e-9 or l1 < 1e-9:
+            out.append((b.x, b.y))
+            continue
+        d0, d1 = d0 / l0, d1 / l1
+        ang = math.acos(max(-1.0, min(1.0, d0.dot(d1))))
+        if ang > PI - 0.05:
+            out.append((b.x, b.y))
+            continue
+        t = min(rr[i] / math.tan(ang / 2), 0.45 * l0, 0.45 * l1)
+        p0, p1 = b + d0 * t, b + d1 * t
+        for j in range(n + 1):
+            u = j / n
+            q = p0.lerp(b, u).lerp(b.lerp(p1, u), u)
+            out.append((q.x, q.y))
+    return out
+
+
+def _rrprof(x0, x1, y0, y1, r, n=2):
+    """Perfil de barrido [x0,x1]x[y0,y1] con esquinas redondeadas de radio r (canto de perfil extruido real)."""
+    return _rrect(x1 - x0, y1 - y0, r, n, (x0 + x1) / 2, (y0 + y1) / 2)
+
+
+def _sweep3(mb, prof, pts, mat, up=(0.0, 0.0, 1.0), scale=None, caps=True):
+    """Barre `prof` [(px, py)] por una polilínea 3D cualquiera: py va en `up` proyectado (N), px en T x N.
+    scale(s) -> factor del perfil (s = 0..1 por longitud): remates redondeados de manijas y jaladeras."""
+    P = [Vector(p) for p in pts]
+    n = len(P)
+    acc = [0.0]
+    for i in range(1, n):
+        acc.append(acc[-1] + (P[i] - P[i - 1]).length)
+    tot = acc[-1] or 1.0
+    U = Vector(up)
+    rings = []
+    for i in range(n):
+        T = (P[min(i + 1, n - 1)] - P[max(i - 1, 0)]).normalized()
+        N = U - T * U.dot(T)
+        N = N.normalized() if N.length > 1e-6 else Vector((1.0, 0.0, 0.0))
+        B = T.cross(N)
+        k = scale(acc[i] / tot) if scale else 1.0
+        rings.append([mb.bm.verts.new(P[i] + B * (px * k) + N * (py * k)) for px, py in prof])
+    m = len(prof)
+    for i in range(n - 1):
+        for j in range(m):
+            jj = (j + 1) % m
+            mb.face([rings[i][j], rings[i][jj], rings[i + 1][jj], rings[i + 1][j]], mat)
+    if caps:
+        mb.face(list(reversed(rings[0])), mat)
+        mb.face(rings[-1], mat)
+    return rings
+
+
+def _rtube(mb, pts, rad, mat, seg=16, rbend=None, nb=6, caps=True, soft=False):
+    """Tubo/varilla redonda por una polilínea con dobleces de radio real (rbend, por defecto 2,5 diámetros)."""
+    P = [Vector(p) for p in pts]
+    rb = rbend if rbend is not None else 5.0 * rad
+    if len(P) > 2 and rb > 0:
+        Q = [P[0]]
+        for i in range(1, len(P) - 1):
+            a, b, c = P[i - 1], P[i], P[i + 1]
+            d0, d1 = (a - b).normalized(), (c - b).normalized()
+            ang = d0.angle(d1) if d0.length and d1.length else PI
+            if ang > PI - 0.02:
+                Q.append(b)
+                continue
+            t = min(rb / math.tan(ang / 2), (a - b).length * 0.49, (c - b).length * 0.49)
+            p0, p1 = b + d0 * t, b + d1 * t
+            for k in range(nb + 1):
+                u = k / nb
+                Q.append(p0.lerp(b, u).lerp(b.lerp(p1, u), u))
+        Q.append(P[-1])
+        P = Q
+    if soft:
+        with mb.soft():
+            mb.tube([tuple(p) for p in P], rad, seg=seg, mat=mat, caps=caps)
+    else:
+        mb.tube([tuple(p) for p in P], rad, seg=seg, mat=mat, caps=caps)
+
+
+def _screw(mb, p, axis, d=0.0065, mat="metal_rust", kind="pan", m=None, up=(0.0, 0.0, 1.0)):
+    """Cabeza de tornillo/clavo sobre una superficie (p en la superficie, `axis` hacia fuera), 16 lados con sombreado continuo:
+    'pan' (gota con cruz hundida), 'flat' (avellanado al ras con cruz), 'dome' (perno de coche / remache)."""
+    a = Vector(axis).normalized()
+    p = Vector(p)
+    M, _ = _frame_on(p, p + a, up)
     if m is not None:
-        p0, p1 = m @ p0, m @ p1
-    mb.cyl(p0, p1, head * r.uniform(0.85, 1.1), seg=5, mat=mat, r1=head * 0.8)
+        M = m @ M
+    h = d * (0.36 if kind == "pan" else (0.55 if kind == "dome" else 0.12))
+    if kind == "pan":
+        prof = [(0.0, -0.0006), (d / 2, -0.0006), (d / 2, h * 0.3), (d * 0.43, h * 0.78), (d * 0.26, h), (d * 0.13, h * 0.96),
+                (0.0, h * 0.62)]
+    elif kind == "dome":
+        prof = [(0.0, -0.0006), (d / 2, -0.0006), (d / 2, h * 0.12), (d * 0.46, h * 0.45), (d * 0.36, h * 0.75), (d * 0.2, h * 0.95),
+                (0.0, h)]
+    else:
+        prof = [(0.0, -0.0008), (d / 2, -0.0008), (d / 2, h), (d * 0.2, h), (0.0, h * 0.2 - 0.0002)]
+    with mb.soft():
+        _lathe(mb, prof, seg=16, mat=mat, M=M)
+
+
+def _nail(mb, x, y, z, r, d=-1, mat="metal_rust", head=0.0045, m=None):
+    """Cabeza de clavo sobre una cara que mira a d*Y (empotrada 0,8 mm, cúpula de 1,6 mm), ligeramente ladeada; a veces
+    el clavo quedó medio sacado y doblado (cabeza levantada con caña visible)."""
+    tilt = Vector((r.normal(0, 0.08), 0, r.normal(0, 0.08)))
+    ax = (Vector((0, d, 0)) + tilt).normalized()
+    p = Vector((x, y, z))
+    pulled = r.random() < 0.12
+    lift = r.uniform(0.004, 0.012) if pulled else 0.0
+    M, _ = _frame_on(p - ax * 0.0008, p + ax, (0, 0, 1))
+    if m is not None:
+        M = m @ M
+    hd = 2 * head * r.uniform(0.85, 1.1)
+    with mb.soft():
+        if pulled:   # caña de 2,8 mm visible
+            _lathe(mb, [(0.0014, 0.0), (0.0014, lift + 0.0004)], seg=10, mat=mat, M=M)
+        _lathe(mb, [(0.0, lift), (hd / 2, lift), (hd / 2, lift + 0.0007), (hd * 0.36, lift + 0.0015), (0.0, lift + 0.0018)],
+               seg=14, mat=mat, M=M)
 
 
 def _bolt(mb, p, axis, r=0.007, ln=0.006, mat="metal_rust", seg=6, m=None):
-    """Cabeza de perno/tornillo hexagonal: p en la superficie, `axis` hacia fuera de ella."""
-    p = Vector(p)
+    """Perno de cabeza hexagonal con chaflán y arandela: p en la superficie, `axis` hacia fuera. r = medio entrecaras."""
     a = Vector(axis).normalized()
-    p0, p1 = p - a * 0.001, p + a * ln
+    p = Vector(p)
+    M, _ = _frame_on(p - a * 0.0008, p + a, (0, 0, 1) if abs(a.z) < 0.9 else (1, 0, 0))
     if m is not None:
-        p0, p1 = m @ p0, m @ p1
-    mb.cyl(p0, p1, r, seg=seg, mat=mat)
+        M = m @ M
+    ce = r / math.cos(PI / 6)
+    tw = min(0.0016, 0.25 * ln)
+    with mb.soft():
+        _lathe(mb, [(0.0, 0.0), (r * 1.45, 0.0), (r * 1.45, tw * 0.7), (r * 1.38, tw), (0.0, tw)], seg=20, mat=mat, M=M)
+    hh = max(0.002, ln - tw)
+    _lathe(mb, [(0.0, tw - 0.0003), (ce, tw - 0.0003), (ce, tw + hh * 0.78), (r * 0.92, tw + hh), (0.0, tw + hh)], seg=6, mat=mat,
+           M=M, phase=PI / 6)
 
 
 def _rack(mb, w, h, r, deg=0.25, sag=0.004):
@@ -429,36 +614,39 @@ def _loose_glass(mb, x0, x1, y0, y1, z, count, r, m=None):
 # =====================================================================================================================
 # cortina rasgada (lámina 'fabric') + barra
 # =====================================================================================================================
-def _curtain_panel(mb, u0, u1, ztop_fn, zbot, yc, r, amp=0.022, wl=0.19, droop=0.0, droop_end=1, rip=True, holes=1):
-    """Paño de tela colgando (lámina de una cara) con pliegues, dobladillo rasgado, desgarro vertical, agujeros y,
-    opcionalmente, un extremo descolgado (droop) donde se soltaron los ganchos."""
+def _curtain_panel(mb, u0, u1, ztop_fn, zbot, yc, r, amp=0.022, wl=0.19, droop=0.0, droop_end=1, rip=True, holes=1,
+                   ring_sp=0.1):
+    """Paño de tela colgando (lámina de una cara, malla de ~3 x 6 cm con sombreado continuo) con pliegues que nacen en el
+    cabezal fruncido (festón entre argollas), dobladillo rasgado, desgarro vertical, agujeros y, opcionalmente, un extremo
+    descolgado (droop) donde se soltaron los ganchos. Devuelve las argollas que aún sostienen la tela [(u, y, z)]."""
     W = u1 - u0
-    nx = max(6, int(W / (wl / 3.2)))
-    nzr = max(5, int((ztop_fn(u0) - zbot) / 0.17))
+    nx = max(10, int(W / (wl / 6.0)))
+    nzr = max(8, int((ztop_fn(u0) - zbot) / 0.06))
     ph = r.uniform(0, 2 * PI)
     sway = _Noise(r, wl=0.8, octaves=2, waves=2)
     # dobladillo rasgado: paseo aleatorio + jirones
     hem, z = [], 0.0
     for i in range(nx + 1):
-        z = 0.7 * z + r.normal(0, 0.035)
-        hem.append(zbot + z + (r.uniform(-0.25, -0.08) if r.random() < 0.06 else 0.0))
+        z = 0.82 * z + r.normal(0, 0.02)
+        hem.append(zbot + z + (r.uniform(-0.25, -0.08) if r.random() < 0.04 else 0.0))
     krip = int(r.integers(2, nx - 2)) if (rip and nx > 6) else -1
     rip_top = r.uniform(0.35, 0.8)
     hole_c = [(_uni(r, u0 + 0.1 * W, u1 - 0.1 * W), _uni(r, zbot + 0.2, ztop_fn(u0) - 0.25), r.uniform(0.04, 0.09))
               for _ in range(holes)]
 
+    def dro(s):
+        return _smooth((s if droop_end > 0 else 1 - s) * 3.0 - 2.0) if droop > 0 else 0.0
+
     def pos(i, j, side):
         s = i / nx
         u = u0 + W * s
-        zt = ztop_fn(u)
-        if droop > 0:
-            dd = _smooth((s if droop_end > 0 else 1 - s) * 3.0 - 2.0)
-            zt -= droop * dd
+        zt = ztop_fn(u) - 0.011 * abs(math.sin(PI * (u - u0) / ring_sp))   # festón entre argollas
+        zt -= droop * dro(s)
         t = j / nzr
         zz = zt + (hem[i] - zt) * t
-        a = amp * (0.75 + 0.5 * t) * (1.0 + 0.35 * sway(u * 1.3, zz))
-        if droop > 0:
-            a *= 1.0 + 0.8 * _smooth((s if droop_end > 0 else 1 - s) * 3.0 - 2.0)
+        # el pliegue nace casi plano en el cabezal (la tela pasa por las argollas) y se abre hacia abajo
+        a = amp * (0.25 + 0.55 * min(1.0, t * 4.0) + 0.45 * t) * (1.0 + 0.35 * sway(u * 1.3, zz))
+        a *= 1.0 + 0.8 * dro(s)
         yy = yc + a * math.sin(2 * PI * (u - u0) / wl + ph + 0.5 * sway(u, zz * 0.7)) + 0.012 * sway(zz, u) * t
         uu = u + 0.006 * sway(zz * 2, u) * t
         if side and j / nzr > 1.0 - rip_top:
@@ -473,21 +661,33 @@ def _curtain_panel(mb, u0, u1, ztop_fn, zbot, yc, r, amp=0.022, wl=0.19, droop=0
             V[(i, j)] = mb._verts([pos(i, j, -1 if i == krip else 0)])[0]
             if i == krip and j / nzr > 1.0 - rip_top - 1e-6:
                 V2[(i, j)] = mb._verts([pos(i, j, 1)])[0] if j / nzr > 1.0 - rip_top + 1e-6 else V[(i, j)]
-    for i in range(nx):
-        for j in range(nzr):
-            uc = u0 + W * (i + 0.5) / nx
-            zc = ztop_fn(uc) + (hem[i] - ztop_fn(uc)) * (j + 0.5) / nzr
-            if any((uc - hu) ** 2 + (zc - hz) ** 2 < hr * hr for hu, hz, hr in hole_c):
-                continue
-            a = V[(i, j)] if i != krip else V2.get((i, j), V[(i, j)])
-            d = V[(i, j + 1)] if i != krip else V2.get((i, j + 1), V[(i, j + 1)])
-            mb.face([a, V[(i + 1, j)], V[(i + 1, j + 1)], d], "fabric")
+    with mb.soft():
+        for i in range(nx):
+            for j in range(nzr):
+                uc = u0 + W * (i + 0.5) / nx
+                zc = ztop_fn(uc) + (hem[i] - ztop_fn(uc)) * (j + 0.5) / nzr
+                if any((uc - hu) ** 2 + (zc - hz) ** 2 < hr * hr for hu, hz, hr in hole_c):
+                    continue
+                a = V[(i, j)] if i != krip else V2.get((i, j), V[(i, j)])
+                d = V[(i, j + 1)] if i != krip else V2.get((i, j + 1), V[(i, j + 1)])
+                mb.face([a, V[(i + 1, j)], V[(i + 1, j + 1)], d], "fabric")
     loose = [v for v in list(V.values()) + list(V2.values()) if v.is_valid and not v.link_faces]
     bmesh.ops.delete(mb.bm, geom=list(set(loose)), context="VERTS")
+    rings = []
+    k = 0
+    while u0 + k * ring_sp <= u1 + 1e-6:
+        u = u0 + k * ring_sp
+        s = (u - u0) / W
+        if dro(s) < 0.05:
+            p = pos(min(nx, round(s * nx)), 0, 0)
+            rings.append((u, p[1], ztop_fn(u)))
+        k += 1
+    return rings
 
 
 def _curtains(dst, w, h, depth, r, tear=0.6):
-    """Barra (tubo con soportes empotrados 2 mm en el muro) y 1–2 paños rasgados del lado interior (y > depth).
+    """Barra de cortina Ø19 (24 lados) con remates torneados y soportes de pared atornillados (uno arrancado a veces), argollas
+    de Ø32 con su ganchito y 1–2 paños rasgados del lado interior (y > depth).
     La tela nunca atraviesa la cara interior del muro: donde cae por fuera del vano (debajo del antepecho o pasada la
     jamba) se apoya contra el muro a 4 mm; dentro del vano puede meterse en el derrame."""
     mb = MB()
@@ -496,42 +696,80 @@ def _curtains(dst, w, h, depth, r, tear=0.6):
     ua, ub = -r.uniform(0.12, 0.2), w + r.uniform(0.12, 0.2)
     fall = r.uniform(0.08, 0.22) if r.random() < 0.25 else 0.0   # un soporte arrancado: la barra cuelga de un lado
     sag = r.uniform(0.002, 0.01)
+    rr = 0.0095
 
     def rodz(u):
         s = (u - ua) / (ub - ua)
         return zr - sag * math.sin(PI * s) - fall * s * s
 
-    pts = [(ua + (ub - ua) * k / 6, yr, rodz(ua + (ub - ua) * k / 6)) for k in range(7)]
-    mb.tube(pts, 0.0095, seg=8, mat="metal_paint")
-    for p, q in ((pts[0], (pts[0][0] - 0.018, yr, pts[0][2])), (pts[-1], (pts[-1][0] + 0.018, yr, pts[-1][2]))):
-        mb.cyl(p, q, 0.014, seg=6, mat="metal_paint")
+    pts = [(ua + (ub - ua) * k / 12, yr, rodz(ua + (ub - ua) * k / 12)) for k in range(13)]
+    mb.tube(pts, rr, seg=24, mat="metal_paint")
+    for p, sg in ((pts[0], -1), (pts[-1], 1)):   # remates: collarín y bola torneada
+        d = Vector(pts[1]) - Vector(pts[0]) if sg < 0 else Vector(pts[-1]) - Vector(pts[-2])
+        M, _ = _frame_on(Vector(p), Vector(p) + d.normalized() * sg, (0, 0, 1))
+        _lathe(mb, [(0.0, -0.004), (0.0115, -0.004), (0.0125, 0.0), (0.0125, 0.006), (0.0105, 0.009), (0.0075, 0.011),
+                    (0.0105, 0.014), (0.0158, 0.021), (0.0165, 0.029), (0.014, 0.038), (0.008, 0.044), (0.0, 0.0455)],
+               seg=24, mat="metal_paint", M=M)
     for k, ub_ in enumerate((ua + 0.09, ub - 0.09)):
         if fall > 0 and k == 1:
-            # soporte arrancado: queda la placa con dos taquetes y el hueco
-            mb.box((ub_ - 0.02, depth - 0.002, zr - 0.05), (ub_ + 0.02, depth + 0.004, zr + 0.03), "metal_paint")
+            # soporte arrancado: queda la roseta torcida con un taquete salido y los agujeros
+            _plate_bev(mb, _rrect(0.04, 0.08, 0.008, 3, ub_, zr - 0.01), depth - 0.002, 0.006, "metal_paint", face=1,
+                       bev=0.0015, m=_about((ub_, depth, zr - 0.01), _R("Y", r.uniform(-12, 12))))
+            _lathe(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.022), (0.0032, 0.025), (0.0, 0.025)], seg=12, mat="plastic",
+                   M=_mat_xy((ub_ + 0.03, depth + 0.004, zr - 0.06), (1, 0, 0), (0, 0, -1)))
             continue
         z0 = rodz(ub_)
-        mb.box((ub_ - 0.02, depth - 0.002, z0 - 0.05), (ub_ + 0.02, depth + 0.005, z0 + 0.03), "metal_paint")
-        mb.box((ub_ - 0.007, depth + 0.004, z0 - 0.012), (ub_ + 0.007, yr + 0.004, z0 - 0.002), "metal_paint")
+        _plate_bev(mb, _rrect(0.04, 0.08, 0.008, 3, ub_, z0 - 0.01), depth - 0.002, 0.007, "metal_paint", face=1, bev=0.002)
+        for zz in (z0 - 0.038, z0 + 0.018):
+            _screw(mb, (ub_, depth + 0.005, zz), (0, 1, 0), d=0.0065, mat="metal_paint", kind="pan")
+        # brazo: varilla doblada que sale del muro y abraza la barra por abajo (copa)
+        _rtube(mb, [(ub_, depth + 0.004, z0 - 0.014), (ub_, yr - 0.004, z0 - 0.014), (ub_, yr + 0.0, z0 - 0.0135)], 0.0045,
+               "metal_paint", seg=16, rbend=0.0)
+        _lathe(mb, [(0.0, -0.002), (0.0135, -0.002), (0.0135, 0.004), (0.0118, 0.006), (0.0, 0.006)], seg=24, mat="metal_paint",
+               M=_T(ub_, yr, z0 - 0.0135))
     zb = r.uniform(-0.08, 0.15)
     yc = yr - 0.002
     mode = r.random()
+    zt = lambda u: rodz(u) - 0.024   # noqa: E731  (el cabezal cuelga de las argollas)
+    rings = []
     if mode < 0.45:      # dos paños, uno recogido a un lado
         cut = w * r.uniform(0.25, 0.4)
-        _curtain_panel(mb, ua + 0.03, ua + 0.03 + cut, lambda u: rodz(u) - 0.035, zb, yc, r, amp=0.035, wl=0.12,
-                       rip=r.random() < tear, holes=0)
-        _curtain_panel(mb, ua + cut + 0.12, ub - 0.03, lambda u: rodz(u) - 0.035, zb, yc, r, amp=0.022,
-                       droop=r.uniform(0.15, 0.45) if r.random() < tear else 0.0, droop_end=1, rip=r.random() < tear,
-                       holes=int(r.random() < tear) + 1)
+        rings += _curtain_panel(mb, ua + 0.03, ua + 0.03 + cut, zt, zb, yc, r, amp=0.035, wl=0.12, rip=r.random() < tear,
+                                holes=0, ring_sp=0.06)
+        rings += _curtain_panel(mb, ua + cut + 0.12, ub - 0.03, zt, zb, yc, r, amp=0.022,
+                                droop=r.uniform(0.15, 0.45) if r.random() < tear else 0.0, droop_end=1, rip=r.random() < tear,
+                                holes=int(r.random() < tear) + 1)
     elif mode < 0.8:     # un solo paño corrido, rasgado
-        _curtain_panel(mb, ua + 0.03, ub - 0.03, lambda u: rodz(u) - 0.035, zb, yc, r, amp=0.026,
-                       droop=r.uniform(0.2, 0.5) if r.random() < tear else 0.0, droop_end=-1 if r.random() < 0.5 else 1,
-                       rip=True, holes=1 + int(r.random() < tear))
+        rings += _curtain_panel(mb, ua + 0.03, ub - 0.03, zt, zb, yc, r, amp=0.026,
+                                droop=r.uniform(0.2, 0.5) if r.random() < tear else 0.0,
+                                droop_end=-1 if r.random() < 0.5 else 1, rip=True, holes=1 + int(r.random() < tear))
     else:                # dos paños recogidos a los lados, jirones
-        _curtain_panel(mb, ua + 0.03, ua + 0.03 + w * 0.3, lambda u: rodz(u) - 0.035, zb + 0.2, yc, r, amp=0.035, wl=0.12,
-                       rip=False, holes=0)
-        _curtain_panel(mb, ub - 0.03 - w * 0.3, ub - 0.03, lambda u: rodz(u) - 0.035, zb, yc, r, amp=0.035, wl=0.12,
-                       rip=True, holes=1)
+        rings += _curtain_panel(mb, ua + 0.03, ua + 0.03 + w * 0.3, zt, zb + 0.2, yc, r, amp=0.035, wl=0.12, rip=False, holes=0,
+                                ring_sp=0.06)
+        rings += _curtain_panel(mb, ub - 0.03 - w * 0.3, ub - 0.03, zt, zb, yc, r, amp=0.035, wl=0.12, rip=True, holes=1,
+                                ring_sp=0.06)
+    # argollas de Ø32 (alambre de 2,5 mm) colgadas de la barra, con ganchito hasta el cabezal de la tela
+    with mb.soft():
+        for (u, y_, z_) in rings:
+            if not (ua + 0.05 < u < ub - 0.05) or (fall > 0 and abs(u - (ub - 0.09)) < 0.03) or abs(u - (ua + 0.09)) < 0.03 \
+                    or abs(u - (ub - 0.09)) < 0.03:
+                continue
+            zc = rodz(u) - 0.006
+            Rg, rg = 0.016, 0.00125
+            tor = []   # toro de 14 x 8
+            for a in range(14):
+                t = 2 * PI * a / 14
+                ctr = Vector((u, yr + Rg * math.cos(t), zc + Rg * math.sin(t)))
+                nrm = Vector((0.0, math.cos(t), math.sin(t)))
+                tor.append(mb._verts([tuple(ctr + nrm * (rg * math.cos(2 * PI * b / 8)) + Vector((rg * math.sin(2 * PI * b / 8),
+                                                                                                   0, 0))) for b in range(8)]))
+            for a in range(14):
+                A, B = tor[a], tor[(a + 1) % 14]
+                for b in range(8):
+                    bb = (b + 1) % 8
+                    mb.face([A[b], A[bb], B[bb], B[b]], "metal_paint")
+            mb.tube([(u, yr, zc - Rg + 0.0005), (u, (yr + y_) / 2, zc - Rg - 0.004), (u, y_, z_ + 0.004)], 0.0011, seg=8,
+                    mat="metal_paint")
     fab = mb.mi("fabric")
     for v in mb.bm.verts:
         if not v.link_faces or v.link_faces[0].material_index != fab:
@@ -548,89 +786,108 @@ def _curtains(dst, w, h, depth, r, tear=0.6):
 # alféizar de concreto con gotero + relleno perimetral de mortero
 # =====================================================================================================================
 def _sill(mb, w, r, chip=0.6):
-    """Alféizar: nariz exterior (sobresale 4,6 cm de la fachada, orejas de 6 cm, pendiente, gotero de 6x9 mm) + pieza
-    interior dentro del vano (empotrada en la repisa del muro). Desportilladuras en la arista frontal."""
+    """Alféizar de concreto colado: nariz exterior (sobresale 4,6 cm de la fachada, orejas de 6 cm, pendiente de 25 %,
+    canto boleado de 8 mm y goterón de 7 x 9 mm a 1,3 cm del frente) + pieza interior dentro del vano (empotrada en la repisa
+    del muro). Desportilladuras en la arista frontal."""
     x0, x1 = -0.06 + r.uniform(-0.012, 0.004), w + 0.06 + r.uniform(-0.004, 0.012)
-    prof = [(-0.0015, 0.032), (-0.038, 0.024), (-0.044, 0.019), (-0.046, 0.012), (-0.046, -0.034), (-0.042, -0.040),
-            (-0.033, -0.040), (-0.033, -0.031), (-0.027, -0.031), (-0.027, -0.040), (-0.0015, -0.040)]
-    n = max(4, int((x1 - x0) / 0.16))
-    xs = [x0, x0 + 0.005] + [x0 + 0.005 + (x1 - x0 - 0.01) * k / n for k in range(1, n)] + [x1 - 0.005, x1]
+    base = [(-0.0015, 0.032), (-0.046, 0.0205), (-0.046, -0.040), (-0.0335, -0.040), (-0.0335, -0.031), (-0.0265, -0.031),
+            (-0.0265, -0.040), (-0.0015, -0.040)]
+    prof = _fillet2d(base, [0.0, 0.008, 0.005, 0.0012, 0.0015, 0.0015, 0.0012, 0.0], n=3)
+    n = max(6, int((x1 - x0) / 0.08))
+    xs = [x0, x0 + 0.004, x0 + 0.008] + [x0 + 0.008 + (x1 - x0 - 0.016) * k / n for k in range(1, n)] + \
+        [x1 - 0.008, x1 - 0.004, x1]
     chips = [(r.uniform(x0, x1), r.uniform(0.03, 0.1), r.uniform(0.006, 0.02)) for _ in range(int(1 + 5 * chip))]
+    nose = Vector((-0.046, 0.0205))
     rings = []
     for k, x in enumerate(xs):
-        end = k in (0, len(xs) - 1)
+        endk = 0 if k in (0, len(xs) - 1) else (1 if k in (1, len(xs) - 2) else 2)
         e = sum(cd * max(0.0, 1 - abs(x - cx) / cw) for cx, cw, cd in chips)
         ring = []
         for j, (py, pz) in enumerate(prof):
             yy, zz = py, pz
-            if j in (1, 2, 3):
-                yy += e * (0.9 if j > 1 else 0.5)
-                zz -= e * (0.7 if j < 3 else 0.4)
-            if end:
-                yy, zz = -0.024 + (yy + 0.024) * 0.88, -0.004 + (zz + 0.004) * 0.9
-            if j > 0 and j < len(prof) - 1 and not end:
-                yy += r.normal(0, 0.0006)
-                zz += r.normal(0, 0.0006)
+            wn = max(0.0, 1.0 - (Vector((py, pz)) - nose).length / 0.022)   # la desportilladura muerde la nariz
+            yy += e * 0.9 * wn
+            zz -= e * 0.7 * wn
+            if endk < 2:   # remate de la oreja redondeado (dos anillos que encogen hacia la fachada)
+                f = (0.86, 0.95)[endk]
+                yy, zz = -0.024 + (yy + 0.024) * f, -0.004 + (zz + 0.004) * (0.9 + 0.05 * endk)
+            elif 0 < j < len(prof) - 1:
+                yy += r.normal(0, 0.0005)
+                zz += r.normal(0, 0.0005)
             ring.append((x, yy, zz))
         rings.append(ring)
     _loft(mb, rings, "concrete")
     zt = 0.029 + r.uniform(-0.002, 0.002)
-    mb.box((0.004, -0.02, -0.006), (w - 0.004, 0.036, zt), "concrete", bevel=0.004, seg=1)
+    mb.box((0.004, -0.006, -0.006), (w - 0.004, 0.036, zt), "concrete", bevel=0.005, seg=2)   # metida bajo la nariz
     return zt
 
 
 def _packing(mb, w, h, g, y0=0.058, y1=0.1):
     """Relleno de mortero entre marco y jambas (queda 1,2 mm separado del muro y metido 3 mm en el marco)."""
     prof = [(-g + 0.0012, y0), (0.003, y0), (0.003, y1), (-g + 0.0012, y1)]
-    mb.sweep(prof, _rect_path(g, g, w - g, h - g, c=0.02), mat="mortar", normal=(0, 1, 0))
+    mb.sweep(prof, _rect_path(g, g, w - g, h - g, c=0.02), mat="mortar", normal=(0, 1, 0), closed_path=True)
 
 
 # =====================================================================================================================
 # VENTANAS
 # =====================================================================================================================
 # perfil de marco de aluminio corredizo (x hacia dentro del vano, y profundidad): dos rieles de 4x10 mm
-_AL_FRAME = [(0.0, 0.040), (0.028, 0.040), (0.031, 0.043), (0.031, 0.050), (0.041, 0.050), (0.041, 0.054),
-             (0.031, 0.054), (0.031, 0.076), (0.041, 0.076), (0.041, 0.080), (0.031, 0.080), (0.031, 0.115),
-             (0.027, 0.120), (0.0, 0.120)]
+_AL_FRAME = _fillet2d([(0.0, 0.040), (0.031, 0.040), (0.031, 0.050), (0.041, 0.050), (0.041, 0.054), (0.031, 0.054),
+                       (0.031, 0.076), (0.041, 0.076), (0.041, 0.080), (0.031, 0.080), (0.031, 0.120), (0.0, 0.120)],
+                      [0.0, 0.0018, 0.0006, 0.0009, 0.0009, 0.0006, 0.0006, 0.0009, 0.0009, 0.0006, 0.0018, 0.0], n=2)
 # perfil de marco de madera con galce exterior (la hoja abatible asienta en y 0,042–0,072 contra el tope)
-_WD_FRAME = [(0.0, 0.040), (0.031, 0.040), (0.035, 0.044), (0.035, 0.074), (0.052, 0.076), (0.055, 0.080),
-             (0.055, 0.124), (0.051, 0.128), (0.0, 0.128)]
+_WD_FRAME = _fillet2d([(0.0, 0.040), (0.035, 0.040), (0.035, 0.0745), (0.055, 0.0755), (0.055, 0.128), (0.0, 0.128)],
+                      [0.0, 0.004, 0.0012, 0.003, 0.004, 0.0], n=3)
 _G = 0.008   # holgura perimetral marco–jamba (rellena de mortero)
 
 
 def _al_sash(sw, sh, r, broken, mid=True, latch=False):
     """Hoja corrediza de aluminio en coordenadas locales: x 0..sw, z 0..sh, y centrado (+-11 mm)."""
     s = MB()
-    s.sweep(_rprof(0.0, 0.032, -0.011, 0.011, 0.002), _rect_path(0, 0, sw, sh, c=0.042), mat="aluminium", normal=(0, 1, 0))
+    s.sweep(_rrprof(0.0, 0.032, -0.011, 0.011, 0.0015), _rect_path(0, 0, sw, sh, c=0.042), mat="aluminium", normal=(0, 1, 0),
+            closed_path=True)
+    # traslape: pestaña de 3 x 7 mm a todo lo alto del larguero de encuentro (engancha con la de la otra hoja)
+    if latch:
+        s.box((0.0, -0.0135, 0.03), (0.007, -0.0108, sh - 0.03), "aluminium", bevel=0.0009, seg=2)
+    else:
+        s.box((sw - 0.007, 0.0108, 0.03), (sw, 0.0135, sh - 0.03), "aluminium", bevel=0.0009, seg=2)
     lites = []
     if mid and sh > 0.95:
         zm = sh * r.uniform(0.42, 0.52)
-        s.box((0.028, -0.009, zm - 0.014), (sw - 0.028, 0.009, zm + 0.014), "aluminium", bevel=0.002, seg=1)
+        s.box((0.028, -0.009, zm - 0.014), (sw - 0.028, 0.009, zm + 0.014), "aluminium", bevel=0.0015, seg=2)
         lites = [(0.032, 0.032, sw - 0.032, zm - 0.014), (0.032, zm + 0.014, sw - 0.032, sh - 0.032)]
     else:
         lites = [(0.032, 0.032, sw - 0.032, sh - 0.032)]
     for (a, b, c, d) in lites:
         _glass(s, a, b, c, d, 0.0, r, min(0.97, max(0.05, broken + r.uniform(-0.2, 0.2))), embed=0.008)
-    # empaque de hule desprendido colgando de un junquillo
+        _glazing(s, a, b, c, d, -0.011, 0.011, 0.0, tg=0.004, bead=False, gw=0.0045)   # vinil cuña a ambos lados
+    # tramo de vinil desprendido colgando de una esquina del claro
     if r.random() < 0.5:
         a, b, c, d = lites[int(r.integers(0, len(lites)))]
         x = a + 0.004
         pts = [(x, -0.004, d - 0.01)]
-        for k in range(1, 7):
-            pts.append((x + 0.012 * math.sin(k * 0.9) + 0.01 * k, -0.004 - 0.006 * k, d - 0.01 - 0.045 * k))
-        s.tube(pts, 0.0025, seg=4, mat="plastic")
+        for k in range(1, 9):
+            pts.append((x + 0.009 * math.sin(k * 0.7) + 0.0075 * k, -0.004 - 0.0045 * k, d - 0.01 - 0.034 * k))
+        s.tube(pts, 0.0022, seg=10, mat="rubber")
     _warp(s, sw, sh, r, amp=0.002)
-    if latch:   # cerrojo de media luna en el larguero de traslape, cara interior
+    if latch:   # cerrojo de media luna en el larguero de traslape, cara interior: base de 18 x 70 y leva con palanca
         zl = sh * 0.5
-        s.box((0.008, 0.0105, zl - 0.035), (0.026, 0.0185, zl + 0.035), "metal_paint", bevel=0.002, seg=1)
-        s.box((0.012, 0.0175, zl - 0.004), (0.022, 0.0245, zl + 0.03), "metal_paint", bevel=0.0015, seg=1)
+        _plate_bev(s, _rrect(0.018, 0.07, 0.004, 3, 0.017, zl), 0.0108, 0.004, "metal_paint", face=1, bev=0.001)
+        _lathe(s, [(0.0, 0.0), (0.0075, 0.0), (0.0075, 0.0035), (0.006, 0.005), (0.0, 0.0052)], seg=24, mat="metal_paint",
+               M=_mat_xy((0.017, 0.0148, zl + 0.01), (1, 0, 0), (0, 0, -1)))
+        arc = [(0.017 + 0.0105 * math.cos(a_), 0.0185, zl + 0.01 + 0.0105 * math.sin(a_)) for a_ in
+               [math.radians(-100 + 25 * k) for k in range(7)]]
+        _sweep3(s, _rrect(0.004, 0.006, 0.0015, 2), arc + [(arc[-1][0] - 0.012, 0.019, arc[-1][2] + 0.016)], "metal_paint",
+                up=(0, 1, 0))
+        for zz in (zl - 0.027, zl + 0.027):
+            _screw(s, (0.017, 0.0148, zz), (0, 1, 0), d=0.0045, mat="metal_paint", kind="pan")
     return s
 
 
 def _win_sliding(mb, w, h, depth, r, broken):
     g = _G
     fr = MB()
-    fr.sweep(_AL_FRAME, _rect_path(g, g, w - g, h - g, step=0.35, c=0.052), mat="aluminium", normal=(0, 1, 0))
+    fr.sweep(_AL_FRAME, _rect_path(g, g, w - g, h - g, step=0.35, c=0.052), mat="aluminium", normal=(0, 1, 0), closed_path=True)
     cu0, cu1, cv0, cv1 = g + 0.031, w - g - 0.031, g + 0.031, h - g - 0.031
     top = cv1 - 0.004
     if h >= 1.45:   # montante fijo con travesaño
@@ -664,27 +921,38 @@ def _win_sliding(mb, w, h, depth, r, broken):
         # C: la interior desapareció (solo quedan sus carretillas); la exterior se salió del riel por un extremo
         ang = r.uniform(0.6, 1.0)
         _merge(mb, _al_sash(sw, sh, r, broken), Rk @ _T(cu0 + 0.003 + dx, 0.052, zb) @ _about((sw, 0, 0), _R("Y", ang)))
-        for k in range(2):
+        for k in range(2):   # carretilla: caja de nailon con rueda de Ø16 asomada sobre el riel
             x = cu1 - 0.06 - k * (sw - 0.12)
-            mb.box((x - 0.02, 0.069, g + 0.041), (x + 0.02, 0.087, g + 0.056), "plastic", bevel=0.002, seg=1)
+            mb.box((x - 0.02, 0.069, g + 0.047), (x + 0.02, 0.087, g + 0.06), "plastic", bevel=0.0015, seg=2)
+            _lathe(mb, [(0.0, -0.0035), (0.0065, -0.0035), (0.008, -0.002), (0.008, 0.002), (0.0065, 0.0035), (0.0, 0.0035)],
+                   seg=24, mat="plastic", M=_T(x, 0.078, g + 0.050) @ _R("X", 90))
 
 
 def _wd_sash(sw, sh, r, broken, cols=None, rows=None, mat="wood"):
     """Hoja abatible de madera: bastidor 48x30 mm, peinazo inferior 75 mm, travesaños (junquillos) que dividen vidrios.
     Local: x 0..sw (x = 0 lado de bisagras), y +-15 mm, z 0..sh."""
     s = MB()
-    s.sweep(_rprof(0.0, 0.048, -0.015, 0.015, 0.003), _rect_path(0, 0, sw, sh, c=0.058), mat=mat, normal=(0, 1, 0))
+    # larguero/cabezal de 48 x 30: cuarto bocel (ovolo) de 7 mm en la arista interior del lado de adentro, cantos boleados
+    s.sweep(_fillet2d([(0.0, -0.015), (0.048, -0.015), (0.048, 0.015), (0.0, 0.015)], [0.003, 0.0015, 0.007, 0.003], n=4),
+            _rect_path(0, 0, sw, sh, c=0.058), mat=mat, normal=(0, 1, 0), closed_path=True)
     zb = 0.075
-    s.box((0.044, -0.013, 0.044), (sw - 0.044, 0.013, zb), mat, bevel=0.003, seg=1)
+    s.box((0.044, -0.013, 0.044), (sw - 0.044, 0.013, zb), mat, bevel=0.003, seg=2)
+    # botaguas (vierteaguas) en la cara exterior del peinazo: nariz inclinada con goterón de 3 x 4 mm
+    dp = _fillet2d([(-0.0145, 0.0685), (-0.031, 0.0535), (-0.031, 0.0445), (-0.0255, 0.0445), (-0.0255, 0.0405),
+                    (-0.0225, 0.0405), (-0.0225, 0.0445), (-0.0145, 0.0445)], [0.0, 0.003, 0.002, 0.0006, 0.0006, 0.0006, 0.0006,
+                                                                                0.0], n=3)
+    _sweep3(s, [(-yy, zz) for yy, zz in dp], [(0.03, 0.0, 0.0), (sw - 0.03, 0.0, 0.0)], mat, up=(0, 0, 1))
     cols = cols or (2 if sw > 0.42 else 1)
     rows = rows or max(1, int(round((sh - 0.12) / 0.42)))
     x0, x1, z0, z1 = 0.048, sw - 0.048, zb, sh - 0.048
     xs = [x0 + (x1 - x0) * k / cols for k in range(cols + 1)]
     zs = [z0 + (z1 - z0) * k / rows for k in range(rows + 1)]
-    for x in xs[1:-1]:
-        s.box((x - 0.011, -0.012, z0 - 0.004), (x + 0.011, 0.012, z1 + 0.004), mat, bevel=0.003, seg=1)
-    for z in zs[1:-1]:   # el travesaño horizontal pasa 3 mm por detrás del vertical en cada cara (sin caras coplanares)
-        s.box((x0 - 0.004, -0.009, z - 0.011), (x1 + 0.004, 0.009, z + 0.011), mat, bevel=0.003, seg=1)
+    for x in xs[1:-1]:   # junquillos moldurados (ovolo de 5 mm a ambos lados del lado interior)
+        _sweep3(s, _fillet2d([(-0.011, -0.012), (0.011, -0.012), (0.011, 0.012), (-0.011, 0.012)],
+                             [0.002, 0.002, 0.005, 0.005], n=3), [(x, 0.0, z0 - 0.004), (x, 0.0, z1 + 0.004)], mat, up=(0, 1, 0))
+    for z in zs[1:-1]:   # el travesaño horizontal sobresale 0,5 mm del vertical en cada cara (sin caras coplanares)
+        _sweep3(s, _fillet2d([(-0.011, -0.0125), (0.011, -0.0125), (0.011, 0.0125), (-0.011, 0.0125)],
+                             [0.002, 0.002, 0.005, 0.005], n=3), [(x0 - 0.004, 0.0, z), (x1 + 0.004, 0.0, z)], mat, up=(0, 1, 0))
     for i in range(cols):
         for j in range(rows):
             a = xs[i] + (0.011 if i > 0 else 0.0)
@@ -693,6 +961,9 @@ def _wd_sash(sw, sh, r, broken, cols=None, rows=None, mat="wood"):
             d = zs[j + 1] - (0.011 if j < rows - 1 else 0.0)
             bb = 0.97 if r.random() < broken * 0.5 else min(0.97, max(0.08, broken + r.uniform(-0.35, 0.25)))
             _glass(s, a, b, c, d, 0.0, r, bb, embed=0.007)
+            # masilla en bisel del lado exterior (la que sostiene el vidrio), agrietada: le faltan tramos
+            path = _rect_path(a, b, c, d, c=0.015)
+            s.sweep([(-0.001, -0.0024), (0.0075, -0.0024), (-0.001, -0.0118)], path, mat=mat, normal=(0, 1, 0), closed_path=True)
     return s   # el alabeo (_warp) lo aplica quien la usa, DESPUÉS de montar herrajes (así se mueven con la hoja)
 
 
@@ -713,10 +984,129 @@ def _warp(mb, w, h, r, amp=0.003, side=0):
         v.co.x += amp * 0.15 * nz(v.co.z + 3.1, v.co.x)
 
 
+def _barrel(mb, x, y, zc, ln, rad, n=5, mat="metal_rust", tips=True, m=None):
+    """Nudillos de bisagra de libro (n canutos de 24 lados con chaflán de 0,5 mm y junta de 0,6 mm entre ellos) sobre su
+    pasador, con botones de remate arriba y abajo. Eje vertical en (x, y), centrado en zc."""
+    M = _T(x, y, zc - ln / 2)
+    if m is not None:
+        M = m @ M
+    g = 0.0006
+    kl = (ln - (n - 1) * g) / n
+    c = min(0.0005, rad * 0.12)
+    _lathe(mb, [(0.0, -0.0006), (rad * 0.42, -0.0006), (rad * 0.42, ln + 0.0006), (0.0, ln + 0.0006)], seg=16, mat=mat, M=M)
+    for k in range(n):
+        z0 = k * (kl + g)
+        _lathe(mb, [(rad * 0.4, z0), (rad - c, z0), (rad, z0 + c), (rad, z0 + kl - c), (rad - c, z0 + kl), (rad * 0.4, z0 + kl)],
+               seg=24, mat=mat, M=M)
+    if tips:   # botón de remate (pasador con cabeza) arriba, punta abajo
+        _lathe(mb, [(0.0, ln - 0.0004), (rad * 0.98, ln - 0.0004), (rad * 0.98, ln + 0.0012), (rad * 0.8, ln + 0.0028),
+                    (rad * 0.45, ln + 0.0036), (0.0, ln + 0.0038)], seg=24, mat=mat, M=M)
+        _lathe(mb, [(0.0, 0.0004), (rad * 0.98, 0.0004), (rad * 0.98, -0.0012), (rad * 0.8, -0.0028), (rad * 0.45, -0.0036),
+                    (0.0, -0.0038)], seg=24, mat=mat, M=M)
+
+
+def _leafplate(mb, M, L, W, t, mat="metal_rust", screws=3, sd=0.0065, rc=0.003):
+    """Hoja de bisagra / placa de herraje: placa de L (Z local) x W (X local) x t (Y local, de 0 a t) con esquinas de radio rc y
+    canto redondeado, con `screws` tornillos avellanados en su cara y = t. M la coloca (origen: centro del borde x = 0)."""
+    prof = _rrect(W, L, rc, 3, W / 2, 0.0)
+    a = mb._verts([(px, 0.0, pz) for px, pz in prof], M)
+    b = mb._verts([(px, t, pz) for px, pz in prof], M)
+    mb.face(a, mat)
+    mb.face(list(reversed(b)), mat)
+    k = len(prof)
+    for i in range(k):
+        j = (i + 1) % k
+        mb.face([a[i], b[i], b[j], a[j]], mat)
+    for s in range(screws):
+        zz = -L / 2 + L * (s + 0.5) / screws
+        xx = W * (0.62 if s % 2 else 0.5)
+        p = M @ Vector((xx, t, zz))
+        ax = (M.to_3x3() @ Vector((0, 1, 0))).normalized()
+        _screw(mb, p, ax, d=min(sd, 0.8 * W), mat=mat, kind="flat")
+
+
+def _inset(pts, d):
+    """Polígono 2D CCW desplazado d hacia dentro (por bisectriz; para contornos convexos o casi)."""
+    n = len(pts)
+    out = []
+    for i in range(n):
+        a, b, c = Vector(pts[i - 1]), Vector(pts[i]), Vector(pts[(i + 1) % n])
+        e0, e1 = (b - a), (c - b)
+        if e0.length < 1e-9 or e1.length < 1e-9:
+            out.append(tuple(b))
+            continue
+        n0 = Vector((-e0.y, e0.x)).normalized()
+        n1 = Vector((-e1.y, e1.x)).normalized()
+        nb = n0 + n1
+        nb = nb.normalized() if nb.length > 1e-6 else n0
+        k = d / max(0.35, nb.dot(n0))
+        out.append(tuple(b + nb * k))
+    return out
+
+
+def _plate_bev(mb, pts, y0, t, mat, face=-1, bev=0.0008, m=None):
+    """Placa (pletina, chapa) de contorno `pts` [(x, z)] CCW visto desde -Y, de y0 a y0 + face*t, con el canto de la cara vista
+    (la del lado `face`) redondeado/achaflanado `bev`; la cara de apoyo queda plana. Sólido cerrado."""
+    inner = _inset(pts, bev)
+    yA = y0
+    yB = y0 + face * (t - bev)
+    yC = y0 + face * t
+    A = mb._verts([(x, yA, z) for x, z in pts], m)
+    B = mb._verts([(x, yB, z) for x, z in pts], m)
+    C = mb._verts([(x, yC, z) for x, z in inner], m)
+    k = len(pts)
+    mb.face(list(reversed(A)), mat)
+    mb.face(C, mat)
+    for R0, R1 in ((A, B), (B, C)):
+        for i in range(k):
+            j = (i + 1) % k
+            mb.face([R0[i], R0[j], R1[j], R1[i]], mat)
+
+
+def _lever(mb, x, y, z, d, r, mat="metal_paint", m=None, droop=0.0):
+    """Manija de palanca con retorno hacia la hoja sobre roseta (local de la hoja; la palanca apunta a -X).
+    Roseta Ø52 x 9 mm de canto redondo (32 lados), cuello Ø18 con collarín, palanca de 17 x 11 mm de sección redondeada,
+    curva de retorno de 1,5 cm hacia la hoja y punta redonda. d = signo de la cara (-1 exterior, +1 interior)."""
+    mm = m if m is not None else Matrix.Identity(4)
+    up = Vector((0.0, d, 0.0))
+    M, _ = _frame_on(Vector((x, y - d * 0.001, z)), Vector((x, y - d * 0.001, z)) + up, (0, 0, 1))
+    M = mm @ M
+    _lathe(mb, [(0.0, 0.0), (0.026, 0.0), (0.026, 0.0035), (0.0252, 0.0062), (0.0232, 0.0083), (0.019, 0.0096), (0.0105, 0.01),
+                (0.0, 0.0101)], seg=32, mat=mat, M=M)
+    _lathe(mb, [(0.0, 0.009), (0.0098, 0.009), (0.0098, 0.03), (0.0108, 0.034), (0.0108, 0.04), (0.0094, 0.043), (0.0094, 0.058),
+                (0.006, 0.0605), (0.0, 0.061)], seg=24, mat=mat, M=M)
+    dz = -0.12 * math.sin(math.radians(droop))
+    yy = lambda k: y + d * k   # noqa: E731
+    pts = [(x + 0.004, yy(0.052), z), (x - 0.008, yy(0.0525), z + dz * 0.04), (x - 0.025, yy(0.053), z + dz * 0.18),
+           (x - 0.05, yy(0.052), z + dz * 0.4), (x - 0.075, yy(0.049), z + dz * 0.62), (x - 0.098, yy(0.044), z + dz * 0.82),
+           (x - 0.112, yy(0.037), z + dz * 0.93), (x - 0.119, yy(0.03), z + dz), (x - 0.1215, yy(0.0262), z + dz),
+           (x - 0.123, yy(0.0236), z + dz)]
+    pts = [mm @ Vector(p) for p in pts]
+
+    def sc(s):
+        return 1.0 if s < 0.9 else max(0.3, math.sqrt(max(0.0, 1 - ((s - 0.9) / 0.1) ** 2)))
+    _sweep3(mb, _rrect(0.011, 0.017, 0.0045, 3), pts, mat, up=mm.to_3x3() @ Vector((0, 0, 1)), scale=sc)
+
+
+def _cylinder_rose(mb, p, axis, R=0.011, h=0.009, mat="metal_paint", turn=False, m=None):
+    """Escudo de cilindro de cerradura (o de mirilla): roseta torneada de 28 lados con bombín y ranura de llave; turn=True
+    lleva botón de giro (cara interior) en vez de bocallave."""
+    a = Vector(axis).normalized()
+    p = Vector(p)
+    M, _ = _frame_on(p - a * 0.001, p + a, (0, 0, 1))
+    if m is not None:
+        M = m @ M
+    _lathe(mb, [(0.0, 0.0), (R, 0.0), (R, h * 0.35), (R * 0.93, h * 0.7), (R * 0.78, h), (R * 0.55, h * 1.02), (0.0, h * 1.02)],
+           seg=28, mat=mat, M=M)
+    if turn:
+        mb.box((-0.0035, -R * 0.75, h), (0.0035, R * 0.75, h + 0.011), mat, bevel=0.0015, seg=2, m=M)
+    else:
+        mb.box((-0.0007, -R * 0.38, h * 0.95), (0.0007, R * 0.18, h * 1.08), "metal_rust", m=M)
+
+
 def _hinge(mb, x, y, z, r, ln=0.07, rad=0.0065):
-    """Bisagra de pernio: nudillo vertical con tapones."""
-    mb.cyl((x, y, z - ln / 2), (x, y, z + ln / 2), rad, seg=8, mat="metal_rust")
-    mb.cyl((x, y, z + ln / 2), (x, y, z + ln / 2 + 0.006), rad * 0.7, seg=8, mat="metal_rust")
+    """Bisagra de pernio de ventana: canutos con pasador y botones."""
+    _barrel(mb, x, y, z, ln, rad, n=5 if ln > 0.06 else 3)
 
 
 def _win_wood_frame(mb, w, h, r, transom=True):
@@ -724,11 +1114,11 @@ def _win_wood_frame(mb, w, h, r, transom=True):
     descuadre del marco para montar las hojas con él)."""
     g = _G
     fr = MB()
-    fr.sweep(_WD_FRAME, _rect_path(g, g, w - g, h - g, step=0.6, c=0.066), mat="wood", normal=(0, 1, 0))
+    fr.sweep(_WD_FRAME, _rect_path(g, g, w - g, h - g, step=0.6, c=0.066), mat="wood", normal=(0, 1, 0), closed_path=True)
     top = h - g - 0.035
     if transom and h >= 1.45:
         vt = h - g - r.uniform(0.33, 0.4)
-        fr.box((g + 0.03, 0.041, vt - 0.03), (w - g - 0.03, 0.127, vt + 0.03), "wood", bevel=0.004, seg=1)
+        fr.box((g + 0.03, 0.041, vt - 0.03), (w - g - 0.03, 0.127, vt + 0.03), "wood", bevel=0.004, seg=2)
         _glass(fr, g + 0.055, vt + 0.03, w - g - 0.055, h - g - 0.055, 0.1, r, 0.6, embed=0.02)
         top = vt - 0.03
     Rk = _rack(fr, w, h, r, deg=0.3, sag=0.004)
@@ -759,10 +1149,18 @@ def _win_casement(mb, w, h, depth, r, broken, allow_open=True, lites=(None, None
         s = _wd_sash(sw, sh, r, broken, cols=lites[0], rows=lites[1])
         for zz in (0.15, sh - 0.15):   # nudillo 7 cm; las hojas de la bisagra 6,4 cm (sin tapas coplanares)
             _hinge(s, 0.0, -0.016, zz, r)
-            s.box((0.004, -0.0165, zz - 0.032), (0.03, -0.0148, zz + 0.032), "metal_rust")
-        if k == 1:   # manija de falleba en el larguero de cierre (cara interior)
-            s.box((sw - 0.034, 0.0145, sh * 0.48 - 0.04), (sw - 0.016, 0.0215, sh * 0.48 + 0.04), "metal_paint", bevel=0.002, seg=1)
-            s.box((sw - 0.03, 0.02, sh * 0.48 - 0.006), (sw - 0.02, 0.05, sh * 0.48 + 0.006), "metal_paint", bevel=0.002, seg=1)
+            _leafplate(s, _mat_xy((0.004, -0.0148, zz), (1, 0, 0), (0, -1, 0)), 0.064, 0.026, 0.0017, screws=2, sd=0.0052)
+        if k == 1:   # manija de falleba en el larguero de cierre (cara interior): escudo boleado y palanca curva
+            zf = sh * 0.48
+            _plate_bev(s, _rrect(0.018, 0.08, 0.005, 3, sw - 0.025, zf), 0.0145, 0.0045, "metal_paint", face=1, bev=0.0012)
+            _lathe(s, [(0.0, 0.0), (0.0068, 0.0), (0.0068, 0.004), (0.0058, 0.012), (0.0062, 0.016), (0.0, 0.0175)], seg=24,
+                   mat="metal_paint", M=_mat_xy((sw - 0.025, 0.0185, zf), (1, 0, 0), (0, 0, -1)))
+            pts = [(sw - 0.025, 0.031, zf), (sw - 0.03, 0.034, zf - 0.02), (sw - 0.032, 0.036, zf - 0.045),
+                   (sw - 0.03, 0.037, zf - 0.065), (sw - 0.0285, 0.037, zf - 0.07)]
+            _sweep3(s, _rrect(0.0065, 0.009, 0.0028, 2), pts, "metal_paint", up=(1, 0, 0),
+                    scale=lambda t_: 1.0 if t_ < 0.85 else max(0.35, 1 - (t_ - 0.85) / 0.15 * 0.65))
+            for zz in (zf - 0.03, zf + 0.03):
+                _screw(s, (sw - 0.025, 0.019, zz), (0, 1, 0), d=0.0045, mat="metal_paint", kind="pan")
         _warp(s, sw, sh, r, amp=0.003, side=-1 if th < 3 else 0)
         sagm = _R("Y", sag)   # la hoja vencida: el extremo libre cae
         if k == 0:   # gira sobre el eje del nudillo (y = 0,041); abre hacia afuera (-Y)
@@ -774,7 +1172,7 @@ def _win_casement(mb, w, h, depth, r, broken, allow_open=True, lites=(None, None
         hx = g + 0.037 if k == 0 else w - g - 0.037
         for zz in (zb + 0.15, zb + sh - 0.15):
             sx = 1 if k == 0 else -1
-            hw.box((min(hx, hx - sx * 0.03), 0.0385, zz - 0.032), (max(hx, hx - sx * 0.03), 0.0402, zz + 0.032), "metal_rust")
+            _leafplate(hw, _mat_xy((hx, 0.0402, zz), (-sx, 0, 0), (0, -1, 0)), 0.064, 0.026, 0.0017, screws=2, sd=0.0052)
     _merge(mb, hw, Rk)
 
 
@@ -785,15 +1183,15 @@ def _shutter_panel(W, H, r, style):
     Tk = 0.03
     if style == "louvre":
         mat, st = "wood", 0.055
-        s.box((0, -Tk / 2, 0), (st, Tk / 2, H), mat, bevel=0.004, seg=1)
-        s.box((W - st, -Tk / 2, 0), (W, Tk / 2, H), mat, bevel=0.004, seg=1)
+        s.box((0, -Tk / 2, 0), (st, Tk / 2, H), mat, bevel=0.004, seg=2)
+        s.box((W - st, -Tk / 2, 0), (W, Tk / 2, H), mat, bevel=0.004, seg=2)
         rails = [(0.003, 0.10), (H - 0.07, H - 0.003)]
         if H > 1.0:
             zm = H * r.uniform(0.45, 0.55)
             rails.append((zm - 0.035, zm + 0.035))
         rails.sort()
         for z0, z1 in rails:
-            s.box((st - 0.004, -Tk / 2 + 0.002, z0), (W - st + 0.004, Tk / 2 - 0.002, z1), mat, bevel=0.004, seg=1)
+            s.box((st - 0.004, -Tk / 2 + 0.002, z0), (W - st + 0.004, Tk / 2 - 0.002, z1), mat, bevel=0.004, seg=2)
         L = W - 2 * st + 0.008
         for (za, zb_), (zc, _) in zip(rails[:-1], rails[1:]):
             z = zb_ + 0.022
@@ -803,10 +1201,13 @@ def _shutter_panel(W, H, r, style):
                     pass
                 elif q < 0.2:   # tablilla rota colgando de un lado
                     ln = L * r.uniform(0.3, 0.6)
-                    s.box((0, -0.018, -0.0035), (ln, 0.018, 0.0035), mat,
-                          m=_T(st - 0.004, 0, z) @ _R("Y", r.uniform(8, 25)) @ _R("X", r.uniform(55, 80)))
-                else:
-                    s.box((-L / 2, -0.018, -0.0035), (L / 2, 0.018, 0.0035), mat,
+                    Mb = _T(st - 0.004, 0, z) @ _R("Y", r.uniform(8, 25)) @ _R("X", r.uniform(55, 80))
+                    s.box((0, -0.018, -0.0035), (ln, 0.018, 0.0035), mat, bevel=0.0028, seg=2, m=Mb)
+                    # punta astillada del lado roto
+                    _prism(s, [(ln - 0.002, 0.0, -0.0075), (ln + r.uniform(0.02, 0.05), 0.0, r.uniform(-0.006, 0.006)),
+                               (ln - 0.002, 0.0, 0.0075)], 0.0055, mat, m=Mb @ _R("X", -90))
+                else:   # tablilla de 36 x 7 de cantos redondos, metida en las cajas de los largueros
+                    s.box((-L / 2, -0.018, -0.0035), (L / 2, 0.018, 0.0035), mat, bevel=0.0028, seg=2,
                           m=_T(W / 2, 0, z) @ _R("X", 45 + r.uniform(-6, 6)) @ _R("Y", r.uniform(-0.6, 0.6)))
                 z += 0.042
     else:
@@ -829,12 +1230,15 @@ def _shutter_panel(W, H, r, style):
         _merge(s, p, _T(0.04, 0.0076, 0.12 + 0.045) @ _R("Y", -ang))
     # bisagras de cola de golondrina (cara interior +Y) con nudillo en el eje
     for zc in (0.12, H - 0.12):
-        pts = [(-0.012, 0.0, zc - 0.016), (0.25, 0.0, zc - 0.016), (0.33, 0.0, zc - 0.007), (0.33, 0.0, zc + 0.007),
-               (0.25, 0.0, zc + 0.016), (-0.012, 0.0, zc + 0.016)]
-        _prism(s, [(x, 0.0167, z) for x, _, z in pts], 0.004, "metal_rust")
-        s.cyl((0, 0, zc - 0.028), (0, 0, zc + 0.028), 0.0095, seg=6, mat="metal_rust")
+        # pletina forjada de 32 mm que se adelgaza hasta un remate redondo, sobre la cara interior (+Y), con su ojo
+        pts = [(-0.004, zc - 0.016), (0.22, zc - 0.016), (0.29, zc - 0.009)] + \
+            [(0.30 + 0.011 * math.cos(a_), zc + 0.011 * math.sin(a_)) for a_ in [-PI / 2 + PI * k / 6 for k in range(1, 6)]] + \
+            [(0.29, zc + 0.009), (0.22, zc + 0.016), (-0.004, zc + 0.016)]
+        _plate_bev(s, pts, 0.0147, 0.0042, "metal_rust", face=1, bev=0.001)
+        _lathe(s, [(0.0042, -0.028), (0.0088, -0.028), (0.0095, -0.0273), (0.0095, 0.0273), (0.0088, 0.028), (0.0042, 0.028)],
+               seg=24, mat="metal_rust", M=_T(0.0, 0.0, zc))
         for xb in (0.08, 0.25):
-            _bolt(s, (xb, 0.0187, zc), (0, 1, 0), r=0.0055, ln=0.003, seg=5)
+            _screw(s, (xb, 0.0187, zc), (0, 1, 0), d=0.011, kind="dome")
     return s
 
 
@@ -861,9 +1265,13 @@ def _win_shutter(mb, w, h, depth, r, broken):
         if mx.y > -0.002:
             _xform(s, _T(0, -(mx.y + 0.002), 0))
         _merge(mb, s)
-        for zc in (zb + 0.12, zb + H - 0.12):   # pernios empotrados en la fachada
-            mb.cyl((ax, -0.02, zc - 0.034), (ax, -0.02, zc + 0.03), 0.0055, seg=6, mat="metal_rust")
-            mb.box((ax - 0.008, -0.022, zc - 0.04), (ax + 0.008, 0.012, zc - 0.03), "metal_rust")
+        for zc in (zb + 0.12, zb + H - 0.12):   # pernios (goznes) empotrados en la fachada con su remiendo de mortero
+            _lathe(mb, [(0.0, -0.034), (0.0055, -0.034), (0.0055, 0.027), (0.0042, 0.0292), (0.0022, 0.0302), (0.0, 0.0304)],
+                   seg=16, mat="metal_rust", M=_T(ax, -0.02, zc))
+            mb.box((ax - 0.008, -0.026, zc - 0.041), (ax + 0.008, 0.012, zc - 0.03), "metal_rust", bevel=0.002, seg=2)
+            pm = [(ax + 0.022 * math.cos(2 * PI * k / 12) * r.uniform(0.75, 1.15),
+                   zc - 0.035 + 0.019 * math.sin(2 * PI * k / 12) * r.uniform(0.75, 1.15)) for k in range(12)]
+            _plate_bev(mb, pm, 0.0015, 0.0045, "mortar", face=-1, bev=0.0018)
 
 
 def _win_boarded(mb, w, h, depth, r, broken):
@@ -975,16 +1383,6 @@ def _door_frame(mb, w, h, prof, mat, r, g=0.006, c=None):
     return Rk   # para montar el herraje del marco (pernios, cerradero) con el mismo descuadre
 
 
-def _lever(mb, x, y, z, d, r, mat="metal_paint", m=None, droop=0.0):
-    """Roseta + manija de palanca hacia -X (local de la hoja). d = signo de la cara (-1 exterior, +1 interior)."""
-    p = lambda a, b, c_: (m @ Vector((a, b, c_))) if m is not None else Vector((a, b, c_))
-    mb.cyl(p(x, y - d * 0.001, z), p(x, y + d * 0.008, z), 0.026, seg=10, mat=mat)
-    mb.cyl(p(x, y + d * 0.008, z), p(x, y + d * 0.05, z), 0.009, seg=8, mat=mat)
-    dz = -0.12 * math.sin(math.radians(droop))
-    mb.tube([p(x, y + d * 0.05, z), p(x - 0.03, y + d * 0.058, z + dz * 0.25), p(x - 0.12, y + d * 0.06, z + dz)], 0.0085,
-            seg=8, mat=mat)
-
-
 def _swing_clear(leaf, Mfn, angle, boxes, margin=0.0015, pin=None):
     """Mayor ángulo (de `angle` hacia 0, resolución 0,5°) con el que ningún vértice de la hoja entra en las cajas
     prohibidas (jambas, muro) — una hoja real se detiene donde su herraje toca la jamba o el muro. Se ignora el herraje
@@ -1052,10 +1450,17 @@ def _leaf_place(mb, leaf, u_hinge, y_face, z0, pin, angle, mirror=False, boxes=N
     return M
 
 
-def _butt_hinges(mb, x, y, zs, r, ln=0.09):
+def _butt_hinges(mb, x, y, zs, r, ln=0.09, rad=0.0068):
+    """Bisagras de libro (canutos con pasador y botones) con el eje en (x, y) a las alturas zs."""
     for z in zs:
-        mb.cyl((x, y, z - ln / 2), (x, y, z + ln / 2), 0.0068, seg=8, mat="metal_rust")
-        mb.cyl((x, y, z + ln / 2), (x, y, z + ln / 2 + 0.007), 0.0045, seg=6, mat="metal_rust")
+        _barrel(mb, x, y, z, ln, rad, n=5)
+
+
+def _mat_xy(o, X, Y):
+    """Matriz con origen o y ejes X, Y dados (Z = X x Y)."""
+    X, Y = Vector(X), Vector(Y)
+    Z = X.cross(Y)
+    return Matrix(((X.x, Y.x, Z.x, o[0]), (X.y, Y.y, Z.y, o[1]), (X.z, Y.z, Z.z, o[2]), (0.0, 0.0, 0.0, 1.0)))
 
 
 def _door_flush(mb, w, h, depth, r, ang):
@@ -1063,12 +1468,16 @@ def _door_flush(mb, w, h, depth, r, ang):
     forzada (canto astillado a la altura de la chapa, chapa de piel desprendida y abolladuras)."""
     g = 0.006
     y0, ys, y1 = 0.001, 0.031, depth - 0.012
-    prof = [(0.0, y0), (0.038, y0), (0.042, y0 + 0.004), (0.042, ys), (0.027, ys + 0.002), (0.027, y1 - 0.004),
-            (0.023, y1), (0.0, y1)]
+    # marco (jamba de 42 x 136 mm con tope rebajado de 15 mm): aristas boleadas de 2–3 mm, como una jamba cepillada
+    prof = _fillet2d([(0.0, y0), (0.042, y0), (0.042, ys), (0.027, ys + 0.0015), (0.027, y1), (0.0, y1)],
+                     [0.0, 0.003, 0.002, 0.0015, 0.003, 0.0], n=3)
     Rk = _door_frame(mb, w, h, prof, "wood", r, g)
-    # moldura exterior (chambrana) sobre la fachada
-    cas = [(-0.072, -0.0012), (0.016, -0.0012), (0.016, -0.011), (0.011, -0.016), (-0.058, -0.019), (-0.067, -0.017),
-           (-0.072, -0.012)]
+    # moldura exterior (chambrana colonial de 88 x 19 mm): canto interior boleado con media caña, campo, gola y contramarco
+    cas = [(-0.072, -0.0012), (0.016, -0.0012), (0.016, -0.0085), (0.0156, -0.0096), (0.0146, -0.0103), (0.0132, -0.0106),
+           (0.0088, -0.0108), (0.0079, -0.0101), (0.0068, -0.0099), (0.0058, -0.0104), (0.0048, -0.0112), (-0.0385, -0.0128),
+           (-0.0415, -0.0132), (-0.0448, -0.0141), (-0.0478, -0.0155), (-0.0505, -0.0170), (-0.0532, -0.0180),
+           (-0.0565, -0.0187), (-0.0655, -0.0190), (-0.0688, -0.0187), (-0.0708, -0.0177), (-0.0718, -0.0161),
+           (-0.072, -0.0140)]
     sub = MB()
     if r.random() < 0.5:   # tramo de chambrana arrancado en la jamba izquierda
         cut = r.uniform(0.6, 1.4)
@@ -1132,29 +1541,39 @@ def _door_flush(mb, w, h, depth, r, ang):
     # chapa, manijas, cerrojo, mirilla, número
     xh = Wl - 0.065
     for d, yy in ((-1, 0.0), (1, T)):
-        y_a, y_b = (yy - 0.004, yy + 0.001) if d < 0 else (yy - 0.001, yy + 0.004)
-        leaf.box((xh - 0.024, y_a, zl - 0.11), (xh + 0.024, y_b, zl + 0.11), "metal_paint", bevel=0.002, seg=1)
-        _lever(leaf, xh, yy + d * 0.004, zl + 0.04, d, r, droop=r.uniform(0, 35) if d < 0 else 0.0)
-        leaf.cyl((xh, yy + d * 0.003, zl - 0.06), (xh, yy + d * 0.012, zl - 0.06), 0.011, seg=8, mat="metal_paint")
-        leaf.cyl((xh, yy - d * 0.002, 1.28), (xh, yy + d * 0.014, 1.28), 0.019, seg=10, mat="metal_paint")
-    leaf.cyl((Wl / 2, 0.001, 1.55), (Wl / 2, -0.012, 1.55), 0.009, seg=8, mat="metal_paint")
-    leaf.box((Wl / 2 - 0.045, -0.004, 1.68), (Wl / 2 + 0.045, 0.001, 1.74), "metal_paint", bevel=0.0015, seg=1)
+        # placa larga (escudo) de 48 x 220 mm de canto boleado con tornillos, manija de palanca y cilindro
+        pl = _rrect(0.048, 0.22, 0.006, 3, xh, zl)
+        _plate_bev(leaf, pl, yy - d * 0.001, 0.0045, "metal_paint", face=d, bev=0.0012)
+        _lever(leaf, xh, yy + d * 0.0035, zl + 0.04, d, r, droop=r.uniform(0, 35) if d < 0 else 0.0)
+        _cylinder_rose(leaf, (xh, yy + d * 0.0035, zl - 0.06), (0, d, 0), R=0.011, h=0.008, turn=False)
+        for zz in (zl + 0.095, zl - 0.095):
+            _screw(leaf, (xh, yy + d * 0.0035, zz), (0, d, 0), d=0.0062, mat="metal_paint", kind="pan")
+        # cerrojo de seguridad: roseta con bocallave por fuera, botón de giro por dentro
+        _cylinder_rose(leaf, (xh, yy - d * 0.001, 1.28), (0, d, 0), R=0.0215, h=0.012, turn=d > 0)
+    # mirilla (Ø14 mm con lente) y placa de número atornillada
+    Mv = _mat_xy((Wl / 2, 0.0015, 1.55), (1, 0, 0), (0, 0, 1))   # Z local = -Y (hacia afuera)
+    _lathe(leaf, [(0.0, 0.0), (0.0108, 0.0), (0.0108, 0.0028), (0.0098, 0.004), (0.0074, 0.0046), (0.0074, 0.0078),
+                  (0.0064, 0.0082), (0.0062, 0.0072), (0.0, 0.0072)], seg=24, mat="metal_paint", M=Mv)
+    _lathe(leaf, [(0.0, 0.0071), (0.0063, 0.0071), (0.0063, 0.0077), (0.0, 0.0079)], seg=24, mat="glass", M=Mv)
+    _plate_bev(leaf, _rrect(0.09, 0.06, 0.006, 3, Wl / 2, 1.71), 0.0008, 0.0048, "metal_paint", face=-1, bev=0.001)
     for sx in (-0.036, 0.036):
-        _bolt(leaf, (Wl / 2 + sx, -0.004, 1.71), (0, -1, 0), r=0.003, ln=0.002)
-    # bisagras: hojas embutidas en el canto
+        _screw(leaf, (Wl / 2 + sx, -0.004, 1.71), (0, -1, 0), d=0.0055, mat="metal_paint", kind="dome")
+    # bisagras de libro de 3 1/2" (89 mm): hojas embutidas en el canto con 3 tornillos avellanados
     zs = (0.22, Hl / 2 + 0.1, Hl - 0.22)
     for z in zs:
-        leaf.box((-0.0012, T - 0.03, z - 0.045), (0.0018, T - 0.002, z + 0.045), "metal_rust")
+        _leafplate(leaf, _mat_xy((0.0013, T - 0.002, z), (0, -1, 0), (-1, 0, 0)), 0.089, 0.028, 0.0025)
     pin = (-0.001, T + 0.004)
     _leaf_place(mb, leaf, xl0, ys + 0.002, 0.016, pin, ang, boxes=_jamb_boxes(w, h, depth, g, 0.027, ys + 0.001, y1))
     _butt_hinges(mb, xl0 - 0.001, ys + 0.002 + T + 0.004, [z + 0.016 for z in zs], r)
     fh = MB()   # herraje y daños de la jamba: con el descuadre del marco
     for z in zs:
-        fh.box((g + 0.026, ys + 0.012, z + 0.016 - 0.045), (g + 0.0285, ys + 0.002 + T, z + 0.016 + 0.045), "metal_rust")
-    # cerradero arrancado y astillas en la jamba de la chapa
+        _leafplate(fh, _mat_xy((g + 0.026, ys + 0.002 + T, z + 0.016), (0, -1, 0), (1, 0, 0)), 0.089, 0.03, 0.0025)
+    # cerradero arrancado (zafado, colgando de un tornillo) y astillas en la jamba de la chapa
     xj = w - g - 0.027
     if r.random() < 0.4:
-        fh.box((xj - 0.0015, ys + 0.004, zl + 0.016 - 0.07), (xj + 0.002, ys + 0.03, zl + 0.016 + 0.07), "metal_rust")
+        Ms = _mat_xy((xj + 0.002, ys + 0.004, zl + 0.016), (0, 1, 0), (-1, 0, 0))
+        _leafplate(fh, Ms @ _about((0.004, 0.0, 0.055), _R("Y", r.uniform(-14, -6)) @ _R("Z", r.uniform(4, 9))), 0.14, 0.026,
+                   0.0018, screws=1, rc=0.004)
     for _ in range(int(r.integers(4, 8))):
         zc = zl + 0.016 + r.uniform(-0.12, 0.12)
         ln = r.uniform(0.04, 0.12)
@@ -1164,21 +1583,49 @@ def _door_flush(mb, w, h, depth, r, ang):
     _merge(mb, fh, Rk)
 
 
+def _glazing(mb, a, b, c, d, y0, y1, yg, tg=0.005, bead=True, gasket=(-1, 1), mat="aluminium", gw=0.0055):
+    """Vidriado de un claro (a..c en x, b..d en z) de un bastidor de y0..y1 con el vidrio en yg: junquillo de presión con cara
+    inclinada del lado +Y (si bead) y empaque de hule (cuña) a ambos lados del vidrio, aunque el vidrio ya no esté."""
+    path = _rect_path(a, b, c, d, c=0.02)
+    if bead:
+        yb = yg + tg / 2 + 0.0032
+        bp = _fillet2d([(-0.001, yb), (0.0115, yb), (0.0115, yb + 0.002), (0.0045, y1 - 0.0016), (-0.001, y1 - 0.0016)],
+                       [0.0, 0.0006, 0.0008, 0.0012, 0.0], n=2)
+        mb.sweep(bp, path, mat=mat, normal=(0, 1, 0), closed_path=True)
+    for sd in gasket:
+        yc = yg + sd * (tg / 2 + 0.0013)
+        mb.sweep(_rrect(gw, 0.0024, 0.0011, 2, 0.0005 + gw / 2, yc), path, mat="rubber", normal=(0, 1, 0), closed_path=True)
+
+
 def _door_glazed(mb, w, h, depth, r, ang):
-    """Puertas dobles de vestíbulo: marco de aluminio con tope, montante si h > 2,3, dos hojas de bastidor ancho con
-    zoclo, travesaño-empujador, jaladeras verticales, pivotes, vidrio roto en esquirlas y vidrio en el piso."""
+    """Puertas dobles de vestíbulo: marco de aluminio con tope, montante si h > 2,3, dos hojas de bastidor ancho (perfil
+    tubular de 62 x 45 con cantos de radio 1,8 mm) con zoclo, travesaño-empujador, junquillos y empaques de hule, jaladera
+    tubular Ø25 sobre postes torneados, barra de empuje Ø28, cerrojo de piso, bisagras de libro, vidrio roto en esquirlas
+    y vidrio en el piso."""
     g = 0.006
     y0, y1 = 0.05, min(depth - 0.01, 0.15)
-    prof = [(0.0, y0), (0.056, y0), (0.058, y0 + 0.002), (0.058, y0 + 0.012), (0.045, y0 + 0.013), (0.045, y1 - 0.002),
-            (0.043, y1), (0.0, y1)]
+    prof = _fillet2d([(0.0, y0), (0.058, y0), (0.058, y0 + 0.012), (0.045, y0 + 0.013), (0.045, y1), (0.0, y1)],
+                     [0.0, 0.0015, 0.001, 0.0008, 0.0015, 0.0], n=2)
     _door_frame(mb, w, h, prof, "aluminium", r, g)
     top = h - g - 0.045
     if h > 2.3:
         vt = h - g - r.uniform(0.38, 0.5)
-        mb.box((g + 0.04, y0 + 0.001, vt - 0.03), (w - g - 0.04, y1 - 0.001, vt + 0.03), "aluminium", bevel=0.003, seg=1)
+        tp = _rrprof(-0.03, 0.03, y0 + 0.001, y1 - 0.001, 0.0018)
+        mb.sweep([(z, y) for z, y in tp], [(g + 0.04, 0.0, vt), (w - g - 0.04, 0.0, vt)], mat="aluminium", normal=(0, 1, 0))
         _glass(mb, g + 0.045, vt + 0.03, w - g - 0.045, top, (y0 + y1) / 2, r, 0.75, embed=0.012)
+        _glazing(mb, g + 0.045, vt + 0.03, w - g - 0.045, top, y0, y1, (y0 + y1) / 2)
         top = vt - 0.03
-    mb.box((0.003, y0 - 0.03, -0.008), (w - 0.003, y1 + 0.01, 0.009), "aluminium", bevel=0.003, seg=1)
+    # umbral de aluminio con rampas y estrías antiderrapantes (pasa bajo las jambas)
+    ya, yb_ = y0 - 0.03, y1 + 0.01
+    ribs = []
+    nr = 9
+    for k in range(nr):
+        x0_ = ya + 0.012 + (yb_ - ya - 0.024) * k / nr
+        x1_ = ya + 0.012 + (yb_ - ya - 0.024) * (k + 0.55) / nr
+        ribs += [(x0_, 0.0075), (x0_ + 0.0006, 0.009), (x1_ - 0.0006, 0.009), (x1_, 0.0075)]
+    tprof = [(ya, -0.008), (yb_, -0.008), (yb_, -0.0045), (yb_ - 0.012, 0.0075)] + list(reversed(ribs)) + [(ya + 0.012, 0.0075),
+                                                                                                      (ya, -0.0045)]
+    _sweep3(mb, [(-yy, zz) for yy, zz in tprof], [(0.003, 0.0, 0.0), (w - 0.003, 0.0, 0.0)], "aluminium", up=(0, 0, 1))
     T = 0.045
     xin0, xin1 = g + 0.045 + 0.003, w - g - 0.045 - 0.003
     Wl = (xin1 - xin0) / 2 - 0.003
@@ -1187,17 +1634,34 @@ def _door_glazed(mb, w, h, depth, r, ang):
     angs = (ang, min(85.0, ang * r.uniform(0.2, 1.6)) if r.random() < 0.6 else 0.0)   # tope antes del muro a escuadra
     for k in range(2):
         lf = MB()
-        lf.sweep(_rprof(0.0, 0.062, 0.0, T, 0.003), _rect_path(0, 0, Wl, Hl, c=0.075), mat="aluminium", normal=(0, 1, 0))
-        lf.box((0.058, 0.002, 0.058), (Wl - 0.058, T - 0.002, 0.2), "aluminium", bevel=0.003, seg=1)
+        lf.sweep(_rrprof(0.0, 0.062, 0.0, T, 0.0018), _rect_path(0, 0, Wl, Hl, c=0.075), mat="aluminium", normal=(0, 1, 0),
+                 closed_path=True)
+        lf.box((0.058, 0.002, 0.058), (Wl - 0.058, T - 0.002, 0.2), "aluminium", bevel=0.003, seg=2)
         zm = r.uniform(0.95, 1.05)
-        lf.box((0.058, 0.004, zm - 0.04), (Wl - 0.058, T - 0.004, zm + 0.04), "aluminium", bevel=0.003, seg=1)
-        _glass(lf, 0.062, 0.2, Wl - 0.062, zm - 0.04, T / 2, r, min(0.97, r.uniform(0.6, 1.0)), embed=0.01)
-        _glass(lf, 0.062, zm + 0.04, Wl - 0.062, Hl - 0.062, T / 2, r, min(0.97, r.uniform(0.45, 0.95)), embed=0.01)
-        # jaladera exterior vertical junto al larguero de cierre y barra de empuje interior
+        lf.box((0.058, 0.004, zm - 0.04), (Wl - 0.058, T - 0.004, zm + 0.04), "aluminium", bevel=0.003, seg=2)
+        for (gb, gt) in ((0.2, zm - 0.04), (zm + 0.04, Hl - 0.062)):
+            _glass(lf, 0.062, gb, Wl - 0.062, gt, T / 2, r, min(0.97, r.uniform(0.5, 1.0)), embed=0.01)
+            _glazing(lf, 0.062, gb, Wl - 0.062, gt, 0.0, T, T / 2)
+        # jaladera exterior vertical Ø25 x 600 sobre dos postes torneados, junto al larguero de cierre
         xp = Wl - 0.035
-        lf.tube([(xp, 0.0, 0.85), (xp, -0.05, 0.88), (xp, -0.05, 1.32), (xp, 0.0, 1.35)], 0.012, seg=8, mat="aluminium")
-        lf.tube([(0.1, T, zm), (0.12, T + 0.05, zm), (Wl - 0.12, T + 0.05, zm), (Wl - 0.1, T, zm)], 0.014, seg=8, mat="aluminium")
-        lf.box((Wl - 0.03, T - 0.004, 0.06), (Wl - 0.012, T + 0.012, 0.13), "metal_paint", bevel=0.002, seg=1)
+        for zz in (0.9, 1.3):
+            _lathe(lf, [(0.0, -0.001), (0.0165, -0.001), (0.0165, 0.0025), (0.0125, 0.0055), (0.0098, 0.009), (0.0098, 0.046),
+                        (0.0, 0.046)], seg=24, mat="aluminium", M=_mat_xy((xp, 0.0, zz), (1, 0, 0), (0, 0, 1)))
+        _lathe(lf, [(0.0, 0.0), (0.0062, 0.0006), (0.0104, 0.003), (0.0125, 0.0075), (0.0125, 0.5925), (0.0104, 0.597),
+                    (0.0062, 0.5994), (0.0, 0.6)], seg=24, mat="aluminium", M=_T(xp, -0.0565, 0.8))
+        # barra de empuje interior Ø28 sobre postes
+        for xx in (0.1, Wl - 0.1):
+            _lathe(lf, [(0.0, -0.001), (0.018, -0.001), (0.018, 0.0025), (0.0135, 0.006), (0.011, 0.01), (0.011, 0.04),
+                        (0.0, 0.04)], seg=24, mat="aluminium", M=_mat_xy((xx, T, zm), (1, 0, 0), (0, 0, -1)))
+        _lathe(lf, [(0.0, 0.0), (0.007, 0.0007), (0.0118, 0.0035), (0.014, 0.0085), (0.014, Wl - 0.13 - 0.0085),
+                    (0.0118, Wl - 0.13 - 0.0035), (0.007, Wl - 0.1307), (0.0, Wl - 0.13)], seg=24, mat="aluminium",
+               M=_T(0.065, T + 0.052, zm) @ _R("Y", 90))
+        # cerrojo de piso (pasador) en el larguero de cierre, cara interior
+        lf.box((Wl - 0.03, T - 0.004, 0.06), (Wl - 0.012, T + 0.012, 0.13), "metal_paint", bevel=0.002, seg=2)
+        _lathe(lf, [(0.0, 0.0), (0.0045, 0.0), (0.0045, 0.08), (0.003, 0.0815), (0.0, 0.082)], seg=16, mat="metal_rust",
+               M=_T(Wl - 0.021, T + 0.016, 0.025))
+        for zz in (0.07, 0.12):
+            _screw(lf, (Wl - 0.021, T + 0.012, zz), (0, 1, 0), d=0.005, mat="metal_paint", kind="pan")
         # abolladura del zoclo
         dn = _dents(r, 2, 0.1, Wl - 0.1, 0.06, 0.2, rad=(0.05, 0.1), depth=(0.003, 0.008))
         for v in lf.bm.verts:
@@ -1212,28 +1676,44 @@ def _door_glazed(mb, w, h, depth, r, ang):
         _leaf_place(mb, lf, hinge, yf, 0.014, (0.002, T + 0.003), angs[k], mirror=(k == 1),
                     boxes=_jamb_boxes(w, h, depth, g, 0.045, y0 + 0.012, y1))   # la barra de empuje tope con la jamba
         hx = hinge + (0.002 if k == 0 else -0.002)
-        _butt_hinges(mb, hx, yf + T + 0.003, (0.264, 0.014 + Hl * 0.55, 0.014 + Hl - 0.2), r, ln=0.1)
+        _butt_hinges(mb, hx, yf + T + 0.003, (0.264, 0.014 + Hl * 0.55, 0.014 + Hl - 0.2), r, ln=0.1, rad=0.0072)
+        sx = 1 if k == 0 else -1
+        for zz in (0.264, 0.014 + Hl * 0.55, 0.014 + Hl - 0.2):   # hoja de la bisagra en el marco
+            _leafplate(mb, _mat_xy((hinge - sx * 0.0035, yf + T + 0.003, zz), (0, -1, 0), (sx, 0, 0)), 0.1, 0.03, 0.0025)
     _loose_glass(mb, 0.1, w - 0.1, -0.7, -0.05, 0.0, int(r.integers(8, 15)), r)
     _loose_glass(mb, 0.1, w - 0.1, depth + 0.05, depth + 0.7, 0.0, int(r.integers(6, 12)), r)
 
 
 def _strap(mb, x0, x1, z, y, r, w0=0.042, t=0.005, face=-1, bolts=4):
-    """Bisagra de cola larga (pletina ahusada) sobre una cara en y (face = -1 cara hacia -Y)."""
-    pts = [(x0, z - w0 / 2), (x1 - 0.06, z - w0 / 2), (x1, z - w0 / 5), (x1, z + w0 / 5), (x1 - 0.06, z + w0 / 2), (x0, z + w0 / 2)]
-    yc = y + face * (t / 2 - 0.0006)
-    _prism(mb, [(a, yc, b) for a, b in pts], t, "metal_rust")
+    """Bisagra de cola larga forjada (pletina ahusada de 5 mm con remate de lanza redondeado y canto suavizado) sobre una cara
+    en y (face = -1: cara hacia -Y), con pernos de coche de cabeza de cúpula y tuerca del otro lado oculta."""
+    L = x1 - x0
+    n = 6
+    pts = [(x0, z - w0 / 2)]
+    for k in range(1, n + 1):   # costado inferior ahusándose
+        s = k / n
+        pts.append((x0 + (L - 0.05) * s, z - (w0 / 2 - (w0 / 2 - w0 * 0.2) * s ** 1.4)))
+    tip = _arc(x1 - 0.05 + 0.0, z, w0 * 0.2, -PI / 2, PI / 2, 4)
+    pts += [(x1 - 0.05 + (px - (x1 - 0.05)) * 2.6 + 0.0, pz) for px, pz in tip[1:-1]]
+    pts.append((x1 - 0.05, z + w0 * 0.2))
+    for k in range(n - 1, -1, -1):
+        s = k / n
+        pts.append((x0 + (L - 0.05) * s, z + (w0 / 2 - (w0 / 2 - w0 * 0.2) * s ** 1.4)))
+    _plate_bev(mb, pts, y + face * 0.0006 * -1, t, "metal_rust", face=face, bev=0.0012)
     for k in range(bolts):
-        xb = x0 + 0.05 + (x1 - x0 - 0.1) * k / max(1, bolts - 1)
-        _bolt(mb, (xb, y + face * (t - 0.0006), z), (0, face, 0), r=0.0058, ln=0.003)
+        xb = x0 + 0.05 + (x1 - x0 - 0.12) * k / max(1, bolts - 1)
+        _screw(mb, (xb, y + face * (t - 0.0006), z), (0, face, 0), d=0.0125 - 0.0015 * (k / max(1, bolts - 1)), kind="dome")
 
 
 def _padlock(mb, x, y, z, r, d=-1):
-    """Candado: cuerpo con bisel colgando de su arco (arco en z, cuerpo debajo). d = hacia dónde mira el frente."""
-    mb.box((x - 0.022, y - 0.009, z - 0.075), (x + 0.022, y + 0.009, z - 0.03), "metal_paint", bevel=0.004, seg=1)
-    pts = [(x - 0.013, y, z - 0.032)] + [(x + 0.013 * math.cos(PI - PI * k / 6), y, z + 0.004 + 0.013 * math.sin(PI * k / 6))
-                                          for k in range(7)] + [(x + 0.013, y, z - 0.032)]
-    mb.tube(pts, 0.0035, seg=6, mat="metal_rust")
-    mb.cyl((x, y + d * 0.0085, z - 0.06), (x, y + d * 0.011, z - 0.06), 0.005, seg=6, mat="metal_rust")
+    """Candado de 40 mm: cuerpo de 44 x 18 x 45 mm con aristas redondeadas (radio 4 mm), arco de Ø7 mm
+    (16 lados, doblez de radio real) y bocallave abajo. Arco en z, cuerpo debajo; d = hacia dónde mira el frente."""
+    mb.box((x - 0.022, y - 0.009, z - 0.075), (x + 0.022, y + 0.009, z - 0.03), "metal_paint", bevel=0.004, seg=3)
+    pts = [(x - 0.0115, y, z - 0.034), (x - 0.0115, y, z + 0.006)] + \
+        [(x + 0.0115 * math.cos(PI - PI * k / 8), y, z + 0.006 + 0.0115 * math.sin(PI * k / 8)) for k in range(1, 8)] + \
+        [(x + 0.0115, y, z + 0.006), (x + 0.0115, y, z - 0.034)]
+    _rtube(mb, pts, 0.0035, "metal_rust", seg=16, rbend=0.0)
+    mb.box((x - 0.001, y - 0.004, z - 0.0758), (x + 0.001, y + 0.004, z - 0.0748), "metal_rust")
 
 
 def _door_plank(mb, w, h, depth, r, ang):
@@ -1243,8 +1723,8 @@ def _door_plank(mb, w, h, depth, r, ang):
     y0 = 0.002
     ys = y0 + 0.054
     y1 = max(ys + 0.02, depth - 0.008)
-    prof = [(0.0, y0), (0.046, y0), (0.05, y0 + 0.004), (0.05, ys), (0.07, ys + 0.002), (0.072, ys + 0.006),
-            (0.072, y1 - 0.004), (0.068, y1), (0.0, y1)]
+    prof = _fillet2d([(0.0, y0), (0.05, y0), (0.05, ys), (0.072, ys), (0.072, y1), (0.0, y1)],
+                     [0.0, 0.004, 0.0015, 0.003, 0.004, 0.0], n=3)   # aristas gastadas de 3–4 mm
     _door_frame(mb, w, h, prof, "wood_grey", r, g)
     th = _plank(w - 0.006, depth + 0.025, 0.035, r, "wood_grey", step=0.12, bow=0.0, twist=0.0,
                 yfn=lambda s: -0.006 * math.sin(PI * s) ** 2)
@@ -1299,35 +1779,51 @@ def _door_plank(mb, w, h, depth, r, ang):
                 _nail(leaf, xc + r.uniform(-0.02, 0.02), 0.0, zc + r.uniform(-0.03, 0.03), r)
     for zc in (bat[0], bat[-1]):
         _strap(leaf, 0.0, min(0.48, Wl * 0.7), zc, 0.0, r)   # arranca en el nudillo (no se mete en la jamba)
-        leaf.cyl((-0.004, -0.012, zc - 0.03), (-0.004, -0.012, zc + 0.03), 0.0095, seg=8, mat="metal_rust")
+        # ojo enrollado de la pletina alrededor del pernio (Ø19, 24 lados) y su cuello hasta la pletina
+        _lathe(leaf, [(0.0062, 0.0), (0.0089, 0.0), (0.0095, 0.0006), (0.0095, 0.0574), (0.0089, 0.058), (0.0062, 0.058)],
+               seg=24, mat="metal_rust", M=_T(-0.004, -0.012, zc - 0.029))
     # aldaba en la hoja (cerrada) o arrancada colgando del candado (abierta)
     zc = Hl * 0.5 + r.uniform(-0.05, 0.08)
     xs_ = w - g - 0.025
     closed = ang <= 3
-    if closed:
-        hp = [(Wl - 0.13, zc - 0.018), (Wl + 0.055, zc - 0.018), (Wl + 0.055, zc + 0.018), (Wl - 0.13, zc + 0.018)]
-        _prism(leaf, [(a, -0.0028, b) for a, b in hp], 0.0045, "metal_rust")
-        leaf.cyl((Wl - 0.135, -0.004, zc - 0.022), (Wl - 0.135, -0.004, zc + 0.022), 0.006, seg=6, mat="metal_rust")
+    if closed:   # aldaba de 185 mm con ojo de bisagra, extremo redondo y ranura de la armella
+        hp = _rrect(0.185, 0.036, 0.008, 3, Wl - 0.0375, zc)
+        _plate_bev(leaf, hp, -0.0006, 0.0045, "metal_rust", face=-1, bev=0.0009)
+        _lathe(leaf, [(0.0, 0.0), (0.0055, 0.0), (0.006, 0.0005), (0.006, 0.0435), (0.0055, 0.044), (0.0, 0.044)], seg=24,
+               mat="metal_rust", M=_T(Wl - 0.135, -0.0045, zc - 0.022))
+        for xx in (Wl - 0.105, Wl - 0.07):
+            _screw(leaf, (xx, -0.0051, zc), (0, -1, 0), d=0.0075, kind="dome")
     else:
         for k in range(3):
             _bolt(leaf, (Wl - 0.12 + 0.02 * k, 0.0, zc + r.uniform(-0.012, 0.012)), (0.1 * r.normal(), -1, 0.15 * r.normal()),
                   r=0.0035, ln=0.012)
     M = _leaf_place(mb, leaf, xl0, y0 + 0.002, z0, (-0.004, -0.012), -ang, boxes=_jamb_boxes(w, h, depth, g, 0.05, y0 - 0.001, y1))
-    for zz in (bat[0], bat[-1]):   # pernios en la cara del marco
+    for zz in (bat[0], bat[-1]):   # pernios (gozne) en la cara del marco: pasador Ø11,6 con punta redonda sobre placa atornillada
         px, py, pz = xl0 - 0.004, y0 + 0.002 - 0.012, z0 + zz
-        mb.cyl((px, py, pz - 0.034), (px, py, pz + 0.032), 0.0058, seg=8, mat="metal_rust")
-        mb.box((px - 0.006, py - 0.006, pz - 0.046), (px + 0.03, y0 + 0.012, pz - 0.034), "metal_rust")
-    # armella en el marco + candado
+        _lathe(mb, [(0.0, -0.034), (0.0058, -0.034), (0.0058, 0.029), (0.0045, 0.0315), (0.0024, 0.0325), (0.0, 0.033)],
+               seg=16, mat="metal_rust", M=_T(px, py, pz))
+        _lathe(mb, [(0.0, -0.047), (0.0105, -0.047), (0.0105, -0.0365), (0.0085, -0.0345), (0.0, -0.0345)], seg=24,
+               mat="metal_rust", M=_T(px, py, pz))   # collarín de apoyo bajo el ojo
+        mb.box((px - 0.002, py - 0.004, pz - 0.046), (px + 0.03, y0 + 0.001, pz - 0.036), "metal_rust", bevel=0.0015, seg=2)
+        _plate_bev(mb, _rrect(0.034, 0.075, 0.006, 3, px + 0.03, pz - 0.041), y0 + 0.0006, 0.0045, "metal_rust", face=-1,
+                   bev=0.001)
+        for zq in (pz - 0.066, pz - 0.016):
+            _screw(mb, (px + 0.03, y0 - 0.0039, zq), (0, -1, 0), d=0.008, kind="pan")
+    # armella en el marco (placa con 2 tornillos y grapa en U de Ø8,4) + candado
     zw = z0 + zc
-    mb.box((xs_ - 0.018, y0 - 0.0025, zw - 0.05), (xs_ + 0.018, y0 + 0.001, zw + 0.05), "metal_rust")
-    mb.tube([(xs_ - 0.012, y0, zw), (xs_ - 0.012, y0 - 0.026, zw), (xs_ + 0.012, y0 - 0.026, zw), (xs_ + 0.012, y0, zw)],
-            0.0042, seg=6, mat="metal_rust", caps=True)
+    _plate_bev(mb, _rrect(0.036, 0.1, 0.007, 3, xs_, zw), y0 + 0.0006, 0.0031, "metal_rust", face=-1, bev=0.0008)
+    for zq in (zw - 0.036, zw + 0.036):
+        _screw(mb, (xs_, y0 - 0.0025, zq), (0, -1, 0), d=0.0075, kind="pan")
+    _rtube(mb, [(xs_ - 0.012, y0 - 0.001, zw), (xs_ - 0.012, y0 - 0.026, zw), (xs_ + 0.012, y0 - 0.026, zw),
+                (xs_ + 0.012, y0 - 0.001, zw)], 0.0042, "metal_rust", seg=16, rbend=0.008)
     _padlock(mb, xs_, y0 - 0.02, zw + 0.004, r)
     if not closed:
-        hp = [(xs_ - 0.018, zw - 0.012), (xs_ + 0.018, zw - 0.012), (xs_ + 0.018, zw - 0.19), (xs_ - 0.018, zw - 0.19)]
-        sub = MB()
-        _prism(sub, [(a, -0.003, b) for a, b in hp], 0.0045, "metal_rust")
-        sub.cyl((xs_ - 0.022, -0.004, zw - 0.195), (xs_ + 0.022, -0.004, zw - 0.195), 0.006, seg=6, mat="metal_rust")
+        sub = MB()   # aldaba arrancada colgando del candado (con los tornillos todavía en sus agujeros)
+        _plate_bev(sub, _rrect(0.036, 0.185, 0.008, 3, xs_, zw - 0.1), -0.0008, 0.0045, "metal_rust", face=-1, bev=0.0009)
+        _lathe(sub, [(0.0, 0.0), (0.0055, 0.0), (0.006, 0.0005), (0.006, 0.0435), (0.0055, 0.044), (0.0, 0.044)], seg=24,
+               mat="metal_rust", M=_T(xs_ - 0.022, -0.005, zw - 0.195) @ _R("Y", 90))
+        for zq in (zw - 0.16, zw - 0.125):
+            _screw(sub, (xs_, -0.0053, zq), (0, -1, 0), d=0.0075, kind="dome")
         _merge(mb, sub, _about((xs_, -0.003, zw - 0.012), _R("Y", r.uniform(-12, 12)) @ _R("X", r.uniform(-8, -2))))
 
 
@@ -1336,10 +1832,15 @@ def _door_metal(mb, w, h, depth, r, ang):
     forzada hacia afuera), rejilla de ventilación, letrero atornillado, manijas, cierrapuertas con brazo roto."""
     g = 0.006
     y0, ys, y1 = 0.01, 0.03, depth - 0.01
-    prof = [(0.0, y0), (0.05, y0), (0.052, y0 + 0.002), (0.052, ys), (0.036, ys + 0.0015), (0.036, y1 - 0.002),
-            (0.034, y1), (0.0, y1)]
+    # marco de lámina doblada (cara de 2" = 52 mm, tope de 5/8" = 16 mm): dobleces de radio 1,5–2 mm
+    prof = _fillet2d([(0.0, y0), (0.052, y0), (0.052, ys), (0.036, ys + 0.0015), (0.036, y1), (0.0, y1)],
+                     [0.0, 0.002, 0.0015, 0.0012, 0.002, 0.0], n=3)
     Rk = _door_frame(mb, w, h, prof, "metal_paint", r, g)
-    mb.box((0.003, y0 - 0.02, -0.006), (w - 0.003, y1, 0.006), "metal_rust", bevel=0.002, seg=1)
+    # umbral de lámina con rampas boleadas (pasa bajo las jambas)
+    ya, yb_ = y0 - 0.02, y1
+    tprof = _fillet2d([(ya, -0.006), (yb_, -0.006), (yb_, 0.001), (yb_ - 0.016, 0.006), (ya + 0.016, 0.006), (ya, 0.001)],
+                      [0.0, 0.0, 0.002, 0.004, 0.004, 0.002], n=3)
+    _sweep3(mb, [(-yy, zz) for yy, zz in tprof], [(0.003, 0.0, 0.0), (w - 0.003, 0.0, 0.0)], "metal_rust", up=(0, 0, 1))
     T = 0.045
     xl0 = g + 0.036 + 0.003
     Wl, Hl, z0 = w - 2 * xl0, h - g - 0.036 - 0.003 - 0.012, 0.012
@@ -1383,55 +1884,81 @@ def _door_metal(mb, w, h, depth, r, ang):
             v.co.y += warp * (x / Wl) * (0.5 + 0.5 * wsgn * (2 * z / Hl - 1))
     # rejilla de ventilación sobrepuesta
     a, b, c, d = vent
-    for (p0, p1) in (((a, -0.012, c), (b, 0.0006, c + 0.018)), ((a, -0.012, d - 0.018), (b, 0.0006, d)),
-                     ((a + 0.001, -0.011, c + 0.012), (a + 0.017, 0.0004, d - 0.012)),
-                     ((b - 0.017, -0.011, c + 0.012), (b - 0.001, 0.0004, d - 0.012))):
-        leaf.box(p0, p1, "metal_paint", bevel=0.0015, seg=1)
+    # marco de la rejilla: ángulo de lámina con esquinas redondeadas, atornillado
+    fr = _rrect(b - a, d - c, 0.006, 3, (a + b) / 2, (c + d) / 2)
+    fi = _rrect(b - a - 0.036, d - c - 0.036, 0.003, 3, (a + b) / 2, (c + d) / 2)
+    A = leaf._verts([(x, 0.0006, z) for x, z in fr])
+    B = leaf._verts([(x, -0.0105, z) for x, z in _inset(fr, 0.0012)])
+    C = leaf._verts([(x, -0.0105, z) for x, z in _inset(fi, -0.0012)])
+    D = leaf._verts([(x, 0.0006, z) for x, z in fi])
+    for R0, R1 in ((A, B), (B, C), (C, D), (D, A)):
+        for i in range(len(fr)):
+            j = (i + 1) % len(fr)
+            leaf.face([R0[i], R0[j], R1[j], R1[i]], "metal_paint")
+    for (xb, zb) in ((a + 0.009, c + 0.009), (b - 0.009, c + 0.009), (a + 0.009, d - 0.009), (b - 0.009, d - 0.009)):
+        _screw(leaf, (xb, -0.0105, zb), (0, -1, 0), d=0.0058, mat="metal_paint", kind="pan")
+    # aletas en V invertida (lámina de 1,2 mm con cantos redondos), una arrancada
     k, z = 0, c + 0.035
+    blade = [(py, pz) for py, pz in _rrect(0.034, 0.0013, 0.00055, 2)]
     while z < d - 0.03:
         if not (k == 2 and r.random() < 0.6):
-            leaf.box((-(b - a) / 2 + 0.016, -0.0015, -0.016), ((b - a) / 2 - 0.016, 0.0015, 0.016), "metal_paint",
-                     m=_T((a + b) / 2, -0.006, z) @ _R("X", -40 + r.uniform(-6, 6)))
+            ang_b = -40 + r.uniform(-6, 6)
+            ca, sa = math.cos(math.radians(ang_b)), math.sin(math.radians(ang_b))
+            prof_b = [(-(py * ca - pz * sa) - 0.006, py * sa + pz * ca) for py, pz in blade]
+            _sweep3(leaf, prof_b, [(a + 0.017, 0.0, z), (b - 0.017, 0.0, z)], "metal_paint", up=(0, 0, 1))
         z += 0.034
         k += 1
-    # letrero atornillado
+    # letrero atornillado: placa de 240 x 160 con esquinas redondas y 4 tornillos de cabeza de gota
     a, b, c, d = sign
-    leaf.box((a, -0.0025, c), (b, 0.0006, d), "metal_paint", bevel=0.001, seg=1)
+    _plate_bev(leaf, _rrect(b - a, d - c, 0.01, 3, (a + b) / 2, (c + d) / 2), 0.0006, 0.0031, "metal_paint", face=-1,
+               bev=0.0008)
     for (xb, zb) in ((a + 0.012, c + 0.012), (b - 0.012, c + 0.012), (a + 0.012, d - 0.012), (b - 0.012, d - 0.012)):
-        _bolt(leaf, (xb, -0.0025, zb), (0, -1, 0), r=0.004, ln=0.002)
-    # manijas y cilindro
+        _screw(leaf, (xb, -0.0025, zb), (0, -1, 0), d=0.007, mat="metal_paint", kind="pan")
+    # manijas, escudos y cilindro
     xh, zl = Wl - 0.065, 1.0
     for dd, yy in ((-1, 0.0), (1, T)):
         _lever(leaf, xh, yy, zl, dd, r, droop=r.uniform(0, 40) if dd < 0 else r.uniform(0, 10))
-        leaf.cyl((xh, yy - dd * 0.001, zl - 0.075), (xh, yy + dd * 0.011, zl - 0.075), 0.013, seg=8, mat="metal_paint")
+        _cylinder_rose(leaf, (xh, yy - dd * 0.001, zl - 0.075), (0, dd, 0), R=0.0145, h=0.011, turn=dd > 0)
     # zapata del brazo del cierrapuertas (cara interior, arriba): el cuerpo va en el muro sobre el vano (ver abajo)
-    leaf.box((0.15, T - 0.001, Hl - 0.075), (0.2, T + 0.011, Hl - 0.035), "metal_paint", bevel=0.002, seg=1)
-    leaf.cyl((0.175, T + 0.011, Hl - 0.055), (0.175, T + 0.019, Hl - 0.055), 0.006, seg=8, mat="metal_rust")
+    leaf.box((0.15, T - 0.001, Hl - 0.075), (0.2, T + 0.011, Hl - 0.035), "metal_paint", bevel=0.003, seg=2)
+    _lathe(leaf, [(0.0, 0.0), (0.0062, 0.0), (0.0062, 0.0065), (0.0045, 0.008), (0.0, 0.0082)], seg=24, mat="metal_rust",
+           M=_mat_xy((0.175, T + 0.011, Hl - 0.055), (1, 0, 0), (0, 0, -1)))
     for xb in (0.16, 0.19):
-        _bolt(leaf, (xb, T + 0.011, Hl - 0.067), (0, 1, 0), r=0.0028, ln=0.0015, seg=5)
+        _screw(leaf, (xb, T + 0.011, Hl - 0.067), (0, 1, 0), d=0.0055, mat="metal_paint", kind="pan")
+    # bisagras de 4 1/2" (114 mm) de acero: hojas embutidas en el canto
     zs = (0.22, Hl / 2, Hl - 0.22)
     for z in zs:
-        leaf.box((-0.0012, T - 0.03, z - 0.05), (0.0018, T - 0.002, z + 0.05), "metal_rust")
+        _leafplate(leaf, _mat_xy((0.0013, T - 0.002, z), (0, -1, 0), (-1, 0, 0)), 0.114, 0.028, 0.003, screws=4)
     _leaf_place(mb, leaf, xl0, ys + 0.002, z0, (-0.001, T + 0.005), ang, boxes=_jamb_boxes(w, h, depth, g, 0.036, ys + 0.001, y1))
-    _butt_hinges(mb, xl0 - 0.001, ys + 0.002 + T + 0.005, [z + z0 for z in zs], r, ln=0.1)
+    _butt_hinges(mb, xl0 - 0.001, ys + 0.002 + T + 0.005, [z + z0 for z in zs], r, ln=0.114, rad=0.0075)
     fh = MB()
-    fh.box((w - g - 0.0375, ys + 0.004, z0 + zl - 0.06), (w - g - 0.0345, ys + 0.03, z0 + zl + 0.06), "metal_rust")
+    for z in zs:
+        _leafplate(fh, _mat_xy((g + 0.035, ys + 0.002 + T + 0.002, z + z0), (0, -1, 0), (1, 0, 0)), 0.114, 0.03, 0.003, screws=4)
+    _leafplate(fh, _mat_xy((w - g - 0.0345, ys + 0.004, z0 + zl), (0, 1, 0), (-1, 0, 0)), 0.12, 0.026, 0.003, screws=2, rc=0.004)
     _merge(mb, fh, Rk)
     # cierrapuertas atornillado al muro sobre el vano (cara interior, lado de bisagras): cuerpo, tapas, piñón y el brazo
     # principal partido colgando junto a la jamba (fuera del barrido de la hoja); el antebrazo se perdió
     yb0 = depth + 0.0012
     zc0 = h + 0.035
-    mb.box((-0.04, yb0, zc0), (0.24, yb0 + 0.05, zc0 + 0.062), "metal_paint", bevel=0.004, seg=1)
-    for xe in (-0.045, 0.245):
-        mb.cyl((xe - 0.006 if xe < 0 else xe + 0.006, yb0 + 0.025, zc0 + 0.031), (xe, yb0 + 0.025, zc0 + 0.031), 0.022, seg=10,
-               mat="metal_paint")
+    # cuerpo de aluminio fundido 280 x 50 x 62 con cantos de radio 9 mm, tapas torneadas de las válvulas y tornillos
+    body = _rrect(0.05, 0.062, 0.009, 4, yb0 + 0.025, zc0 + 0.031)
+    _sweep3(mb, [(-yy, zz) for yy, zz in body], [(-0.04, 0.0, 0.0), (0.24, 0.0, 0.0)], "metal_paint", up=(0, 0, 1))
+    for xe, sg in ((-0.04, -1), (0.24, 1)):
+        _lathe(mb, [(0.0, -0.002), (0.0225, -0.002), (0.0225, 0.004), (0.0205, 0.0062), (0.012, 0.007), (0.0, 0.007)], seg=28,
+               mat="metal_paint", M=_mat_xy((xe, yb0 + 0.025, zc0 + 0.031), (0, sg, 0), (0, 0, 1)))
     for (xb, zb) in ((-0.02, zc0 + 0.012), (0.22, zc0 + 0.05)):
-        _bolt(mb, (xb, yb0 + 0.05, zb), (0, 1, 0), r=0.0045, ln=0.0025)
+        _screw(mb, (xb, yb0 + 0.05, zb), (0, 1, 0), d=0.0085, mat="metal_paint", kind="pan")
     px, py = 0.012, yb0 + 0.03
-    mb.cyl((px, py, zc0 + 0.002), (px, py, zc0 - 0.016), 0.007, seg=8, mat="metal_rust")
-    arm = MB()
-    arm.box((-0.011, -0.004, -0.21), (0.011, 0.004, 0.0), "metal_paint", bevel=0.0015, seg=1)
-    arm.cyl((0, -0.006, -0.198), (0, 0.006, -0.198), 0.0065, seg=6, mat="metal_rust")
+    _lathe(mb, [(0.0, -0.016), (0.0072, -0.016), (0.0072, 0.001), (0.0, 0.001)], seg=24, mat="metal_rust", M=_T(px, py, zc0))
+    _lathe(mb, [(0.0, -0.0175), (0.0055, -0.0175), (0.0055, -0.016), (0.0, -0.016)], seg=6, mat="metal_rust", M=_T(px, py, zc0),
+           phase=PI / 6)
+    arm = MB()   # brazo principal de 22 x 8 con ojos redondos en ambos extremos, partido en el ojo inferior
+    arm.box((-0.011, -0.004, -0.198), (0.011, 0.004, -0.012), "metal_paint", bevel=0.0025, seg=2)
+    for zz in (0.0, -0.198):
+        _lathe(arm, [(0.0, -0.004), (0.011, -0.004), (0.011, 0.004), (0.0, 0.004)], seg=24, mat="metal_paint",
+               M=_mat_xy((0.0, 0.0, zz), (1, 0, 0), (0, 0, 1)))
+    _lathe(arm, [(0.0, -0.0062), (0.0045, -0.0062), (0.0045, 0.0062), (0.0, 0.0062)], seg=16, mat="metal_rust",
+           M=_mat_xy((0.0, 0.0, -0.198), (1, 0, 0), (0, 0, 1)))
     _merge(mb, arm, _T(px, py, zc0 - 0.012) @ _R("Y", r.uniform(4, 12)) @ _R("X", r.uniform(2, 8)))   # cuelga hacia el muro
 
 
@@ -1466,21 +1993,49 @@ def door(kind, w, h, depth=0.20, seed=0, open_angle=25, parts=False):
 # =====================================================================================================================
 # CORTINA METÁLICA ENROLLABLE
 # =====================================================================================================================
-def _slat_profile(p=0.08, bulge=0.009, t=0.0013):
-    """Perfil de lama ciega (z, y) cerrado: cara exterior abombada hacia -Y, gancho de engrane arriba, lámina de 1,3 mm."""
-    n = 5
-    z0 = 0.0025   # arranque desfasado: los vértices de lamas contiguas nunca coinciden
-    zz = [z0 + (p - z0) * k / n for k in range(n + 1)]
-    outer = [(z, -bulge * math.sin(PI * k / n) ** 0.8) for k, z in enumerate(zz)]
-    hook = [(p + 0.003, 0.003), (p + 0.0035, 0.0085), (p - 0.0015, 0.0095)]
-    inner = [(zz[k], -bulge * math.sin(PI * k / n) ** 0.8 + t) for k in range(n - 1, 0, -1)]
-    return outer + hook + inner + [(z0 + 0.0015, 0.004)]
+def _slat_profile(p=0.08, bulge=0.010, t=0.0008):
+    """Duela curva de lámina (cal. 22, 0,8 mm) en (z, y), contorno cerrado: cara abombada 10 mm hacia -Y y rizo superior
+    (hembra) de Ø8,4 donde entra la cola de la duela de arriba (que arranca dentro del rizo). Paso p."""
+    C = [(-0.0046, 0.0036), (-0.0016, 0.0012)]
+    nf = 8
+    for k in range(nf + 1):
+        u = k / nf
+        C.append((0.0015 + (p - 0.0085 - 0.0015) * u, -bulge * math.sin(PI * u) ** 0.85))
+    zc, yc, R = p - 0.0062, 0.0042, 0.0042
+    for k in range(1, 10):
+        th = -PI / 2 + (PI / 2 + math.radians(205)) * k / 9
+        C.append((zc + R * math.cos(th), yc + R * math.sin(th)))
+    P = [Vector(c) for c in C]
+    L, Rr = [], []
+    for i in range(len(P)):
+        d = (P[min(i + 1, len(P) - 1)] - P[max(i - 1, 0)]).normalized()
+        n = Vector((-d.y, d.x))
+        L.append(tuple(P[i] + n * t / 2))
+        Rr.append(tuple(P[i] - n * t / 2))
+    return L + list(reversed(Rr))
+
+
+def _shutter_guide(mb, x, side, z0, z1, r):
+    """Guía de cortina: canal en U de lámina de 3,2 mm (ángulos de 1 1/2" x 1/8" unidos) con dobleces de radio real, la boca
+    abocinada arriba, y taquetes con perno a la jamba. side 0 = jamba izquierda (canal abre hacia +X)."""
+    U = [(0.003, 0.035), (0.063, 0.035), (0.063, 0.0382), (0.0062, 0.0382), (0.0062, 0.0818), (0.063, 0.0818), (0.063, 0.085),
+         (0.003, 0.085)]
+    U = _fillet2d(U, [0.004, 0.0012, 0.0012, 0.0016, 0.0016, 0.0012, 0.0012, 0.004], n=3)
+    prof = [(-u if side == 0 else u, y) for u, y in U]
+    if side == 0:
+        prof = list(reversed(prof))
+    mb.sweep(prof, [(x, 0.0, z0), (x, 0.0, z1)], mat="metal_paint", normal=(0, 1, 0))
+    sg = 1 if side == 0 else -1
+    for zz in [0.25 + (z1 - 0.4) * k / 3 for k in range(4)]:
+        _bolt(mb, (x + sg * 0.0062, 0.06, zz), (sg, 0, 0), r=0.0065, ln=0.0055)
 
 
 def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
     """Cortina metálica enrollable montada DENTRO del vano (local u 0..w, v 0..h, plano de lamas en y = 0,06):
-    guías en U contra las jambas, caja de enrollado (0,32 m superiores) con faldón abollable, lamas de perfil ondulado
-    (paso 8 cm, barridas), barra inferior con cerrojo central, pasadores laterales y jaladeras.
+    guías en U de lámina de 3,2 mm contra las jambas, caja de enrollado (0,32 m superiores) con faldón de lámina abollable
+    de borde enrollado, tapas laterales con chumacera y el rollo de duelas visible por la ranura; duelas curvas de 8 cm
+    (lámina de 0,8 mm, cara abombada 10 mm y rizo de engrane), barra inferior de doble ángulo con hule, chapa central con
+    pasadores a las guías, jaladeras de varilla y porta-candados.
     dent 0..1: abolladuras (ruido + golpes) y lamas torcidas; open_frac 0..1 sube la cortina."""
     r = rng(seed)
     mb = MB()
@@ -1488,31 +2043,38 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
     yc = 0.06
     hb = 0.32
     zbox = h - hb
-    # guías (U de lámina abierta hacia el claro)
-    U = [(0.003, 0.035), (0.063, 0.035), (0.063, 0.041), (0.009, 0.041), (0.009, 0.079), (0.063, 0.079), (0.063, 0.085),
-         (0.003, 0.085)]
     for side in (0, 1):
-        x = 0.0 if side == 0 else w
-        prof = [(-u if side == 0 else u, y) for u, y in U]
-        if side == 0:
-            prof = list(reversed(prof))
-        mb.sweep(prof, [(x, 0.0, -0.005), (x, 0.0, zbox + 0.03)], mat="metal_paint", normal=(0, 1, 0))
-        for zz in (0.25, zbox * 0.5, zbox - 0.15):
-            xb = 0.006 if side == 0 else w - 0.006
-            _bolt(mb, (xb, 0.06, zz), (1 if side == 0 else -1, 0, 0), r=0.007, ln=0.004)
-    # caja: faldón frontal (lámina abollable), tapa inferior con ranura, tapa superior y laterales
-    fb, frings, fnx = _slab(w - 0.008, hb - 0.006, 0.0025, nx=max(4, int(w / 0.15)), nz=4, c=0.0008, mat="metal_paint")
+        _shutter_guide(mb, 0.0 if side == 0 else w, side, -0.005, zbox + 0.03, r)
+    # caja: faldón frontal (lámina abollable con el borde inferior enrollado), tapa inferior con ranura, tapa superior y laterales
+    fb, frings, fnx = _slab(w - 0.008, hb - 0.006, 0.0012, nx=max(6, int(w / 0.12)), nz=6, c=0.0004, mat="metal_paint")
     fd = _dents(r, int(3 + 5 * dent), 0.1, w - 0.1, 0.0, hb, rad=(0.05, 0.16), depth=(0.003, 0.018 * dent + 0.003))
     for v in fb.bm.verts:
         v.co.y += fd(v.co.x, v.co.z)
-    _merge(mb, fb, _T(0.004, 0.008, zbox))
-    mb.box((0.004, 0.011, zbox), (w - 0.004, 0.038, zbox + 0.004), "metal_paint")
-    mb.box((0.004, 0.084, zbox), (w - 0.004, 0.19, zbox + 0.004), "metal_paint")
-    mb.box((0.004, 0.011, h - 0.007), (w - 0.004, 0.19, h - 0.003), "metal_paint")
-    for xa in (0.004, w - 0.008):
-        mb.box((xa, 0.0115, zbox + 0.0045), (xa + 0.004, 0.19, h - 0.0075), "metal_paint")
+    _merge(mb, fb, _T(0.004, 0.009, zbox))
+    _lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, w - 0.012), (0.0, w - 0.012)], seg=16, mat="metal_paint",
+           M=_T(0.006, 0.0118, zbox + 0.003) @ _R("Y", 90))
+    mb.box((0.004, 0.012, zbox), (w - 0.004, 0.038, zbox + 0.004), "metal_paint", bevel=0.0012, seg=2)
+    mb.box((0.004, 0.084, zbox), (w - 0.004, 0.19, zbox + 0.004), "metal_paint", bevel=0.0012, seg=2)
+    mb.box((0.004, 0.011, h - 0.007), (w - 0.004, 0.19, h - 0.003), "metal_paint", bevel=0.0012, seg=2)
+    zax = h - hb / 2 - 0.01
+    for xa, sg in ((0.004, 1), (w - 0.008, -1)):
+        mb.box((xa, 0.0115, zbox + 0.0045), (xa + 0.004, 0.19, h - 0.0075), "metal_paint", bevel=0.0012, seg=2)
+        xs_ = xa + (0.004 if sg > 0 else 0.0)
+        _lathe(mb, [(0.0, -0.0005), (0.034, -0.0005), (0.034, 0.008), (0.031, 0.011), (0.022, 0.012), (0.0, 0.012)], seg=32,
+               mat="metal_paint", M=_mat_xy((xs_, 0.1, zax), (0, 0, 1), (0, sg, 0)) @ _R("X", 0))
+        for k in range(4):
+            a_ = PI / 4 + PI / 2 * k
+            _bolt(mb, (xs_, 0.1 + 0.026 * math.cos(a_), zax + 0.026 * math.sin(a_)), (sg, 0, 0), r=0.005, ln=0.005)
+    # rollo de duelas: cilindro acanalado (una costura por duela) sobre el eje del tambor
     roll = 0.05 + 0.035 * max(0.0, min(1.0, open_frac))   # rollo de lamas: cabe en la caja (y 0,011–0,19)
-    mb.cyl((0.02, 0.1, h - hb / 2 - 0.01), (w - 0.02, 0.1, h - hb / 2 - 0.01), roll, seg=16, mat="metal_paint")
+    nr = 72
+    nseam = max(12, int(2 * PI * roll / p))
+    rp = [(roll * (1.0 - 0.06 * max(0.0, math.cos(PI * nseam * k / nr)) ** 8) * math.cos(2 * PI * k / nr),
+           roll * (1.0 - 0.06 * max(0.0, math.cos(PI * nseam * k / nr)) ** 8) * math.sin(2 * PI * k / nr)) for k in range(nr)]
+    with mb.soft():
+        _sweep3(mb, list(reversed(rp)), [(0.02, 0.1, zax), (w - 0.02, 0.1, zax)], "metal_paint", up=(0, 0, 1))
+    _lathe(mb, [(0.0, 0.0), (0.024, 0.0), (0.024, w - 0.016), (0.0, w - 0.016)], seg=24, mat="metal_rust",
+           M=_T(0.008, 0.1, zax) @ _R("Y", 90))
     # cortina
     hc = zbox + 0.01
     zb0 = max(0.0, min(0.95, open_frac)) * (hc - 0.3)
@@ -1520,13 +2082,14 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
     bar_h = 0.06
     n = max(1, int((hc - zb0 - bar_h) / p))
     prof = _slat_profile(p)
-    ns = max(4, int(w / 0.22))
+    ns = max(4, int(round(w / max(0.15, w / 30.0))))
     xs = [0.03 + (w - 0.06) * k / ns for k in range(ns + 1)]
     path = [(x, 0.0, 0.0) for x in xs]
     popped = int(r.integers(0, max(1, n // 3))) if r.random() < 0.35 + 0.5 * dent else -1
     for k in range(n):
         s = MB()
-        s.sweep(prof, path, mat="metal_paint", normal=(0, 1, 0))
+        with s.soft():
+            s.sweep(prof, path, mat="metal_paint", normal=(0, 1, 0))
         z = zb0 + bar_h + k * p
         th = 0.0
         if k == popped:                          # lama zafada de su engrane: gira sobre su gancho hacia afuera
@@ -1539,26 +2102,40 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
                 yy, zz = v.co.y, v.co.z - p
                 v.co.y, v.co.z = yy * math.cos(a) - zz * math.sin(a), yy * math.sin(a) + zz * math.cos(a) + p
         _merge(cur, s, _T(0, yc, z) @ _about((w / 2, 0, p / 2), _R("Y", r.uniform(-0.2, 0.2))))
-    # barra inferior (ángulo con hule) y cerrojo
-    bp = [(0.0, -0.014), (0.05, -0.014), (0.055, -0.009), (0.055, 0.014), (0.05, 0.018), (0.008, 0.018), (0.004, 0.014),
-          (0.0, 0.006)]
+    # barra inferior: doble ángulo de 1 1/2" con hule de bulbo; chapa central con pasadores; jaladeras; porta-candados
+    bp = _fillet2d([(0.0, -0.014), (0.055, -0.014), (0.055, 0.016), (0.008, 0.016), (0.008, 0.012), (0.0, 0.006)],
+                   [0.0015, 0.002, 0.002, 0.0012, 0.0012, 0.0015], n=2)
+    nb0 = len(cur.bm.verts)
     cur.sweep(bp, [(x, 0.0, 0.0) for x in xs], mat="metal_paint", normal=(0, 1, 0))
-    nb = len(bp) * len(xs)
-    for v in list(cur.bm.verts)[-nb:]:
+    cur.bm.verts.ensure_lookup_table()
+    for v in list(cur.bm.verts)[nb0:]:
         v.co.y += yc
         v.co.z += zb0 + 0.004
-    cur.box((0.035, yc - 0.008, zb0 - 0.002), (w - 0.035, yc + 0.008, zb0 + 0.006), "plastic")
+    with cur.soft():
+        cur.sweep(_rrect(0.016, 0.009, 0.004, 3), [(x, 0.0, 0.0) for x in (0.035, w - 0.035)], mat="rubber", normal=(0, 1, 0))
+    cur.bm.verts.ensure_lookup_table()
+    nb1 = len(cur.bm.verts)
+    for v in list(cur.bm.verts)[nb1 - 2 * 4 * 4:]:
+        v.co.y += yc
+        v.co.z += zb0 + 0.0025
     xc = w / 2
-    cur.box((xc - 0.04, yc - 0.03, zb0 + 0.008), (xc + 0.04, yc - 0.0135, zb0 + 0.055), "metal_paint", bevel=0.003, seg=1)
-    cur.cyl((xc, yc - 0.031, zb0 + 0.032), (xc, yc - 0.037, zb0 + 0.032), 0.009, seg=8, mat="metal_rust")
-    for sx in (-1, 1):   # pasadores hacia las guías
-        cur.cyl((xc + sx * 0.04, yc - 0.022, zb0 + 0.03), (xc + sx * (w / 2 - 0.02), yc - 0.022, zb0 + 0.03), 0.006, seg=6,
-                mat="metal_rust")
+    cur.box((xc - 0.045, yc - 0.03, zb0 + 0.008), (xc + 0.045, yc - 0.0135, zb0 + 0.06), "metal_paint", bevel=0.004, seg=2)
+    _cylinder_rose(cur, (xc, yc - 0.03, zb0 + 0.034), (0, -1, 0), R=0.0125, h=0.008, mat="metal_paint")
+    for sx in (-1, 1):   # pasadores hacia las guías (varilla de 1/2" con su guía doblada) y jaladeras de varilla
+        x0_, x1_ = xc + sx * 0.045, xc + sx * (w / 2 - 0.02)
+        _lathe(cur, [(0.0, 0.0), (0.0062, 0.0), (0.0062, abs(x1_ - x0_) - 0.002), (0.0045, abs(x1_ - x0_)), (0.0, abs(x1_ - x0_))],
+               seg=16, mat="metal_rust", M=_T(x0_, yc - 0.022, zb0 + 0.03) @ _R("Y", 90 * sx))
         for xg in (xc + sx * 0.25, xc + sx * (w / 2 - 0.25)):
-            cur.box((xg - 0.012, yc - 0.03, zb0 + 0.024), (xg + 0.012, yc - 0.0135, zb0 + 0.036), "metal_rust")
+            cur.box((xg - 0.014, yc - 0.031, zb0 + 0.021), (xg + 0.014, yc - 0.0135, zb0 + 0.039), "metal_rust", bevel=0.0025,
+                    seg=2)
         xh = xc + sx * w * 0.3
-        cur.tube([(xh - 0.05, yc - 0.0135, zb0 + 0.03), (xh - 0.045, yc - 0.05, zb0 + 0.032), (xh + 0.045, yc - 0.05, zb0 + 0.032),
-                  (xh + 0.05, yc - 0.0135, zb0 + 0.03)], 0.007, seg=6, mat="metal_rust")
+        _rtube(cur, [(xh - 0.05, yc - 0.012, zb0 + 0.032), (xh - 0.05, yc - 0.05, zb0 + 0.032), (xh + 0.05, yc - 0.05, zb0 + 0.032),
+                     (xh + 0.05, yc - 0.012, zb0 + 0.032)], 0.0065, "metal_rust", seg=16, rbend=0.016)
+        # porta-candado junto a la guía: oreja con ojo en la barra (el candado lo cortaron)
+        xq = xc + sx * (w / 2 - 0.12)
+        _plate_bev(cur, _rrect(0.04, 0.05, 0.008, 3, xq, zb0 + 0.03), yc - 0.0135, 0.005, "metal_rust", face=-1, bev=0.0012)
+        _lathe(cur, [(0.009, -0.0025), (0.015, -0.0025), (0.016, -0.0015), (0.016, 0.0015), (0.015, 0.0025), (0.009, 0.0025),
+                     (0.009, -0.0025)], seg=24, mat="metal_rust", M=_T(xq, yc - 0.034, zb0 + 0.012), caps=False)
     # abolladuras, panza y esquina inferior forzada
     nz_ = _Noise(r, wl=0.7, octaves=3, waves=3)
     dn = _dents(r, int(4 + 12 * dent), 0.15, w - 0.15, zb0 + 0.05, hc - 0.1, rad=(0.07, 0.3), depth=(0.003, 0.04 * dent + 0.006))
@@ -1724,7 +2301,7 @@ def security_grille(w, h, seed=0, bottom=0.05, y0=0.006):
     g = 0.006
     L = [(0.0, y0), (0.03, y0), (0.03, y0 + 0.004), (0.004, y0 + 0.004), (0.004, y0 + 0.03), (0.0, y0 + 0.03)]
     fr = MB()
-    fr.sweep(L, _rect_path(g, bottom, w - g, h - g, step=0.4, c=0.04), mat="metal_rust", normal=(0, 1, 0))
+    fr.sweep(L, _rect_path(g, bottom, w - g, h - g, step=0.4, c=0.04), mat="metal_rust", normal=(0, 1, 0), closed_path=True)
     Rk = _rack(fr, w, h, r, deg=0.25, sag=0.002)
     _merge(mb, fr)
     for z in (bottom + 0.15, (bottom + h) / 2, h - 0.15):   # anclas a las jambas

@@ -162,7 +162,14 @@ def _rebar(mb, pts, r, ribs=None, seg=None, mat="metal_rust"):
         ribs = _lv(True, False, False)
     if seg is None:
         seg = _lv(8, 5, 4)
-    if ribs:
+    if ribs and _LOD.aaa:
+        # R-AAA (2026-11-19): corrugado con el paso y la altura reales de ASTM A615 — corrugaciones a 0,7·Ø (6,7 mm en #3,
+        # 8,9 mm en #4) y cresta de 0,1·r (>= 0,5 mm); 2 anillos por paso, tubo de 14 lados (services._tseg)
+        P = _resample(pts, 0.7 * r)
+        cr = r + max(0.0005, 0.1 * r)
+        radii = [cr if (i % 2 == 1) else r for i in range(len(P))]
+        _tube(mb, P, r, seg=seg, mat=mat, radii=radii, lod=False)
+    elif ribs:
         radii = [r * (1.16 if (i % 2 == 1) else 1.0) for i in range(len(pts))]
         _tube(mb, pts, r, seg=seg, mat=mat, radii=radii, lod=False)
     else:
@@ -421,7 +428,7 @@ def rebar_nest(seed=0, n=8, length=0.6, stump=(0.35, 0.35, 0.35), r=None, detail
     detail: high / mid / low = 28,5 / 3,3 / 1,25 k con n = 8, length = 0,6 (≈ 2,9 k / 0,3 k / 0,1 k por varilla).
     mid / low: varillas lisas de 5 / 4 lados simplificadas (el corrugado no se lee a > 3 m), muñón a paso × 2 / × 5.
     Control fino: n (varillas), seg (lados de varilla), ribs (forzar o quitar el corrugado)."""
-    with _detail(detail):
+    with _detail(detail, aaa=(detail == "high")):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -552,6 +559,64 @@ def _brick(mb, M, rr, broken=False):
     _hull(mb, pts, "brick", m=M)
 
 
+def _block_frag(mb, M, rr, nz):
+    """Pedazo de block hueco de concreto 15 × 20 × 40 cm (NMX; 2 celdas, paredes de 3 cm) quebrado a lo largo: queda
+    abierta la celda del lado roto (U), el canto de la fractura es irregular y la superficie rugosa. Acostado (celdas
+    horizontales) con el origen en el centro de su base."""
+    from kit.common import wall_with_openings
+    Lb = rr.uniform(0.17, 0.32)
+    ops = [(0.03, min(0.185, Lb), 0.03, 0.12)]
+    if Lb > 0.24:
+        ops.append((0.215, Lb, 0.03, 0.12))
+    tmp = MB()
+    # u = largo (X), v = ancho de 15 cm (Z del muro -> Y), espesor = alto de 20 cm (Y del muro -> Z): celdas verticales
+    wall_with_openings(tmp, Lb, 0.15, 0.20, [o for o in ops if o[1] - o[0] > 0.01], mat_out="block", mat_in="block",
+                       mat_reveal="block", m=Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, 1, 0, 0), (0, 0, 0, 1))))
+    bmesh.ops.subdivide_edges(tmp.bm, edges=[e for e in tmp.bm.edges if e.calc_length() > 0.05], cuts=2, use_grid_fill=False)
+    bmesh.ops.triangulate(tmp.bm, faces=[f for f in tmp.bm.faces if len(f.verts) > 4])
+    for v in tmp.bm.verts:
+        p = v.co
+        rough = 0.0015 * nz(p, 40.0)
+        brk = 0.0
+        if p.x > Lb - 0.025:                      # canto roto: dientes de hasta 2,5 cm
+            brk = -0.022 * (0.5 + 0.5 * nz(p + Vector((3, 0, 0)), 18.0)) * min(1.0, (p.x - (Lb - 0.025)) / 0.025)
+        v.co = Vector((p.x + brk + rough, p.y + rough * 0.7, p.z + rough * 0.7))
+    for f in tmp.bm.faces:
+        c = f.calc_center_median()
+        if c.x > Lb - 0.03 and abs(f.normal.x) > 0.5:
+            f.material_index = tmp.mi("rubble")
+    rot = rr.choice([0, 1, 2])                    # acostado de canto, de cara o parado
+    R = [Matrix.Identity(4), _R("X", 90), _R("Y", 90)][int(rot)]
+    tmp.transform(R @ _T(-Lb / 2, -0.075, -0.10))
+    zmin = min(v.co.z for v in tmp.bm.verts)
+    tmp.transform(_T(0, 0, -zmin))
+    _merge(mb, tmp, M)
+
+
+def _flake(mb, M, rr):
+    """Laja de aplanado (12–20 mm) combada, con canto quebrado: cara pintada 'plaster', atrás y canto 'mortar'."""
+    k = int(rr.integers(7, 11))
+    s = rr.uniform(0.08, 0.22)
+    t = rr.uniform(0.012, 0.02)
+    pts = [(s * rr.uniform(0.55, 1.0) * math.cos(2 * PI * (i + rr.uniform(-0.3, 0.3)) / k),
+            s * rr.uniform(0.45, 0.85) * math.sin(2 * PI * (i + rr.uniform(-0.3, 0.3)) / k)) for i in range(k)]
+    tmp = MB()
+    bot = [tmp.bm.verts.new((x, y, 0.0)) for (x, y) in pts]
+    mid = [tmp.bm.verts.new((x + rr.uniform(-0.004, 0.004), y + rr.uniform(-0.004, 0.004), t * rr.uniform(0.35, 0.65))) for (x, y) in pts]
+    top = [tmp.bm.verts.new((x * rr.uniform(0.9, 0.98), y * rr.uniform(0.9, 0.98), t)) for (x, y) in pts]
+    tmp.face(list(reversed(bot)), "mortar")
+    tmp.face(top, "plaster")
+    for i in range(k):
+        j = (i + 1) % k
+        tmp.face([bot[i], bot[j], mid[j], mid[i]], "mortar")
+        tmp.face([mid[i], mid[j], top[j], top[i]], "mortar")
+    bmesh.ops.triangulate(tmp.bm, faces=[f for f in tmp.bm.faces if len(f.verts) > 4])
+    bend = rr.uniform(-0.6, 0.6)
+    for v in tmp.bm.verts:
+        v.co.z += bend * (v.co.x ** 2 + 0.5 * v.co.y ** 2)
+    _merge(mb, tmp, M)
+
+
 def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
     """Montón de escombro: base de cascajo/arena con perfil de talud irregular y n trozos de concreto (cascos convexos
     rugosos, losas con varilla) APILADOS con un campo de alturas (cada pieza descansa sobre las anteriores), ladrillos
@@ -560,7 +625,7 @@ def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
     detail: high / mid / low = 50 / 13,3 / 5,6 k con radius = 1, n = 60 y 93 / 24 / 8,4 k con radius = 1,6, n = 90.
     mid: trozos con la mitad de resolución y 1 de cada 2 piedras de grava; low: cada trozo es el poliedro limpio de sus
     planos de fractura (20–60 triángulos) y 1 de cada 4 piedras. Control fino: n (trozos) y gravel (piedras por trozo)."""
-    with _detail(detail):
+    with _detail(detail, aaa=(detail == "high")):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -682,6 +747,23 @@ def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
             pts = _rebar_path(rr, p0, dirv, rr.uniform(0.3, 0.9), Vector((math.cos(a), math.sin(a), 0)),
                               kind=rr.choice(["bent", "kink", "hook", "straight"]))
             _rebar(mb, pts, rr.choice([0.0048, 0.0064]))
+        if _LOD.aaa:
+            # R-AAA (2026-11-19): escombro de muro además del de losa — blocks huecos rotos y lajas de aplanado sobre el
+            # montón (solo en 'high': mid / low y su semilla quedan como estaban)
+            for _ in range(max(1, int(n // 18))):
+                a = rr.uniform(0, 2 * PI)
+                d = Rth(a) * rr.uniform(0.15, 0.8)
+                x, y = d * math.cos(a), d * math.sin(a)
+                base = hf_at(x, y, 0.12)
+                _block_frag(mb, _T(x, y, base - 0.015) @ _R("Z", rr.uniform(0, 360)) @ _R("X", rr.uniform(-12, 12)), rr, nz)
+                for (i, j, dd) in cells(x, y, 0.16):
+                    hf[i][j] = max(hf[i][j], base + 0.12 * (1 - dd / 0.16))
+            for _ in range(max(2, int(n // 10))):
+                a = rr.uniform(0, 2 * PI)
+                d = Rth(a) * rr.uniform(0.1, 1.05)
+                x, y = d * math.cos(a), d * math.sin(a)
+                base = max(hgt(x, y), hf_at(x, y, 0.06) - 0.01, 0.0)
+                _flake(mb, _T(x, y, base) @ _R("Z", rr.uniform(0, 360)) @ _R("X", rr.uniform(-20, 20)) @ _R("Y", rr.uniform(-20, 20)), rr)
         _declump(mb)
         return mb
 
@@ -692,7 +774,7 @@ def chunk(size=0.3, seed=0, kind=None, detail="high"):
     grande, varilla asomando) o None (al azar). Origen: centro en planta, z = 0 en su punto más bajo (se apoya en el piso;
     para escombro colgante o desconches usar la matriz que convenga).
     detail: high / mid / low = 2,4 / 0,8 / 0,09 k para 0,45 m (low = poliedro limpio de los planos de fractura)."""
-    with _detail(detail):
+    with _detail(detail, aaa=(detail == "high")):
         rr = rng(seed)
         nz = _Nz(rr)
         if isinstance(size, (int, float)):
@@ -809,7 +891,7 @@ def spall_edge(length, depth, seed=0, edge_bevel=0.015, cover=0.035, bar_r=0.006
     soldado sin junta usar `spalled_box`, que integra la mordida en el sólido del anfitrión.
     detail: high / mid / low = 8,4 / 1,7 / 0,7 k para 1,2 × 0,12 (estaciones cada 1,5 / 3 / 6 cm, perfil de 12 / 8 / 5
     puntos, varilla lisa en mid / low, 1 de cada 2 / 4 piedras de agregado)."""
-    with _detail(detail):
+    with _detail(detail, aaa=(detail == "high")):
         rr = rng(seed)
         nz = _Nz(rr)
         mb = MB()
@@ -870,7 +952,7 @@ def spalled_box(mb, mn, mx, spalls, mat="concrete", bevel=0.015, seg=2, detail="
     expuestos se agregan con la misma convención que `spall_edge`.
     detail: high / mid / low = 29 / 8,3 / 3,4 k para una losa de 3,6 m con 2 mordidas y 23,6 / 6,9 / 2,9 k para una
     columna de 2,6 m con 2 mordidas (mismos recortes que spall_edge)."""
-    with _detail(detail):
+    with _detail(detail, aaa=(detail == "high")):
         mn, mx = _v(mn), _v(mx)
         if not spalls:
             _box(mb, tuple(mn), tuple(mx), mat, bevel=bevel, seg=seg)

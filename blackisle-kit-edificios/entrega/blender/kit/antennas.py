@@ -40,7 +40,7 @@ def _V(p):
     return Vector((float(p[0]), float(p[1]), float(p[2])))
 
 
-def _washer(mb, M, d, seg=16, mat=SS):
+def _washer(mb, M, d, seg=24, mat=SS):
     """Arandela plana sobre z = 0 local (eje +Z); devuelve su espesor."""
     t = max(0.0015, d * 0.16)
     revolve(mb, [(d * 1.05, -0.0004), (d * 1.05, t)], mat, seg=seg, M=M)
@@ -63,7 +63,7 @@ def _nut(mb, M, d=0.012, washer=True, mat=SS):
     return z + _hex(mb, M, d, mat=mat, z=z)
 
 
-def _rod(mb, p0, p1, r, seg=14, mat=SS):
+def _rod(mb, p0, p1, r, seg=16, mat=SS):
     mb.cyl(_V(p0), _V(p1), r, seg=seg, mat=mat)
 
 
@@ -125,7 +125,7 @@ def _clamp(mb, M, w=0.16, h=0.05, t=0.005, gap=0.012, rod_x=0.062, rod_d=0.012, 
     for x in (-rod_x, rod_x):
         hh = _hex(mb, M @ _T(x, -yo, 0) @ _Rx(90), rod_d, h=0.65 * rod_d, z=-0.0003)
         top = _nut(mb, M @ _T(x, yo, 0) @ _Rx(-90), rod_d)
-        _rod(mb, M @ Vector((x, -yo - hh + 0.003, 0)), M @ Vector((x, yo + top + 0.004, 0)), rod_d / 2, seg=14, mat=SS)
+        _rod(mb, M @ Vector((x, -yo - hh + 0.003, 0)), M @ Vector((x, yo + top + 0.004, 0)), rod_d / 2, seg=16, mat=SS)
     ya = -(k + t / 2)
     if lug:
         kind, ypiv = lug[0], lug[1]
@@ -144,7 +144,7 @@ def _pivot_bolt(mb, M, p, x_out, d=0.012):
     hexagonal apoyada en -x_out, tuerca de seguridad (sin arandela) en +x_out y 3 mm de espárrago visible."""
     hh = _hex(mb, M @ _T(-x_out, p[0], p[1]) @ _Ry(-90), d, h=0.6 * d, z=-0.0003)
     nh = _hex(mb, M @ _T(x_out, p[0], p[1]) @ _Ry(90), d, h=0.9 * d, z=-0.0003)
-    _rod(mb, M @ Vector((-x_out - hh + 0.003, p[0], p[1])), M @ Vector((x_out + nh + 0.003, p[0], p[1])), d / 2, seg=14)
+    _rod(mb, M @ Vector((-x_out - hh + 0.003, p[0], p[1])), M @ Vector((x_out + nh + 0.003, p[0], p[1])), d / 2, seg=16)
 
 
 # ======================================================================================================== panel pasivo
@@ -194,19 +194,19 @@ def _end_cap(mb, MA, prof, z0, z1, top, mat="plastic"):
     loft_rings(mb, rings, mat, M=MA)
 
 
-def _port_43_10(mb, M, seg=16):
+def _port_43_10(mb, M, seg=24):
     """Puerto hembra 4.3-10 de panel (eje +Z local hacia fuera): contratuerca hexagonal y cuerpo roscado con boca."""
     _hex(mb, M, 0.0155, h=0.0065, mat=SS, z=-0.001)
     revolve(mb, [(0.0098, 0.004), (0.0098, 0.0235), (0.0087, 0.0262), (0.0060, 0.0262), (0.0056, 0.020), (0.0, 0.020)], SS,
             seg=seg, M=M)
 
 
-def _aisg_port(mb, M, seg=16):
+def _aisg_port(mb, M, seg=24):
     """Puerto AISG de 8 pines con su tapa protectora de hule (eje +Z hacia fuera)."""
     _hex(mb, M, 0.0135, h=0.005, mat=SS, z=-0.001)
     revolve(mb, [(0.0105, 0.0035), (0.0105, 0.020), (0.0094, 0.0225), (0.0, 0.0232)], "rubber", seg=seg, M=M)
     mb.tube([M @ Vector((0.0104, 0.0, 0.012)), M @ Vector((0.016, 0.0, 0.010)), M @ Vector((0.019, 0.0, 0.0)),
-             M @ Vector((0.018, 0.0, -0.0008))], 0.0018, seg=6, mat="rubber")
+             M @ Vector((0.018, 0.0, -0.0008))], 0.0018, seg=12, mat="rubber")
 
 
 def _antenna_bracket(mb, MA, zp, ypiv, plate_w=0.21, plate_h=0.12, bolts_x=(-0.075, 0.075), bolts_dz=(-0.04, 0.04), hh=0.055,
@@ -283,7 +283,7 @@ def panel_antenna(seed=0, tilt_deg=4.0):
             _port_43_10(mb, MA @ _T(x, y, 0.0) @ _Rx(180))
     for x in (-0.06, 0.06):
         _aisg_port(mb, MA @ _T(x, -0.148, 0.0) @ _Rx(180) @ _Rz(float(r.uniform(0, 360))))
-    revolve(mb, [(0.006, -0.001), (0.006, 0.004), (0.0045, 0.0055), (0.0, 0.0058)], "plastic", seg=12, M=MA @ _T(0, -0.148, 0) @ _Rx(180))
+    revolve(mb, [(0.006, -0.001), (0.006, 0.004), (0.0045, 0.0055), (0.0, 0.0058)], "plastic", seg=24, M=MA @ _T(0, -0.148, 0) @ _Rx(180))
     # placa de identificación en la espalda
     mb.box((-0.045, -0.0015, 0.42), (0.045, 0.0016, 0.48), "sign_white", bevel=0.0006, seg=1, m=MA)
     # soportes del cuerpo
@@ -339,15 +339,15 @@ def _tail(mb, M, pts, r, mat="cable", seg=14, bend=0.04, nseg=5):
 def _grommet(mb, M, r_cable, mat="rubber"):
     """Pasacables de hule (prensaestopa de domo) en z = 0 local, eje +Z hacia fuera."""
     ro = r_cable + 0.006
-    revolve(mb, [(ro, -0.001), (ro, 0.0045), (r_cable + 0.0013, 0.0095), (r_cable + 0.0003, 0.0095)], mat, seg=16, M=M)
+    revolve(mb, [(ro, -0.001), (ro, 0.0045), (r_cable + 0.0013, 0.0095), (r_cable + 0.0003, 0.0095)], mat, seg=24, M=M)
 
 
 def _ground_lug(mb, M, mat="copper"):
     """Terminal de tierra: zapata de cobre de un ojo sobre espárrago con tuerca, y el cable verde de tierra saliendo hacia -Z
     local (marco M: plano de la superficie XY, +Z fuera; el cable baja por -Y local)."""
-    revolve(mb, [(0.0085, -0.0004), (0.0085, 0.0018), (0.0068, 0.0026), (0.0, 0.0026)], mat, seg=16, M=M)       # ojo
+    revolve(mb, [(0.0085, -0.0004), (0.0085, 0.0018), (0.0068, 0.0026), (0.0, 0.0026)], mat, seg=24, M=M)       # ojo
     mb.box((-0.0055, -0.024, -0.0004), (0.0055, -0.0072, 0.0016), mat, bevel=0.0006, seg=1, m=M)              # lengüeta
-    revolve(mb, [(0.0045, -0.0215), (0.0062, -0.0225), (0.0062, -0.036), (0.0048, -0.037)], mat, seg=16,
+    revolve(mb, [(0.0045, -0.0215), (0.0062, -0.0225), (0.0062, -0.036), (0.0048, -0.037)], mat, seg=24,
             M=M @ _T(0, 0, 0.0058) @ _Rx(-90))                                                                 # barril
     _hex(mb, M @ _T(0, 0, 0.0022), 0.006, h=0.005)
     _rod(mb, M @ Vector((0, 0, -0.003)), M @ Vector((0, 0, 0.0095)), 0.003)
@@ -394,13 +394,13 @@ def aau(seed=0, tilt_deg=2.0, tails=True):
     # asa superior: tubo Ø 18 doblado con dos bases torneadas
     yh = -0.128
     mb.tube([MA @ _V(p) for p in fillet([(-0.085, yh, H - 0.004), (-0.085, yh, H + 0.042), (0.085, yh, H + 0.042), (0.085, yh, H - 0.004)],
-                                         0.022, 4)], 0.009, seg=16, mat="aluminium")
+                                         0.022, 6)], 0.009, seg=24, mat="aluminium")
     for sx in (-1, 1):
-        revolve(mb, [(0.017, -0.002), (0.017, 0.004), (0.012, 0.010), (0.0, 0.011)], "aluminium", seg=20, M=MA @ _T(sx * 0.085, yh, H))
+        revolve(mb, [(0.017, -0.002), (0.017, 0.004), (0.012, 0.010), (0.0, 0.011)], "aluminium", seg=24, M=MA @ _T(sx * 0.085, yh, H))
     # bahía de cables inferior: tapa con 2 tornillos cautivos, pasacables y colas
     slab(mb, MA @ _T(0, -0.160, 0.002) @ _Rx(180), 0.25, 0.085, 0.026, rc=0.010, re=0.004, re0=0.0, mat="aluminium", nc=3, ne=2)
     for sx in (-1, 1):
-        revolve(mb, [(0.0065, -0.0004), (0.0065, 0.003), (0.004, 0.0055), (0.0, 0.006)], SS, seg=16,
+        revolve(mb, [(0.0065, -0.0004), (0.0065, 0.003), (0.004, 0.0055), (0.0, 0.006)], SS, seg=24,
                 M=MA @ _T(sx * 0.10, -0.2025, -0.012) @ _Rx(90))
     cab = [(-0.05, 0.0075, "cable"), (0.03, 0.0035, "paint_yellow"), (0.05, 0.0035, "paint_yellow")]
     for (x, rc, mat) in cab:
@@ -446,7 +446,7 @@ def rru(seed=0, tails=True):
     slab(mb, MC @ _T(0, -0.044, H - 0.008), W + 0.006, Dc + 0.008, 0.022, rc=0.018, re=0.006, re0=0.002, mat="aluminium", nc=4, ne=2)
     yh = -0.044
     for sx in (-1, 1):
-        revolve(mb, [(0.011, -0.001), (0.011, 0.012), (0.009, 0.016), (0.0, 0.0165)], "aluminium", seg=16,
+        revolve(mb, [(0.011, -0.001), (0.011, 0.012), (0.009, 0.016), (0.0, 0.0165)], "aluminium", seg=24,
                 M=MC @ _T(sx * 0.075, yh, H + 0.012) @ _Ry(90 * sx))
     mb.sweep(rr_profile(0.024, 0.006, 0.0025, n=1), [MC @ _V(p) for p in fillet(
         [(-0.085, yh, H + 0.023), (-0.085, yh - 0.045, H + 0.036), (0.085, yh - 0.045, H + 0.036), (0.085, yh, H + 0.023)], 0.018, 4)],
@@ -457,7 +457,7 @@ def rru(seed=0, tails=True):
     _aisg_port(mb, MC @ _T(0.0, -0.060, 0.0) @ _Rx(180) @ _Rz(float(r.uniform(0, 360))))
     slab(mb, MC @ _T(0, -0.022, 0.002) @ _Rx(180), 0.236, 0.034, 0.022, rc=0.008, re=0.004, re0=0.0, mat="aluminium", nc=3, ne=2)
     for sx in (-1, 1):
-        revolve(mb, [(0.0065, -0.0004), (0.0065, 0.003), (0.004, 0.0055), (0.0, 0.006)], SS, seg=16,
+        revolve(mb, [(0.0065, -0.0004), (0.0065, 0.003), (0.004, 0.0055), (0.0, 0.006)], SS, seg=24,
                 M=MC @ _T(sx * 0.095, -0.039, -0.010) @ _Rx(90))
     cab = [(-0.06, 0.0075, "cable"), (-0.03, 0.0035, "paint_yellow")]
     for (x, rc, mat) in cab:
@@ -486,7 +486,7 @@ def rru(seed=0, tails=True):
     for zc in (0.13, H - 0.13):
         _clamp(mb, _T(0, 0, zc), w=0.15)
         for sx in (-1, 1):                             # cordones de soldadura mordaza-canal
-            mb.tube([MC @ Vector((sx * 0.0045, 0.0212, zc + dz)) for dz in (-0.023, 0.023)], 0.0022, seg=6, mat=GALV)
+            mb.tube([MC @ Vector((sx * 0.0045, 0.0212, zc + dz)) for dz in (-0.023, 0.023)], 0.0022, seg=10, mat=GALV)
     return mb
 
 
@@ -525,7 +525,7 @@ def _odu(mb, M, W=0.259, H=0.321, D=0.108, seed=0):
     xa = W / 2
     pts = fillet([(xa - 0.004, -0.09, D * 0.55), (xa + 0.035, -0.09, D * 0.55), (xa + 0.035, 0.09, D * 0.55), (xa - 0.004, 0.09, D * 0.55)],
                  0.02, 4)
-    mb.tube([M @ _V(p) for p in pts], 0.008, seg=14, mat="aluminium")
+    mb.tube([M @ _V(p) for p in pts], 0.008, seg=24, mat="aluminium")
     # broches (4) al anillo del cubo
     for a in (45, 135, 225, 315):
         Ma = M @ _Rz(a) @ _T(0.098, 0, 0)
@@ -533,7 +533,7 @@ def _odu(mb, M, W=0.259, H=0.321, D=0.108, seed=0):
         mb.box((0.002, -0.006, -0.03), (0.016, 0.006, 0.016), SS, bevel=0.002, seg=1, m=Ma)
     # conectores abajo (-Y): alimentación/datos con prensaestopa y tapa de puerto óptico
     for (x, rr, mat) in ((-0.05, 0.0105, "plastic"), (0.035, 0.009, "rubber")):
-        revolve(mb, [(rr * 1.3, -0.002), (rr * 1.3, 0.006), (rr, 0.009), (rr, 0.024), (rr * 0.85, 0.027), (rr * 0.55, 0.027)], mat, seg=16,
+        revolve(mb, [(rr * 1.3, -0.002), (rr * 1.3, 0.006), (rr, 0.009), (rr, 0.024), (rr * 0.85, 0.027), (rr * 0.55, 0.027)], mat, seg=24,
                 M=M @ _T(x, -H / 2, D * 0.45) @ _Rx(90))
     _ground_lug(mb, M @ _T(-W / 2 - 0.0002, -0.08, D * 0.45) @ _Ry(-90) @ _Rz(180))
 
@@ -563,7 +563,7 @@ def mw_dish(d=0.9, seed=0, cable=True):
     Rs = Rr + 0.015                              # faldón
     h = d / 4.8                                  # profundidad del paraboloide (f/D = 0,30)
     Ls = 0.30 if d >= 0.75 else 0.20             # largo del faldón
-    seg = 48
+    seg = 64
     yv = -0.228                                  # vértice trasero del reflector
     MD = _T(0, yv, 0) @ _Rx(90)                  # z local = hacia el frente (-Y); x local = X; y local = +Z
     zc = h + 0.008 + Ls                          # borde delantero del faldón
@@ -576,26 +576,48 @@ def mw_dish(d=0.9, seed=0, cable=True):
         a = 2 * PI * (k + 0.5) / 10
         Mb = MD @ _T((Rs + 0.0055) * math.cos(a), (Rs + 0.0055) * math.sin(a), h + 0.0008) @ _Rx(180)
         _hex(mb, Mb, 0.008, h=0.0055, z=-0.0004)
-    # radomo de tela: frente abombado con arrugas radiales cerca de la orilla, vuelta sobre el labio, faldón fruncido
+    # radomo de tela (PTFE/fibra de vidrio tensado): paño abombado por la tensión, arrugas de tensión que nacen en el labio y
+    # mueren hacia el centro (cada una con su ángulo, ancho, largo y alto propios; algunas hundidas), una leve deformación de
+    # baja frecuencia del paño, vuelta sobre el labio y faldón fruncido bajo el fleje con pliegues de paso irregular.
+    sgf = 128
     bul = 0.010 + 0.006 * d
-    nf = seg // 4
     ph = float(r.uniform(0, 2 * PI))
-    fprof = [(0.0, zc + 0.006 + bul)] + [(Rs * f, zc + 0.006 + bul * (1 - f * f)) for f in (0.4, 0.72, 0.88, 0.96)]
-    fprof += [(Rs - 0.003, zc + 0.0045), (Rs + 0.006, zc - 0.001), (Rs + 0.0068, zc - 0.012), (Rs + 0.0035, zc - 0.022),
-              (Rs + 0.0030, zc - 0.058), (Rs - 0.002, zc - 0.058), (Rs - 0.002, zc - 0.002), (0.0, zc + 0.002)]
+    face_f = (0.16, 0.32, 0.46, 0.58, 0.68, 0.76, 0.83, 0.885, 0.925, 0.955, 0.978)
+    fprof = [(0.0, zc + 0.006 + bul)] + [(Rs * f, zc + 0.006 + bul * (1 - f * f)) for f in face_f]
+    i_lip = len(fprof)
+    fprof += [(Rs - 0.003, zc + 0.0045), (Rs + 0.006, zc - 0.001), (Rs + 0.0068, zc - 0.012), (Rs + 0.0050, zc - 0.018),
+              (Rs + 0.0035, zc - 0.024), (Rs + 0.0032, zc - 0.040), (Rs + 0.0030, zc - 0.058), (Rs - 0.002, zc - 0.058),
+              (Rs - 0.002, zc - 0.002), (0.0, zc + 0.002)]
+    nw = int(14 + 10 * d)                         # arrugas de tensión
+    wr = [(float(r.uniform(0, 2 * PI)), float(r.uniform(0.022, 0.06)), float(r.uniform(0.52, 0.82)),
+           float(r.choice([-0.45, 1.0, 1.0, 1.0])) * float(r.uniform(0.0016, 0.0034))) for _ in range(nw)]
+    npl = int(round(26 * d / 0.9)) * 2            # pliegues del faldón
+    pw = [float(r.uniform(-0.35, 0.35)) for _ in range(npl)]
+
+    def _ss(x):
+        x = min(max(x, 0.0), 1.0)
+        return x * x * (3 - 2 * x)
 
     def fab(i, a, rr, z):
-        if 1 <= i <= 5:                              # ondulación suave del paño + arrugas radiales de tensión en la orilla
-            w = (0.1, 0.3, 0.75, 0.9, 0.3)[i - 1]
-            z += 0.0045 * w * math.sin(nf * a + ph + 0.5 * math.sin(3 * a + ph))
-            z += 0.0025 * (1.0, 0.9, 0.6, 0.3, 0.1)[i - 1] * math.sin(2 * a + 1.3 * ph)
-        if i in (7, 8):                              # frunces del faldón entre el labio y el fleje
-            rr += (0.0024 if i == 7 else 0.0012) * (0.5 + 0.5 * math.sin(nf * a + ph))
+        f = rr / Rs
+        if 1 <= i < i_lip:
+            for (aj, wj, fj, hj) in wr:                  # cresta: gaussiana en el ángulo, crece hacia el labio
+                da = (a - aj + PI) % (2 * PI) - PI
+                if abs(da) < 3.5 * wj:
+                    z += hj * math.exp(-(da / wj) ** 2) * _ss((f - fj) / (0.985 - fj)) * (1.0 - 0.35 * _ss((f - 0.95) / 0.035))
+            z += 0.0014 * f * f * math.sin(2 * a + 1.3 * ph) + 0.0008 * f ** 3 * math.sin(5 * a + 0.7 * ph)
+        if i_lip + 2 <= i <= i_lip + 5:                # frunces entre el labio y el fleje: pliegues de paso irregular
+            u = (a / (2 * PI)) * npl
+            k = int(u) % npl
+            fr = u - int(u) + pw[k] * 0.3
+            pl = abs(math.sin(PI * fr)) ** 0.6
+            amp = (0.0012, 0.0024, 0.0030, 0.0016)[i - (i_lip + 2)]
+            rr += amp * (pl - 0.5)
         return rr, z
-    _polar(mb, MD, fprof, seg, "radome", mod=fab)
+    _polar(mb, MD, fprof, sgf, "radome", mod=fab)
     # fleje de tensión alrededor del faldón y tensor (tornillo en T) abajo
     zb0, zb1 = zc - 0.050, zc - 0.028
-    revolve(mb, [(Rs + 0.0026, zb0), (Rs + 0.0054, zb0 + 0.001), (Rs + 0.0054, zb1 - 0.001), (Rs + 0.0026, zb1)], SS, seg=seg, M=MD)
+    revolve(mb, [(Rs + 0.0026, zb0), (Rs + 0.0054, zb0 + 0.001), (Rs + 0.0054, zb1 - 0.001), (Rs + 0.0026, zb1)], SS, seg=sgf, M=MD)
     a_t = -PI / 2 + 0.25
     Mt = MD @ _T((Rs + 0.0050) * math.cos(a_t), (Rs + 0.0050) * math.sin(a_t), (zb0 + zb1) / 2) @ _Rz(math.degrees(a_t)) @ _Ry(90)
     mb.box((-0.013, -0.022, -0.001), (0.013, 0.022, 0.016), SS, bevel=0.003, seg=1, m=Mt)
@@ -719,7 +741,7 @@ def obstruction_light(mount="pipe"):
     revolve(mb, prof, "sign_red", seg=40)
     # prensaestopa lateral M20 (en -Y) y cable que baja
     Mg = _Rz(-90) @ _T(0.054, 0, zb + 0.030) @ _Ry(90)
-    revolve(mb, [(0.012, -0.008), (0.012, 0.007), (0.0105, 0.016), (0.0050, 0.021)], "plastic", seg=16, M=Mg)
+    revolve(mb, [(0.012, -0.008), (0.012, 0.007), (0.0105, 0.016), (0.0050, 0.021)], "plastic", seg=24, M=Mg)
     p0 = Mg @ Vector((0, 0, 0.018))
     mb.tube(fillet([p0, p0 + Vector((0, -0.035, 0)), Vector((0.0, p0.y - 0.045, -0.20))], 0.035, 3), 0.0042, seg=14, mat="cable")
     return mb
@@ -743,7 +765,7 @@ def lightning_rod(h=2.0):
     revolve(mb, [(0.008, zm + 0.04), (0.008, h - 0.10), (0.0042, h - 0.02), (0.0, h)], "copper", seg=24)  # punta
     ys = 0.040
     zc = zm + 0.10
-    revolve(mb, [(0.0135, zc - 0.012), (0.0135, zc + 0.012)], "copper", seg=16)                          # grapa
+    revolve(mb, [(0.0135, zc - 0.012), (0.0135, zc + 0.012)], "copper", seg=24)                          # grapa
     mb.box((-0.006, 0.011, zc - 0.012), (0.006, ys + 0.009, zc + 0.012), "copper", bevel=0.002, seg=1)
     pts = [(0.0, ys, zc), (0.0, ys, 0.06), (0.0, ys + 0.03, 0.0165)]
     mb.tube(fillet(pts, 0.035, 3), 0.005, seg=14, mat="copper")
@@ -764,7 +786,7 @@ def _connector_43_10(mb, M, r_cable, band=None):
     rb = max(r_cable + 0.0025, 0.0095)
     revolve(mb, [(0.0122, 0.036), (0.0122, 0.046), (rb, 0.066), (r_cable + 0.0008, 0.074)], "rubber", seg=24, M=M)
     if band:
-        revolve(mb, [(r_cable + 0.0019, 0.078), (r_cable + 0.0019, 0.094)], band, seg=16, M=M)
+        revolve(mb, [(r_cable + 0.0019, 0.078), (r_cable + 0.0019, 0.094)], band, seg=24, M=M)
 
 
 def _spline(pts, step=0.025):
@@ -892,7 +914,7 @@ def pipe_mount(length=3.0, standoff=0.30, clamp_z=(0.35, None), rail_d=0.0603):
         from kit.clinic_equipo import rtube_lo
         rtube_lo(mb, (0, R + 0.008, z), (0, standoff - rr - 0.008, z), 0.04, 0.04, GALV, up=(0, 0, 1), r=0.003, n=1)
         for sx in (-1, 1):
-            mb.tube([(sx * 0.0205, R + 0.0105, z - 0.018), (sx * 0.0205, R + 0.0105, z + 0.018)], 0.0022, seg=6, mat=GALV)
+            mb.tube([(sx * 0.0205, R + 0.0105, z - 0.018), (sx * 0.0205, R + 0.0105, z + 0.018)], 0.0022, seg=10, mat=GALV)
         # placa contra el larguero (lado -Y del larguero) con abrazadera U por el lado +Y
         mb.box((-0.05, standoff - rr - 0.010, z - 0.065), (0.05, standoff - rr + 0.0005, z + 0.065), GALV, bevel=0.002, seg=1)
         _ubolt(mb, _T(0, standoff, z) @ _Rz(180), rr)

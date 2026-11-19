@@ -113,6 +113,99 @@ def c_sec(h, b, t=0.006):
     return [(0.0, t, -h / 2, h / 2), (t, b, h / 2 - t, h / 2), (t, b, -h / 2, -h / 2 + t)]
 
 
+def i_profile(h, b, tw=0.012, tf=0.016, rr=0.015):
+    """Perfil I laminado (x = ancho de patín, y = peralte) con filetes de raíz y puntas de patín redondeadas."""
+    pts = [(-b / 2, -h / 2), (b / 2, -h / 2), (b / 2, -h / 2 + tf), (tw / 2 + rr, -h / 2 + tf), (tw / 2, -h / 2 + tf + rr),
+           (tw / 2, h / 2 - tf - rr), (tw / 2 + rr, h / 2 - tf), (b / 2, h / 2 - tf), (b / 2, h / 2), (-b / 2, h / 2),
+           (-b / 2, h / 2 - tf), (-tw / 2 - rr, h / 2 - tf), (-tw / 2, h / 2 - tf - rr), (-tw / 2, -h / 2 + tf + rr),
+           (-tw / 2 - rr, -h / 2 + tf), (-b / 2, -h / 2 + tf)]
+    return port.round_poly(pts, min(rr, tf * 0.45), 3)
+
+
+def isweep(mb, p0, p1, h, b, mat, up=(0, 0, 1), tw=0.012, tf=0.016):
+    """Viga o columna I de p0 a p1 (peralte h hacia `up`), con filetes de raíz."""
+    port.psweep(mb, i_profile(h, b, tw, tf, rr=min(0.018, h * 0.05)), [p0, p1], mat, up=up, miter=False)
+
+
+def cz_profile(h, b, t, kind="C", lip=0.0, r_in=None):
+    """Perfil de lámina doblada en frío (C o Z) de espesor t con dobleces de radio real (x = ala, y = alma)."""
+    if kind == "C":
+        pts = [(0.0, -h / 2), (b, -h / 2), (b, -h / 2 + (lip or t)), (b - t, -h / 2 + (lip or t)), (b - t, -h / 2 + t), (t, -h / 2 + t),
+               (t, h / 2 - t), (b - t, h / 2 - t), (b - t, h / 2 - (lip or t)), (b, h / 2 - (lip or t)), (b, h / 2), (0.0, h / 2)]
+    else:
+        pts = [(-b, -h / 2), (t / 2, -h / 2), (t / 2, h / 2 - t), (b, h / 2 - t), (b, h / 2), (-t / 2, h / 2), (-t / 2, -h / 2 + t),
+               (-b, -h / 2 + t)]
+    return port.round_poly(pts, r_in if r_in is not None else t * 1.2, 2)
+
+
+def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c=0.015, rebar_mat="metal_rust"):
+    """Viga de concreto colado de p0 a p1 (sección w x h, base en la cota de p0/p1 y altura hacia `up`) con chaflán c en
+    las 4 aristas. spalls > 0 (requiere r y out = vector hacia la cara expuesta): descascarados en la arista inferior
+    expuesta, con la varilla longitudinal y los estribos a la vista y oxidados."""
+    P0, P1 = Vector(p0), Vector(p1)
+    L = (P1 - P0).length
+    T = (P1 - P0).normalized()
+    U = Vector(up)
+    N = (U - T * T.dot(U)).normalized()
+    B = T.cross(N)
+    sx = 1.0
+    if out is not None:
+        sx = 1.0 if B.dot(Vector(out)) >= 0 else -1.0
+    sp = []
+    if spalls and r is not None:
+        for _ in range(spalls):
+            ln = float(r.uniform(0.5, 1.8))
+            s0 = float(r.uniform(0.3, max(0.31, L - ln - 0.3)))
+            sp.append((s0, s0 + ln, float(r.uniform(0.05, 0.11))))
+    stations = {0.0, L}
+    for (a, b, _) in sp:
+        k = 0
+        while a - 0.04 + 0.07 * k <= b + 0.04:
+            if 0 < a - 0.04 + 0.07 * k < L:
+                stations.add(round(a - 0.04 + 0.07 * k, 4))
+            k += 1
+    stations = sorted(stations)
+    rings = []
+    for st in stations:
+        d = 0.0
+        for (a, b, dep) in sp:
+            if a <= st <= b:
+                f = math.sin(math.pi * (st - a) / (b - a)) ** 0.6
+                d = max(d, dep * f * (0.8 + 0.4 * float(r.random())))
+        cb = max(c, d)
+        hx = w / 2
+        # base, arista inferior derecha (con cráter si es la expuesta), lado derecho, arriba, lado izquierdo, arista inferior
+        # izquierda: siempre 10 vértices para que los anillos casen
+        cr = cb if sx > 0 else c
+        cl = cb if sx < 0 else c
+        kr = 0.154 * d if sx > 0 else 0.0
+        kl = 0.154 * d if sx < 0 else 0.0
+        prof = [(-hx + cl, 0.0), (hx - cr, 0.0), (hx - cr * 0.5 - kr, cr * 0.5 + kr), (hx, cr), (hx, h - c), (hx - c, h),
+                (-hx + c, h), (-hx, h - c), (-hx, cl), (-hx + cl * 0.5 + kl, cl * 0.5 + kl)]
+        P = P0 + T * st
+        rings.append([mb.bm.verts.new(P + B * x + N * y) for (x, y) in prof])
+    m = len(rings[0])
+    for i in range(len(rings) - 1):
+        for j in range(m):
+            jj = (j + 1) % m
+            mb.face([rings[i][j], rings[i][jj], rings[i + 1][jj], rings[i + 1][j]], mat)
+    mb.face(list(reversed(rings[0])), mat)
+    mb.face(rings[-1], mat)
+    for (a, b, dep) in sp:
+        if dep < 0.06:
+            continue
+        cv = 0.045
+        bx = sx * (w / 2 - cv)
+        with mb.soft():
+            mb.tube([P0 + T * (a + 0.03) + B * bx + N * cv, P0 + T * (b - 0.03) + B * bx + N * cv], 0.008, seg=14, mat=rebar_mat)
+            st = a + 0.1
+            while st < b - 0.1:
+                q = P0 + T * st
+                mb.tube(port.fillet([q + B * (bx - sx * 0.2) + N * (cv - 0.012), q + B * (bx + sx * 0.012) + N * (cv - 0.012),
+                                     q + B * (bx + sx * 0.012) + N * (cv + 0.25)], 0.02, 3), 0.005, seg=12, mat=rebar_mat)
+                st += 0.2
+
+
 def grid_solid(mb, x0, x1, y0, y1, ztop, zbot, mat, cell=1.0, holes=()):
     """Losa cerrada en rejilla: cara superior subdividida (AO por vértice), inferior y cantos (también alrededor de huecos).
     ztop(x, y) / zbot(x, y): cotas."""
@@ -261,6 +354,88 @@ def clad_wall(mb, M, L, z0, ztop_fn, openings, r, mat="cladding", width=1.0, row
 
 
 # ------------------------------------------------------------------------------------------------------------ cubierta
+_PILE_CACHE = {}
+
+
+def _pile_variant(k):
+    """Pilote tubular de acero Ø 0,55 (de PILE_BOT a 1,5) con su placa de cabeza anclada al cabezal, cordón de la costura
+    de empalme, picadura de corrosión en la zona de salpicadura, costra marina irregular en la franja de mareas y percebes
+    sueltos encima. Se arman 4 variantes y se copian giradas."""
+    if k in _PILE_CACHE:
+        return _PILE_CACHE[k]
+    r = rng(9100 + k)
+    mb = port.PMB()
+    R = 0.275
+    pits = [(float(r.uniform(0, 2 * math.pi)), float(r.uniform(SEA_Z + 0.35, SEA_Z + 1.6)), float(r.uniform(0.002, 0.007)))
+            for _ in range(16)]
+
+    def dr_pipe(a, z):
+        s_ = 0.0
+        for (pa, pz, pd) in pits:
+            da = math.atan2(math.sin(a - pa), math.cos(a - pa))
+            q = (da / 0.12) ** 2 + ((z - pz) / 0.05) ** 2
+            if q < 9:
+                s_ -= pd * math.exp(-q)
+        return s_
+    zs = [PILE_BOT, -2.7, SEA_Z + 0.3] + [SEA_Z + 0.35 + 0.1 * j for j in range(14)] + [1.5]
+    port.lathe_n(mb, [(R, z) for z in zs], seg=40, mat="metal_rust", caps=True, dr=dr_pipe)
+    ph = [float(r.uniform(0, 2 * math.pi)) for _ in range(3)]
+
+    def dr_crust(a, z):
+        return 0.012 * math.sin(3 * a + ph[0]) * math.cos(2 * z + ph[1]) + 0.006 * math.sin(7 * a + ph[2] + 5 * z)
+    ztop = SEA_Z + 0.22
+    prof = [(R + 0.002, -2.85), (R + 0.02, -2.78), (R + 0.03, -2.5), (R + 0.032, -1.8), (R + 0.03, -1.2), (R + 0.028, ztop - 0.35),
+            (R + 0.02, ztop - 0.12), (R + 0.008, ztop), (R + 0.001, ztop + 0.05)]
+    port.lathe_n(mb, prof, seg=40, mat="rubble", caps=False, dr=dr_crust)
+    pts = []
+    for _ in range(18):
+        a = float(r.uniform(0, 2 * math.pi))
+        z = float(r.uniform(ztop + 0.03, ztop + 0.55))
+        pts.append(((R * math.cos(a), R * math.sin(a), z), (math.cos(a), math.sin(a), 0.0)))
+    port._barnacles(mb, r, pts, size=(0.007, 0.016))
+    port.weld(mb, [(0.279 * math.cos(2 * math.pi * q / 40), 0.279 * math.sin(2 * math.pi * q / 40), 0.35) for q in range(41)],
+              r=0.005, mat="metal_rust")
+    port.bev_plate(mb, [(-0.34, -0.34), (0.34, -0.34), (0.34, 0.34), (-0.34, 0.34)], 0.025, "metal_rust", M=_T(0, 0, 1.475), ch=0.003)
+    port.weld(mb, [(0.282 * math.cos(2 * math.pi * q / 40), 0.282 * math.sin(2 * math.pi * q / 40), 1.47) for q in range(41)],
+              r=0.007, mat="metal_rust")
+    for (x, y) in ((-0.27, -0.27), (0.27, -0.27), (0.27, 0.27), (-0.27, 0.27)):
+        port.hexnut(mb, _T(x, y, 1.475) @ Matrix.Rotation(math.pi, 4, "X"), af=0.036, mat="metal_rust", washer=True, stud=0.02)
+    _PILE_CACHE[k] = mb
+    return mb
+
+
+def _brace(det, p, q, r, ends=(True, True), off=Vector((0, 0, 0)), broken=False):
+    """Riostra de tubo Ø114 de p a q (centros de los pilotes a la cota de cada extremo) desplazada `off` del plano de la
+    crujía (las dos diagonales de una cruz pasan una delante de la otra), con cartela soldada al pilote y 2 pernos en cada
+    extremo; queda a 0,1 m de la cara del pilote."""
+    p, q = Vector(p), Vector(q)
+    d = (q - p).normalized()
+    hz = Vector((d.x, d.y, 0.0))
+    hz = hz.normalized() if hz.length > 1e-6 else Vector((1, 0, 0))
+    a = p + d * 0.42 + off
+    b = q - d * 0.42 + off
+    nrm = d.cross(Vector((0, 0, 1))) if abs(d.z) < 0.99 else Vector((1, 0, 0))
+    nrm.normalize()
+    if broken:                                         # quebrada por la corrosión: cuelga de la cartela de arriba
+        ends = (True, False)
+        hang = (hz * 0.3 + Vector((0, 0, -1.0))).normalized()
+        L_ = float(r.uniform(0.9, 1.6))
+        det.tube(port.fillet([a, a + d * 0.12, a + d * 0.12 + hang * L_], 0.1, 4), 0.057, seg=16, mat="metal_rust", caps=True)
+    else:
+        det.tube([a, b], 0.057, seg=16, mat="metal_rust", caps=True)
+    for (c, sgn, on) in ((p, 1, ends[0]), (q, -1, ends[1])):
+        if not on:
+            continue
+        e = (a if sgn > 0 else b)
+        M, _ = port.frame_on(c + off + hz * sgn * 0.22, e + d * sgn * 0.08, up=tuple(nrm))
+        L_ = ((e + d * sgn * 0.08) - (c + off + hz * sgn * 0.22)).length
+        port.bev_plate(det, [(0.0, -0.09), (L_, -0.06), (L_, 0.06), (0.0, 0.09)], 0.016, "metal_rust", M=M @ _T(0, 0, -0.008), ch=0.002)
+        for t_ in (0.06, 0.16):
+            pp = e + d * sgn * (-t_ + 0.08)
+            port.hexnut(det, _T(*pp) @ port.frame_on(pp, pp + nrm)[0].to_3x3().to_4x4() @ Matrix.Rotation(math.pi / 2, 4, "Y") @
+                        _T(0, 0, 0.057), af=0.03, mat="metal_rust", washer=False, stud=0.01)
+
+
 def build_deck(shell, inter, det, r):
     zt = lambda x, y: DECK_Z  # noqa: E731
     zb = lambda x, y: DECK_Z - SLAB_T  # noqa: E731
@@ -270,59 +445,90 @@ def build_deck(shell, inter, det, r):
     grid_solid(inter, ax0 + w, ax1 - w, ay0 + w, by0, zt, zb, "concrete")
     grid_solid(inter, bx0 + w, ax1 - w, by0, by1 - w, zt, zb, "concrete")
     grid_solid(inter, ax1 - w, bx1 - w, by0 + w, by1 - w, zt, zb, "concrete", holes=[HOLE])
-    # trabes de borde (Shell: atlas con óxido, salitre y grafiti)
+    # trabes de borde (Shell: atlas con óxido, salitre y grafiti): concreto colado con chaflán y descascarados con la
+    # varilla a la vista en la arista inferior expuesta (más del lado del mar)
     z0, z1 = FASCIA_Z0, DECK_Z
-    for (a, b) in [((ax0, ay0), (ax1, ay0 + w)), ((ax0, ay0 + w), (ax0 + w, by1)), ((ax1 - w, ay0 + w), (ax1, by0 + w)),
-                   ((ax1, by0), (bx1, by0 + w)), ((bx1 - w, by0 + w), (bx1, by1)), ((ax0 + w, by1 - w), (bx1 - w, by1))]:
-        shell.box((a[0], a[1], z0), (b[0], b[1], z1), "concrete")
-    # vigas cabezal bajo la losa y pilotes de acero con cruces
+    hh = z1 - z0
+    segs = [  # (p0, p1, afuera, descascarados)
+        ((ax0, ay0 + w / 2), (ax1, ay0 + w / 2), (0, -1, 0), 2),
+        ((ax0 + w / 2, ay0 + w), (ax0 + w / 2, by1), (-1, 0, 0), 4),
+        ((ax1 - w / 2, ay0 + w), (ax1 - w / 2, by0 + w), (1, 0, 0), 3),
+        ((ax1, by0 + w / 2), (bx1, by0 + w / 2), (0, -1, 0), 4),
+        ((bx1 - w / 2, by0 + w), (bx1 - w / 2, by1), (1, 0, 0), 2),
+        ((ax0 + w, by1 - w / 2), (bx1 - w, by1 - w / 2), (0, 1, 0), 8)]
+    for (a, b, o, nsp) in segs:
+        beam_loft(shell, (a[0], a[1], z0), (b[0], b[1], z0), w, hh, "concrete", out=o, r=r, spalls=nsp, c=0.02,
+                  rebar_mat="metal_rust")
+    # vigas cabezal bajo la losa y pilotes de acero con riostras
     piles = []
     xa = [ax0 + 2.0 + k * (ax1 - ax0 - 4.0) / 8 for k in range(9)]
     ya = [ay0 + 2.5 + 5 * k for k in range(int((by0 - ay0) / 5))]
     for yb in ya:
-        det.box((ax0 + w, yb - 0.4, 1.5), (ax1 - w, yb + 0.4, DECK_Z - SLAB_T), "concrete")
+        beam_loft(det, (ax0 + w, yb, 1.5), (ax1 - w, yb, 1.5), 0.8, DECK_Z - SLAB_T - 1.5, "concrete", out=(0, 1 if yb > 20 else -1, 0),
+                  r=r, spalls=2, c=0.02)
         for xp in xa:
             piles.append((xp, yb))
     xb_ = [bx0 + 2.5 + 5 * k for k in range(int((bx1 - bx0) / 5))]
     yb3 = (by0 + 1.6, (by0 + by1) / 2, by1 - 1.6)
     for xb in xb_:
-        det.box((xb - 0.4, by0 + w, 1.5), (xb + 0.4, by1 - w, DECK_Z - SLAB_T), "concrete")
+        beam_loft(det, (xb, by0 + w, 1.5), (xb, by1 - w, 1.5), 0.8, DECK_Z - SLAB_T - 1.5, "concrete", out=(1, 0, 0), r=r, spalls=1,
+                  c=0.02)
         for yp in yb3:
             piles.append((xb, yp))
     for (x, y) in piles:
-        det.cyl((x, y, PILE_BOT), (x, y, 1.5), 0.275, seg=14, mat="metal_rust")
-        det.cyl((x, y, SEA_Z - 0.7), (x, y, SEA_Z + 0.3), 0.30, seg=14, mat="rubble")      # costra marina en la línea de agua
+        det.join(_pile_variant(int(r.integers(0, 4))), _T(x, y, 0.0) @ _Rz(float(r.uniform(0, 360))))
 
-    def brace(p, q):
-        if r.random() < 0.08:
+    def brace(p, q, off, horiz=False):
+        u = r.random()
+        if u < 0.04:
             return
-        det.cyl(p, q, 0.055, seg=4, mat="metal_rust")
+        if u < 0.08 and not horiz:                     # riostra rota por la corrosión: cuelga de su cartela de arriba
+            p, q = Vector(p), Vector(q)
+            hi, lo = (p, q) if p.z > q.z else (q, p)
+            _brace(det, hi, lo, r, off=Vector(off), broken=True)
+            return
+        _brace(det, p, q, r, off=Vector(off))
     for yb in ya:
         for a, b in zip(xa[:-1], xa[1:]):
-            brace((a + 0.25, yb, 1.2), (b - 0.25, yb, -2.2))
-            brace((a + 0.25, yb, -2.2), (b - 0.25, yb, 1.2))
-            brace((a + 0.25, yb, 1.25), (b - 0.25, yb, 1.25))
-            brace((a + 0.25, yb, -2.25), (b - 0.25, yb, -2.25))
+            brace((a, yb, 1.2), (b, yb, -2.2), (0, 0.075, 0))
+            brace((a, yb, -2.2), (b, yb, 1.2), (0, -0.075, 0))
+            brace((a, yb, 1.25), (b, yb, 1.25), (0, 0.0, 0), horiz=True)
+            brace((a, yb, -2.25), (b, yb, -2.25), (0, 0.0, 0), horiz=True)
     for xb in xb_:
         for a, b in zip(yb3[:-1], yb3[1:]):
-            brace((xb, a + 0.25, 1.2), (xb, b - 0.25, -2.2))
-            brace((xb, a + 0.25, -2.2), (xb, b - 0.25, 1.2))
-            brace((xb, a + 0.25, 1.25), (xb, b - 0.25, 1.25))
-    # juntas de dilatación de la losa: solera de acero de 8 cm al ras, por los carriles (no pasan bajo la nave ni la caseta)
+            brace((xb, a, 1.2), (xb, b, -2.2), (0.075, 0, 0))
+            brace((xb, a, -2.2), (xb, b, 1.2), (-0.075, 0, 0))
+            brace((xb, a, 1.25), (xb, b, 1.25), (0, 0, 0), horiz=True)
+    # juntas de dilatación de la losa: dos soleras de acero con sello de hule al centro, ancladas cada 0,6 m (carriles; no
+    # pasan bajo la nave ni la caseta)
     def joint(p0, p1):
-        det.box((min(p0[0], p1[0]) - (0.04 if p0[0] == p1[0] else 0), min(p0[1], p1[1]) - (0.04 if p0[1] == p1[1] else 0), DECK_Z),
-                (max(p0[0], p1[0]) + (0.04 if p0[0] == p1[0] else 0), max(p0[1], p1[1]) + (0.04 if p0[1] == p1[1] else 0),
-                 DECK_Z + 0.006), "metal_rust")
+        p0, p1 = Vector((p0[0], p0[1], DECK_Z)), Vector((p1[0], p1[1], DECK_Z))
+        dv = (p1 - p0).normalized()
+        sd = Vector((-dv.y, dv.x, 0))
+        for sg in (-1, 1):
+            o = sd * sg * 0.026
+            port.member(det, p0 + o, p1 + o, [(-0.018, 0.018, 0.0, 0.006)], "metal_rust")
+        port.member(det, p0, p1, [(-0.008, 0.008, -0.004, 0.002)], "rubber")
+        L_ = (p1 - p0).length
+        k = 0.3
+        while k < L_ - 0.1:
+            for sg in (-1, 1):
+                c = p0 + dv * k + sd * sg * 0.026
+                with det.soft():
+                    port.lathe_n(det, [(0.0, 0.006), (0.011, 0.006), (0.009, 0.009), (0.0, 0.0105)], seg=12, mat="metal_rust",
+                                 M=_T(c.x, c.y, DECK_Z))
+            k += 0.6
     joint((ax0 + w, 5.0), (ax1 - w, 5.0))
     joint((ax0 + w, 37.5), (ax1 - w, 37.5))
     joint((ax0 + w, by0), (ax1 - w, by0))
     for x in (-19.0, 17.0):
-        joint((x, ay0 + w), (x, by0 - 0.04))
+        joint((x, ay0 + w), (x, by0 - 0.05))
     for x in (6.0, 18.0, 30.0, 39.5, 50.0):
-        joint((x, by0 + 0.04), (x, by1 - w))
+        joint((x, by0 + 0.05), (x, by1 - w))
     # largueros longitudinales bajo la cubierta A (entre vigas cabezal, en algunas líneas de pilotes)
     for xp in xa[::2]:
-        det.box((xp - 0.2, ya[0] + 0.4, 1.7), (xp + 0.2, ya[-1] - 0.4, DECK_Z - SLAB_T), "concrete")
+        beam_loft(det, (xp, ya[0] + 0.4, 1.7), (xp, ya[-1] - 0.4, 1.7), 0.4, DECK_Z - SLAB_T - 1.7, "concrete", out=(1, 0, 0), r=r,
+                  spalls=1, c=0.015)
     return dict(piles=len(piles))
 
 
@@ -353,19 +559,44 @@ def collision_proxies():
     return mb
 
 
+def _padeye(det, x, y, z, r):
+    """Oreja de amarre en la cara del muro (y = cara, sale hacia +Y): placa de 160 x 200 x 20 con 4 anclas y ojo soldado."""
+    port.bev_plate(det, [(-0.08, -0.1), (0.08, -0.1), (0.08, 0.1), (-0.08, 0.1)], 0.02, "metal_rust",
+                   M=_T(x, y, z) @ Matrix.Rotation(-math.pi / 2, 4, "X"), ch=0.003)
+    for (dx, dz) in ((-0.055, -0.07), (0.055, -0.07), (0.055, 0.07), (-0.055, 0.07)):
+        port.hexnut(det, _T(x + dx, y + 0.02, z + dz) @ Matrix.Rotation(-math.pi / 2, 4, "X"), af=0.024, mat="metal_rust", stud=0.01)
+    Mo = _T(x, y + 0.02, z) @ _Rz(90) @ Matrix.Rotation(math.pi / 2, 4, "X")
+    port.bev_plate(det, port.round_poly([(-0.05, 0.0), (0.05, 0.0), (0.03, 0.07), (-0.03, 0.07)], 0.02, 3), 0.016, "metal_rust",
+                   M=Mo @ _T(0, 0, -0.008), ch=0.002)
+    with det.soft():
+        det.tube([(x + 0.008 * 0, y + 0.02 + 0.075 + 0.025 * math.cos(2 * math.pi * k / 20), z - 0.0 + 0.025 * math.sin(2 * math.pi * k / 20))
+                  for k in range(21)], 0.009, seg=12, mat="metal_rust", caps=False)
+    return Vector((x, y + 0.02 + 0.075, z - 0.025))
+
+
 def build_berth(det, r):
-    """Frente de atraque: guarnición, bitas, defensas de llanta y de madera, escaleras marinas, cabos."""
+    """Frente de atraque: guarnición de concreto con angular de nariz, bitas, defensas de llanta colgadas de cadena con
+    oreja y grilletes, pilotes de defensa de madera hincados y atornillados a la trabe, escaleras marinas sobre canales de
+    respaldo hincados, imbornales y cabos de amarre que pasan sobre la guarnición y caen al agua."""
     bx0, bx1, by0, by1 = DECK_B
     stats = dict(bollards=0, tyres=0, timbers=0, ladders=0)
     xs_b, lad = berth_layout()
-    # guarnición (con cortes en las escaleras)
+    # guarnición (con cortes en las escaleras) y angular de nariz cortado igual
     cuts = sorted([(x - 0.6, x + 0.6) for x in lad])
+    runs = []
     cur = bx0
     for (c0, c1) in cuts:
-        det.box((cur, by1 - 0.3, DECK_Z), (c0, by1, DECK_Z + 0.22), "concrete")
+        runs.append((cur, c0))
         cur = c1
-    det.box((cur, by1 - 0.3, DECK_Z), (bx1, by1, DECK_Z + 0.22), "concrete")
-    det.box((bx1 - 0.3, by0, DECK_Z), (bx1, by1 - 0.3, DECK_Z + 0.22), "concrete")
+    runs.append((cur, bx1))
+    zc = DECK_Z + 0.22
+    for (a, b) in runs:
+        beam_loft(det, (a, by1 - 0.15, DECK_Z), (b, by1 - 0.15, DECK_Z), 0.3, 0.22, "concrete", c=0.012)
+        port.angle_sweep(det, (a + 0.005, by1 + 0.012, zc + 0.012), (b - (0.005 if b < bx1 else 0.0), by1 + 0.012, zc + 0.012),
+                         leg=0.15, t=0.012, mat="metal_rust", up=(0, 0, -1))
+    beam_loft(det, (bx1 - 0.15, by0, DECK_Z), (bx1 - 0.15, by1 - 0.3, DECK_Z), 0.3, 0.22, "concrete", c=0.012)
+    port.angle_sweep(det, (bx1 + 0.012, by0, zc + 0.012), (bx1 + 0.012, by1 - 0.3, zc + 0.012), leg=0.15, t=0.012,
+                     mat="metal_rust", up=(0, 0, -1), flip=True)
     for x in xs_b:
         if any(abs(x - l) < 1.0 for l in lad):
             continue
@@ -374,48 +605,60 @@ def build_berth(det, r):
     for y in (by0 + 3.0, by1 - 4.0):
         det.join(port.bollard(int(r.integers(1e6))), _T(bx1 - 0.75, y, DECK_Z) @ _Rz(90 + float(r.uniform(-4, 4))))
         stats["bollards"] += 1
-    # ángulo de protección de acero en la arista de la guarnición
-    for (p0, p1, ax) in (((bx0, by1), (bx1, by1), "x"), ((bx1, by0), (bx1, by1), "y")):
-        zt = DECK_Z + 0.22
-        if ax == "x":
-            det.box((p0[0], by1 - 0.15, zt), (p1[0], by1 + 0.012, zt + 0.012), "metal_rust")
-            det.box((p0[0], by1, zt - 0.15), (p1[0], by1 + 0.012, zt), "metal_rust")
-        else:
-            det.box((bx1 - 0.15, p0[1], zt), (bx1 + 0.012, p1[1] - 0.15, zt + 0.012), "metal_rust")
-            det.box((bx1, p0[1], zt - 0.15), (bx1 + 0.012, p1[1] - 0.15, zt), "metal_rust")
-    # imbornales: tubos de desagüe por la trabe de borde cada 6 m
+    # imbornales: tubos de desagüe por la trabe de borde cada 6 m, con su boca abocinada y chorreadura
     x = bx0 + 1.5
     while x < bx1 - 1:
-        det.cyl((x, by1 - 0.3, DECK_Z - 0.18), (x, by1 + 0.16, DECK_Z - 0.18), 0.055, seg=10, mat="metal_rust")
+        if not any(abs(x - l) < 0.9 for l in lad):
+            port.lathe_n(det, [(0.055, -0.46), (0.055, 0.0), (0.06, 0.012), (0.075, 0.02), (0.075, 0.028), (0.05, 0.028)], seg=24,
+                         mat="metal_rust", M=_T(x, by1 - 0.3, DECK_Z - 0.18) @ Matrix.Rotation(-math.pi / 2, 4, "X") @ _T(0, 0, -0.3 + 0.46),
+                         caps=False)
         x += 6.0
-    # defensas: llantas colgando de cadena y pilotes de madera
+    # defensas: llantas colgadas de cadena (oreja en el muro, grillete, cadena, grillete por la banda)
     x = bx0 + 2.0
     while x < bx1 - 1.0:
         if r.random() > 0.12 and not any(abs(x - l) < 0.8 for l in lad):
-            ztop = DECK_Z - 0.62
-            det.join(port.fender_tyre(int(r.integers(1e6))), _T(x, by1 + 0.15, ztop - 0.55) @
-                     Matrix.Rotation(float(r.uniform(-0.15, 0.15)), 4, "Y"))
-            det.box((x - 0.05, by1, DECK_Z - 0.12), (x + 0.05, by1 + 0.04, DECK_Z - 0.02), "metal_rust")      # argolla
-            port.chain(det, [(x, by1 + 0.07, DECK_Z - 0.09), (x, by1 + 0.11, ztop + 0.0)], r=r)
+            zt_ = DECK_Z - 0.62                       # corona de la llanta
+            yt = by1 + 0.155
+            det.join(port.fender_tyre(int(r.integers(1e6))), _T(x, yt, zt_ - 0.55) @
+                     Matrix.Rotation(float(r.uniform(-0.12, 0.12)), 4, "Y"))
+            eye = _padeye(det, x, by1, DECK_Z - 0.17, r)
+            port.shackle(det, _T(eye.x, eye.y + 0.005, eye.z - 0.003) @ Matrix.Rotation(math.pi, 4, "X") @ _Rz(90), d=0.016)
+            port.shackle(det, _T(x, yt, zt_ - 0.018) @ _Rz(90), d=0.019)
+            port.chain(det, [(eye.x, eye.y + 0.005, eye.z - 0.09), (x, yt, zt_ + 0.09)], wire=0.008, r=r)
             stats["tyres"] += 1
         x += 3.0
+    # pilotes de defensa de madera hincados (de -5,5 a 2,45) y atornillados a la trabe por el fleje de arriba
     x = bx0 + 3.5
     while x < bx1 - 1.0:
         if not any(abs(x - l) < 0.8 for l in lad):
-            lean = float(r.uniform(-0.02, 0.02))
-            det.join(port.timber_fender(DECK_Z - 0.05 + 1.6, int(r.integers(1e6))),
-                     _T(x, by1 + 0.005, -1.6) @ Matrix.Rotation(lean, 4, "Y"))
+            lean = float(r.uniform(-0.006, 0.006))
+            det.join(port.timber_fender(DECK_Z - 0.05 + 5.5, int(r.integers(1e6)), wl=SEA_Z + 5.5),
+                     _T(x, by1 + 0.012, -5.5) @ Matrix.Rotation(lean, 4, "Y"))
             stats["timbers"] += 1
         x += 6.0
+    # escaleras marinas sobre dos canales de respaldo hincados (sus ménsulas bajas no quedan al aire)
+    cprof = port.round_poly([(-0.08, -0.065), (-0.072, -0.065), (-0.072, -0.0085), (0.072, -0.0085), (0.072, -0.065), (0.08, -0.065),
+                             (0.08, 0.0), (-0.08, 0.0)], 0.004, 2)
     for x in lad:
-        det.join(port.marine_ladder(-1.4, DECK_Z, int(r.integers(1e6))), _T(x, by1, 0.0))
+        det.join(port.marine_ladder(-1.4, DECK_Z, int(r.integers(1e6)), brackets=[2.05, 0.9, -0.55], wl=SEA_Z), _T(x, by1, 0.0))
+        for dx in (-0.22, 0.22):
+            port.psweep(det, [(-ox, oy) for (ox, oy) in cprof], [(x + dx, by1, -5.5), (x + dx, by1, FASCIA_Z0 - 0.002)], "metal_rust",
+                        up=(0, 1, 0), miter=False)
+            port.bev_plate(det, [(-0.1, -0.09), (0.1, -0.09), (0.1, 0.0), (-0.1, 0.0)], 0.016, "metal_rust",
+                           M=_T(x + dx, by1, FASCIA_Z0 - 0.018), ch=0.002)
         stats["ladders"] += 1
-    # cabos deshilachados de dos bitas al agua
-    for x in (xs_b[2], xs_b[6]):
-        y = by1 - 0.7
-        pts = [(x, y, DECK_Z + 0.35), (x + 0.3, y + 0.6, DECK_Z + 0.25), (x + 0.6, y + 1.0, DECK_Z - 0.2),
-               (x + 0.9, y + 1.3, DECK_Z - 1.5), (x + 1.4, y + 1.6, SEA_Z + 0.1)]
-        det.tube(pts, 0.022, seg=6, mat="plastic")
+    # cabos de amarre: vuelta en la bita, pasan sobre la guarnición y el angular y caen al agua (punta deshilachada)
+    for x in (xs_b[1], xs_b[4]):
+        y = by1 - 0.75
+        zl = DECK_Z + 0.27
+        loop = []
+        for k in range(26):
+            a = math.radians(-60 + 380 * k / 25)
+            loop.append((x + 0.178 * math.cos(a), y + 0.178 * math.sin(a), zl + 0.045 * k / 25))
+        pts = loop + [(x - 0.12, y + 0.35, DECK_Z + 0.2), (x - 0.18, by1 - 0.18, zc + 0.012 + 0.022),
+                      (x - 0.2, by1 + 0.035, zc + 0.012 + 0.02), (x - 0.2, by1 + 0.06, DECK_Z - 0.25), (x - 0.21, by1 + 0.09, 1.3),
+                      (x - 0.18, by1 + 0.45, SEA_Z + 0.25), (x - 0.1, by1 + 0.95, SEA_Z - 0.25)]
+        port.laid_rope(det, pts, r=0.022, mat="plastic", fray=0.25)
     return stats
 
 

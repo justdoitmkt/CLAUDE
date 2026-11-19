@@ -70,8 +70,26 @@ def cfg_apt_a():
     west.update({k: ["window", "vent", "window"] for k in (1, 2, 3, 4)})
     east = {0: ["window_high", "window_high", "window_high"]}  # PB cerrada; ventana alta sobre el descanso; la celosía arranca en el 1.er piso
     east.update({k: ["window", "breeze", "window"] for k in (1, 2, 3, 4)})
+    zl = [GROUND]
+    for hh in h:
+        zl.append(zl[-1] + hh)
+    # mordidas con varilla expuesta en columnas y vigas exteriores (fachada oeste muy dañada, golpes al pie de las columnas
+    # del frente, vigas sobre las logias y trasera); sides = (cara de x, cara de y) en columnas, (cara lateral, -1 abajo) en vigas
+    spalls = {
+        ("col", 0, 1): [dict(sides=(-1, -1), start=zl[2] + 0.55, length=1.0, depth=0.09, seed=1101),
+                        dict(sides=(-1, 1), start=zl[3] + 1.1, length=0.8, depth=0.07, seed=1102)],
+        ("col", 0, 2): [dict(sides=(-1, 1), start=zl[1] + 0.9, length=1.3, depth=0.09, seed=1103)],
+        ("col", 1, 0): [dict(sides=(-1, -1), start=0.32, length=0.7, depth=0.06, seed=1104)],
+        ("col", 3, 0): [dict(sides=(1, -1), start=0.45, length=0.55, depth=0.05, seed=1105)],
+        ("beam", 2, "y", 0, 1): [dict(sides=(-1, -1), start=0.4, length=1.4, depth=0.08, seed=1106)],
+        ("beam", 3, "y", 0, 0): [dict(sides=(-1, -1), start=1.0, length=1.0, depth=0.07, seed=1107)],
+        ("beam", 4, "y", 0, 2): [dict(sides=(-1, -1), start=0.6, length=0.9, depth=0.06, seed=1108)],
+        ("beam", 1, "x", 1, 0): [dict(sides=(-1, -1), start=0.8, length=1.2, depth=0.08, seed=1109)],
+        ("beam", 3, "x", 2, 0): [dict(sides=(-1, -1), start=1.4, length=0.9, depth=0.07, seed=1110)],
+        ("beam", 2, "x", 0, 3): [dict(sides=(1, -1), start=0.5, length=1.5, depth=0.08, seed=1111)],
+    }
     return dict(id="APT_A_5p", xs=xs, ys=ys, h=h, stair=stair, front=front, back=back, west=west, east=east,
-                loggia_depth=1.2, seed=11)
+                loggia_depth=1.2, seed=11, spalls=spalls)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -111,11 +129,47 @@ def _node_on(cfg, i, j):
                if 0 <= a < len(cfg["xs"]) - 1 and 0 <= b < len(cfg["ys"]) - 1)
 
 
-def build_frame(cfg, mb):
+SLAB_BAND = 0.06       # canto de losa perimetral (barrido con goterón) que sustituye la orilla de la losa
+
+
+def slab_band(mb, path, closed, z_top, t=SLAB, mat="concrete"):
+    """Canto de losa: perfil de 6 cm (2 cm fuera de la cara del relleno) con aristas superior e inferior redondeadas
+    (r 8 mm) y GOTERÓN de 10 × 10 mm a 1,2 cm de la orilla en la cara de abajo, barrido por la orilla (recorrido
+    antihorario en planta: el perfil x crece hacia afuera). Cerrado o abierto (ramas de una planta en L)."""
+    w = SLAB_BAND
+    k = 0.0023
+    prof = [(-w, 0.0), (-0.008, 0.0), (-k, -k), (0.0, -0.008), (0.0, -t + 0.008), (-k, -t + k), (-0.008, -t),
+            (-0.0115, -t), (-0.0122, -t + 0.009), (-0.0135, -t + 0.0102), (-0.0205, -t + 0.0102), (-0.0218, -t + 0.009),
+            (-0.0225, -t), (-w, -t)]
+    pts = [Vector((p[0], p[1], z_top)) for p in path]
+    mb.sweep(list(reversed(prof)), pts, mat=mat, closed_profile=True, closed_path=closed, normal=(0, 0, 1))
+
+
+def frame_spalls(cfg):
+    """Mordidas de arista con varilla expuesta INTEGRADAS en la estructura (R-AAA, 2026-11-19). Antes eran envolventes
+    2 mm por fuera de la columna sana y la mordida quedaba tapada por la columna original. cfg['spalls'] =
+    {('col', i, j): [mordida, ...], ('beam', k, eje, i, j): [...]} con mordida = dict(sides, start, length, depth, seed)
+    (convención de kit.damage.spalled_box; start desde el inicio del elemento)."""
+    return cfg.get("spalls", {})
+
+
+def _spalled(spall_mb, mb, key, mn, mx, axis, bevel, seg, cfg):
+    sp = frame_spalls(cfg).get(key)
+    if not sp or spall_mb is None:
+        mb.box(mn, mx, "concrete", bevel=bevel, seg=seg)
+        return False
+    from kit import damage as dm
+    dm.spalled_box(spall_mb, mn, mx, [dict(d, axis=axis) for d in sp], mat="concrete", bevel=bevel, seg=seg, detail="high")
+    return True
+
+
+def build_frame(cfg, mb, spall_mb=None):
     """Opcionales (APT_B/C/D; APT_A no usa ninguno y su resultado no cambia):
     cells = {(i, j)} crujías activas (planta en L) · col_top = {(i, j): z} columnas truncadas (colapso) ·
     skip_beam(k, eje, i, j) -> bool · stair_levels = losas k con hueco de escalera · holes = {k: [(x0, x1, y0, y1)]} huecos
-    extra en coordenadas absolutas · slab_rects = [(x0, x1, y0, y1)] losas por rectángulos (absolutas, antes del vuelo de viga)."""
+    extra en coordenadas absolutas · slab_rects = [(x0, x1, y0, y1)] losas por rectángulos (absolutas, antes del vuelo de viga).
+    spall_mb: MB donde van las columnas y vigas con mordidas de cfg['spalls'] (grupo Damage); slab_band (por omisión True):
+    canto de losa redondeado con goterón en las orillas con vuelo."""
     xs, ys = cfg["xs"], cfg["ys"]
     zl = level_z(cfg)
     r = rng(cfg["seed"])
@@ -128,7 +182,7 @@ def build_frame(cfg, mb):
             if not _node_on(cfg, i, j):
                 continue
             c = col_size(i, j, cfg) / 2
-            mb.box((x - c, y - c, 0.0), (x + c, y + c, col_top.get((i, j), top - SLAB)), "concrete", bevel=0.012, seg=2)
+            _spalled(spall_mb, mb, ("col", i, j), (x - c, y - c, 0.0), (x + c, y + c, col_top.get((i, j), top - SLAB)), "z", 0.012, 2, cfg)
     # vigas en todas las líneas de la malla (descuelgue BEAM_D - SLAB bajo la losa)
     for k in range(1, len(zl)):
         zt = zl[k] - SLAB
@@ -140,25 +194,51 @@ def build_frame(cfg, mb):
                 x0 = xs[i] + col_size(i, j, cfg) / 2
                 x1 = xs[i + 1] - col_size(i + 1, j, cfg) / 2
                 sag = float(r.uniform(0.0, 0.012))
-                mb.box((x0, y - BEAM_W / 2, zb - sag), (x1, y + BEAM_W / 2, zt), "concrete", bevel=0.01, seg=1)
+                _spalled(spall_mb, mb, ("beam", k, "x", i, j), (x0, y - BEAM_W / 2, zb - sag), (x1, y + BEAM_W / 2, zt), "x", 0.01, 2, cfg)
         for i, x in enumerate(xs):
             for j in range(len(ys) - 1):
                 if not (_cell_on(cfg, i, j) or _cell_on(cfg, i - 1, j)) or skip(k, "y", i, j):
                     continue
                 y0 = ys[j] + col_size(i, j, cfg) / 2
                 y1 = ys[j + 1] - col_size(i, j + 1, cfg) / 2
-                mb.box((x - BEAM_W / 2, y0, zb), (x + BEAM_W / 2, y1, zt), "concrete", bevel=0.01, seg=1)
+                _spalled(spall_mb, mb, ("beam", k, "y", i, j), (x - BEAM_W / 2, y0, zb), (x + BEAM_W / 2, y1, zt), "y", 0.01, 2, cfg)
     # losas: desplante + entrepisos + azotea; las de entrepiso llevan el hueco de escalera
     ex = BEAM_W / 2
     st = cfg["stair"]
     st_levels = cfg.get("stair_levels", range(1, len(zl)))      # APT_A: la escalera sigue hasta el casetón de azotea
     rects = cfg.get("slab_rects", [(xs[0], xs[-1], ys[0], ys[-1])])
+    band = cfg.get("slab_band", True)
     for rect in rects:
         rx0, rx1, ry0, ry1 = rect[:4]
         e = rect[4] if len(rect) > 4 else (ex, ex, ex, ex)   # vuelo por lado (0 en la junta de dos losas de una planta en L)
-        x0, x1 = rx0 - e[0], rx1 + e[1]
-        y0, y1 = ry0 - e[2], ry1 + e[3]
+        X0, X1 = rx0 - e[0], rx1 + e[1]
+        Y0, Y1 = ry0 - e[2], ry1 + e[3]
+        on = [band and v > 0 for v in e]                      # lados con canto (x0, x1, y0, y1)
         for k, zt in enumerate(zl):
+            x0, x1, y0, y1 = X0, X1, Y0, Y1
+            if k > 0 and any(on):
+                # la losa se recorta SLAB_BAND en los lados con canto y el canto barrido (con goterón) la completa
+                w = SLAB_BAND
+                x0, x1 = X0 + (w if on[0] else 0.0), X1 - (w if on[1] else 0.0)
+                y0, y1 = Y0 + (w if on[2] else 0.0), Y1 - (w if on[3] else 0.0)
+                corners = [(X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)]
+                side_on = [on[2], on[1], on[3], on[0]]            # recorrido antihorario: abajo, derecha, arriba, izquierda
+                if all(side_on):
+                    slab_band(mb, corners, True, zt)
+                else:
+                    k0 = next(q for q in range(4) if not side_on[q])
+                    run = []
+                    for q in range(1, 5):
+                        sd = (k0 + q) % 4
+                        if side_on[sd]:
+                            if not run:
+                                run = [corners[sd]]
+                            run.append(corners[(sd + 1) % 4])
+                        elif run:
+                            slab_band(mb, run, False, zt)
+                            run = []
+                    if run:
+                        slab_band(mb, run, False, zt)
             holes = []
             if k in st_levels:
                 holes.append((st["x0"], st["x0"] + st["w"], st["y0"], st["y0"] + st["l"]))
@@ -731,8 +811,9 @@ def dress_services(cfg, placed, pent, details, interior, detail_far="low", detai
     return n
 
 
-def dress_damage(cfg, shell, details, interior, skirt, detail="low"):
-    """Daño concentrado en la fachada oeste (la 'muy dañada') + varillas de espera + escombro y trozos."""
+def dress_damage(cfg, shell, details, interior, skirt, detail="high"):
+    """Daño concentrado en la fachada oeste (la 'muy dañada') + varillas de espera + escombro y trozos (R-AAA: detalle 'high',
+    varilla corrugada real, trozos con caras de fractura rugosas, blocks y lajas en el escombro)."""
     from kit import damage as dm
     r = rng(cfg["seed"] + 606)
     zl = level_z(cfg)
@@ -740,17 +821,7 @@ def dress_damage(cfg, shell, details, interior, skirt, detail="low"):
     def add(key, mb, M, target):
         target.join(mb, M)
         n[key] = n.get(key, 0) + 1
-    # columnas de la fachada oeste con esquinas mordidas (piezas adicionales: se colocan como envolvente de la columna original,
-    # 1 mm por fuera, para no tocar la estructura base)
-    x = cfg["xs"][0]
-    for j, y in enumerate(cfg["ys"][1:3], start=1):
-        c = COL / 2 + 0.002
-        z0 = zl[int(r.integers(1, 4))] + 0.3
-        mbx = MB()
-        dm.spalled_box(mbx, (x - c, y - c, z0), (x + c, y + c, z0 + 1.6),
-                       [dict(axis="z", sides=(-1, int(r.choice([-1, 1]))), start=0.25, length=1.0, depth=0.09, seed=int(r.integers(1e6)))],
-                       detail=detail)
-        add("spalled_column", mbx, Matrix(), shell)
+    # (las columnas y vigas con mordidas se arman en build_frame, integradas: ver cfg['spalls'])
     # varillas de espera: castillos en las 4 esquinas de la azotea del casetón + ruinas de una ampliación demolida atrás
     for (xx, yy) in ((PENT_XW + 0.15, -1.65), (7.2, -1.8), (PENT_XW + 0.15, 1.65), (7.2, 1.8)):
         add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 8)), length=0.7, stump=(0.25, 0.25, 0.25), detail=detail),
@@ -780,7 +851,8 @@ def build_apt_a(collection_root=None, dress=True, roof_detail="low"):
     cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof")}
     out = {k: [] for k in cols}
     shell = MB()
-    build_frame(cfg, shell)
+    dmg_shell = MB()
+    build_frame(cfg, shell, spall_mb=dmg_shell if dress else None)
     placed = {}
     for side in ("front", "back", "west", "east"):
         placed[side] = build_facade(cfg, shell, side)
@@ -808,7 +880,7 @@ def build_apt_a(collection_root=None, dress=True, roof_detail="low"):
     rear = (1.0, cfg["ys"][-1], 2.6, cfg["ys"][-1] + 3.0)
     out["stats_skirt"] = build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear))
     if dress:
-        dmg_shell, dmg_det, dmg_int = MB(), MB(), MB()
+        dmg_det, dmg_int = MB(), MB()
         out["stats_damage"] = dress_damage(cfg, dmg_shell, dmg_det, dmg_int, sk)
         cols["Damage"] = get_collection(f"{cid}_Damage", root)
         out["Damage"] = []

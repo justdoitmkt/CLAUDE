@@ -25,12 +25,37 @@ from mathutils import Matrix, Vector
 
 from kit import port
 from kit.clinic import MB, PI, _Rx, _Ry, _Rz, _T, fillet, rbox, rng, rr_profile, rtube, zloft  # noqa: F401
-from kit.clinic_equipo import angle_l, loft_rings, revolve, sweep_frame, weld  # noqa: F401
+from kit.clinic_equipo import angle_l, loft_rings, sweep_frame, weld  # noqa: F401
 from kit.clinic_equipo import chain as echain
-from kit.clinic_equipo import rtube_lo, screw_lo
+from kit.clinic_equipo import rtube_lo as _rtube_lo0
+from kit.clinic_equipo import screw_lo as _screw_lo0
 from kit.clinic_equipo import text as etext
-from kit.clinic_servicios import foot_leveler, holed, hose, louver_grille, rr_pts, rrframe, skin, slab  # noqa: F401
-from kit.clinic_servicios import lathe as slathe
+from kit.clinic_servicios import foot_leveler, hexnut, holed, louver_grille, skin  # noqa: F401
+from kit.clinic_servicios import hose as _hose0
+# redondos sin facetas (segunda pasada R-AAA): los envoltorios de kit.farm dan a cada redondo los lados que pide su radio y a
+# cada canto redondeado pasos de <= 22,5° (ver kit.farm.nsides / qsegs)
+from kit.farm import cyl, nsides, qsegs, revolve, rr_pts, rrframe, slab, tube  # noqa: F401
+from kit.farm import lathe as slathe
+from kit.farm import rope_tube
+from kit.clinic_equipo import revolve as _revolve_raw
+
+
+def rtube_lo(mb, p0, p1, w, h, mat, up=(0, 0, 1), r=0.004, n=2, caps=True):
+    """PTR de esquinas redondeadas con pasos de <= 22,5° (suave a cualquier distancia)."""
+    return _rtube_lo0(mb, p0, p1, w, h, mat, up=up, r=r, n=max(n, qsegs(r)), caps=caps)
+
+
+def screw_lo(mb, M, d=0.007, mat="steel", seg=6):
+    """Cabeza de tornillo redonda (14+ lados)."""
+    return _screw_lo0(mb, M, d=d, mat=mat, seg=max(seg, 14))
+
+
+def hose(mb, pts, r, bend=0.03, mat="rubber", seg=10, pitch=None, depth=0.12, nseg=8):
+    """Manguera / cable / varilla doblada con los lados que pide su radio (Ø <= 6 mm: 12 lados, sombreado continuo)."""
+    if r <= 0.003:
+        with mb.soft():
+            return _hose0(mb, pts, r, bend=bend, mat=mat, seg=max(seg, 12), pitch=pitch, depth=depth, nseg=max(nseg, 6))
+    return _hose0(mb, pts, r, bend=bend, mat=mat, seg=max(seg, nsides(r)), pitch=pitch, depth=depth, nseg=max(nseg, 6))
 
 
 # ======================================================================================================== utilidades
@@ -107,7 +132,7 @@ def plank_x(mb, x0, x1, y0, y1, z0, z1, mat, rf=0.003, rb=0.003, nst=12, wear=No
 
 
 def wire(mb, p0, p1, r, mat="steel", seg=6):
-    mb.cyl(p0, p1, r, seg=seg, mat=mat)
+    cyl(mb, p0, p1, r, seg=seg, mat=mat)
 
 
 def _jit(r, a):
@@ -568,18 +593,190 @@ def paper_bag(w, d, h, mat="paper", band=None, seed=0, lv=6):
     return mb
 
 
-def can(R=0.037, H=0.11, label="sign_red", seg=14, lod=0):
-    """Lata de conserva: fondo con ceja, doble engargolado arriba, tapa rehundida; la etiqueta es un tramo del perfil
-    (material propio, sin calcomanía). seg >= 13: el sombreado suave del kit (30°) no la facetea. lod=1: fila trasera."""
+def can(R=0.037, H=0.11, label="sign_red", seg=14, lod=0, band=None, style="paper", pull=False):
+    """Lata de conserva de hojalata: fondo con doble engargolado y ceja de estiba, cuerpo, doble engargolado arriba y tapa
+    rehundida con anillos de expansión (o abre-fácil con argolla si pull). style="paper": etiqueta de papel que envuelve el cuerpo
+    (0,3 mm sobre la lámina, con franja `band` de otro color: el producto se reconoce por su combinación de colores);
+    style="litho": lata litografiada con 3 cordones de refuerzo en el cuerpo. Todo de un perfil torneado (materiales por tramo,
+    sin calcomanías). lod=1: fila trasera (perfil reducido)."""
     mb = MB()
     if lod == 0:
-        prof = [(R * 0.95, 0.0), (R * 0.985, 0.006), (R * 0.97, 0.0095), (R * 0.97, H - 0.0095), (R, H - 0.0058), (R, H - 0.0012),
-                (R * 0.89, H - 0.0045), (0.0, H - 0.0045)]
-        mats = ["steel", "steel", label, "steel", "steel", "steel", "steel"]
+        zb0, zb1 = 0.0095, H - 0.0095
+        if style == "litho":
+            body = [(R * 0.97, zb0)]
+            for k in range(3):                                    # cordones de refuerzo
+                zc = zb0 + (zb1 - zb0) * (k + 1) / 4
+                body += [(R * 0.97, zc - 0.003), (R * 0.955, zc - 0.0012), (R * 0.955, zc + 0.0012), (R * 0.97, zc + 0.003)]
+            body += [(R * 0.97, zb1)]
+            bm = [label] * (len(body) - 1)
+            if band:
+                mid = len(bm) // 2
+                bm[mid - 1:mid + 2] = [band] * 3
+        else:
+            Rl = R * 0.97 + 0.0003
+            zm = zb0 + (zb1 - zb0) * 0.62
+            body = [(R * 0.97, zb0), (Rl, zb0 + 0.0008), (Rl, zm), (Rl, zm + 0.012), (Rl, zb1 - 0.0008), (R * 0.97, zb1)]
+            bm = ["steel", label, band or label, label, "steel"]
+        prof = [(0.0, 0.0012), (R * 0.82, 0.0005), (R * 0.95, 0.0), (R * 0.985, 0.003), (R * 0.985, 0.006), (R * 0.97, zb0)] + body[1:] + \
+               [(R, H - 0.0058), (R, H - 0.0012), (R * 0.97, H - 0.0006), (R * 0.9, H - 0.0045), (R * 0.75, H - 0.0045),
+                (R * 0.72, H - 0.0035), (R * 0.69, H - 0.0045), (R * 0.45, H - 0.0045), (R * 0.42, H - 0.0036), (R * 0.39, H - 0.0045),
+                (0.0, H - 0.0045)]
+        mats = ["steel"] * 5 + bm + ["steel"] * 11
+        _revolve_raw(mb, prof, mats, seg=max(seg, 24))     # 24 lados: flecha 0,3 mm en Ø 75 (se repite cientos de veces)
+        if pull:                                                  # remache, lengüeta y argolla del abre-fácil
+            zt = H - 0.0045
+            revolve(mb, [(0.0035, zt), (0.0035, zt + 0.0008), (0.0, zt + 0.0012)], "aluminium", seg=16, M=_T(0, 0, 0), caps=False)
+            Mr = _T(R * 0.42, 0.0, zt + 0.0006) @ _Rz(180)
+            ring = [(0.009 * math.cos(2 * PI * k / 16) + 0.0, 0.0072 * math.sin(2 * PI * k / 16), 0.0) for k in range(16)]
+            tube(mb, [tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, mat="aluminium", caps=False)
+            slab(mb, _T(R * 0.18, 0, zt + 0.0003), 0.016, 0.009, 0.0006, rc=0.003, re=0.0002, mat="aluminium")
     else:
-        prof = [(R * 0.985, 0.0), (R * 0.985, H - 0.0095), (R, H - 0.0025), (R * 0.88, H - 0.0045), (0.0, H - 0.0045)]
-        mats = [label, "steel", "steel", "steel"]
-    revolve(mb, prof, mats, seg=seg)
+        prof = [(R * 0.985, 0.0), (R * 0.985, H - 0.0095), (R, H - 0.0058), (R, H - 0.0025), (R * 0.88, H - 0.0045), (0.0, H - 0.0045)]
+        mats = [label, "steel", "steel", "steel", "steel"]
+        _revolve_raw(mb, prof, mats, seg=max(seg, 24))     # 24 lados: flecha 0,3 mm en Ø 75 (se repite cientos de veces)
+    return mb
+
+
+def oval_can(L=0.105, W=0.065, H=0.03, label="sign_red", band="paint_yellow"):
+    """Lata oval de sardinas (125 g): cuerpo de estadio litografiado con franja, doble engargolado arriba y abajo, tapa
+    rehundida con la llave abre-fácil (argolla y lengüeta) en un extremo."""
+    mb = MB()
+    n = 48
+
+    def oval(off, z):
+        return [(x + nx * off, y + ny * off, z) for (x, y, nx, ny) in _oval_pts(L, W, n)]
+    loops = [oval(-0.002, 0.0), oval(-0.0005, 0.0012), oval(0.0, 0.003), oval(-0.0012, 0.0045), oval(-0.0012, H * 0.4),
+             oval(-0.0012, H * 0.62), oval(-0.0012, H - 0.0045), oval(0.0, H - 0.003), oval(0.0, H - 0.0008), oval(-0.0015, H - 0.0002),
+             oval(-0.004, H - 0.0025), oval(-0.0055, H - 0.0025)]
+    mats = ["steel", "steel", "steel", label, band, label, "steel", "steel", "steel", "steel", "steel"]
+    skin(mb, loops, "steel", mats=mats)
+    zt = H - 0.0025
+    Mr = _T(-L / 2 + 0.016, 0.0, zt + 0.0006)
+    ring = [(0.0085 * math.cos(2 * PI * k / 16), 0.0068 * math.sin(2 * PI * k / 16), 0.0) for k in range(16)]
+    tube(mb, [tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, mat="aluminium", caps=False)
+    slab(mb, _T(-L / 2 + 0.028, 0, zt), 0.014, 0.008, 0.0006, rc=0.003, re=0.0002, mat="aluminium")
+    return mb
+
+
+def _oval_pts(L, W, n):
+    """Estadio (largo L en X, ancho W en Y) a paso constante: (x, y, nx, ny)."""
+    R = W / 2
+    a = L / 2 - R
+    per = 4 * a + 2 * PI * R
+    out = []
+    for k in range(n):
+        s_ = per * k / n
+        if s_ < 2 * a:
+            x, y, nx, ny = -a + s_, -R, 0.0, -1.0
+        elif s_ < 2 * a + PI * R:
+            th = -PI / 2 + (s_ - 2 * a) / R
+            x, y, nx, ny = a + R * math.cos(th), R * math.sin(th), math.cos(th), math.sin(th)
+        elif s_ < 4 * a + PI * R:
+            x, y, nx, ny = a - (s_ - 2 * a - PI * R), R, 0.0, 1.0
+        else:
+            th = PI / 2 + (s_ - 4 * a - PI * R) / R
+            x, y, nx, ny = -a + R * math.cos(th), R * math.sin(th), math.cos(th), math.sin(th)
+        out.append((x + nx * 0.0, y + ny * 0.0, nx, ny))
+    return out
+
+
+def glass_jar(R=0.04, H=0.13, fill="cardboard", label="paper", lid="sign_red", band=None):
+    """Frasco de vidrio (café soluble, chiles, mermelada): fondo grueso, hombro, cuello con rosca, tapa metálica con estrías y
+    ceja; contenido visible (sólido interior de su color) y etiqueta de papel como tramo del perfil (0,3 mm sobre el vidrio)."""
+    mb = MB()
+    Rn = R * 0.78
+    prof = [(0.0, 0.004), (R * 0.85, 0.0), (R * 0.97, 0.003), (R, 0.012), (R, 0.02), (R + 0.0003, 0.021), (R + 0.0003, H * 0.45),
+            (R + 0.0003, H * 0.55), (R + 0.0003, H * 0.7), (R, H * 0.71), (R, H * 0.8), (R * 0.93, H * 0.87), (Rn, H * 0.9),
+            (Rn, H - 0.012)]
+    mats = ["glass", "glass", "glass", "glass", label, band or label, label, "glass", "glass", "glass", "glass", "glass", "glass"]
+    revolve(mb, prof, mats, seg=48, caps=False)
+    revolve(mb, [(0.0, 0.0045), (R * 0.95, 0.0045), (R * 0.95, H * 0.72), (R * 0.75, H * 0.86), (0.0, H * 0.86)], fill, seg=32)
+    lp = [(Rn + 0.0035, H - 0.016), (Rn + 0.0045, H - 0.0145)]
+    for k in range(5):
+        zz = H - 0.014 + k * 0.0028
+        lp += [(Rn + 0.0045, zz), (Rn + 0.0037, zz + 0.0014)]
+    lp += [(Rn + 0.0045, H + 0.0012), (Rn + 0.003, H + 0.0022), (Rn * 0.7, H + 0.0024), (0.0, H + 0.0022)]
+    revolve(mb, lp, lid, seg=56)
+    return mb
+
+
+def box_pack(w, d, h, mat="sign_white", band="sign_red", top_mat=None):
+    """Caja de cartoncillo impresa (avena, galletas, jabón en polvo, focos): cuerpo de cantos un poco vencidos, franja de color
+    a media altura (tramo de material), solapas superior e inferior con su ceja de pegado (0,6 mm)."""
+    mb = MB()
+    pts = rr_pts(w, d, 0.0018, 4)
+    lv = [(0.0, 0.0012), (0.0012, 0.0), (h * 0.35, 0.0), (h * 0.62, 0.0), (h - 0.0012, 0.0), (h, 0.0012)]
+    loops = [[(x - math.copysign(i_, x), y - math.copysign(i_, y), z) for (x, y) in pts] for (z, i_) in lv]
+    skin(mb, loops, mat, mats=[mat, mat, band, mat, top_mat or mat])
+    for z in (h - 0.0004, 0.0):                                  # ceja de la solapa de pegado
+        mb.box((-w / 2 + 0.003, -d / 2 - 0.0006, z - 0.0006 if z else 0.0), (w / 2 - 0.003, -d / 2 + 0.0004, z + 0.0006 if z else 0.0012),
+               mat, bevel=0.0002)
+    return mb
+
+
+def stand_pouch(w=0.16, d=0.07, h=0.24, mat="sign_blue", band="sign_white", seed=0):
+    """Bolsa de pie de plástico (detergente, azúcar): fondo de fuelle ovalado, cuerpo abombado que se angosta arriba hasta el
+    sello plano termosoldado con muesca de rasgado y estrías del sello; arrugas suaves del plástico."""
+    r = rng(seed)
+    mb = MB()
+    n = 32
+    ph = [_f(v) for v in r.uniform(0, 2 * PI, 3)]
+    loops = []
+    zs = [0.0, 0.004, 0.015, 0.04, h * 0.3, h * 0.5, h * 0.7, h * 0.82, h * 0.9, h - 0.025, h - 0.024, h - 0.001]
+    mats = []
+    for i, z in enumerate(zs):
+        f = z / h
+        dd = d / 2 * (0.82 if i == 0 else 1.0) * (1.0 - 0.95 * _sstep(0.6, 0.96, f)) + (0.0012 if f > 0.9 else 0.0)
+        ww = w / 2 * (0.92 if i == 0 else 1.0) * (1.0 + 0.03 * math.sin(PI * f))
+        ring = []
+        for k in range(n):
+            a = 2 * PI * k / n
+            ca, sa = math.cos(a), math.sin(a)
+            x = ww * math.copysign(abs(ca) ** 0.6, ca)
+            y = dd * math.copysign(abs(sa) ** 0.85, sa)
+            wr = 0.0012 * math.sin(9 * a + ph[0] + 13 * f) * math.sin(7 * f + ph[1]) if 0.05 < f < 0.88 else 0.0
+            ring.append((x + wr * ca, y + wr * sa, z))
+        loops.append(ring)
+        if i < len(zs) - 1:
+            mats.append(band if 0.35 < (f + zs[i + 1] / h) / 2 < 0.62 else mat)
+    skin(mb, loops, mat, mats=mats)
+    for k in range(6):                                           # estrías del sello
+        zz = h - 0.022 + k * 0.0035
+        mb.box((-w / 2 + 0.004, -0.0016, zz), (w / 2 - 0.004, 0.0016, zz + 0.0012), mat, bevel=0.0004)
+    return mb
+
+
+def _sstep(e0, e1, x):
+    t = min(max((x - e0) / (e1 - e0), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def salt_canister(R=0.045, H=0.135, mat="sign_blue", band="sign_white"):
+    """Bote de sal de cartón: tubo con tapas de lámina engargoladas y pico vertedor de lámina abatible en la tapa."""
+    mb = MB()
+    prof = [(0.0, 0.001), (R * 0.95, 0.001), (R + 0.0006, 0.0), (R + 0.0008, 0.005), (R, 0.006), (R, H * 0.4), (R, H * 0.62),
+            (R, H - 0.006), (R + 0.0008, H - 0.005), (R + 0.0006, H), (R * 0.95, H - 0.001), (0.0, H - 0.001)]
+    revolve(mb, prof, ["steel", "steel", "steel", "steel", mat, band, mat, "steel", "steel", "steel", "steel"], seg=48)
+    mb.box((R * 0.35, -0.012, H - 0.001), (R * 0.85, 0.012, H + 0.0012), "steel", bevel=0.0004)
+    return mb
+
+
+def soda_bottle(mat="glass", label="sign_red", cap="sign_red", fill="amber"):
+    """Botella PET de refresco de 2 L (Ø 110 × 310 mm): base de 5 pétalos, cuerpo con anillos, etiqueta de banda, hombro,
+    cuello con anillo de seguridad y tapa estriada; el líquido se ve por dentro (sólido interior)."""
+    mb = MB()
+    R = 0.055
+
+    def petal(a):
+        return 1.0 - 0.18 * (0.5 + 0.5 * math.cos(5 * a)) ** 2
+    revolve(mb, [(0.0, 0.006), (R * 0.6, 0.0), (R * 0.95, 0.012), (R, 0.03)], mat, seg=60, rmod=lambda a: petal(a), caps=False)
+    prof = [(R, 0.03), (R, 0.08), (R * 0.97, 0.088), (R, 0.096), (R + 0.0003, 0.1), (R + 0.0003, 0.2), (R, 0.205), (R * 0.97, 0.212),
+            (R, 0.22), (R * 0.9, 0.245), (R * 0.55, 0.275), (0.0135, 0.29), (0.0135, 0.292), (0.016, 0.293), (0.016, 0.295), (0.0135, 0.296)]
+    mats = [mat, mat, mat, mat, label, mat, mat, mat, mat, mat, mat, mat, mat, mat, mat]
+    revolve(mb, prof, mats, seg=56, caps=False)
+    revolve(mb, [(0.0, 0.007), (R * 0.95, 0.012), (R * 0.97, 0.06), (R * 0.97, 0.2), (R * 0.85, 0.24), (0.0, 0.24)], fill, seg=40)
+    revolve(mb, [(0.0145, 0.2955), (0.0155, 0.297), (0.0155, 0.318), (0.0145, 0.3195), (0.0, 0.3198)], cap, seg=40,
+            rmod=lambda a: 1.0 - 0.04 * (0.5 + 0.5 * math.cos(24 * a)) ** 4, caps=False)
     return mb
 
 
@@ -607,7 +804,7 @@ def jug(mat="plastic", cap="plastic_blue", label="sign_blue"):
     skin(mb, loops, mat, mats=[mat, mat, label, mat, mat, mat, mat])
     revolve(mb, [(0.019, 0.268), (0.019, 0.285), (0.0205, 0.287), (0.0205, 0.305), (0.018, 0.307), (0.0, 0.307)], cap, seg=8,
             caps=False)
-    mb.tube([(0.03, 0.03, 0.25), (0.066, 0.066, 0.262), (0.08, 0.08, 0.24), (0.079, 0.079, 0.21), (0.052, 0.052, 0.19)], 0.011,
+    tube(mb, [(0.03, 0.03, 0.25), (0.066, 0.066, 0.262), (0.08, 0.08, 0.24), (0.079, 0.079, 0.21), (0.052, 0.052, 0.19)], 0.011,
             seg=6, mat=mat)
     return mb
 
@@ -735,7 +932,7 @@ def jar_candle(print_mat="sign_white", R=0.029, H=0.2, seg=14):
     prof = [(0.0, 0.003), (R * 0.93, 0.0), (R, 0.02), (R, H - 0.016), (R, H), (R - 0.0022, H), (R - 0.0022, H - 0.013),
             (0.0, H - 0.013)]
     revolve(mb, prof, ["glass", "glass", print_mat, "glass", "glass", "glass", "plastic"], seg=seg)
-    mb.cyl((0, 0, H - 0.0135), (0.0008, 0, H - 0.003), 0.0009, seg=4, mat="cable")
+    cyl(mb, (0, 0, H - 0.0135), (0.0008, 0, H - 0.003), 0.0009, seg=4, mat="cable")
     return mb
 
 
@@ -780,7 +977,7 @@ def rope_coil(seed=0, R=0.12, rr=0.0105, turns=4.5, mat="burlap"):
     a_end = 2 * PI * n / 12
     pts += [((R + 0.02) * math.cos(a_end + 0.3), (R + 0.02) * math.sin(a_end + 0.3), rr),
             ((R + 0.045) * math.cos(a_end + 0.5), (R + 0.045) * math.sin(a_end + 0.55), rr)]
-    mb.tube(pts, rr, seg=5, mat=mat)
+    rope_tube(mb, pts, rr, mat=mat, lay=rr * 14)                # yute de 3 cabos torcidos
     zt = rr * (1 + 0.6 * turns) + rr
     for a in (0.7, 3.9):                                        # amarres
         c, s_ = math.cos(a), math.sin(a)
@@ -789,7 +986,7 @@ def rope_coil(seed=0, R=0.12, rr=0.0105, turns=4.5, mat="burlap"):
             b = 2 * PI * k / 8
             loop.append(((R + (rr + 0.006) * math.cos(b)) * c, (R + (rr + 0.006) * math.cos(b)) * s_,
                          zt / 2 + (zt / 2 + 0.004) * math.sin(b)))
-        mb.tube(loop, 0.004, seg=4, mat=mat)
+        rope_tube(mb, loop, 0.004, mat=mat, lay=0.03)
     return mb
 
 
@@ -916,8 +1113,118 @@ def _put(mb, hero, x, y, z, rz=0.0, s=1.0, extra=None, prio=0, on=None):
     return None
 
 
+class SKU:
+    """Producto de anaquel: malla héroe (fn), huella w (frente) × d (fondo), alto h, frentes min-max, filas de fondo, estiba
+    máxima, giro libre (round) o acostado a lo largo (rz). Las combinaciones de colores lo hacen reconocible sin marcas."""
+
+    def __init__(self, key, fn, w, d, h, f=(2, 5), rows=3, stack=1, round_=False, rz=0.0, back=None):
+        self.key, self.fn, self.w, self.d, self.h = key, fn, w, d, h
+        self.f, self.rows, self.stack, self.round, self.rz, self.back = f, rows, stack, round_, rz, back
+
+
+def _cat_canned():
+    return [
+        SKU("beans", lambda: can(0.0375, 0.112, "sign_red", seg=24, band="paint_yellow"), 0.0775, 0.0775, 0.112, (3, 5), 3, 2, True,
+            back=lambda: can(0.0375, 0.112, "sign_red", seg=24, lod=1)),
+        SKU("chiles", lambda: can(0.0375, 0.112, "paint_yellow", seg=24, band="sign_red", style="litho"), 0.0775, 0.0775, 0.112, (2, 4), 3, 2,
+            True, back=lambda: can(0.0375, 0.112, "paint_yellow", seg=24, lod=1)),
+        SKU("corn", lambda: can(0.0375, 0.112, "sign_green", seg=24, band="paint_yellow"), 0.0775, 0.0775, 0.112, (2, 4), 3, 2, True,
+            back=lambda: can(0.0375, 0.112, "sign_green", seg=24, lod=1)),
+        SKU("paste", lambda: can(0.033, 0.074, "sign_red", seg=24, band="sign_green", style="litho", pull=True), 0.068, 0.068, 0.074, (3, 6),
+            3, 3, True, back=lambda: can(0.033, 0.074, "sign_red", seg=24, lod=1)),
+        SKU("evap", lambda: can(0.037, 0.1, "sign_blue", seg=24, band="sign_white"), 0.0765, 0.0765, 0.1, (3, 5), 3, 2, True,
+            back=lambda: can(0.037, 0.1, "sign_blue", seg=24, lod=1)),
+        SKU("cmilk", lambda: can(0.038, 0.083, "sign_white", seg=24, band="sign_blue", pull=True), 0.078, 0.078, 0.083, (2, 4), 2, 3, True),
+        SKU("tuna", lambda: can(0.043, 0.039, "sign_blue", seg=24, band="paint_yellow", style="litho", pull=True), 0.088, 0.088, 0.039,
+            (2, 4), 2, 4, True),
+        SKU("sardine", lambda: oval_can(), 0.068, 0.108, 0.03, (2, 3), 2, 5, False, rz=90.0),
+        SKU("juice", lambda: can(0.042, 0.122, "paint_green", seg=24, band="paint_yellow", style="litho"), 0.086, 0.086, 0.122, (2, 4), 2, 1,
+            True),
+        SKU("coffee", lambda: glass_jar(0.04, 0.13, fill="cardboard", label="sign_red", lid="sign_red", band="paint_yellow"), 0.083, 0.083,
+            0.133, (2, 3), 2, 1, True),
+        SKU("salsa", lambda: glass_jar(0.032, 0.11, fill="sign_red", label="paper", lid="paint_yellow", band="sign_green"), 0.067, 0.067,
+            0.113, (3, 5), 2, 1, True),
+    ]
+
+
+def _cat_dry():
+    return [
+        SKU("rice", lambda: pillow_bag(0.2, 0.13, 0.05, mat="plastic", band="sign_red", seed=21, nu=16, nv=9, seal=0.018), 0.135, 0.205,
+            0.05, (2, 4), 2, 3, False, rz=90.0),
+        SKU("beansbag", lambda: pillow_bag(0.2, 0.13, 0.05, mat="plastic", band="paint_yellow", seed=22, nu=16, nv=9, seal=0.018), 0.135,
+            0.205, 0.05, (2, 3), 2, 3, False, rz=90.0),
+        SKU("lentil", lambda: pillow_bag(0.17, 0.11, 0.045, mat="plastic", band="sign_green", seed=23, nu=16, nv=9, seal=0.016), 0.115,
+            0.175, 0.045, (2, 3), 2, 3, False, rz=90.0),
+        SKU("flour", lambda: paper_bag(0.115, 0.07, 0.23, band="sign_blue", seed=31), 0.12, 0.075, 0.23, (2, 4), 2, 1, False),
+        SKU("masa", lambda: paper_bag(0.12, 0.075, 0.25, band="sign_red", seed=32), 0.125, 0.08, 0.25, (2, 3), 2, 1, False),
+        SKU("sugar", lambda: stand_pouch(0.14, 0.065, 0.22, mat="sign_white", band="sign_blue", seed=3), 0.15, 0.07, 0.22, (2, 3), 2, 1,
+            False),
+        SKU("oil", lambda: oil_bottle(), 0.084, 0.084, 0.29, (2, 4), 2, 1, True),
+        SKU("salt", lambda: salt_canister(), 0.093, 0.093, 0.137, (2, 4), 2, 1, True),
+        SKU("pasta", lambda: pillow_bag(0.17, 0.09, 0.028, mat="plastic", band="paint_yellow", seed=41, nu=14, nv=8, seal=0.014, zr=0.45),
+            0.095, 0.175, 0.028, (3, 5), 2, 4, False, rz=90.0),
+        SKU("cookies", lambda: pillow_bag(0.21, 0.065, 0.048, mat="sign_red", band="sign_white", seed=42, nu=16, nv=8, seal=0.016, zr=0.5),
+            0.215, 0.07, 0.048, (1, 2), 2, 3, False),
+        SKU("oats", lambda: box_pack(0.13, 0.06, 0.2, mat="sign_white", band="paint_yellow", top_mat="sign_blue"), 0.133, 0.063, 0.2,
+            (2, 3), 2, 1, False),
+        SKU("cereal", lambda: box_pack(0.19, 0.07, 0.27, mat="paint_yellow", band="sign_red"), 0.193, 0.073, 0.27, (1, 2), 2, 1, False),
+    ]
+
+
+def _cat_household():
+    return [
+        SKU("soap", lambda: pillow_bag(0.09, 0.06, 0.03, mat="paper", band="sign_green", seed=51, nu=10, nv=7, seal=0.008, zr=0.5,
+                                       crimp=False), 0.065, 0.095, 0.03, (3, 6), 2, 4, False, rz=90.0),
+        SKU("detergent", lambda: stand_pouch(0.17, 0.08, 0.26, mat="sign_blue", band="sign_white", seed=5), 0.18, 0.085, 0.26, (2, 3), 2, 1,
+            False),
+        SKU("bulbs", lambda: box_pack(0.065, 0.065, 0.12, mat="sign_white", band="sign_blue"), 0.068, 0.068, 0.12, (3, 6), 2, 2, False),
+        SKU("coils", lambda: box_pack(0.14, 0.14, 0.035, mat="sign_green", band="sign_red", top_mat="sign_green"), 0.143, 0.143, 0.035,
+            (1, 2), 2, 5, False),
+        SKU("matches", lambda: box_pack(0.055, 0.035, 0.016, mat="paint_yellow", band="sign_red"), 0.058, 0.04, 0.016, (4, 8), 2, 6, False),
+        SKU("candle", lambda: jar_candle("sign_white"), 0.06, 0.062, 0.2, (3, 5), 2, 1, True),
+        SKU("candle_r", lambda: jar_candle("sign_red"), 0.06, 0.062, 0.2, (2, 4), 2, 1, True),
+        SKU("tp", lambda: tp_pack(), 0.218, 0.218, 0.102, (1, 3), 2, 2, False),
+    ]
+
+
+def _fill_level(P, r, H, cat, x0, x1, y0, y1, z, zmax, gap=0.12):
+    """Llena un entrepaño con bloques de producto (frentes de 1-8, varias filas de fondo, estibas) y huecos de lo vendido; la
+    fila de enfrente es prioridad 0, las estibas 1 y las filas traseras 2 (el presupuesto quita primero lo de atrás)."""
+    x = x0 + _f(r.uniform(0.0, 0.012))
+    last = None
+    while x < x1 - 0.05:
+        if last is not None and r.random() < gap:
+            x += _f(r.uniform(0.05, 0.13))
+            last = None
+            continue
+        opts = [k for k in cat if k.h < zmax - z - 0.01 and k.w < x1 - x and k is not last]
+        if not opts:
+            break
+        sku = opts[int(r.integers(0, len(opts)))]
+        last = sku
+        nf = int(r.integers(sku.f[0], sku.f[1] + 1))
+        nf = max(1, min(nf, int((x1 - x) / (sku.w + 0.002))))
+        rows = max(1, min(sku.rows, int((y1 - y0 - 0.006) / (sku.d + 0.004))))
+        nst = max(1, min(sku.stack, int((zmax - z) / (sku.h + 0.0006))))
+        hero = H.get(("sku", sku.key), sku.fn)
+        back = H.get(("skub", sku.key), sku.back) if sku.back else hero
+        for fi in range(nf):
+            cx = x + sku.w / 2 + fi * (sku.w + 0.002) + _jit(r, 0.0015)
+            for row in range(rows):
+                cy = y0 + 0.004 + sku.d / 2 + row * (sku.d + 0.004) + _jit(r, 0.002)
+                ns = nst if row == 0 else int(r.integers(1, nst + 1))
+                below = None
+                for st in range(ns):
+                    rz = _f(r.uniform(0, 360)) if sku.round else sku.rz + _jit(r, 4)
+                    h_ = hero if (row == 0 or not sku.back) else back
+                    below = _put(P, h_, cx + _jit(r, 0.002 * st), cy + _jit(r, 0.002 * st), z + st * (sku.h + 0.0004), rz=rz,
+                                 prio=(0 if st == 0 else 1) if row == 0 else 2, on=below)
+        x += nf * (sku.w + 0.002) + _f(r.uniform(0.008, 0.03))
+
+
 def _stock_canned(mb, r, H, x0, x1, y0, y1, z, zmax, kind):
-    """Grupos de latas (frentes de 2-5, de 1 a 3 en fondo, a veces estibadas), huecos de lo vendido; arriba cajas cerradas."""
+    """Abarrotes enlatados: latas de frijol, chiles, elote, puré, leche evaporada y condensada, atún, sardina oval y jugo;
+    frascos de café y salsa; huecos de lo vendido; abajo latas grandes y refresco de 2 L; arriba cajas cerradas."""
     if kind == "top":
         x = x0 + _f(r.uniform(0.0, 0.03))
         while x < x1 - 0.2:
@@ -928,55 +1235,33 @@ def _stock_canned(mb, r, H, x0, x1, y0, y1, z, zmax, kind):
             _put(mb, hero, x + cw / 2, (y0 + y1) / 2 + _jit(r, 0.02), z, rz=_jit(r, 3))
             x += cw + _f(r.uniform(0.01, 0.06))
         return
-    sizes = [(0.0375, 0.112), (0.033, 0.074), (0.042, 0.122)] if kind != "bottom" else [(0.05, 0.142), (0.0375, 0.112)]
-    x = x0 + _f(r.uniform(0.0, 0.015))
-    first = True
-    while x < x1 - 0.06:
-        if not first and r.random() < 0.14:                    # hueco: se vendió
-            x += _f(r.uniform(0.05, 0.12))
-            continue
-        first = False
-        R, Hc = sizes[int(r.integers(0, len(sizes)))]
-        lab = LABELS[int(r.integers(0, len(LABELS)))]
-        pitch = 2 * R + 0.0025
-        f = int(r.integers(2, 6))
-        f = min(f, int((x1 - x) / pitch))
-        if f < 1:
-            break
-        rows = int(r.choice([1, 1, 2, 2, 2, 3]))
-        stack = (2 * Hc < zmax - z - 0.01) and r.random() < 0.3
-        for fi in range(f):
-            cx = x + R + fi * pitch + _jit(r, 0.0015)
-            for k in range(rows):
-                cy = y0 + 0.004 + R + k * (2 * R + 0.003) + _jit(r, 0.002)
-                if cy + R > y1:
-                    break
-                lod = 0 if k == 0 else 1
-                hero = H.get(("can", R, Hc, lab, lod), lambda: can(R, Hc, lab, seg=14 if lod == 0 else 13, lod=lod))
-                i0 = _put(mb, hero, cx, cy, z, rz=_f(r.uniform(0, 360)), prio=2 if k else 0)
-                if stack and (k == 0 or r.random() < 0.5) and not (fi == f - 1 and r.random() < 0.5):
-                    _put(mb, hero, cx + _jit(r, 0.0015), cy + _jit(r, 0.0015), z + Hc - 0.0012, rz=_f(r.uniform(0, 360)),
-                         prio=2 if k else 1, on=i0)
-        x += f * pitch + _f(r.uniform(0.006, 0.025))
+    if kind == "bottom":
+        cat = [SKU("lard", lambda: can(0.05, 0.142, "paint_yellow", seg=28, band="sign_red", style="litho"), 0.102, 0.102, 0.142, (2, 3), 3,
+                   2, True),
+               SKU("soda", lambda: soda_bottle(label="sign_red", cap="sign_red", fill="amber"), 0.112, 0.112, 0.32, (2, 4), 3, 1, True),
+               SKU("soda2", lambda: soda_bottle(label="sign_green", cap="sign_green", fill="glass"), 0.112, 0.112, 0.32, (2, 3), 3, 1, True)]
+        _fill_level(mb, r, H, cat, x0, x1, y0, y1, z, zmax, gap=0.05)
+        return
+    _fill_level(mb, r, H, _cat_canned(), x0, x1, y0, y1, z, zmax)
 
 
 def _stock_dry(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
-    """Abarrotes secos: costales abajo, pilas de bolsas de arroz/frijol acostadas, bolsas de papel de harina/azúcar paradas,
-    botellas de aceite; arriba cajas y un costal."""
+    """Abarrotes secos: costales abajo; bolsas de arroz, frijol y lenteja acostadas en pilas, harina y masa en bolsa de papel,
+    azúcar en bolsa de pie, aceite, sal, sopa de pasta, galletas, avena y cereal en caja; arriba cajas y un costal."""
     if kind == "bottom":
         x = x0 + 0.005
         for k in range(2):
             L, W, T = 0.56, 0.34, 0.13
             if x + L > x1 + 0.02:
                 break
-            hero = H.get(("sack", k), lambda: pillow_bag(L, W, T, mat="burlap", band=None, seed=7 + k, nu=14, nv=8, seal=0.035,
+            hero = H.get(("sack", k), lambda: pillow_bag(L, W, T, mat="burlap", band=None, seed=7 + k, nu=22, nv=12, seal=0.035,
                                                           zr=0.42, wr=0.006, crimp=False))
             _put(mb, hero, x + L / 2, (y0 + y1) / 2 + _jit(r, 0.01), z, rz=_jit(r, 4))
             x += L + 0.015
         return
     if kind == "top":
         x = x0 + 0.01
-        hero = H.get(("sack_top",), lambda: pillow_bag(0.5, 0.32, 0.12, mat="burlap", seed=11, nu=14, nv=8, seal=0.035, zr=0.42,
+        hero = H.get(("sack_top",), lambda: pillow_bag(0.5, 0.32, 0.12, mat="burlap", seed=11, nu=22, nv=12, seal=0.035, zr=0.42,
                                                        wr=0.006, crimp=False))
         _put(mb, hero, x + 0.25, (y0 + y1) / 2, z, rz=_jit(r, 8))
         x += 0.53
@@ -985,61 +1270,18 @@ def _stock_dry(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
         if x + cw < x1:
             _put(mb, hero, x + cw / 2, (y0 + y1) / 2, z, rz=_jit(r, 4))
         return
-    plan = {1: (("paper", "paper", "sign_blue"), ("bags", "plastic", "sign_red")),
-            2: (("oil",), ("bags", "plastic", "paint_yellow")),
-            3: (("bags", "plastic", "sign_green"), ("paper", "paper", "sign_red"))}
-    sel, sel2 = plan[1 + (lvl - 1) % 3]
-    x = x0 + 0.004
-    for part, cfg in ((0, sel), (1, sel2)):
-        xend = (x0 + x1) / 2 + _jit(r, 0.1) if part == 0 else x1
-        if cfg[0] == "bags":                                   # pilas de bolsas de 1 kg acostadas, largo hacia el fondo
-            Lb, Wb, Tb = 0.2, 0.13, 0.05
-            while x + Wb < xend:
-                n = int(r.integers(2, 4))
-                n = min(n, int((zmax - z) / (Tb * 0.92)))
-                below = None
-                for k in range(n):
-                    var = int(r.integers(0, 3))
-                    hero = H.get(("bag", cfg[1], cfg[2], var), lambda: pillow_bag(Lb, Wb, Tb, mat=cfg[1], band=cfg[2], seed=21 + var,
-                                                                                   nu=11, nv=7, seal=0.018))
-                    below = _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + Lb / 2 + 0.005 + _jit(r, 0.008), z + k * Tb * 0.9,
-                                 rz=90 + _jit(r, 7), prio=1 if k else 0, on=below)
-                if r.random() < 0.3 and y1 - y0 > 2 * Lb:             # segunda pila detrás
-                    below = None
-                    for k in range(int(r.integers(1, n + 1))):
-                        hero = H.get(("bag", cfg[1], cfg[2], 0), lambda: pillow_bag(Lb, Wb, Tb, mat=cfg[1], band=cfg[2], seed=21, nu=11,
-                                                                                     nv=7, seal=0.018))
-                        below = _put(mb, hero, x + Wb / 2 + _jit(r, 0.006), y0 + 1.5 * Lb + 0.01, z + k * Tb * 0.9, rz=90 + _jit(r, 7),
-                                     prio=2, on=below)
-                x += Wb + _f(r.uniform(0.004, 0.012))
-        elif cfg[0] == "paper":                                # bolsas de papel paradas en dos filas
-            bw, bd, bh = 0.115, 0.07, 0.23
-            while x + bw < xend:
-                for k in range(2 if r.random() < 0.4 else 1):
-                    var = int(r.integers(0, 2))
-                    hero = H.get(("pbag", var), lambda: paper_bag(bw, bd, bh, band=cfg[2], seed=31 + var))
-                    _put(mb, hero, x + bw / 2, y0 + bd / 2 + 0.006 + k * (bd + 0.01), z, rz=_jit(r, 5), prio=2 if k else 0)
-                x += bw + _f(r.uniform(0.004, 0.015))
-        else:                                                  # aceite: botellas en 2 filas
-            while x + 0.085 < xend:
-                for k in range(2 if r.random() < 0.5 else 1):
-                    hero = H.get(("oil",), lambda: oil_bottle())
-                    _put(mb, hero, x + 0.041, y0 + 0.045 + k * 0.085, z, rz=_f(r.uniform(-30, 30)), prio=2 if k else 0)
-                x += 0.084 + _f(r.uniform(0.0, 0.006))
-        x = max(x, xend) + 0.01
+    _fill_level(mb, r, H, _cat_dry(), x0, x1, y0, y1, z, zmax)
 
 
 def _stock_household(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
-    """Mercería y ferretería: garrafas de cloro y soga abajo; paquetes de papel higiénico; veladoras y pilas; herramienta;
-    arriba cajas y paquetes."""
+    """Mercería y ferretería: garrafas de cloro y soga abajo; jabón en barra, detergente, focos, espirales contra mosquito,
+    cerillos, veladoras, papel higiénico y pilas; un entrepaño de herramienta (machetes, martillos, clavos, soga); arriba cajas."""
     if kind == "bottom":
         x = x0 + 0.005
         for k in range(4):
             hero = H.get(("jug",), lambda: jug())
             _put(mb, hero, x + 0.074, y0 + 0.08 + (0.0 if k % 2 == 0 else 0.15), z, rz=_jit(r, 12) + (0 if k % 2 else 90))
             x += 0.15 if k % 2 else 0.0
-            if k % 2 == 0:
-                continue
         x += 0.02
         hero = H.get(("rope",), lambda: rope_coil(seed=5))
         _put(mb, hero, x + 0.14, (y0 + y1) / 2, z, rz=_f(r.uniform(0, 360)))
@@ -1058,36 +1300,7 @@ def _stock_household(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
             _put(mb, hero, x + cw / 2, (y0 + y1) / 2, z, rz=_jit(r, 4))
             x += cw + 0.03
         return
-    sel = lvl % 3
-    if sel == 1:                                               # papel higiénico: paquetes de 4 en 2 alturas
-        x = x0 + 0.003
-        while x + 0.22 < x1:
-            n = 2 if (zmax - z) > 0.22 else 1
-            below = None
-            for k in range(n):
-                for j in range(2 if (y1 - y0 > 0.44 and k == 0) else 1):
-                    i_ = _put(mb, H.get(("tp",), lambda: tp_pack()), x + 0.108, y0 + 0.11 + j * 0.22, z + k * 0.1, rz=_jit(r, 4),
-                              prio=2 if j else (1 if k else 0), on=below if j == 0 else None)
-                    if j == 0:
-                        below = i_
-            x += 0.222
-    elif sel == 2:                                             # veladoras y exhibidor de pilas
-        x = x0 + 0.005
-        for k in range(int(r.integers(6, 10))):
-            pm = ("sign_white", "sign_red", "sign_green")[k % 3]
-            hero = H.get(("candle", pm), lambda: jar_candle(pm))
-            for j in range(2 if r.random() < 0.5 else 1):
-                _put(mb, hero, x + 0.03, y0 + 0.035 + j * 0.065, z, rz=_f(r.uniform(0, 360)), prio=2 if j else 0)
-            x += 0.062
-        x += 0.03
-        _put(mb, H.get(("batt",), lambda: battery_box(seed=2)), x + 0.075, y0 + 0.06, z, rz=_jit(r, 5))
-        x += 0.18
-        if x + 0.25 < x1:                                      # paquetes de velas de parafina envueltos en papel
-            hero = H.get(("candles_pk",), lambda: pillow_bag(0.24, 0.07, 0.035, mat="paper", band="sign_red", seed=71, nu=7, nv=4,
-                                                             seal=0.02, zr=0.45, wr=0.0012))
-            for k in range(4):
-                _put(mb, hero, x + 0.12 + _jit(r, 0.01), y0 + 0.05 + (k % 2) * 0.08, z + (k // 2) * 0.033, rz=_jit(r, 6))
-    else:                                                      # herramienta: machetes al frente, martillos detrás, clavos, soga
+    if lvl % 3 == 0:                                            # herramienta: machetes al frente, martillos detrás, clavos, soga
         x = x0 + 0.16
         for k in range(2):
             _put(mb, H.get(("mach",), lambda: machete()), x + k * 0.03, y0 + 0.03 + k * 0.022, z + 0.0011 + k * 0.0102,
@@ -1102,6 +1315,12 @@ def _stock_household(mb, r, H, x0, x1, y0, y1, z, zmax, kind, lvl):
         if x + 0.24 < x1:
             _put(mb, H.get(("rope2",), lambda: rope_coil(seed=6, R=0.1, rr=0.007, turns=5.5, mat="burlap")), x + 0.12,
                  (y0 + y1) / 2, z, rz=_f(r.uniform(0, 360)))
+        return
+    cat = _cat_household()
+    if lvl % 3 == 2:                                            # pilas en su exhibidor al principio del entrepaño
+        _put(mb, H.get(("batt",), lambda: battery_box(seed=2)), x0 + 0.08, y0 + 0.06, z, rz=_jit(r, 5))
+        x0 += 0.17
+    _fill_level(mb, r, H, cat, x0, x1, y0, y1, z, zmax)
 
 
 def grocery_shelving(w=1.2, d=0.40, h=2.0, seed=0, stock="canned"):
@@ -1128,7 +1347,7 @@ def grocery_shelving(w=1.2, d=0.40, h=2.0, seed=0, stock="canned"):
             _stock_dry(mb, r, H, x0, x1, y0, y1, zs, zmax, kind, i)
         else:
             _stock_household(mb, r, H, x0, x1, y0, y1, zs, zmax, kind, i)
-    mb.flush(r, 19500)
+    mb.flush(r, 48000)
     return base
 
 
@@ -1178,43 +1397,170 @@ def wire_shelf(mb, x0, x1, y0, y1, z, pitch=0.032, rw=0.0022, lip=0.03):
     R = 0.0025
     rim = rr_pts(x1 - x0, y1 - y0, 0.012, 2)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    mb.tube([(cx + x, cy + y, z) for (x, y) in rim] + [(cx + rim[0][0], cy + rim[0][1], z)], R, seg=5, mat="steel")
-    mb.tube([(x0 + 0.004, y0, z + lip), (x1 - 0.004, y0, z + lip)], R, seg=5, mat="steel")                 # tope frontal
+    tube(mb, [(cx + x, cy + y, z) for (x, y) in rim] + [(cx + rim[0][0], cy + rim[0][1], z)], R, seg=5, mat="steel")
+    tube(mb, [(x0 + 0.004, y0, z + lip), (x1 - 0.004, y0, z + lip)], R, seg=5, mat="steel")                 # tope frontal
     for x in (x0 + 0.004, x1 - 0.004):
-        mb.tube([(x, y0, z), (x, y0, z + lip)], R * 0.8, seg=4, mat="steel")
+        tube(mb, [(x, y0, z), (x, y0, z + lip)], R * 0.8, seg=4, mat="steel")
     for yy in (y0 + 0.12, y1 - 0.12):
-        mb.cyl((x0 + 0.002, yy, z - R - 0.0018), (x1 - 0.002, yy, z - R - 0.0018), 0.002, seg=4, mat="steel")
+        cyl(mb, (x0 + 0.002, yy, z - R - 0.0018), (x1 - 0.002, yy, z - R - 0.0018), 0.002, seg=4, mat="steel")
     n = int((x1 - x0 - 0.02) / pitch)
     for i in range(1, n + 1):
         x = x0 + (x1 - x0) * i / (n + 1)
-        mb.cyl((x, y0 + 0.002, z), (x, y1 - 0.002, z), rw, seg=4, mat="steel")
+        cyl(mb, (x, y0 + 0.002, z), (x, y1 - 0.002, z), rw, seg=4, mat="steel")
+
+
+def _condensing_unit(mb, W, yf, D, z0, z1, r):
+    """Unidad condensadora inferior de refrigerador comercial (montaje inferior, aire por el frente), dentro del cuarto de
+    máquina de z0 a z1: charola base de lámina con ceja, compresor hermético (domo de dos cascos con cordón de soldadura, patas
+    con ojillos de hule y tornillos, caja de terminales con tapa y cable), serpentín condensador de tubo de cobre Ø 3/8" con
+    curvas en U y aletas de aluminio cada 3 mm entre dos placas porta-tubos, ventilador axial de 5 aspas con anillo-tobera,
+    motor y soporte, filtro deshidratador, tubo capilar enrollado, líneas de succión y descarga que suben al evaporador, charola
+    de deshielo con su lazo de gas caliente y cordón con prensacable atrás."""
+    xa, xb = -W / 2 + 0.05, W / 2 - 0.05
+    # charola base
+    board(mb, xa, xb, yf + 0.06, D / 2 - 0.06, z0, z0 + 0.0015, "steel", rc=0.004, re=0.0007)
+    for x in (xa, xb - 0.0015):
+        board(mb, x, x + 0.0015, yf + 0.06, D / 2 - 0.06, z0, z0 + 0.025, "steel", rc=0.001, re=0.0007)
+    # serpentín condensador detrás de la rejilla (cara a 5 cm del frente)
+    yc0, yc1 = yf + 0.075, yf + 0.115
+    cx0, cx1 = xa + 0.035, xb - 0.035
+    cz0, cz1 = z0 + 0.03, z1 - 0.02
+    for x in (cx0, cx1):                                         # placas porta-tubos
+        board(mb, x - 0.0008, x + 0.0008, yc0 - 0.004, yc1 + 0.004, cz0 - 0.006, cz1 + 0.006, "steel", rc=0.001, re=0.0006)
+        for (y, z) in ((yc0 + 0.01, cz0 + 0.004), (yc1 - 0.01, cz1 - 0.004)):
+            screw_lo(mb, _T(x - 0.001, y, z) @ _Ry(-90), d=0.006)
+    x = cx0 + 0.003
+    while x < cx1 - 0.002:                                       # aletas de aluminio de 0,15 mm a cada 3 mm
+        mb.box((x - 0.0001, yc0, cz0), (x + 0.0001, yc1, cz1), "aluminium", bevel=0.0)
+        x += 0.003
+    rows = [(yc0 + 0.01, 0.0), (yc1 - 0.01, 0.5)]
+    npass = 6
+    for (y, off) in rows:                                        # dos filas de tubo con curvas en U alternadas a cada lado
+        zs = [cz0 + 0.012 + (cz1 - cz0 - 0.024) * (k + off * 0.5) / (npass - 0.5) for k in range(npass)]
+        for k in range(npass):
+            tube(mb, [(cx0 - 0.004, y, zs[k]), (cx1 + 0.004, y, zs[k])], 0.0048, mat="copper", caps=False)
+        for k in range(npass - 1):
+            xe = cx1 + 0.004 if k % 2 == 0 else cx0 - 0.004
+            sg = 1 if k % 2 == 0 else -1
+            zc_, rr_ = (zs[k] + zs[k + 1]) / 2, (zs[k + 1] - zs[k]) / 2
+            arc = [(xe + sg * rr_ * math.sin(PI * j / 10), y, zc_ - rr_ * math.cos(PI * j / 10)) for j in range(11)]
+            tube(mb, arc, 0.0048, mat="copper", caps=False)
+    # ventilador axial con anillo-tobera, detrás del serpentín
+    fy = yc1 + 0.05
+    fx, fz = 0.0, (z0 + z1) / 2 + 0.005
+    Rf = min(0.085, (z1 - z0) / 2 - 0.012)
+    Mfan = _T(fx, fy, fz) @ _Rx(90)
+    revolve(mb, [(Rf + 0.004, -0.018), (Rf + 0.004, 0.012), (Rf + 0.012, 0.02), (Rf + 0.03, 0.022), (Rf + 0.03, 0.024),
+                 (Rf + 0.0105, 0.0225), (Rf + 0.0025, 0.0135), (Rf + 0.0025, -0.018)], "plastic", seg=64, M=Mfan, closed=True)
+    board(mb, fx - Rf - 0.03, fx + Rf + 0.03, fy + 0.0215, fy + 0.0235, fz - Rf - 0.03, fz + Rf + 0.03, "plastic", rc=0.01,
+          re=0.0008, M=None)
+    for k in range(5):                                           # aspas de lámina estampada (torcidas)
+        a = 2 * PI * k / 5 + 0.3
+        blade = [(0.018, -0.012), (Rf - 0.004, -0.03), (Rf - 0.002, 0.018), (0.02, 0.012)]
+        Mb_ = Mfan @ _Rz(math.degrees(a)) @ _T(0, 0, 0.0) @ _Rx(18)
+        mb.plate(blade, 0.0012, "aluminium", m=Mb_)
+    revolve(mb, [(0.0, -0.004), (0.02, -0.004), (0.022, 0.002), (0.02, 0.008), (0.0, 0.009)], "aluminium", seg=24, M=Mfan)
+    revolve(mb, [(0.0, 0.009), (0.034, 0.012), (0.036, 0.02), (0.036, 0.06), (0.032, 0.068), (0.0, 0.07)], "gunmetal", seg=32, M=Mfan)
+    for k in range(3):                                           # soporte del motor (tres brazos de solera)
+        a = 2 * PI * k / 3 + 0.5
+        p0 = Mfan @ Vector((0.03 * math.cos(a), 0.03 * math.sin(a), 0.05))
+        p1 = Mfan @ Vector(((Rf + 0.02) * math.cos(a), (Rf + 0.02) * math.sin(a), 0.022))
+        rtube_lo(mb, tuple(p0), tuple(p1), 0.012, 0.0025, "steel", up=(0, 1, 0), r=0.0008)
+    # compresor hermético
+    cxp, cyp = -0.13, D / 2 - 0.17
+    revolve(mb, [(0.0, 0.0), (0.09, 0.0), (0.092, 0.003), (0.092, 0.006), (0.0, 0.006)], "gunmetal", seg=48,
+            M=_T(cxp, cyp, z0 + 0.0015) @ Matrix.Diagonal((1.0, 0.75, 1.0, 1.0)))            # base del compresor
+    for (dx, dy) in ((-0.07, -0.05), (0.07, -0.05), (-0.07, 0.05), (0.07, 0.05)):
+        Mg = _T(cxp + dx, cyp + dy, z0 + 0.0015)
+        revolve(mb, [(0.0, 0.0), (0.012, 0.0), (0.013, 0.004), (0.009, 0.007), (0.012, 0.01), (0.013, 0.016), (0.0, 0.016)], "rubber",
+                seg=20, M=Mg)
+        hexnut(mb, Mg @ _T(0, 0, 0.016), s=0.011, h=0.006, mat="steel")
+    zc0 = z0 + 0.018
+    Rc, Hc_ = 0.072, min(0.19, z1 - z0 - 0.03)
+    prof = [(0.0, zc0), (0.045, zc0), (Rc * 0.92, zc0 + 0.006), (Rc, zc0 + 0.025), (Rc, zc0 + Hc_ * 0.48), (Rc + 0.003, zc0 + Hc_ * 0.5),
+            (Rc, zc0 + Hc_ * 0.52), (Rc, zc0 + Hc_ * 0.8), (Rc * 0.9, zc0 + Hc_ * 0.94), (Rc * 0.6, zc0 + Hc_), (0.0, zc0 + Hc_ + 0.004)]
+    revolve(mb, prof, "gunmetal", seg=64, M=_T(cxp, cyp, 0.0))
+    Mt = _T(cxp + Rc - 0.004, cyp, zc0 + Hc_ * 0.55) @ _Ry(90)          # caja de terminales
+    slab(mb, Mt @ _T(0, 0, 0.0), 0.06, 0.07, 0.03, rc=0.008, re=0.004, mat="plastic")
+    hose(mb, [(cxp + Rc + 0.026, cyp + 0.01, zc0 + Hc_ * 0.55), (cxp + Rc + 0.05, cyp + 0.04, zc0 + Hc_ * 0.55),
+              (cxp + Rc + 0.05, D / 2 - 0.07, z0 + 0.03), (0.2, D / 2 - 0.07, z0 + 0.03)], 0.0045, bend=0.03, mat="cable")
+    # líneas de refrigerante: descarga al condensador, succión que sube al evaporador, filtro y capilar
+    tube_d = [(cxp + 0.03, cyp - 0.02, zc0 + Hc_ * 0.86), (cxp + 0.03, cyp - 0.09, zc0 + Hc_ * 0.86 + 0.01), (cx0 - 0.004, cyp - 0.09, cz1 - 0.012),
+              (cx0 - 0.004, yc0 + 0.01, cz1 - 0.012)]
+    hose(mb, tube_d, 0.0032, bend=0.025, mat="copper")
+    tube_s = [(cxp - 0.03, cyp + 0.02, zc0 + Hc_ * 0.9), (cxp - 0.03, cyp + 0.05, zc0 + Hc_ + 0.02), (cxp - 0.03, D / 2 - 0.09, z1 - 0.005),
+              (cxp - 0.03, D / 2 - 0.09, z1 + 0.02)]
+    hose(mb, tube_s, 0.0048, bend=0.03, mat="copper")
+    fx0 = cx1 - 0.05                                             # filtro deshidratador vertical junto al serpentín
+    revolve(mb, [(0.0, -0.055), (0.003, -0.055), (0.009, -0.045), (0.0095, -0.042), (0.0095, 0.042), (0.009, 0.045), (0.003, 0.055),
+                 (0.0, 0.055)], "copper", seg=24, M=_T(fx0, yc1 + 0.02, (z0 + z1) / 2))
+    hose(mb, [(fx0, yc1 + 0.02, (z0 + z1) / 2 + 0.055), (fx0, yc1 + 0.02, z1 - 0.004), (fx0 - 0.02, D / 2 - 0.09, z1 - 0.004),
+              (fx0 - 0.02, D / 2 - 0.09, z1 + 0.02)], 0.0012, bend=0.02, mat="copper")
+    cap = [(fx0 - 0.02 + 0.022 * math.cos(2 * PI * k / 14), D / 2 - 0.12 + 0.022 * math.sin(2 * PI * k / 14), z1 - 0.03 + 0.0015 * k / 14 * 4)
+           for k in range(14 * 3)]
+    tube(mb, cap, 0.0012, mat="copper")
+    # charola de deshielo con lazo de gas caliente
+    tx0, tx1, ty0, ty1 = 0.05, xb - 0.02, D / 2 - 0.2, D / 2 - 0.08
+    board(mb, tx0, tx1, ty0, ty1, z1 - 0.06, z1 - 0.058, "steel", rc=0.006, re=0.0006)
+    for (a_, b_) in (((tx0, ty0), (tx1, ty0 + 0.0012)), ((tx0, ty1 - 0.0012), (tx1, ty1)), ((tx0, ty0), (tx0 + 0.0012, ty1)),
+                     ((tx1 - 0.0012, ty0), (tx1, ty1))):
+        board(mb, a_[0], b_[0], a_[1], b_[1], z1 - 0.06, z1 - 0.025, "steel", rc=0.0005, re=0.0005)
+    loop = [(tx0 + 0.02, ty0 + 0.02, z1 - 0.052), (tx1 - 0.02, ty0 + 0.02, z1 - 0.052), (tx1 - 0.02, ty1 - 0.02, z1 - 0.052),
+            (tx0 + 0.02, ty1 - 0.02, z1 - 0.052), (tx0 + 0.02, ty0 + 0.05, z1 - 0.052)]
+    hose(mb, loop, 0.0032, bend=0.02, mat="copper")
+    hose(mb, [(0.10, D / 2 - 0.075, z1 + 0.01), (0.10, D / 2 - 0.075, z1 - 0.03)], 0.007, bend=0.01, mat="plastic")      # desagüe
+
+
+def _louvered_panel(mb, M, w, h, n, t=0.0012, mat="enamel", frame=0.014):
+    """Tapa de rejilla del cuarto de máquina: lámina doblada (marco perimetral) con n persianas estampadas abiertas hacia abajo
+    (aire por el frente) y ranuras pasantes: a través de ellas se ve el serpentín. Plano XY local, cara vista +Z."""
+    holed(mb, M, (0, 0, w / 2, h / 2, 0.006), (0, 0, w / 2 - frame, h / 2 - frame, 0.002), t * 4, re_o=0.002, re_i=0.0012, n=40,
+          mat=mat, ne=2, ctr=(0, 0))
+    ih = h - 2 * frame
+    pitch = ih / n
+    for k in range(n):
+        y = -ih / 2 + pitch * (k + 0.5)
+        Ms = M @ _T(0, y, t * 2) @ _Rx(-38)
+        slab(mb, Ms @ _T(0, 0, -t / 2), w - 2 * frame + 0.002, pitch * 0.62, t, rc=0.001, re=0.0005, mat=mat)
+    for x in (-w / 2 + frame * 0.5, w / 2 - frame * 0.5):        # tornillos de la tapa
+        screw_lo(mb, M @ _T(x, 0, t * 4), d=0.0065)
 
 
 def beer_cooler(seed=0):
-    """Refrigerador vertical de puerta de vidrio para bebidas, 0,65 × 0,65 × 2,0 (origen al centro de la huella, frente -Y):
+    """Refrigerador vertical de puerta de vidrio para bebidas (enfriador comercial de una puerta, montaje inferior: 0,65 × 0,65 ×
+    2,0; cf. MainStreet GMC-12 0,60 × 0,60 × 1,90 y Hoshizaki RM-26 0,76 × 0,76 × 2,03), origen al centro de la huella, frente -Y:
     gabinete de lámina con cantos redondeados, marco frontal, puerta de perfil de aluminio con doble vidrio, empaque magnético,
     jaladera de barra con bases, bisagras de pivote y chapa; interior con forro, cremalleras y 4 parrillas de alambre llenas de
-    botellas ámbar y latas sin etiqueta (frentes completos, fondo a medias); copete superior iluminado con la palabra COLD en
-    relieve, rejilla inferior de persianas, patas niveladoras y cordón."""
+    botellas ámbar y latas (frentes completos, fondo a medias); copete superior iluminado con la palabra COLD en relieve;
+    cuarto de máquina abajo (23 cm) con tapa de rejilla de persianas por la que respira y deja ver la UNIDAD CONDENSADORA
+    (serpentín de cobre con aletas, ventilador, compresor, líneas, charola de deshielo), rejilla de ventilación atrás, patas
+    niveladoras y cordón."""
     r = rng(seed)
     base = MB()
     mb = base
     W, D, Hc = 0.65, 0.65, 2.0
-    zb, zc = 0.13, 1.79                                          # zoclo y copete
+    zb, zc = 0.26, 1.79                                          # piso del gabinete (sobre el cuarto de máquina) y copete
     yf = -D / 2
+    zf0 = 0.03
     # gabinete: costados, espalda, techo y piso de lámina (forro interior blanco = mismas piezas, cara interior)
     for s in (-1, 1):
         board(mb, min(s * W / 2, s * (W / 2 - 0.045)), max(s * W / 2, s * (W / 2 - 0.045)), yf + 0.035, D / 2, 0.0, zc, "enamel",
               rc=(0.0, 0.0, 0.0, 0.0), re=0.004)
-    board(mb, -W / 2 + 0.045, W / 2 - 0.045, D / 2 - 0.05, D / 2, 0.0, zc, "enamel", rc=0.002, re=0.003)
+    board(mb, -W / 2 + 0.045, W / 2 - 0.045, D / 2 - 0.05, D / 2, zb, zc, "enamel", rc=0.002, re=0.003)          # espalda
     board(mb, -W / 2 + 0.045, W / 2 - 0.045, yf + 0.035, D / 2 - 0.05, zc - 0.05, zc, "enamel", rc=0.002, re=0.002)
     board(mb, -W / 2 + 0.045, W / 2 - 0.045, yf + 0.035, D / 2 - 0.05, zb, zb + 0.05, "enamel", rc=0.002, re=0.002)
-    board(mb, -W / 2 + 0.045, W / 2 - 0.045, yf + 0.06, D / 2 - 0.05, 0.03, zb, "cable", rc=0.002, re=0.002)       # cuarto de máquina
-    # marco frontal (perímetro del vano) y copete
+    # cuarto de máquina: unidad condensadora, tapa de rejilla al frente y rejilla de ventilación atrás
+    _condensing_unit(mb, W, yf, D, zf0, zb, r)
+    board(mb, -W / 2 + 0.045, W / 2 - 0.045, D / 2 - 0.0015, D / 2, zf0, zb, "enamel", rc=0.002, re=0.0008)       # tapa trasera
+    louver_grille(mb, _T(0.12, D / 2 + 0.0, (zf0 + zb) / 2) @ _Rx(-90), 0.26, zb - zf0 - 0.07, 8, mat="enamel", back_mat="cable",
+                  t=0.004, frame=0.012, slat_ang=40, depth=0.04, nr=24)
+    # marco frontal (perímetro del vano de la puerta) y marco de la rejilla
     Mf = _T(0, yf + 0.035, 0) @ _Rx(90)
-    zf0 = 0.03
-    rrframe(mb, Mf, (0, (zf0 + zc) / 2, W, zc - zf0, 0.012), (0, (zb + 0.06 + zc - 0.05) / 2, W - 0.09, zc - 0.05 - zb - 0.06, 0.008),
+    rrframe(mb, Mf, (0, (zb + zc) / 2, W, zc - zb, 0.012), (0, (zb + 0.06 + zc - 0.05) / 2, W - 0.09, zc - 0.05 - zb - 0.06, 0.008),
             0.035, re_o=0.006, re_i=0.003, n=3, ne=2, mat="enamel")
+    rrframe(mb, Mf, (0, (zf0 + zb) / 2, W, zb - zf0, 0.012), (0, (zf0 + zb) / 2 + 0.004, W - 0.1, zb - zf0 - 0.05, 0.006),
+            0.035, re_o=0.006, re_i=0.002, n=3, ne=2, mat="enamel")
+    _louvered_panel(mb, _T(0, yf, (zf0 + zb) / 2 + 0.004) @ _Rx(90), W - 0.085, zb - zf0 - 0.035, 9)
     slab(mb, _T(0, 0.0, zc), W + 0.01, D, Hc - zc, rc=(0.014, 0.014, 0.02, 0.02), re=0.008, re0=0.003, mat="enamel", nc=3, ne=2)
     # caja de luz del copete: marco + acrílico + letras COLD en relieve
     yl = -D / 2
@@ -1223,12 +1569,9 @@ def beer_cooler(seed=0):
     board(mb, -W / 2 + 0.05, W / 2 - 0.05, yl - 0.006, yl + 0.002, zc + 0.045, Hc - 0.045, "sign_white", rc=0.002, re=0.001)
     etext(mb, "COLD", 0.085, 0.0035, "sign_blue", _T(0, yl - 0.006, zc + (Hc - zc) / 2 - 0.03) @ _Rx(90), res=2, back=False,
           bold=True)
-    # zoclo: rejilla de persianas
-    louver_grille(mb, _T(0, yf, (zf0 + zb) / 2 + 0.002) @ _Rx(90), W - 0.12, zb - zf0 - 0.025, 5, mat="enamel", back_mat="cable",
-                  t=0.01, frame=0.01, slat_ang=40, depth=-0.0005, nr=24)
     for x in (-W / 2 + 0.06, W / 2 - 0.06):
         for y in (yf + 0.07, D / 2 - 0.07):
-            foot_leveler(mb, _T(x, y, 0.0), r=0.02, h=0.035, lite=True)
+            foot_leveler(mb, _T(x, y, 0.0), r=0.02, h=0.035)
     # puerta: perfil de aluminio con doble vidrio, empaque, jaladera, bisagras y chapa
     yd = yf - 0.008                                              # cara trasera de la puerta (el empaque llena la holgura)
     dz0, dz1 = zb + 0.012, zc - 0.012
@@ -1238,8 +1581,8 @@ def beer_cooler(seed=0):
             re_o=0.006, re_i=0.004, n=3, ne=2, mat="aluminium")
     for gy in (yd - 0.012, yd - 0.030):
         board(mb, -W / 2 + 0.06, W / 2 - 0.06, gy - 0.004, gy, dz0 + 0.06, dz1 - 0.04, "glass", rc=0.004, re=0.0015)
-    path = [(x, yf - 0.004, zcd + z) for (x, z) in rr_pts(W - 0.04, dz1 - dz0 - 0.03, 0.014, 2)]
-    mb.sweep([(u, v) for (u, v) in rr_pts(0.016, 0.009, 0.0035, 1)], path, mat="rubber", closed_path=True, normal=(0, 1, 0))
+    path = [(x, yf - 0.004, zcd + z) for (x, z) in rr_pts(W - 0.04, dz1 - dz0 - 0.03, 0.014, 4)]
+    mb.sweep([(u, v) for (u, v) in rr_pts(0.016, 0.009, 0.0035, 4)], path, mat="rubber", closed_path=True, normal=(0, 1, 0))
     xh = W / 2 - 0.035
     yh = yd - 0.042
     hose(mb, [(xh, yh + 0.002, 0.82), (xh, yh - 0.045, 0.82), (xh, yh - 0.045, 1.42), (xh, yh + 0.002, 1.42)], 0.011, bend=0.03,
@@ -1258,6 +1601,10 @@ def beer_cooler(seed=0):
     for x in (xi0 - 0.005, xi1 + 0.005):                         # cremalleras de las parrillas
         for y in (yi0 + 0.03, yi1 - 0.03):
             board(mb, x - 0.0075, x + 0.0075, y - 0.012, y + 0.012, zb + 0.05, zc - 0.05, "aluminium", rc=0.002, re=0.001)
+            z_ = zb + 0.08
+            while z_ < zc - 0.07:                                # ranuras de la cremallera (ceja de lámina)
+                mb.box((x - 0.0085, y - 0.006, z_), (x + 0.0085, y + 0.006, z_ + 0.0035), "aluminium", bevel=0.0006)
+                z_ += 0.0254
     board(mb, xi0 + 0.04, xi1 - 0.04, yi0 + 0.01, yi0 + 0.04, zc - 0.075, zc - 0.05, "plastic", rc=0.01, re=0.006)   # luz
     levels = [zb + 0.05, 0.62, 0.94, 1.26, 1.56]
     for z in levels[1:]:
@@ -1280,14 +1627,15 @@ def beer_cooler(seed=0):
                 y = yi0 + 0.04 + row * pitch + _jit(r, 0.002)
                 lod = 0 if row == 0 else 1
                 fn = beer_can if cans else beer_bottle
-                hm = H.get(("c" if cans else "b", lod), lambda: fn(lod=lod, seg=14 if lod == 0 else 13))
+                hm = H.get(("c" if cans else "b", lod), lambda: fn(lod=lod))
                 _put(P, hm, x, y, zs, rz=_f(r.uniform(0, 360)), prio=0 if row == 0 else (1 if row < 3 else 2))
                 if cans and r.random() < 0.6 and i == 1:                     # latas estibadas
                     _put(P, hm, x, y, zs + 0.1222 - 0.004, rz=_f(r.uniform(0, 360)), prio=2)
-    # cordón de corriente por detrás
+    # cordón de corriente por detrás (sale del prensacable de la tapa trasera)
     hose(mb, [(0.2, D / 2 - 0.02, 0.09), (0.2, D / 2 + 0.03, 0.09), (0.22, D / 2 + 0.035, 0.0045), (0.3, D / 2 + 0.03, 0.0045),
               (0.31, D / 2 - 0.04, 0.0045)], 0.0045, bend=0.03, mat="cable", seg=6, nseg=4)
-    P.flush(r, 17600)
+    revolve(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.006, 0.012), (0.0, 0.012)], "plastic", seg=24, M=_T(0.2, D / 2, 0.09) @ _Rx(-90))
+    P.flush(r, 60000)
     return base
 
 
@@ -1415,7 +1763,7 @@ def cash_box(seed=0):
     lo_w, lo_d = W + 0.006, D + 0.006
     yh, zh = lo_d / 2 + 0.0012 + 0.0034, Hb - 0.004
     board(mb, -W / 2 + 0.02, W / 2 - 0.02, D / 2 - 0.0003, yh - 0.0034 + 0.0002, Hb - 0.02, zh, "steel", rc=0.002, re=0.0004)
-    mb.cyl((-W / 2 + 0.018, yh, zh), (W / 2 - 0.018, yh, zh), 0.0018, seg=8, mat="steel")
+    cyl(mb, (-W / 2 + 0.018, yh, zh), (W / 2 - 0.018, yh, zh), 0.0018, seg=8, mat="steel")
     Ml = _T(0, yh, zh) @ _Rx(-14) @ _T(0, -yh, -zh)
     nk = 5
     for k in range(nk):
@@ -1452,10 +1800,150 @@ PRICES = (("RICE", "3.00"), ("BEANS", "3.50"), ("OIL", "6.10"), ("FLOUR", "3.00"
           ("ALCOHOL", "1.10"), ("BANDAGES", "2.00"), ("COLD BEER", "1.50"), ("AMMO", "12.00"))
 
 
+def _arc(cx, cy, rx, ry, a0, a1, n=None):
+    """Arco de elipse de a0 a a1 (grados, con signo: a1 < a0 = sentido horario) como polilínea."""
+    n = n or max(4, int(abs(a1 - a0) / 15))
+    return [(cx + rx * math.cos(math.radians(a0 + (a1 - a0) * k / n)), cy + ry * math.sin(math.radians(a0 + (a1 - a0) * k / n)))
+            for k in range(n + 1)]
+
+
+# Letra de gis a mano (trazos de una sola línea, mayúscula de imprenta): por carácter, (ancho, [trazos]) en unidades de la
+# altura de mayúscula. Los arcos se dan con _arc. Se escriben con el trazo del gis (ver chalk_text), no con una tipografía.
+CHALK = {
+    "A": (0.62, [[(0, 0), (0.31, 1), (0.62, 0)], [(0.13, 0.38), (0.49, 0.38)]]),
+    "B": (0.58, [[(0, 0), (0, 1)], [(0, 1), (0.3, 1)] + _arc(0.3, 0.755, 0.245, 0.245, 90, -90) + [(0, 0.51)],
+                 [(0, 0.51), (0.31, 0.51)] + _arc(0.31, 0.255, 0.255, 0.255, 90, -90) + [(0, 0)]]),
+    "C": (0.6, [_arc(0.33, 0.5, 0.33, 0.5, 48, 312)]),
+    "D": (0.62, [[(0, 0), (0, 1)], [(0, 1), (0.22, 1)] + _arc(0.22, 0.5, 0.38, 0.5, 90, -90) + [(0, 0)]]),
+    "E": (0.52, [[(0.5, 1), (0, 1), (0, 0), (0.52, 0)], [(0, 0.52), (0.4, 0.52)]]),
+    "F": (0.5, [[(0.5, 1), (0, 1), (0, 0)], [(0, 0.52), (0.4, 0.52)]]),
+    "G": (0.64, [_arc(0.33, 0.5, 0.33, 0.5, 50, 345) + [(0.64, 0.42)], [(0.64, 0.42), (0.38, 0.42)]]),
+    "H": (0.56, [[(0, 0), (0, 1)], [(0.56, 0), (0.56, 1)], [(0, 0.52), (0.56, 0.52)]]),
+    "I": (0.04, [[(0.02, 0), (0.02, 1)]]),
+    "J": (0.46, [[(0.46, 1), (0.46, 0.26)] + _arc(0.24, 0.26, 0.22, 0.26, 0, -170)]),
+    "K": (0.54, [[(0, 0), (0, 1)], [(0.52, 1), (0, 0.4)], [(0.17, 0.6), (0.56, 0)]]),
+    "L": (0.48, [[(0, 1), (0, 0), (0.48, 0)]]),
+    "M": (0.74, [[(0, 0), (0, 1), (0.37, 0.32), (0.74, 1), (0.74, 0)]]),
+    "N": (0.58, [[(0, 0), (0, 1), (0.58, 0), (0.58, 1)]]),
+    "O": (0.68, [_arc(0.34, 0.5, 0.34, 0.5, 100, 465)]),
+    "P": (0.54, [[(0, 0), (0, 1), (0.28, 1)] + _arc(0.28, 0.75, 0.25, 0.25, 90, -90) + [(0, 0.5)]]),
+    "Q": (0.68, [_arc(0.34, 0.5, 0.34, 0.5, 100, 465), [(0.42, 0.24), (0.72, -0.06)]]),
+    "R": (0.56, [[(0, 0), (0, 1), (0.28, 1)] + _arc(0.28, 0.75, 0.25, 0.25, 90, -90) + [(0, 0.5)], [(0.22, 0.5), (0.56, 0)]]),
+    "S": (0.54, [_arc(0.27, 0.75, 0.25, 0.25, 25, 270) + _arc(0.27, 0.25, 0.27, 0.25, 90, -155)[1:]]),
+    "T": (0.58, [[(0, 1), (0.58, 1)], [(0.29, 1), (0.29, 0)]]),
+    "U": (0.56, [[(0, 1), (0, 0.3)] + _arc(0.28, 0.3, 0.28, 0.3, 180, 360) + [(0.56, 1)]]),
+    "V": (0.6, [[(0, 1), (0.3, 0), (0.6, 1)]]),
+    "W": (0.8, [[(0, 1), (0.19, 0), (0.4, 0.72), (0.61, 0), (0.8, 1)]]),
+    "X": (0.56, [[(0, 1), (0.56, 0)], [(0.56, 1), (0, 0)]]),
+    "Y": (0.58, [[(0, 1), (0.29, 0.5), (0.58, 1)], [(0.29, 0.5), (0.29, 0)]]),
+    "Z": (0.56, [[(0, 1), (0.56, 1), (0, 0), (0.58, 0)]]),
+    "0": (0.5, [_arc(0.25, 0.5, 0.25, 0.5, 100, 465)]),
+    "1": (0.3, [[(0.02, 0.78), (0.24, 1), (0.24, 0)]]),
+    "2": (0.5, [_arc(0.25, 0.74, 0.24, 0.26, 160, -25) + [(0, 0), (0.52, 0)]]),
+    "3": (0.48, [_arc(0.23, 0.76, 0.23, 0.24, 150, -90) + _arc(0.23, 0.26, 0.26, 0.26, 90, -150)[1:]]),
+    "4": (0.52, [[(0.38, 0), (0.38, 1), (0, 0.3), (0.54, 0.3)]]),
+    "5": (0.5, [[(0.46, 1), (0.07, 1), (0.03, 0.55)] + _arc(0.24, 0.3, 0.26, 0.3, 125, -150)]),
+    "6": (0.52, [_arc(0.28, 0.5, 0.28, 0.5, 70, 190) + _arc(0.26, 0.28, 0.26, 0.28, 190, 540)[1:]]),
+    "7": (0.5, [[(0, 1), (0.5, 1), (0.16, 0)]]),
+    "8": (0.5, [_arc(0.25, 0.76, 0.22, 0.24, 270, 630), _arc(0.25, 0.26, 0.26, 0.26, 90, 450)]),
+    "9": (0.5, [_arc(0.24, 0.72, 0.24, 0.28, 0, 365), [(0.48, 0.72), (0.45, 0.3), (0.32, 0)]]),
+    ".": (0.08, [[(0.02, 0.0), (0.06, 0.03)]]),
+    "$": (0.54, [_arc(0.27, 0.75, 0.25, 0.25, 25, 270) + _arc(0.27, 0.25, 0.27, 0.25, 90, -155)[1:], [(0.28, -0.12), (0.26, 1.12)]]),
+    "-": (0.36, [[(0, 0.46), (0.36, 0.47)]]),
+    ":": (0.08, [[(0.02, 0.0), (0.06, 0.03)], [(0.02, 0.6), (0.06, 0.63)]]),
+    "/": (0.42, [[(0, -0.05), (0.42, 1.05)]]),
+}
+
+
+def _catmull(pts, step):
+    """Polilínea suavizada (Catmull-Rom) muestreada a ~`step` (el trazo de la mano, sin quiebres de polígono)."""
+    P = [Vector((p[0], p[1], 0.0)) for p in pts]
+    if len(P) < 2:
+        return P
+    out = []
+    for i in range(len(P) - 1):
+        p0, p1, p2, p3 = P[max(i - 1, 0)], P[i], P[i + 1], P[min(i + 2, len(P) - 1)]
+        n = max(1, int((p2 - p1).length / step))
+        for k in range(n):
+            t = k / n
+            t2, t3 = t * t, t * t * t
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3))
+    out.append(P[-1])
+    return out
+
+
+def chalk_stroke(mb, pts, wd, M, rr, h=0.0007, mat="sign_white"):
+    """Trazo de gis sobre el plano local XZ (cara del pizarrón en y = 0, relieve hacia -Y): cinta de ancho `wd` con lomo de
+    `h` (>= 0,5 mm), presión que varía a lo largo (más ancho al arrancar, se adelgaza al soltar), cantos desmoronados (borde
+    irregular) y puntas redondeadas; los cantos entran 0,2 mm en el tablero (sin coplanares ni rendijas). pts: [(x, z)]."""
+    P = _catmull(pts, max(wd * 0.8, 0.0025))
+    if len(P) < 2:
+        P = [Vector((pts[0][0], pts[0][1], 0.0)), Vector((pts[0][0] + wd * 0.3, pts[0][1] + wd * 0.2, 0.0))]
+    n = len(P)
+    ph = float(rr.uniform(0, 10))
+    acc = [0.0]
+    for i in range(1, n):
+        acc.append(acc[-1] + (P[i] - P[i - 1]).length)
+    tot = max(acc[-1], 1e-6)
+    rings = []
+    for i in range(n):
+        t = (P[min(i + 1, n - 1)] - P[max(i - 1, 0)])
+        t = t.normalized() if t.length > 1e-9 else Vector((1, 0, 0))
+        nrm = Vector((-t.y, t.x, 0.0))
+        u = acc[i] / tot
+        press = (1.06 - 0.22 * u) * (1.0 + 0.08 * math.sin(acc[i] * 260 + ph))
+        w_ = wd * press * (0.55 + 0.45 * min(1.0, acc[i] / (wd * 0.9), (tot - acc[i]) / (wd * 0.9)))
+        e0 = 1.0 + float(rr.uniform(-0.12, 0.12))
+        e1 = 1.0 + float(rr.uniform(-0.12, 0.12))
+        hh = h * (0.8 + 0.2 * press) * (0.7 + 0.3 * min(1.0, acc[i] / wd, (tot - acc[i]) / wd))
+        prof = [(-w_ / 2 * e0, -0.0002), (-w_ * 0.3, hh * 0.75), (0.0, hh), (w_ * 0.3, hh * 0.75), (w_ / 2 * e1, -0.0002), (0.0, -0.0004)]
+        rings.append([(P[i].x + nrm.x * o, -hz, P[i].y + nrm.y * o) for (o, hz) in prof])
+    t0 = (P[1] - P[0]).normalized()
+    t1 = (P[-1] - P[-2]).normalized()
+    c0 = P[0] - t0 * wd * 0.35
+    c1 = P[-1] + t1 * wd * 0.3
+    loops = [[(c0.x, -h * 0.25, c0.y)]] + rings + [[(c1.x, -h * 0.2, c1.y)]]
+    with mb.soft():
+        skin(mb, loops, mat, M)
+
+
+def chalk_text(mb, txt, size, M, rr, align="LEFT", slant=0.1, wd=None, mat="sign_white"):
+    """Texto escrito a mano con gis en el plano local XZ (renglón sobre z = 0, cara del tablero en y = 0): cada letra con su
+    giro, tamaño, inclinación y desplazamiento de la línea base; temblor suave del pulso a lo largo de cada trazo."""
+    wd = wd or max(0.0032, size * 0.1)
+    sp = size * 0.2
+    widths = [(CHALK[c][0] if c in CHALK else 0.35) * size for c in txt]
+    total = sum(widths) + sp * (len(txt) - 1)
+    x = {"LEFT": 0.0, "RIGHT": -total, "CENTER": -total / 2}[align]
+    drift = float(rr.uniform(-0.02, 0.02)) * size
+    for ci, c in enumerate(txt):
+        gw = widths[ci]
+        if c in CHALK:
+            sc = size * float(rr.uniform(0.94, 1.06))
+            rot = math.radians(float(rr.uniform(-3.0, 3.0)))
+            dz = float(rr.uniform(-0.025, 0.025)) * size + drift * (ci / max(len(txt) - 1, 1))
+            cr, sr = math.cos(rot), math.sin(rot)
+            ph = float(rr.uniform(0, 50))
+            for stroke in CHALK[c][1]:
+                pts = []
+                for (gx, gy) in stroke:
+                    lx, lz = gx * sc + gy * sc * slant, gy * sc
+                    lx, lz = lx * cr - lz * sr, lx * sr + lz * cr
+                    pts.append((x + lx, lz + dz))
+                dense = _catmull(pts, size * 0.08)
+                wob = [(p.x + 0.012 * size * math.sin(ph + p.y * 60 / max(size, 0.01)), p.y + 0.01 * size * math.sin(ph * 1.3 + p.x * 55 / max(size, 0.01)))
+                       for p in dense]
+                chalk_stroke(mb, wob, wd, M, rr, mat=mat)
+        x += gw + sp
+    return total
+
+
 def chalkboard(w=0.9, h=1.2, seed=0):
     """Pizarrón de muro (origen: cara del muro, centro del canto inferior; sale hacia -Y): tablero verde de 12 mm dentro de un
     marco de moldura con ingletes y galce, pijas en las esquinas, repisa para gises con ceja y dos ménsulas; lista de precios
-    escrita con gis (letras en relieve de 1,3 mm, renglones un poco chuecos, como a mano), gises (uno roto) y borrador."""
+    escrita A MANO con gis (trazos de gis de 4-6 mm con lomo de 0,7 mm, presión variable y cantos desmoronados; letra de
+    imprenta con su temblor, giro e inclinación por letra y renglones un poco chuecos), raya bajo el título de dos pasadas,
+    gises de punta gastada (uno roto) y borrador de fieltro."""
     r = rng(seed)
     mb = MB()
     zt0 = 0.03                                                   # la repisa ocupa los primeros 3 cm
@@ -1465,8 +1953,8 @@ def chalkboard(w=0.9, h=1.2, seed=0):
     board(mb, x0 + 0.025 + 0.0055, x1 - 0.025 - 0.0055, -0.012, -0.0002, z0 + 0.025 + 0.0055, z1 - 0.025 - 0.0055,
           "paint_green", rc=0.002, re=0.001)
     # marco de moldura (barrido con ingletes): perfil x hacia adentro, y hacia el muro (+Y) / cuarto (-Y)
-    prof = [(-0.025, 0.0), (-0.025, -0.017), (-0.0235, -0.0215), (-0.019, -0.024), (-0.004, -0.024), (0.006, -0.0205), (0.016, -0.0178),
-            (0.02, -0.0158), (0.02, -0.0125), (0.004, -0.0125), (0.004, 0.0)]
+    prof = [(-0.025, 0.0), (-0.025, -0.017), (-0.0245, -0.0195), (-0.0235, -0.0215), (-0.0215, -0.023), (-0.019, -0.024),
+            (-0.004, -0.024), (0.006, -0.0205), (0.016, -0.0178), (0.02, -0.0158), (0.02, -0.0125), (0.004, -0.0125), (0.004, 0.0)]
     cx0, cx1, cz0, cz1 = x0 + 0.025, x1 - 0.025, z0 + 0.025, z1 - 0.025
     mb.sweep(prof, [(cx0, 0.0, cz0), (cx1, 0.0, cz0), (cx1, 0.0, cz1), (cx0, 0.0, cz1)], mat="wood_dark", closed_path=True,
              normal=(0, 1, 0))
@@ -1474,42 +1962,45 @@ def chalkboard(w=0.9, h=1.2, seed=0):
         revolve(mb, [(0.0042, -0.0003), (0.0042, 0.0006), (0.0, 0.0012)], "steel", seg=8,
                 M=_T(x - math.copysign(0.004, x), -0.024 + 0.0003 * 0, z - math.copysign(0.004, z - (z0 + z1) / 2)) @ _Rx(90))
     # repisa del gis con ceja + ménsulas
-    tp = [(0.0, 0.0), (-0.075, 0.0), (-0.0785, 0.0035), (-0.0785, 0.018), (-0.0755, 0.0205), (-0.072, 0.018), (-0.0715, 0.009),
-          (-0.012, 0.009), (-0.012, 0.03), (0.0, 0.03)]
+    tp = [(0.0, 0.0), (-0.075, 0.0), (-0.0772, 0.0009), (-0.0785, 0.0035), (-0.0785, 0.018), (-0.0777, 0.0197), (-0.0755, 0.0205),
+          (-0.0733, 0.0197), (-0.072, 0.018), (-0.0715, 0.009), (-0.012, 0.009), (-0.012, 0.03), (0.0, 0.03)]
     lofts(mb, [(x, [(y, z) for (y, z) in tp]) for x in (x0 - 0.01, x1 + 0.01)], "wood_dark")
     for x in (x0 + 0.08, x1 - 0.08):
         Mb_ = _T(x - 0.009, 0.0, 0.0) @ Matrix(((0, 0, 1, 0), (-1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
         mb.plate([(0.0, -0.0003), (0.05, -0.0003), (0.0, -0.075)], 0.018, "wood_dark", m=Mb_)
-    # gises y borrador en la repisa (piso de la repisa en z = 0,009)
+    # gises y borrador en la repisa (piso de la repisa en z = 0,009); gis = cilindro de punta gastada (redonda)
     for (xc, L, a) in ((-0.2, 0.08, 4.0), (-0.05, 0.034, -11.0), (0.05, 0.062, 2.0)):
-        mb.cyl(_T(xc, -0.045, 0.009 + 0.0048) @ _Rz(a) @ Vector((-L / 2, 0, 0)), _T(xc, -0.045, 0.009 + 0.0048) @ _Rz(a) @ Vector((L / 2, 0, 0)),
-               0.0048, seg=8, mat="sign_white")
+        Mg = _T(xc, -0.045, 0.009 + 0.0048) @ _Rz(a) @ _Ry(90)
+        revolve(mb, [(0.0, -L / 2), (0.0035, -L / 2 + 0.0003), (0.0048, -L / 2 + 0.003), (0.0048, L / 2 - 0.004), (0.004, L / 2 - 0.0012),
+                     (0.0, L / 2)], "sign_white", seg=16, M=Mg)
     Me = _T(0.25, -0.042, 0.009) @ _Rz(-6)
     board(mb, -0.065, 0.065, -0.024, 0.024, 0.0, 0.006, "linen", rc=0.006, re=0.0025, M=Me)
     board(mb, -0.064, 0.064, -0.023, 0.023, 0.006, 0.024, "wood", rc=0.008, re=0.006, nc=2, ne=2, M=Me)
-    # lista de precios con gis
+    # lista de precios escrita con gis sobre la cara del tablero (y = -0,012)
     yb = -0.012
+    Mb = _T(0, yb, 0)
     xl, xr = x0 + fw + 0.04, x1 - fw - 0.04
     top = z1 - fw - 0.03
-    tsz = min(0.075, (z1 - z0) * 0.062)
+    tsz = min(0.07, (z1 - z0) * 0.058)
     zz = top - tsz
-    M = _T(0, yb + 0.0003, zz) @ _Rx(90) @ _Rz(_jit(r, 0.8)) @ Matrix(((1, 0.12, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
-    etext(mb, "PRICE LIST", tsz, 0.0016, "sign_white", M, align="CENTER", res=2, back=False, bold=True)
-    wt = 0.5 * w
-    mb.box((-wt / 2, -0.0035, -0.0012), (wt / 2, 0.0015, 0.0013), "sign_white", bevel=0.0, m=_T(0, yb, zz - 0.016) @ _Rx(90) @
-           _Rz(_jit(r, 0.6)))
+    chalk_text(mb, "PRICE LIST", tsz, Mb @ _T(_jit(r, 0.01), 0, zz) @ _Ry(_jit(r, 0.8)), r, align="CENTER", slant=0.08,
+               wd=max(0.0045, tsz * 0.11))
+    wt = 0.5 * w                                                 # raya bajo el título (dos pasadas del gis)
+    for k in range(2):
+        zl_ = zz - 0.018 - k * 0.006
+        chalk_stroke(mb, [(-wt / 2 + _jit(r, 0.01), zl_ + _jit(r, 0.002)), (_jit(r, 0.02), zl_ - 0.002 + _jit(r, 0.002)),
+                          (wt / 2 + _jit(r, 0.01), zl_ + 0.003 + _jit(r, 0.003))], 0.0042, Mb, r)
     n = len(PRICES)
-    lh = (zz - 0.03 - (z0 + fw + 0.04)) / n
-    sz = min(lh * 0.62, 0.06)
-    shear = Matrix(((1, 0.16, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))     # gis a mano: letra inclinada
+    lh = (zz - 0.04 - (z0 + fw + 0.04)) / n
+    sz = min(lh * 0.58, 0.055)
     for i, (item, price) in enumerate(PRICES):
-        zl = zz - 0.04 - (i + 1) * lh + lh * 0.25
+        zl = zz - 0.045 - (i + 1) * lh + lh * 0.25
         rot = _jit(r, 0.9)
         s_ = sz * _f(r.uniform(0.93, 1.05))
-        etext(mb, item, s_, 0.0016, "sign_white", _T(xl + _jit(r, 0.006), yb + 0.0003, zl + _jit(r, 0.003)) @ _Rx(90) @ _Rz(rot) @
-              shear, align="LEFT", res=2, back=False)
-        etext(mb, price, s_, 0.0016, "sign_white", _T(xr + _jit(r, 0.004), yb + 0.0003, zl + _jit(r, 0.003)) @ _Rx(90) @
-              _Rz(rot * 0.5) @ shear, align="RIGHT", res=2, back=False)
+        Mi = Mb @ _T(xl + _jit(r, 0.006), 0, zl + _jit(r, 0.003)) @ _Ry(rot)
+        chalk_text(mb, item, s_, Mi, r, align="LEFT")
+        Mp = Mb @ _T(xr + _jit(r, 0.004), 0, zl + _jit(r, 0.003)) @ _Ry(rot * 0.5)
+        chalk_text(mb, "$" + price, s_, Mp, r, align="RIGHT")
     return mb
 
 
@@ -1577,13 +2068,13 @@ def open_sign():
               Mf @ _T(0, -0.021 if sgn > 0 else -0.015, -0.0003), res=3 if sgn > 0 else 1, back=False, bold=True)
     for x in (-0.1, 0.1):                                        # armellas
         tmp = MB()
-        tmp.tube([(0.006 * math.cos(2 * PI * k / 8), 0.0, 0.007 + 0.006 * math.sin(2 * PI * k / 8)) for k in range(9)], 0.0012, seg=4,
+        tube(tmp, [(0.006 * math.cos(2 * PI * k / 8), 0.0, 0.007 + 0.006 * math.sin(2 * PI * k / 8)) for k in range(9)], 0.0012, seg=4,
                  mat="steel")
-        tmp.cyl((0, 0, -0.006), (0, 0, 0.0015), 0.0012, seg=4, mat="steel")
+        cyl(tmp, (0, 0, -0.006), (0, 0, 0.0015), 0.0012, seg=4, mat="steel")
         mb.join(tmp, _T(x, yc, zc + hh / 2))
     pts = [(-0.1, yc, zc + hh / 2 + 0.013), (-0.05, yc + 0.003, -0.06), (0.0, -0.006, -0.004), (0.05, yc + 0.003, -0.06),
            (0.1, yc, zc + hh / 2 + 0.013)]
-    mb.tube(pts, 0.0011, seg=4, mat="steel")
+    tube(mb, pts, 0.0011, seg=4, mat="steel")
     revolve(mb, [(0.0028, 0.0), (0.0028, 0.0015), (0.0018, 0.002), (0.0018, 0.028), (0.0, 0.03)], "steel", seg=6,
             M=_T(0, 0.0, 0.0) @ _Rx(90))                         # clavo
     return mb
@@ -1686,7 +2177,7 @@ def bottle_crate(seed=0, empty=True):
             board(mb, x0_, x1_, min(sy * 0.055, sy * (D / 2 - 0.012)), max(sy * 0.055, sy * (D / 2 - 0.012)), Hh - 0.072, Hh - 0.012,
                   mat, rc=0.003, re=0.002)
         xh = sx * (W / 2 - t / 2)
-        mb.tube([(xh, -0.06, Hh - 0.02), (xh, 0.06, Hh - 0.02)], 0.011, seg=8, mat=mat)                 # travesaño del asa
+        tube(mb, [(xh, -0.06, Hh - 0.02), (xh, 0.06, Hh - 0.02)], 0.011, seg=8, mat=mat)                 # travesaño del asa
         board(mb, min(sx * (W / 2 + 0.002), sx * (W / 2 - t - 0.002)), max(sx * (W / 2 + 0.002), sx * (W / 2 - t - 0.002)),
               -D / 2 + 0.008, D / 2 - 0.008, Hh - 0.0095, Hh, mat, rc=0.004, re=0.003, nc=2)
     for (sx, sy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):     # esquineros
