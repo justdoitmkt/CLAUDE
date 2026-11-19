@@ -423,7 +423,7 @@ def washer(seed=0, front_load=True):
         x = -0.157 + k * 0.032
         slab(mb, Mc @ _T(x, -0.042, fz - 0.0004), 0.022, 0.0085, 0.0034, rc=0.0035, re=0.0014, mat="plastic", nc=2, ne=1)
         label(mb, s_, 0.0052, "cable", Mc @ _T(x, -0.032, fz), depth=0.0010, res=1)
-        lathe(mb, [(0.0012, 0.0), (0.0012, 0.0006), (0.0, 0.0011)], seg=6, mat="sign_green", M=Mc @ _T(x + 0.014, -0.042, fz - 0.0003))
+        lathe(mb, [(0.0012, 0.0), (0.0012, 0.0006), (0.0, 0.0011)], seg=12, mat="sign_green", M=Mc @ _T(x + 0.014, -0.042, fz - 0.0003))
     # perilla de programas: bisel cromado, perilla estriada con faldón, escala de 14 posiciones
     kx = 0.015
     lathe(mb, [(0.038, -0.0003), (0.0395, 0.0006), (0.039, 0.0022), (0.0365, 0.0028), (0.0345, 0.0016), (0.0345, -0.0003)], seg=32,
@@ -441,7 +441,7 @@ def washer(seed=0, front_load=True):
     lathe(mb, [(0.0172, -0.0003), (0.0174, 0.0035), (0.0158, 0.0058), (0.009, 0.0068), (0.0, 0.0069)], seg=24, mat="plastic", M=Ms)
     label(mb, "START", 0.0068, "cable", Mc @ _T(0.125, -0.033, fz), res=1)
     for k in range(3):
-        lathe(mb, [(0.0016, -0.0003), (0.0016, 0.0007), (0.0009, 0.0013), (0.0, 0.0014)], seg=8, mat="sign_green" if k == 0 else "glass",
+        lathe(mb, [(0.0016, -0.0003), (0.0016, 0.0007), (0.0009, 0.0013), (0.0, 0.0014)], seg=16, mat="sign_green" if k == 0 else "glass",
               M=Mc @ _T(0.165, 0.02 - k * 0.011, fz))
     label(mb, "POWER", 0.0048, "cable", Mc @ _T(0.165, -0.033, fz), depth=0.0010, res=1)
     # ---- fuelle de hule: labio sobre la ceja, pliegue y labio hacia la boca del tambor (se ve por el vidrio)
@@ -484,7 +484,7 @@ def washer(seed=0, front_load=True):
     slab(mb, Mb @ _T(0, 0, -0.0004), 0.03, 0.16, 0.0075, rc=0.006, re=0.002, mat="aluminium", nc=3, ne=2)
     for z in (-0.06, 0.06):
         screw(mb, Mb @ _T(0, z, 0.0071), r=0.004, seg=8)
-    lathe(mb, [(0.0, -0.075), (0.0075, -0.075), (0.0085, -0.072), (0.0085, 0.072), (0.0075, 0.075), (0.0, 0.075)], seg=12,
+    lathe(mb, [(0.0, -0.075), (0.0075, -0.075), (0.0085, -0.072), (0.0085, 0.072), (0.0075, 0.075), (0.0, 0.075)], seg=20,
           mat="aluminium", M=_T(-0.2585, -0.3155, 0.42))
     for z in (-0.045, 0.045):
         mb.box((-0.2585, -0.322, 0.42 + z - 0.012), (-0.224, -0.309, 0.42 + z + 0.012), "aluminium", bevel=0.003, seg=1)
@@ -495,20 +495,20 @@ def washer(seed=0, front_load=True):
     yv = yb + 0.0027
     Mv = _T(-0.20, yv, 0.765) @ _Rx(-90)
     slab(mb, Mv @ _T(0, 0, -0.0032), 0.05, 0.04, 0.0102, rc=0.006, re=0.002, mat="plastic", nc=2, ne=1)
-    lathe(mb, [(0.0, 0.0068), (0.0062, 0.0068), (0.0062, 0.0135), (0.0, 0.0135)], seg=8, mat="aluminium", M=Mv)
+    lathe(mb, [(0.0, 0.0068), (0.0062, 0.0068), (0.0062, 0.0135), (0.0, 0.0135)], seg=16, mat="aluminium", M=Mv)
     lathe(mb, [(0.0, 0.0095), (0.0118, 0.0095), (0.0118, 0.0195), (0.0, 0.0195)], seg=6, mat="aluminium", M=Mv, phase=PI / 6)
     ye = yv + 0.0215                                                                  # codo metálico de 90° y casquillo
-    mb.tube(_dedupe(fillet([(-0.20, yv + 0.019, 0.765), (-0.20, ye, 0.765), (-0.20, ye, 0.735)], 0.007, 4)), 0.0072, seg=8,
+    mb.tube(_dedupe(fillet([(-0.20, yv + 0.019, 0.765), (-0.20, ye, 0.765), (-0.20, ye, 0.735)], 0.007, 4)), 0.0072, seg=16,
             mat="aluminium")
-    lathe(mb, [(0.0, 0.0), (0.0098, 0.0), (0.0098, 0.02), (0.0, 0.02)], seg=8, mat="aluminium", M=_T(-0.20, ye, 0.717))
+    lathe(mb, [(0.0, 0.0), (0.0098, 0.0), (0.0098, 0.02), (0.0, 0.02)], seg=16, mat="aluminium", M=_T(-0.20, ye, 0.717))
     hose(mb, [(-0.20, ye, 0.72), (-0.20, ye, 0.40), (-0.205, ye, 0.0088), (-0.311, ye - 0.004, 0.0088)], 0.0082, bend=0.05,
-         mat="rubber", seg=6, nseg=4)
+         mat="rubber", seg=12, nseg=4)
     yd = yv + 0.016
-    lathe(mb, [(0.0, -0.0003), (0.019, -0.0003), (0.0195, 0.0025), (0.0125, 0.0045), (0.0, 0.0045)], seg=10, mat="rubber",
+    lathe(mb, [(0.0, -0.0003), (0.019, -0.0003), (0.0195, 0.0025), (0.0125, 0.0045), (0.0, 0.0045)], seg=18, mat="rubber",
           M=_T(0.18, yv, 0.11) @ _Rx(-90))                                                               # pasamuros
     hp = [(0.18, yv - 0.02, 0.11), (0.18, yd, 0.11), (0.18, yd, 0.79), (0.235, yd, 0.79), (0.235, yd, 0.70), (0.25, yd, 0.0115),
           (0.312, yd, 0.0115)]
-    hose(mb, hp, 0.0115, bend=0.03, mat="plastic", seg=6, nseg=4)
+    hose(mb, hp, 0.0115, bend=0.03, mat="plastic", seg=12, nseg=4)
     Mg = _T(0.2075, yv, 0.72) @ _Rx(-90)                                              # gancho guía (dos abrazaderas)
     slab(mb, Mg @ _T(0, 0, -0.0005), 0.095, 0.034, 0.004, rc=0.006, re=0.0015, mat="plastic", nc=1, ne=1)
     for x in (0.18, 0.235):
@@ -516,10 +516,10 @@ def washer(seed=0, front_load=True):
                                                   for j in range(5)] + [(x + 0.0135, yv + 0.003, 0.72)]
         mb.sweep([(-0.0012, -0.006), (0.0012, -0.006), (0.0012, 0.006), (-0.0012, 0.006)], _dedupe(st), mat="plastic",
                  normal=(0, 0, 1))
-    lathe(mb, [(0.0, -0.0003), (0.008, -0.0003), (0.008, 0.008), (0.0055, 0.018), (0.0, 0.018)], seg=8, mat="cable",
+    lathe(mb, [(0.0, -0.0003), (0.008, -0.0003), (0.008, 0.008), (0.0055, 0.018), (0.0, 0.018)], seg=16, mat="cable",
           M=_T(-0.06, yv, 0.62) @ _Rx(-90))
     hose(mb, [(-0.06, yv + 0.008, 0.62), (-0.06, yv + 0.021, 0.62), (-0.06, yv + 0.021, 0.20), (-0.09, yv + 0.021, 0.0045),
-              (-0.311, yv + 0.019, 0.0045)], 0.0042, bend=0.05, mat="cable", seg=5, nseg=4)
+              (-0.311, yv + 0.019, 0.0045)], 0.0042, bend=0.05, mat="cable", seg=10, nseg=4)
     return mb
 
 
@@ -583,7 +583,7 @@ def _paper_note(mb, M, w, h, rr, mag_mat):
         if y < -h / 2 + 0.01:
             break
         mb.box((-w / 2 + 0.012, y, 0.0008), (-w / 2 + 0.012 + L, y + 0.0016, 0.0031), "cable", bevel=0.0, m=M)
-    lathe(mb, [(0.0105, 0.0012), (0.0112, 0.0025), (0.0112, 0.0058), (0.0098, 0.0075), (0.0, 0.0077)], seg=14, mat=mag_mat,
+    lathe(mb, [(0.0105, 0.0012), (0.0112, 0.0025), (0.0112, 0.0058), (0.0098, 0.0075), (0.0, 0.0077)], seg=24, mat=mag_mat,
           M=M @ _T(0, h / 2 - 0.014, 0))
 
 
@@ -616,7 +616,7 @@ def fridge(seed=0):
     # jaladeras de barra
     for (za, zz) in ((1.205, 1.395), (0.865, 1.105)):
         hose(mb, [(0.262, -0.331, za), (0.262, -0.3488, za), (0.262, -0.3488, zz), (0.262, -0.331, zz)], 0.0095, bend=0.016,
-             mat="aluminium", seg=12, nseg=6)
+             mat="aluminium", seg=20, nseg=6)
         for z in (za, zz):
             slab(mb, _T(0.262, -0.3336, z) @ _Rx(90), 0.03, 0.036, 0.0075, rc=0.009, re=0.003, re0=0.0, mat="plastic", nc=2, ne=2)
     # bisagras: superior (placa + tapa), intermedia (en la junta entre puertas), inferior (escuadra atornillada)
@@ -624,15 +624,15 @@ def fridge(seed=0):
     slab(mb, _T(-0.284, -0.278, zt + 0.0032), 0.064, 0.05, 0.011, rc=0.01, re=0.004, re0=0.0, mat="plastic", nc=3, ne=2)
     for x in (-0.300, -0.268):
         screw(mb, _T(x, -0.322, zt + 0.0035), r=0.0035, seg=8)
-    lathe(mb, [(0.0, 1.638), (0.0055, 1.638), (0.0055, zt + 0.004), (0.0045, zt + 0.0055), (0.0, zt + 0.0058)], seg=8, mat="steel",
+    lathe(mb, [(0.0, 1.638), (0.0055, 1.638), (0.0055, zt + 0.004), (0.0045, zt + 0.0055), (0.0, zt + 0.0058)], seg=16, mat="steel",
           M=_T(-0.298, -0.318, 0.0))
     mb.box((-0.318, -0.337, 1.1567), (-0.268, -0.287, 1.1633), "steel", bevel=0.0015, seg=1)
-    lathe(mb, [(0.0, 1.148), (0.0052, 1.148), (0.0052, 1.172), (0.0, 1.172)], seg=8, mat="steel", M=_T(-0.298, -0.318, 0.0))
+    lathe(mb, [(0.0, 1.148), (0.0052, 1.148), (0.0052, 1.172), (0.0, 1.172)], seg=16, mat="steel", M=_T(-0.298, -0.318, 0.0))
     mb.box((-0.318, -0.337, 0.112), (-0.262, -0.287, 0.118), "steel", bevel=0.0015, seg=1)
     mb.box((-0.318, -0.2935, 0.058), (-0.262, -0.2894, 0.118), "steel", bevel=0.0012, seg=1)
     for z in (0.072, 0.1):
         screw(mb, _T(-0.29, -0.2935, z) @ _Rx(90), r=0.004, seg=8)
-    lathe(mb, [(0.0, 0.110), (0.0052, 0.110), (0.0052, 0.132), (0.0, 0.132)], seg=8, mat="steel", M=_T(-0.298, -0.318, 0.0))
+    lathe(mb, [(0.0, 0.110), (0.0052, 0.110), (0.0052, 0.132), (0.0, 0.132)], seg=16, mat="steel", M=_T(-0.298, -0.318, 0.0))
     # rejilla inferior (zoclo) con persianas y ranuras reales
     Mg = _T(0.025, -0.2903, 0.078) @ _Rx(90)
     louver_grille(mb, Mg, 0.50, 0.072, 6, mat="plastic", back_mat="cable", t=0.014, frame=0.009, slat_ang=40, depth=-0.0004, nr=24)
@@ -645,9 +645,9 @@ def fridge(seed=0):
         for s_ in (-1, 1):
             mb.box((s_ * 0.0105 - 0.0012, -0.012, 0.012), (s_ * 0.0105 + 0.0012, 0.012, zb + 0.0015), "steel", bevel=0.0, seg=1, m=Mw)
         mb.box((-0.0135, -0.014, zb - 0.003), (0.0135, 0.014, zb + 0.001), "steel", bevel=0.0, seg=1, m=Mw)
-        lathe(mb, [(0.004, -0.0085), (0.0145, -0.0085), (0.0162, -0.004), (0.0162, 0.004), (0.0145, 0.0085), (0.004, 0.0085)], seg=12,
+        lathe(mb, [(0.004, -0.0085), (0.0145, -0.0085), (0.0162, -0.004), (0.0162, 0.004), (0.0145, 0.0085), (0.004, 0.0085)], seg=20,
               mat="plastic", M=Mw @ _T(0, 0, 0.0162) @ _Ry(90), closed=True)
-        mb.cyl(Mw @ Vector((-0.0125, 0, 0.0162)), Mw @ Vector((0.0125, 0, 0.0162)), 0.0035, seg=6, mat="steel")
+        mb.cyl(Mw @ Vector((-0.0125, 0, 0.0162)), Mw @ Vector((0.0125, 0, 0.0162)), 0.0035, seg=12, mat="steel")
     # ---- espalda contra el muro (no se ve): condensador, compresor y tuberías en versión de volumen (mantienen la caja)
     yc = 0.3515
     rows = 10
@@ -656,7 +656,7 @@ def fridge(seed=0):
     for k, z in enumerate(zs):
         xa, xb_ = (-0.235, 0.235) if k % 2 == 0 else (0.235, -0.235)
         pts += [(xa, yc, z), (xb_, yc, z)]
-    mb.tube(_dedupe(fillet(pts, 0.06, 3)), 0.0024, seg=4, mat="cable")
+    mb.tube(_dedupe(fillet(pts, 0.06, 3)), 0.0024, seg=8, mat="cable")
     for k in range(12):
         x = -0.2185 + k * 0.0397
         mb.cyl((x, yc + 0.0029, zs[0] - 0.02), (x, yc + 0.0029, zs[-1] + 0.02), 0.0008, seg=3, mat="cable")
@@ -674,9 +674,9 @@ def fridge(seed=0):
     for path in ([(xc + 0.02, ycm, 0.205), (xc + 0.02, ycm, 0.232), (xc + 0.02, 0.343, 0.232), (-0.235, 0.343, 0.232),
                   (-0.235, 0.343, 0.30), (-0.235, yc, zs[0])],
                  [(0.12, 0.343, 0.24), (0.12, 0.343, 0.39), (0.235, yc, 0.39), (0.235, yc, zs[-1])]):
-        hose(mb, path, 0.0032, bend=0.02, mat="aluminium", seg=4, nseg=3)
+        hose(mb, path, 0.0032, bend=0.02, mat="aluminium", seg=8, nseg=3)
     hose(mb, [(xc + 0.09, ycm, 0.115), (xc + 0.12, ycm, 0.115), (xc + 0.12, ycm, 0.006), (0.25, 0.30, 0.0045), (0.25, 0.364, 0.0045)],
-         0.0042, bend=0.04, mat="cable", seg=5, nseg=3)
+         0.0042, bend=0.04, mat="cable", seg=10, nseg=3)
     # notas con imanes (según semilla)
     for k in range(int(r.integers(0, 4))):
         on_freezer = bool(r.random() < 0.35)
@@ -721,7 +721,7 @@ def stove(seed=0):
     for (x, y) in ((-0.335, -0.235), (0.335, -0.235), (-0.335, 0.255), (0.335, 0.255)):
         foot_leveler(mb, _T(x, y, 0.0), r=0.017, h=0.024, lite=True)
         lathe(mb, [(0.0105, 0.016), (0.0135, 0.019), (0.0145, 0.03), (0.0155, z0 - 0.004), (0.019, z0 - 0.001), (0.019, z0 + 0.003)],
-              seg=12, mat="aluminium", M=_T(x, y, 0.0), caps=False)
+              seg=20, mat="aluminium", M=_T(x, y, 0.0), caps=False)
     # ---- gabinete abierto al frente, cubierta, respaldo
     slab(mb, _T(0, yf, (z0 + ztop) / 2) @ _Rx(-90), W - 0.002, ztop - z0, yb - yf, rc=0.01, re=0.006, re0=0.0, mat="sign_white",
          nc=4, cap0=False)
@@ -746,15 +746,15 @@ def stove(seed=0):
         mb.box((-0.0009, 0.0285, -0.0003), (0.0009, 0.035, 0.0011), "cable", bevel=0.0, m=Mk)          # marca de apagado
         for (ang, rr_) in ((90, 0.0022), (180, 0.0035)):                                               # flama baja / alta
             a = math.radians(ang + 90)
-            lathe(mb, [(rr_, -0.0003), (rr_, 0.0008), (0.0, 0.0011)], seg=6, mat="cable",
+            lathe(mb, [(rr_, -0.0003), (rr_, 0.0008), (0.0, 0.0011)], seg=12, mat="cable",
                   M=Mk @ _T(0.032 * math.cos(a), 0.032 * math.sin(a), 0))
         if bi is not None:                                                                             # diagrama de quemador
             for j, (bx, by, _) in enumerate(burners):
                 Md = Mp @ _T(kx + (0.0055 if bx > 0 else -0.0055), 0.054 + (0.0055 if by > 0 else -0.0055), fz)
                 if j == bi:
-                    lathe(mb, [(0.0034, -0.0003), (0.0034, 0.0009), (0.0, 0.0011)], seg=8, mat="cable", M=Md)
+                    lathe(mb, [(0.0034, -0.0003), (0.0034, 0.0009), (0.0, 0.0011)], seg=16, mat="cable", M=Md)
                 else:
-                    lathe(mb, [(0.0021, -0.0003), (0.0035, -0.0003), (0.0028, 0.001)], seg=6, mat="cable", M=Md, closed=True)
+                    lathe(mb, [(0.0021, -0.0003), (0.0035, -0.0003), (0.0028, 0.001)], seg=12, mat="cable", M=Md, closed=True)
         else:
             label(mb, "OVEN", 0.0075, "cable", Mp @ _T(kx, 0.048, fz), res=1)
     for (bx, s_) in ((-0.095, "SPARK"), (0.095, "LIGHT")):
@@ -775,9 +775,9 @@ def stove(seed=0):
     rrframe(mb, Md @ _T(0, 0, 0.0358), (0.0, 0.455, 0.456, 0.256, 0.03), (0.0, 0.455, 0.41, 0.21, 0.022), 0.0022, re_o=0.0012,
             re_i=0.0008, n=4, mat="cable", ne=1)
     hp = [(-0.30, -0.312, 0.675), (-0.30, -0.3385, 0.675), (0.30, -0.3385, 0.675), (0.30, -0.312, 0.675)]
-    hose(mb, hp, 0.0105, bend=0.02, mat="aluminium", seg=12, nseg=6)
+    hose(mb, hp, 0.0105, bend=0.02, mat="aluminium", seg=20, nseg=6)
     for x in (-0.30, 0.30):
-        lathe(mb, [(0.0, -0.0003), (0.017, -0.0003), (0.0175, 0.003), (0.0145, 0.007), (0.012, 0.011), (0.0, 0.011)], seg=12,
+        lathe(mb, [(0.0, -0.0003), (0.017, -0.0003), (0.0175, 0.003), (0.0145, 0.007), (0.012, 0.011), (0.0, 0.011)], seg=20,
               mat="aluminium", M=_T(x, -0.315, 0.675) @ _Rx(90))
     for x in (-0.338, 0.338):
         mb.box((x - 0.006, -0.296, 0.1365), (x + 0.006, -0.24, 0.1405), "steel", bevel=0.0008, seg=1)
@@ -787,13 +787,13 @@ def stove(seed=0):
         for sx in (-1, 1):
             mb.box((sx * 0.292 - 0.004, -0.25, z - 0.006), (sx * 0.292 + 0.004, 0.18, z + 0.006), "cable", bevel=0.003, seg=1)
     zr = 0.406 + 0.0045
-    mb.tube(_dedupe([(x, y, zr) for (x, y) in rr_pts(0.56, 0.42, 0.02, 3)] + [(0.28 - 0.0002, 0.21 - 0.02, zr)]), 0.0028, seg=6,
+    mb.tube(_dedupe([(x, y, zr) for (x, y) in rr_pts(0.56, 0.42, 0.02, 3)] + [(0.28 - 0.0002, 0.21 - 0.02, zr)]), 0.0028, seg=12,
             mat="steel", caps=True)
     for k in range(13):
         x = -0.252 + k * 0.042
-        mb.cyl((x, -0.21, zr + 0.0042), (x, 0.21, zr + 0.0042), 0.0019, seg=5, mat="steel")
+        mb.cyl((x, -0.21, zr + 0.0042), (x, 0.21, zr + 0.0042), 0.0019, seg=10, mat="steel")
     for y in (-0.10, 0.0, 0.10):
-        mb.cyl((-0.28, y, zr - 0.004), (0.28, y, zr - 0.004), 0.0019, seg=5, mat="steel")
+        mb.cyl((-0.28, y, zr - 0.004), (0.28, y, zr - 0.004), 0.0019, seg=10, mat="steel")
     # ---- cajón inferior con jalón
     Mc = _T(0, -0.279, 0.105) @ _Rx(90)
     slab(mb, Mc, W - 0.016, 0.059, 0.022, rc=0.005, re=0.005, re0=0.0, mat="sign_white", nc=3)
@@ -814,10 +814,10 @@ def stove(seed=0):
                    (rq * 0.6, zc + 0.0282), (0.0, zc + 0.0286)], seg=28, mat="cable", M=Mb, caps=False)
         a = math.radians(-35)
         Mi = Mb @ _T((rq * 0.9 + 0.007) * math.cos(a), (rq * 0.9 + 0.007) * math.sin(a), 0.0)
-        lathe(mb, [(0.0042, zc - 0.001), (0.0042, zc + 0.008), (0.0028, zc + 0.012), (0.0, zc + 0.0125)], seg=8,
+        lathe(mb, [(0.0042, zc - 0.001), (0.0042, zc + 0.008), (0.0028, zc + 0.012), (0.0, zc + 0.0125)], seg=16,
               mat="sign_white", M=Mi, caps=False)
         mb.tube([tuple(Mi @ Vector((0, 0, zc + 0.011))), tuple(Mi @ Vector((-0.0035 * math.cos(a), -0.0035 * math.sin(a), zc + 0.016)))],
-                0.0007, seg=5, mat="steel")
+                0.0007, seg=10, mat="steel")
     # ---- parrillas de fierro fundido (2), con dedos de apoyo y topes de hule
     for sx in (-1, 1):
         xc = sx * 0.1875
@@ -834,15 +834,15 @@ def stove(seed=0):
                 rtube_p(mb, p0, p1, 0.015, 0.02, "cable", taper=0.72, n=1)
         for (x, y) in ((xc - 0.16, -0.255), (xc + 0.16, -0.255), (xc - 0.16, 0.231), (xc + 0.16, 0.231)):
             lathe(mb, [(0.0068, zc - 0.0005), (0.0072, zc + 0.002), (0.006, zc + 0.0046), (0.0, zc + 0.0048)],
-                  seg=8, mat="rubber", M=_T(x, y, 0.0), caps=False)
+                  seg=16, mat="rubber", M=_T(x, y, 0.0), caps=False)
     # ---- servicio trasero (contra el muro, no se ve): tubo de gas con tuerca y manguera (marca la caja)
-    lathe(mb, [(0.0, -0.0003), (0.016, -0.0003), (0.016, 0.004), (0.0, 0.004)], seg=6, mat="steel", M=_T(-0.30, yb, 0.80) @ _Rx(-90),
+    lathe(mb, [(0.0, -0.0003), (0.016, -0.0003), (0.016, 0.004), (0.0, 0.004)], seg=12, mat="steel", M=_T(-0.30, yb, 0.80) @ _Rx(-90),
           phase=PI / 6)
     gp = [(-0.30, yb + 0.002, 0.80), (-0.30, yb + 0.012, 0.80), (-0.30, yb + 0.012, 0.13)]
-    mb.tube(_dedupe(fillet(gp, 0.012, 3)), 0.0066, seg=6, mat="steel")
+    mb.tube(_dedupe(fillet(gp, 0.012, 3)), 0.0066, seg=12, mat="steel")
     hexnut(mb, _T(-0.30, yb + 0.012, 0.115), s=0.02, h=0.016, mat="aluminium")
     hose(mb, [(-0.30, yb + 0.012, 0.118), (-0.30, yb + 0.012, 0.05), (-0.33, yb + 0.012, 0.009), (-0.392, yb + 0.012, 0.009)],
-         0.009, bend=0.04, mat="paint_yellow", seg=6, nseg=4)
+         0.009, bend=0.04, mat="paint_yellow", seg=12, nseg=4)
     return mb
 
 
@@ -884,7 +884,7 @@ def water_dispenser():
     mb = MB()
     zt = 0.975
     for (x, y) in ((-0.125, -0.125), (0.125, -0.125), (-0.125, 0.125), (0.125, 0.125)):        # regatones (sin fondo: van al piso)
-        lathe(mb, [(0.016, 0.0), (0.018, 0.003), (0.018, 0.012), (0.014, 0.0205), (0.0, 0.0205)], seg=10, mat="rubber",
+        lathe(mb, [(0.016, 0.0), (0.018, 0.003), (0.018, 0.012), (0.014, 0.0205), (0.0, 0.0205)], seg=18, mat="rubber",
               M=_T(x, y, 0.0), caps=False)
     slab(mb, _T(0, 0.029, 0.02), 0.316, 0.258, zt - 0.02, rc=(0.03, 0.03, 0.004, 0.004), re=0.006, re0=0.004, mat="sign_white",
          nc=4, ne=2)
@@ -914,10 +914,10 @@ def water_dispenser():
     for (x, col) in ((-0.05, "sign_blue"), (0.05, "sign_red")):
         slab(mb, _T(x, -0.1, 0.752) @ _Rx(90), 0.036, 0.052, 0.052, rc=0.009, re=0.007, re0=0.0, mat="plastic", nc=3, ne=2)
         lathe(mb, [(0.0085, 0.0), (0.0085, 0.006), (0.006, 0.01), (0.0058, 0.026), (0.0068, 0.03), (0.0068, 0.034), (0.0045, 0.034),
-                   (0.0, 0.031)], seg=12, mat="plastic", M=_T(x, -0.136, 0.731) @ _Rx(180), caps=False)
+                   (0.0, 0.031)], seg=20, mat="plastic", M=_T(x, -0.136, 0.731) @ _Rx(180), caps=False)
         Ml = _T(x, -0.1515, 0.776) @ _Rx(-8)
         slab(mb, Ml @ _T(0, -0.026, -0.0005) @ _Rx(90), 0.032, 0.05, 0.0065, rc=0.008, re=0.0028, mat=col, nc=3, ne=2)
-        mb.cyl(Ml @ Vector((-0.016, -0.004, 0.0)), Ml @ Vector((0.016, -0.004, 0.0)), 0.0032, seg=8, mat="plastic")
+        mb.cyl(Ml @ Vector((-0.016, -0.004, 0.0)), Ml @ Vector((0.016, -0.004, 0.0)), 0.0032, seg=16, mat="plastic")
         for k in range(4):
             mb.box((-0.011, -0.04 + k * 0.0055, -0.0075), (0.011, -0.0372 + k * 0.0055, -0.0062), col, bevel=0.0, seg=1, m=Ml)
         if col == "sign_red":
@@ -936,8 +936,8 @@ def water_dispenser():
     label(mb, "COLD", 0.016, "sign_blue", Mt @ _T(-0.055, 0.893, 0.0), bold=True, res=2)
     label(mb, "HOT", 0.016, "sign_red", Mt @ _T(0.055, 0.893, 0.0), bold=True, res=2)
     for (x, col) in ((-0.055, "sign_green"), (0.055, "sign_red")):
-        lathe(mb, [(0.0042, -0.0003), (0.0042, 0.0012), (0.003, 0.0026), (0.0, 0.003)], seg=10, mat=col, M=Mt @ _T(x, 0.928, 0.0))
-        lathe(mb, [(0.0058, -0.0003), (0.0062, 0.0008), (0.0056, 0.0016), (0.0045, 0.0009), (0.0045, -0.0003)], seg=10,
+        lathe(mb, [(0.0042, -0.0003), (0.0042, 0.0012), (0.003, 0.0026), (0.0, 0.003)], seg=18, mat=col, M=Mt @ _T(x, 0.928, 0.0))
+        lathe(mb, [(0.0058, -0.0003), (0.0062, 0.0008), (0.0056, 0.0016), (0.0045, 0.0009), (0.0045, -0.0003)], seg=18,
               mat="aluminium", M=Mt @ _T(x, 0.928, 0.0), closed=True)
     # puerta inferior (gabinete de guardado): panel con junta, jalón y pernos
     Mdr = Mt @ _T(0, 0.31, -0.0004)
@@ -946,7 +946,7 @@ def water_dispenser():
             re_i=0.0012, n=3, ne=2, mat="plastic")
     mb.box((-0.045, 0.201, -0.006), (0.045, 0.209, 0.0055), "cable", bevel=0.0, m=Mdr)
     for z in (0.12, 0.48):
-        lathe(mb, [(0.0, z - 0.018), (0.0045, z - 0.018), (0.0045, z + 0.018), (0.0, z + 0.018)], seg=8, mat="aluminium",
+        lathe(mb, [(0.0, z - 0.018), (0.0045, z - 0.018), (0.0045, z + 0.018), (0.0, z + 0.018)], seg=16, mat="aluminium",
               M=_T(-0.1215, -0.1625, 0.0))
     # rejillas laterales (persianas reales)
     for sx in (-1, 1):
@@ -961,12 +961,12 @@ def water_dispenser():
         z = 0.12 + k * 0.1
         xa, xb_ = (-0.11, 0.11) if k % 2 == 0 else (0.11, -0.11)
         pts += [(xa, yb + 0.014, z), (xb_, yb + 0.014, z)]
-    mb.tube(_dedupe(fillet(pts, 0.05, 3)), 0.0024, seg=4, mat="cable")
+    mb.tube(_dedupe(fillet(pts, 0.05, 3)), 0.0024, seg=8, mat="cable")
     for x in (-0.13, 0.13):
         mb.box((x - 0.006, yb - 0.0005, 0.09), (x + 0.006, yb + 0.0175, 0.56), "cable", bevel=0.0, seg=1)
-    lathe(mb, [(0.0, -0.0003), (0.009, -0.0003), (0.009, 0.01), (0.006, 0.02), (0.0, 0.02)], seg=8, mat="cable", M=_T(0.09, yb, 0.62) @ _Rx(-90))
+    lathe(mb, [(0.0, -0.0003), (0.009, -0.0003), (0.009, 0.01), (0.006, 0.02), (0.0, 0.02)], seg=16, mat="cable", M=_T(0.09, yb, 0.62) @ _Rx(-90))
     hose(mb, [(0.09, yb + 0.012, 0.62), (0.09, yb + 0.022, 0.62), (0.09, yb + 0.022, 0.12), (0.12, yb + 0.022, 0.0042),
-              (0.172, yb + 0.022, 0.0042)], 0.0042, bend=0.05, mat="cable", seg=5, nseg=3)
+              (0.172, yb + 0.022, 0.0042)], 0.0042, bend=0.05, mat="cable", seg=10, nseg=3)
     return mb
 
 
@@ -980,14 +980,14 @@ def _dloop(w, d, yb, rf, rb, z, n=7, cx=0.0):
 def _cross_handle(mb, M, col):
     """Maneral de cruz cromado con botón de color (sobre z = 0 local)."""
     lathe(mb, [(0.0135, -0.0004), (0.014, 0.004), (0.012, 0.011), (0.0105, 0.016), (0.0115, 0.02), (0.0, 0.021)],
-          seg=12, mat="steel", M=M, caps=False)
+          seg=20, mat="steel", M=M, caps=False)
     for k in range(4):
         a = PI / 4 + PI / 2 * k
         tip = Vector((0.032 * math.cos(a), 0.032 * math.sin(a), 0.026))
         rtube_p(mb, tuple(M @ Vector((0, 0, 0.017))), tuple(M @ tip), 0.008, 0.007, "steel", taper=0.8, n=1)
-        lathe(mb, [(0.0, -0.005), (0.0045, -0.003), (0.0052, 0.0), (0.0045, 0.003), (0.0, 0.005)], seg=6, mat="steel",
+        lathe(mb, [(0.0, -0.005), (0.0045, -0.003), (0.0052, 0.0), (0.0045, 0.003), (0.0, 0.005)], seg=12, mat="steel",
               M=M @ _T(*tip))
-    lathe(mb, [(0.0085, 0.0195), (0.0085, 0.0225), (0.007, 0.0235), (0.0, 0.0237)], seg=10, mat=col, M=M, caps=False)
+    lathe(mb, [(0.0085, 0.0195), (0.0085, 0.0225), (0.007, 0.0235), (0.0, 0.0237)], seg=18, mat=col, M=M, caps=False)
 
 
 def _angle_stop(mb, x, z, y0=0.0, lite=False):
@@ -995,21 +995,21 @@ def _angle_stop(mb, x, z, y0=0.0, lite=False):
     lite: misma forma con menos lados y sin las tapas que quedan dentro del muro o de otra pieza (presupuesto)."""
     Mw = _T(x, y0, z) @ _Rx(90)                                     # z local -> -Y (sale del muro)
     if lite:
-        lathe(mb, [(0.0095, -0.002), (0.025, -0.002), (0.025, 0.0015), (0.022, 0.004), (0.0095, 0.0045)], seg=12, mat="steel", M=Mw,
+        lathe(mb, [(0.0095, -0.002), (0.025, -0.002), (0.025, 0.0015), (0.022, 0.004), (0.0095, 0.0045)], seg=20, mat="steel", M=Mw,
               closed=True)
-        lathe(mb, [(0.0082, 0.004), (0.0082, 0.026)], seg=8, mat="steel", M=Mw, caps=False)
-        lathe(mb, [(0.0118, 0.024), (0.0125, 0.03), (0.0125, 0.046), (0.011, 0.05), (0.0, 0.05)], seg=10, mat="steel", M=Mw, caps=False)
+        lathe(mb, [(0.0082, 0.004), (0.0082, 0.026)], seg=16, mat="steel", M=Mw, caps=False)
+        lathe(mb, [(0.0118, 0.024), (0.0125, 0.03), (0.0125, 0.046), (0.011, 0.05), (0.0, 0.05)], seg=18, mat="steel", M=Mw, caps=False)
         hexnut(mb, _T(x, y0 - 0.037, z + 0.01), s=0.019, h=0.01, mat="steel")
-        lathe(mb, [(0.0068, z + 0.019), (0.0068, z + 0.03)], seg=8, mat="steel", M=_T(x, y0 - 0.037, 0), caps=False)
-        lathe(mb, [(0.0055, 0.05), (0.0055, 0.06)], seg=6, mat="steel", M=Mw, caps=False)
+        lathe(mb, [(0.0068, z + 0.019), (0.0068, z + 0.03)], seg=16, mat="steel", M=_T(x, y0 - 0.037, 0), caps=False)
+        lathe(mb, [(0.0055, 0.05), (0.0055, 0.06)], seg=12, mat="steel", M=Mw, caps=False)
         slab(mb, Mw @ _T(0, 0, 0.0595), 0.036, 0.016, 0.006, rc=0.007, re=0.002, re0=0.001, mat="sign_white", nc=2, ne=1)
         return
     lathe(mb, [(0.0095, -0.002), (0.025, -0.002), (0.025, 0.0015), (0.022, 0.004), (0.0095, 0.0045)], seg=24, mat="steel", M=Mw)
-    lathe(mb, [(0.0, 0.0), (0.0082, 0.0), (0.0082, 0.026), (0.0, 0.026)], seg=14, mat="steel", M=Mw)
+    lathe(mb, [(0.0, 0.0), (0.0082, 0.0), (0.0082, 0.026), (0.0, 0.026)], seg=24, mat="steel", M=Mw)
     lathe(mb, [(0.0, 0.024), (0.0118, 0.024), (0.0125, 0.03), (0.0125, 0.046), (0.011, 0.05), (0.0, 0.05)], seg=16, mat="steel", M=Mw)
     hexnut(mb, _T(x, y0 - 0.037, z + 0.01), s=0.019, h=0.01, mat="steel")
-    lathe(mb, [(0.0, z + 0.008), (0.0068, z + 0.008), (0.0068, z + 0.03), (0.0, z + 0.03)], seg=12, mat="steel", M=_T(x, y0 - 0.037, 0))
-    lathe(mb, [(0.0, 0.05), (0.0055, 0.05), (0.0055, 0.06), (0.0, 0.06)], seg=10, mat="steel", M=Mw)
+    lathe(mb, [(0.0, z + 0.008), (0.0068, z + 0.008), (0.0068, z + 0.03), (0.0, z + 0.03)], seg=20, mat="steel", M=_T(x, y0 - 0.037, 0))
+    lathe(mb, [(0.0, 0.05), (0.0055, 0.05), (0.0055, 0.06), (0.0, 0.06)], seg=18, mat="steel", M=Mw)
     slab(mb, Mw @ _T(0, 0, 0.0595), 0.036, 0.016, 0.006, rc=0.007, re=0.002, re0=0.001, mat="sign_white", nc=4, ne=2)
 
 
@@ -1045,7 +1045,7 @@ def sink(seed=0, mirror=True):
     for k in range(3):
         mb.box((-0.0208, -0.0016, zr - 0.131), (0.0208, 0.0016, zr - 0.1262), "steel", bevel=0.0005, seg=1,
                m=_T(0, yd, 0) @ _Rz(60 * k))
-    lathe(mb, [(0.006, zr - 0.1285), (0.006, zr - 0.1250), (0.0045, zr - 0.1238), (0.0, zr - 0.1236)], seg=8,
+    lathe(mb, [(0.006, zr - 0.1285), (0.006, zr - 0.1250), (0.0045, zr - 0.1238), (0.0, zr - 0.1236)], seg=16,
           mat="steel", M=_T(0, yd, 0), caps=False)
     # ---- mezcladora de 4": base, cuello de ganso con aireador, manerales, varilla
     yf = -0.056
@@ -1053,33 +1053,33 @@ def sink(seed=0, mirror=True):
     lathe(mb, [(0.0165, zr + 0.012), (0.0165, zr + 0.016), (0.0135, zr + 0.022), (0.012, zr + 0.06), (0.0105, zr + 0.068)], seg=16,
           mat="steel", M=_T(0, yf, 0), caps=False)
     hose(mb, [(0.0, yf, zr + 0.06), (0.0, yf, zr + 0.13), (0.0, -0.175, zr + 0.13), (0.0, -0.175, zr + 0.075)], 0.0095,
-              bend=0.045, mat="steel", seg=12, nseg=8)
+              bend=0.045, mat="steel", seg=20, nseg=8)
     Ma = _T(0.0, -0.175, zr + 0.082)
     lathe(mb, [(0.0068, 0.0), (0.0102, 0.0005), (0.0108, 0.003), (0.0102, 0.0045), (0.0108, 0.006), (0.0108, 0.016), (0.0096, 0.018)],
           seg=16, mat="steel", M=Ma @ _T(0, 0, -0.012), caps=False)
-    lathe(mb, [(0.0, -0.0118), (0.0072, -0.0118), (0.0072, -0.0124), (0.0, -0.0124)], seg=12, mat="cable", M=Ma)
+    lathe(mb, [(0.0, -0.0118), (0.0072, -0.0118), (0.0072, -0.0124), (0.0, -0.0124)], seg=20, mat="cable", M=Ma)
     for (x, col) in ((-0.0508, "sign_blue"), (0.0508, "sign_red")):
-        lathe(mb, [(0.0145, zr + 0.012), (0.0145, zr + 0.017), (0.0118, zr + 0.021), (0.0118, zr + 0.031)], seg=12, mat="steel",
+        lathe(mb, [(0.0145, zr + 0.012), (0.0145, zr + 0.017), (0.0118, zr + 0.021), (0.0118, zr + 0.031)], seg=20, mat="steel",
               M=_T(x, yf, 0), caps=False)
         _cross_handle(mb, _T(x, yf, zr + 0.031) @ _Rz(float(r.uniform(-20, 20))), col)
-    lathe(mb, [(0.0028, zr + 0.012), (0.0028, zr + 0.052), (0.0055, zr + 0.054), (0.0058, zr + 0.06), (0.0, zr + 0.0635)], seg=8,
+    lathe(mb, [(0.0028, zr + 0.012), (0.0028, zr + 0.052), (0.0055, zr + 0.054), (0.0058, zr + 0.06), (0.0, zr + 0.0635)], seg=16,
           mat="steel", M=_T(0, -0.033, 0), caps=False)
     # ---- bajo la cubierta: espigas, tuercas, mangueras trenzadas, llaves angulares
     for (x, xs) in ((-0.0508, -0.09), (0.0508, 0.09)):
-        lathe(mb, [(0.0085, 0.70), (0.0085, 0.745)], seg=8, mat="steel", M=_T(x, yf, 0), caps=False)
+        lathe(mb, [(0.0085, 0.70), (0.0085, 0.745)], seg=16, mat="steel", M=_T(x, yf, 0), caps=False)
         hexnut(mb, _T(x, yf, 0.722), s=0.026, h=0.012, mat="steel")
         lathe(mb, [(0.0, 0.69), (0.0072, 0.69), (0.0072, 0.704), (0.0, 0.704)], seg=6, mat="steel", M=_T(x, yf, 0), phase=PI / 6)
         _angle_stop(mb, xs, 0.53, lite=True)
-        hose(mb, [(x, yf, 0.692), (x, yf, 0.64), (xs, -0.037, 0.60), (xs, -0.037, 0.562)], 0.0048, bend=0.035, mat="steel", seg=6,
+        hose(mb, [(x, yf, 0.692), (x, yf, 0.64), (xs, -0.037, 0.60), (xs, -0.037, 0.562)], 0.0048, bend=0.035, mat="steel", seg=12,
              nseg=4)
     # ---- cespol: tubo de cola, tuerca, trampa en J, brazo al muro con chapetón
-    lathe(mb, [(0.0165, 0.70), (0.0165, 0.615)], seg=12, mat="steel", M=_T(0, yd, 0), caps=False)
+    lathe(mb, [(0.0165, 0.70), (0.0165, 0.615)], seg=20, mat="steel", M=_T(0, yd, 0), caps=False)
     for zn in (0.70, 0.612):
         lathe(mb, [(0.021, zn - 0.013), (0.0225, zn - 0.011), (0.0225, zn + 0.002), (0.019, zn + 0.004), (0.0165, zn + 0.004)], seg=18,
               mat="steel", M=_T(0, yd, 0), caps=False,
               rmod=lambda i, a, rr, z: rr - (0.0012 * (0.5 + 0.5 * math.cos(9 * a)) ** 2 if i in (1, 2) else 0.0))
     hose(mb, [(0.0, yd, 0.605), (0.0, yd, 0.497), (0.0, -0.163, 0.497), (0.0, -0.163, 0.556), (0.0, -0.10, 0.556), (0.0, -0.001, 0.556)],
-         0.0165, bend=0.032, mat="steel", seg=10, nseg=6)
+         0.0165, bend=0.032, mat="steel", seg=18, nseg=6)
     lathe(mb, [(0.0165, 0.0), (0.0215, 0.0), (0.0225, 0.002), (0.0225, 0.014), (0.019, 0.016), (0.0165, 0.016)], seg=16, mat="steel",
           M=_T(0, -0.098, 0.556) @ _Rx(90), caps=False)
     lathe(mb, [(0.017, -0.0015), (0.038, -0.0015), (0.038, 0.002), (0.034, 0.006), (0.017, 0.007)], seg=16, mat="steel",
@@ -1091,7 +1091,7 @@ def sink(seed=0, mirror=True):
         for z in (0.665, 0.735):
             screw(mb, _T(x, -0.005, z) @ _Rx(90), r=0.0045, seg=6, cross=False)
         rtube_p(mb, (x, -0.004, 0.744), (x, -0.105, 0.776), 0.03, 0.006, "steel", taper=0.9, n=1)
-        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.004), (0.0, 0.004)], seg=8, mat="rubber",
+        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.004), (0.0, 0.004)], seg=16, mat="rubber",
               M=_T(x, -0.10, 0.777))
     # ---- espejo de acero inoxidable con marco de aluminio, pijas de seguridad y repisa
     if mirror:
@@ -1159,14 +1159,14 @@ def toilet(seed=0):
     si = (0.216, -0.218, 0.074, 0.106, 0.075)
     _ring_seat(mb, _T(0, 0, zr + 0.005), so, si, 0.021, "plastic", n=n)
     for (x, y) in ((-0.13, -0.12), (0.13, -0.12), (-0.135, 0.07), (0.135, 0.07)):
-        lathe(mb, [(0.0, zr - 0.0005), (0.0075, zr - 0.0005), (0.0075, zr + 0.004), (0.006, zr + 0.0058), (0.0, zr + 0.006)], seg=12,
+        lathe(mb, [(0.0, zr - 0.0005), (0.0075, zr - 0.0005), (0.0075, zr + 0.004), (0.006, zr + 0.0058), (0.0, zr + 0.006)], seg=20,
               mat="rubber", M=_T(x, y, 0.0))
     yh, zh = 0.158, zr + 0.031
     for sx in (-1, 1):
         x = sx * 0.075
         slab(mb, _T(x, yh + 0.004, zr - 0.0005), 0.03, 0.034, 0.03, rc=0.008, re=0.006, re0=0.0, mat="plastic", nc=3)
-        lathe(mb, [(0.0, -0.022), (0.0045, -0.022), (0.0045, 0.022), (0.0, 0.022)], seg=12, mat="steel", M=_T(x, yh, zh) @ _Ry(90))
-        lathe(mb, [(0.0, 0.0), (0.0075, 0.0), (0.0078, 0.003), (0.006, 0.0055), (0.0, 0.006)], seg=14, mat="plastic",
+        lathe(mb, [(0.0, -0.022), (0.0045, -0.022), (0.0045, 0.022), (0.0, 0.022)], seg=20, mat="steel", M=_T(x, yh, zh) @ _Ry(90))
+        lathe(mb, [(0.0, 0.0), (0.0075, 0.0), (0.0078, 0.003), (0.006, 0.0055), (0.0, 0.006)], seg=24, mat="plastic",
               M=_T(x + sx * 0.0218, yh, zh) @ _Ry(90 * sx))
         rtube_p(mb, (x - sx * 0.022, 0.12, zr + 0.013), (x - sx * 0.022, yh, zh - 0.002), 0.014, 0.012, "plastic", taper=0.9)
     ang = -float(r.uniform(92.0, 95.0))
@@ -1180,14 +1180,14 @@ def toilet(seed=0):
     for sx in (-1, 1):
         rtube_p(mb, tuple(Ml @ Vector((sx * 0.052, 0.128, zl + 0.012))), tuple(Ml @ Vector((sx * 0.052, yh, zh + 0.002))), 0.014, 0.012,
                 "plastic", taper=0.9)
-        lathe(mb, [(0.0, 0.0), (0.0065, 0.0), (0.0065, 0.004), (0.0, 0.0045)], seg=10, mat="rubber",
+        lathe(mb, [(0.0, 0.0), (0.0065, 0.0), (0.0065, 0.004), (0.0, 0.0045)], seg=18, mat="rubber",
               M=Ml @ _T(sx * 0.12, -0.16, zl) @ _Rx(180))
     # tanque, empaque, tapa, palanca
     slab(mb, _T(0, 0.276, zr + 0.009), 0.38, 0.158, 0.396, rc=0.026, re=0.012, re0=0.008, mat="sign_white", nc=6)
     lathe(mb, [(0.032, zr - 0.0005), (0.05, zr - 0.0005), (0.052, zr + 0.004), (0.05, zr + 0.0095), (0.032, zr + 0.0095)], seg=28,
           mat="rubber", M=_T(0, 0.262, 0.0))
     for x in (-0.085, 0.085):
-        lathe(mb, [(0.0, zr - 0.0005), (0.009, zr - 0.0005), (0.009, zr + 0.0095), (0.0, zr + 0.0095)], seg=6, mat="steel",
+        lathe(mb, [(0.0, zr - 0.0005), (0.009, zr - 0.0005), (0.009, zr + 0.0095), (0.0, zr + 0.0095)], seg=12, mat="steel",
               M=_T(x, 0.262, 0.0), phase=PI / 6)
     slab(mb, _T(0, 0.275, zr + 0.4075), 0.396, 0.174, 0.028, rc=0.032, re=0.012, re0=0.004, mat="sign_white", nc=6)
     Mlev = _T(-0.19, 0.238, 0.738) @ _Ry(-90)                                      # palanca lateral (costado izquierdo)
@@ -1196,18 +1196,18 @@ def toilet(seed=0):
     lathe(mb, [(0.0, 0.007), (0.0085, 0.007), (0.0085, 0.017), (0.0, 0.017)], seg=16, mat="steel", M=Mlev)
     rtube_p(mb, tuple(Mlev @ Vector((0.0, 0.0, 0.0145))), tuple(Mlev @ Vector((-0.008, -0.066, 0.0145))), 0.012, 0.007, "steel",
             taper=0.85)
-    lathe(mb, [(0.0, -0.0042), (0.0065, -0.0042), (0.0068, 0.0), (0.0065, 0.0042), (0.0, 0.0042)], seg=12, mat="steel",
+    lathe(mb, [(0.0, -0.0042), (0.0065, -0.0042), (0.0068, 0.0), (0.0065, 0.0042), (0.0, 0.0042)], seg=20, mat="steel",
           M=Mlev @ _T(-0.008, -0.066, 0.0145))
     # alimentación: espiga de la válvula, tuerca estriada, manguera trenzada, llave angular en el muro
     xs = -0.135
-    lathe(mb, [(0.0, zr - 0.025), (0.0105, zr - 0.025), (0.0105, zr + 0.009), (0.0, zr + 0.009)], seg=14, mat="plastic",
+    lathe(mb, [(0.0, zr - 0.025), (0.0105, zr - 0.025), (0.0105, zr + 0.009), (0.0, zr + 0.009)], seg=24, mat="plastic",
           M=_T(xs, 0.30, 0.0))
     lathe(mb, [(0.0, zr - 0.05), (0.017, zr - 0.05), (0.0175, zr - 0.046), (0.0175, zr - 0.03), (0.015, zr - 0.026), (0.0, zr - 0.026)],
           seg=32, mat="plastic", M=_T(xs, 0.30, 0.0),
           rmod=lambda i, a, rr, z: rr - (0.0013 * (0.5 + 0.5 * math.cos(16 * a)) ** 2 if i in (2, 3) else 0.0))
     _angle_stop(mb, xs - 0.02, 0.17, y0=0.36)
     hose(mb, [(xs, 0.30, zr - 0.048), (xs, 0.30, 0.30), (xs - 0.02, 0.323, 0.235), (xs - 0.02, 0.323, 0.202)], 0.0048, bend=0.05,
-         mat="steel", seg=8, pitch=0.006, depth=0.1)
+         mat="steel", seg=16, pitch=0.006, depth=0.1)
     return mb
 
 
@@ -1220,7 +1220,7 @@ def _small_caster(mb, M, R=0.025, swivel=0.0):
     """Rodaja de 2": placa, balero de giro, horquilla de lámina, rueda con banda redondeada, maza y eje con tuercas."""
     slab(mb, M @ _T(0, 0, 2 * R + 0.009), 0.042, 0.042, 0.003, rc=0.006, re=0.001, mat="steel", nc=2, ne=1)
     Mz = M @ _Rz(swivel)
-    lathe(mb, [(0.016, 2 * R + 0.0035), (0.0175, 2 * R + 0.006), (0.016, 2 * R + 0.0092)], seg=10, mat="steel", M=Mz, caps=False)
+    lathe(mb, [(0.016, 2 * R + 0.0035), (0.0175, 2 * R + 0.006), (0.016, 2 * R + 0.0092)], seg=18, mat="steel", M=Mz, caps=False)
     off = R * 0.35
     for sx in (-1, 1):
         prof = [(-0.014, 2 * R + 0.004), (0.014, 2 * R + 0.004), (off + 0.009, R + 0.004), (off + 0.007, R - 0.006), (off - 0.007, R - 0.006),
@@ -1228,10 +1228,10 @@ def _small_caster(mb, M, R=0.025, swivel=0.0):
         perm = Matrix(((0, 0, 1, 0), (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
         mb.plate(prof, 0.0018, "steel", m=Mz @ _T(sx * 0.0125 - (0.0018 if sx > 0 else 0.0), 0, 0) @ perm)
     Mw = Mz @ _T(0, off, R) @ _Ry(90)
-    lathe(mb, [(0.006, -0.0098), (R * 0.88, -0.0098), (R, -0.0055), (R, 0.0055), (R * 0.88, 0.0098), (0.006, 0.0098)], seg=14,
+    lathe(mb, [(0.006, -0.0098), (R * 0.88, -0.0098), (R, -0.0055), (R, 0.0055), (R * 0.88, 0.0098), (0.006, 0.0098)], seg=24,
           mat="rubber", M=Mw, closed=True)
-    lathe(mb, [(0.0, -0.0106), (0.0062, -0.0106), (0.0062, 0.0106), (0.0, 0.0106)], seg=8, mat="plastic", M=Mw)
-    mb.cyl(Mw @ Vector((0, 0, -0.016)), Mw @ Vector((0, 0, 0.016)), 0.0028, seg=6, mat="steel")
+    lathe(mb, [(0.0, -0.0106), (0.0062, -0.0106), (0.0062, 0.0106), (0.0, 0.0106)], seg=16, mat="plastic", M=Mw)
+    mb.cyl(Mw @ Vector((0, 0, -0.016)), Mw @ Vector((0, 0, 0.016)), 0.0028, seg=12, mat="steel")
     for sz in (-1, 1):
         hexnut(mb, Mw @ _T(0, 0, sz * 0.0143) @ (_Rx(180) if sz < 0 else Matrix()), s=0.0075, h=0.0035, mat="steel")
 
@@ -1260,7 +1260,7 @@ def mop_bucket(seed=0):
     for sx in (-1, 1):                                                             # asa moldeada en cada extremo
         x = sx * 0.183
         mb.tube(_dedupe(fillet([(x - sx * 0.002, -0.06, zb + 0.05), (x + sx * 0.022, -0.06, zb + 0.05), (x + sx * 0.022, 0.06, zb + 0.05),
-                                (x - sx * 0.002, 0.06, zb + 0.05)], 0.015, 4)), 0.008, seg=8, mat="paint_yellow")
+                                (x - sx * 0.002, 0.06, zb + 0.05)], 0.015, 4)), 0.008, seg=16, mat="paint_yellow")
     skin(mb, [_rl(0.323, 0.223, 0.056, 0.1395, n=6), _rl(0.323, 0.223, 0.056, 0.1405, n=6)], "glass")      # agua sucia
     yi = lambda z: -(0.106 + (0.127 - 0.106) * (z - 0.084) / (0.368 - 0.084))  # noqa: E731  (pared interior frontal)
     label(mb, "MAX", 0.016, "paint_yellow", _T(-0.10, yi(0.335), 0.335) @ _Rz(180) @ _Rx(90) @ _Rx(-4.2), res=1)
@@ -1272,11 +1272,11 @@ def mop_bucket(seed=0):
     th = math.radians(76.0)
     Mbail = _T(-0.10, 0.0, zr - 0.015) @ Matrix.Rotation(-th, 4, "Y")
     bp = [(0.0, -0.152, 0.0), (0.0, -0.152, 0.03), (0.0, -0.13, 0.09), (0.0, 0.13, 0.09), (0.0, 0.152, 0.03), (0.0, 0.152, 0.0)]
-    mb.tube(_dedupe([tuple(Mbail @ Vector(p)) for p in fillet(bp, 0.03, 4)]), 0.0032, seg=6, mat="steel")
-    lathe(mb, [(0.0, -0.06), (0.008, -0.06), (0.0095, -0.055), (0.0095, 0.055), (0.008, 0.06), (0.0, 0.06)], seg=10, mat="cable",
+    mb.tube(_dedupe([tuple(Mbail @ Vector(p)) for p in fillet(bp, 0.03, 4)]), 0.0032, seg=12, mat="steel")
+    lathe(mb, [(0.0, -0.06), (0.008, -0.06), (0.0095, -0.055), (0.0095, 0.055), (0.008, 0.06), (0.0, 0.06)], seg=18, mat="cable",
           M=Mbail @ _T(0, 0, 0.09) @ _Rx(90))
     for sy in (-1, 1):
-        lathe(mb, [(0.011, 0.0), (0.011, 0.006), (0.0075, 0.009), (0.0, 0.009)], seg=10, mat="paint_yellow",
+        lathe(mb, [(0.011, 0.0), (0.011, 0.006), (0.0075, 0.009), (0.0, 0.009)], seg=18, mat="paint_yellow",
               M=_T(-0.10, sy * 0.141, zr - 0.015) @ _Rx(-90 * sy), caps=False)
     # ---- exprimidor de prensa lateral
     xc = 0.107
@@ -1300,7 +1300,7 @@ def mop_bucket(seed=0):
     for sy in (-1, 1):
         mb.box((xc - 0.07, sy * 0.117 - 0.003, 0.55), (xc + 0.02, sy * 0.117 + 0.003, 0.585), "steel", bevel=0.0, seg=1,
                m=_T(xc - 0.025, 0, 0.567) @ _Ry(-22) @ _T(-xc + 0.025, 0, -0.567))
-        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.0, 0.006)], seg=6, mat="steel", M=_T(xc - 0.055, sy * 0.12, 0.598) @ _Rx(-90 * sy),
+        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.0, 0.006)], seg=12, mat="steel", M=_T(xc - 0.055, sy * 0.12, 0.598) @ _Rx(-90 * sy),
               phase=PI / 6)
         # silleta: ala que sale del cuerpo y se apoya sobre el labio del costado largo, con pestaña que abraza el borde
         y0_, y1_ = sorted((sy * 0.098, sy * 0.1535))
@@ -1311,35 +1311,35 @@ def mop_bucket(seed=0):
             y0_, y1_ = sorted((sy * 0.096, sy * 0.124))
             mb.box((xg - 0.003, y0_, zr - 0.03), (xg + 0.003, y1_, zr + 0.001), "paint_yellow", bevel=0.0, seg=1,
                    m=_T(xg, sy * 0.096, zr) @ _Rx(sy * 20) @ _T(-xg, -sy * 0.096, -zr))
-    mb.cyl((xc - 0.055, -0.128, 0.598), (xc - 0.055, 0.128, 0.598), 0.005, seg=10, mat="steel")
+    mb.cyl((xc - 0.055, -0.128, 0.598), (xc - 0.055, 0.128, 0.598), 0.005, seg=18, mat="steel")
     # palanca: horquilla al eje y tubo con puño estriado
     for sy in (-1, 1):
         mb.tube(_dedupe(fillet([(xc - 0.055, sy * 0.125, 0.598), (xc - 0.048, sy * 0.125, 0.70), (xc - 0.04, sy * 0.012, 0.76)], 0.05, 5)),
-                0.0085, seg=8, mat="steel")
-    mb.tube([(xc - 0.04, 0.0, 0.755), (xc - 0.012, 0.0, 1.0)], 0.011, seg=10, mat="steel")
+                0.0085, seg=16, mat="steel")
+    mb.tube([(xc - 0.04, 0.0, 0.755), (xc - 0.012, 0.0, 1.0)], 0.011, seg=18, mat="steel")
     dirv = Vector((0.028, 0.0, 0.245)).normalized()
     Mg = Matrix.Translation(Vector((xc - 0.04, 0.0, 0.755)) + dirv * 0.135) @ dirv.to_track_quat("Z", "Y").to_matrix().to_4x4()
     prof = [(0.0145, 0.0), (0.0155, 0.004)]
     for k in range(5):
         prof += [(0.0155, 0.01 + k * 0.02), (0.0141, 0.019 + k * 0.02)]
     prof += [(0.0155, 0.106), (0.014, 0.112), (0.0, 0.114)]
-    lathe(mb, prof, seg=12, mat="rubber", M=Mg, caps=False)
+    lathe(mb, prof, seg=20, mat="rubber", M=Mg, caps=False)
     # ---- trapeador: mecha en la cubeta, palo recargado en el labio del exprimidor, tapón colgador, mordaza con perilla
     p0 = Vector((-0.075, 0.0, 0.262))
     lean = Vector((0.014, 0.03, 0.598)) - p0
     p1 = p0 + lean.normalized() * 1.105
-    mb.cyl(p0, p1, 0.0118, seg=14, mat="wood_varnish")
+    mb.cyl(p0, p1, 0.0118, seg=24, mat="wood_varnish")
     d = (p1 - p0).normalized()
     Mt = Matrix.Translation(p1) @ d.to_track_quat("Z", "Y").to_matrix().to_4x4()
-    lathe(mb, [(0.0135, -0.035), (0.0138, -0.004), (0.012, 0.012), (0.006, 0.0215), (0.0, 0.022)], seg=12, mat="cable",
+    lathe(mb, [(0.0135, -0.035), (0.0138, -0.004), (0.012, 0.012), (0.006, 0.0215), (0.0, 0.022)], seg=20, mat="cable",
           M=Mt, caps=False)
-    lathe(mb, [(0.0035, -0.004), (0.0075, -0.004), (0.0075, 0.004), (0.0035, 0.004)], seg=8, mat="cable", M=Mt @ _T(0, 0, 0.006) @ _Rx(90),
+    lathe(mb, [(0.0035, -0.004), (0.0075, -0.004), (0.0075, 0.004), (0.0035, 0.004)], seg=16, mat="cable", M=Mt @ _T(0, 0, 0.006) @ _Rx(90),
           closed=True)
     Mc = Matrix.Translation(p0) @ d.to_track_quat("Z", "Y").to_matrix().to_4x4()
-    lathe(mb, [(0.022, -0.03), (0.026, -0.02), (0.026, 0.0), (0.016, 0.03), (0.0135, 0.045)], seg=12,
+    lathe(mb, [(0.022, -0.03), (0.026, -0.02), (0.026, 0.0), (0.016, 0.03), (0.0135, 0.045)], seg=20,
           mat="plastic_blue", M=Mc, caps=False)
     slab(mb, Mc @ _T(0.0, 0.0, -0.058), 0.085, 0.034, 0.03, rc=0.008, re=0.005, mat="plastic_blue", nc=2, ne=2)
-    lathe(mb, [(0.006, 0.0), (0.006, 0.018)], seg=8, mat="plastic_blue", M=Mc @ _T(0, -0.017, -0.04) @ _Rx(90), caps=False)
+    lathe(mb, [(0.006, 0.0), (0.006, 0.018)], seg=16, mat="plastic_blue", M=Mc @ _T(0, -0.017, -0.04) @ _Rx(90), caps=False)
     slab(mb, Mc @ _T(0, -0.037, -0.04) @ _Rx(90), 0.03, 0.012, 0.008, rc=0.005, re=0.003, mat="plastic_blue", nc=2, ne=1)
     # mechas de algodón: caen de la mordaza y se extienden sobre el agua (las puntas se hunden)
     zw = 0.14
@@ -1371,9 +1371,10 @@ def mop_bucket(seed=0):
             pp.y = min(max(pp.y, -0.097 + lim), 0.097 - lim)
             pz = zw + (0.0072, 0.0064, -0.016)[j] + float(r.uniform(-0.0006, 0.0006))   # flota (≥ 2 mm) y la punta se hunde
             pts.append(Vector((pp.x, pp.y, pz)))
-        pts = _dedupe([tuple(p) for p in pts], 1e-4)
-        rad = [0.0036, 0.0048] + [0.0056] * (len(pts) - 2)
-        mb.tube(pts, 0.0056, seg=4, mat="linen", radii=rad[:len(pts)])
+        pts = _dedupe(fillet([tuple(p) for p in _dedupe([tuple(p) for p in pts], 1e-4)], 0.012, 4), 1e-4)   # mecha curva, sin quiebres
+        n_ = len(pts)
+        rad = [0.0036 + 0.002 * min(1.0, i / max(1.0, 0.15 * n_)) for i in range(n_)]
+        mb.tube(pts, 0.0056, seg=14, mat="linen", radii=rad)
     return mb
 
 
@@ -1428,22 +1429,22 @@ def trash_bin(seed=0, pedal=True):
         zl = 0.4615
         lathe(mb, [(0.0, 0.497), (0.07, 0.4952), (0.12, 0.4855), (0.146, 0.4745), (0.1555, 0.467), (0.1515, zl), (0.13, 0.466),
                    (0.0, 0.468)], seg=40, mat="steel")
-        lathe(mb, [(0.012, 0.0), (0.012, 0.004), (0.0, 0.0045)], seg=10, mat="cable", M=_T(0, 0, 0.4965), caps=False)
+        lathe(mb, [(0.012, 0.0), (0.012, 0.004), (0.0, 0.0045)], seg=18, mat="cable", M=_T(0, 0, 0.4965), caps=False)
         yh = 0.162
         slab(mb, _T(0, rb(0.43) - 0.0025, 0.43) @ _Rx(-90), 0.06, 0.04, 0.004, rc=0.006, re=0.0015, mat="steel", nc=2, ne=1, re0=0.0)
         for x in (-0.02, 0.02):
-            lathe(mb, [(0.003, 0.0), (0.0024, 0.0015), (0.0, 0.0018)], seg=6, mat="steel",
+            lathe(mb, [(0.003, 0.0), (0.0024, 0.0015), (0.0, 0.0018)], seg=12, mat="steel",
                   M=_T(x, rb(0.43) + 0.0012, 0.422) @ _Rx(-90), caps=False)
         for x in (-0.024, 0.024):
             mb.box((x - 0.004, rb(0.43) + 0.001, 0.438), (x + 0.004, yh + 0.004, 0.468), "steel", bevel=0.0, seg=1)
-        mb.cyl((-0.032, yh, 0.464), (0.032, yh, 0.464), 0.0035, seg=8, mat="steel")
+        mb.cyl((-0.032, yh, 0.464), (0.032, yh, 0.464), 0.0035, seg=16, mat="steel")
         mb.box((-0.016, 0.148, 0.462), (0.016, yh + 0.006, 0.468), "steel", bevel=0.0, seg=1)
-        mb.tube(_dedupe(fillet([(0.0, yh + 0.004, 0.462), (0.0, yh + 0.004, 0.05), (0.0, 0.14, 0.03)], 0.02, 4)), 0.0025, seg=6,
+        mb.tube(_dedupe(fillet([(0.0, yh + 0.004, 0.462), (0.0, yh + 0.004, 0.05), (0.0, 0.14, 0.03)], 0.02, 4)), 0.0025, seg=12,
                 mat="steel")
         # pedal: bisagra en la base, palanca bajo el bote, placa estampada con huella de hule estriada
         for x in (-0.03, 0.03):
             mb.box((x - 0.003, -0.142, 0.006), (x + 0.003, -0.118, 0.03), "steel", bevel=0.0, seg=1)
-        mb.cyl((-0.036, -0.135, 0.018), (0.036, -0.135, 0.018), 0.0035, seg=8, mat="steel")
+        mb.cyl((-0.036, -0.135, 0.018), (0.036, -0.135, 0.018), 0.0035, seg=16, mat="steel")
         Mp = _T(0, -0.135, 0.018) @ _Rx(-6)
         rtube_p(mb, tuple(Mp @ Vector((0, 0.0, 0.0))), tuple(Mp @ Vector((0, 0.10, 0.0))), 0.03, 0.006, "steel", taper=0.9, n=1)
         for x in (-0.024, 0.024):
@@ -1479,7 +1480,7 @@ def trash_bin(seed=0, pedal=True):
             mb.box((-0.05, 0.016 + k * 0.0055, 0.0018), (0.05, 0.0178 + k * 0.0055, 0.0037), "plastic", bevel=0.0, seg=1, m=Mf)
         label(mb, "PUSH", 0.014, "plastic", Mf @ _T(0, -0.026, 0.0021), bold=True, res=1)
         for sx in (-1, 1):
-            lathe(mb, [(0.0035, 0.0), (0.0035, 0.008), (0.0, 0.0085)], seg=8, mat="plastic",
+            lathe(mb, [(0.0035, 0.0), (0.0035, 0.008), (0.0, 0.0085)], seg=16, mat="plastic",
                   M=_T(sx * 0.0715, 0, zt - 0.0005) @ _Ry(90 * sx), caps=False)
     return mb
 
@@ -1524,12 +1525,12 @@ def sanitizer(seed=0):
     for sx in (-1, 1):
         x = sx * 0.0455
         rtube_p(mb, tuple(Mp @ Vector((x, -0.004, -0.004))), (sx * 0.0535, yb - 0.066, 0.1), 0.006, 0.010, "plastic", taper=1.0)
-        lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, 0.0045), (0.0032, 0.0055), (0.0, 0.0056)], seg=10, mat="plastic",
+        lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, 0.0045), (0.0032, 0.0055), (0.0, 0.0056)], seg=18, mat="plastic",
               M=_T(sx * 0.0545, yb - 0.066, 0.1) @ _Ry(90 * sx) @ _T(0, 0, -0.0012))
     # boquilla y gota
-    lathe(mb, [(0.0, 0.02), (0.0065, 0.02), (0.0065, 0.012), (0.0045, 0.008), (0.0035, 0.004), (0.0, 0.0035)], seg=14, mat="plastic",
+    lathe(mb, [(0.0, 0.02), (0.0065, 0.02), (0.0065, 0.012), (0.0045, 0.008), (0.0035, 0.004), (0.0, 0.0035)], seg=24, mat="plastic",
           M=_T(0, yb - 0.048, 0.0))
-    lathe(mb, [(0.0, 0.0035), (0.0018, 0.0028), (0.0026, 0.0012), (0.002, 0.0003), (0.0, 0.0)], seg=10, mat="glass",
+    lathe(mb, [(0.0, 0.0035), (0.0018, 0.0028), (0.0026, 0.0012), (0.002, 0.0003), (0.0, 0.0)], seg=18, mat="glass",
           M=_T(0, yb - 0.048, 0.0))
     return mb
 

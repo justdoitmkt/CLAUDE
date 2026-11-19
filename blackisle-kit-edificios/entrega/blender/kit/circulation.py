@@ -326,7 +326,7 @@ def _anchor(mb, p, up, rs, d=0.010, mat="metal_rust"):
     M = _axis_m(p, up, rs.uniform(0, math.pi))
     t = 0.0022
     _washer(mb, M @ Matrix.Translation((0, 0, -0.0005)), d * 0.55, d * 1.05, t + 0.0005, mat=mat)
-    _hexnut(mb, M @ Matrix.Translation((0, 0, t - 0.0003)), d * 1.6, d * 0.85, mat=mat)
+    _hexnut(mb, M @ Matrix.Translation((0, 0, t - 0.0009)), d * 1.6, d * 0.85, mat=mat)
     top = t + d * 0.85 + rs.uniform(0.004, 0.007)
     _lathe(mb, [(0.0, t + 0.002), (d * 0.5, t + 0.002), (d * 0.5, top - 0.0012), (d * 0.38, top), (0.0, top)], M, seg=12, mat=mat)
 
@@ -383,14 +383,15 @@ def _saddle_weld(mb, c, T, R, rb, below, rs, r=0.0026, seg=14, mat="metal_rust",
     tana = T.z / max(math.hypot(T.x, T.y), 1e-6)
     cosa = 1.0 / math.sqrt(1.0 + tana * tana)
     rr = rb + 0.6 * r
-    pts = []
+    pts, outs = [], []
     for k in range(seg):
         a = 2 * math.pi * k / seg
         dx, dy = rr * math.cos(a), rr * math.sin(a)
         y = min(abs(dy), 0.97 * R)
         dz = tana * dx + (-1.0 if below else 1.0) * math.sqrt(R * R - y * y) / cosa
         pts.append(c + h * dx + side * dy + ZV * dz)
-    _loop_tube(mb, pts, r, seg=6, mat=mat, ripple=0.12, rs=rs, nrm=[ZV * (-1.0 if below else 1.0)] * seg)
+        outs.append(h * math.cos(a) + side * math.sin(a))
+    _loop_tube(mb, pts, r, seg=6, mat=mat, ripple=0.12, rs=rs, nrm=outs)
 
 
 def _rail_z(pts, q):
@@ -614,6 +615,9 @@ def _fillet(pts, R, nseg=4):
             out.append(b)
             continue
         t = min(R * math.tan(dl / 2), 0.45 * l0, 0.45 * l1)
+        if t < 0.0006:                    # quiebre casi recto o radio diminuto: el arco se fundiría al soldar vértices
+            out.append(b)
+            continue
         p0, p2 = b - d0 * t, b + d1 * t
         for j in range(nseg + 1):
             u = j / nseg
@@ -1021,7 +1025,7 @@ def _landing(mb, M, L, v0, v1, lt, rs, *, push_from=None, push=0.03, nb=0.018, b
 def _rebar_run(mb, pts, rs, r=0.005, bulge=0.004):
     """Varilla corrugada (NMX-B-506 / ASTM A615): núcleo de 8 lados con sombreado continuo, corrugaciones transversales
     cada ~0,7 d (anillos alternos de cresta y valle) y dos costillas longitudinales; leve ondulación por corrosión/pandeo."""
-    P = [_v(p) for p in pts]
+    P = _fillet([_v(p) for p in pts], max(6.0 * r, 0.02), nseg=6)   # dobleces con radio real (>= 6 d, ACI 318)
     pitch = 1.4 * r                       # corrugación cada 0,7 d
     out = [P[0]]
     for a, b in zip(P, P[1:]):
@@ -1090,8 +1094,8 @@ def stair_u(width=1.2, floor_h=2.9, landing_depth=1.3, gap=0.15, seed=0, broken=
     - broken: probabilidad de despostillados en narices (más en el canto libre del ojo), losa inferior desconchada con
       varillas expuestas (si broken >= 0,2) y escombro suelto en huellas/descanso. Con broken > 0 siempre hay un mínimo de
       narices mordidas (~10 % por peldaño), grietas en el descanso y gravilla barrida contra el muro: un módulo no se ve
-      nunca como maqueta limpia. Coste orientativo: ~18-20k triángulos con broken 0,1-0,15; ~30-35k con broken 0,4 y
-      barandal de tubo; ~40-46k con balaustrada de concreto (cada despostillado añade estaciones a lo ancho del tramo).
+      nunca como maqueta limpia. Coste orientativo (segunda pasada AAA): ~20k sin barandal; ~60k con broken 0,05 y
+      barandal de tubo soldado (postes, placas, anclas, soldaduras); más con balaustrada de concreto de 24 lados.
     - rail: None | 'tube_metal' | 'wood' | 'baluster_concrete' -> pasamanos en el borde del ojo (stair_railing). Con
       'baluster_concrete' el giro del descanso lleva un único pilar de arranque ancho con remate.
     meta: N, riser, n1, n2, L, W, landing_z, landing_x, rail_path (polilínea de base del pasamanos del ojo)."""
@@ -1493,11 +1497,21 @@ def _rail_tube(mb, path, h, rs, missing, *, ends=(0.025, 0.025), post_max=1.4, s
         for sx, sy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
             _anchor(mb, m @ Vector((0.034 * sx, 0.034 * sy, 0.008)), ZV, rh, d=0.008)
         # cordones: poste-placa (filete) y poste-pasamanos (silla siguiendo la cara inferior del tubo)
-        loop = _rrect_loop(w / 2 + 0.0004, w / 2 + 0.0004, 0.0044, n=4)
+        loop0 = _rrect_loop(w / 2 + 0.0004, w / 2 + 0.0004, 0.0044, n=4)
+        loop = []                             # perímetro remuestreado cada ~4 mm (la silla baja al centro de cada cara)
+        for i_, a_ in enumerate(loop0):
+            b_ = loop0[(i_ + 1) % len(loop0)]
+            m_ = max(1, int(math.hypot(b_[0] - a_[0], b_[1] - a_[1]) / 0.004))
+            loop += [(a_[0] + (b_[0] - a_[0]) * j / m_, a_[1] + (b_[1] - a_[1]) * j / m_) for j in range(m_)]
         c, sn = math.cos(ang), math.sin(ang)
         Lw = [Vector((pxy.x + x * c - y * sn, pxy.y + x * sn + y * c, 0.0)) for x, y in loop]
-        _loop_tube(mb, [p + ZV * (base.z + 0.008) for p in Lw], 0.003, seg=6, ripple=0.1, rs=rh)
-        _loop_tube(mb, [p + ZV * (rail_surf(hr, rt, p, True) + 0.0005) for p in Lw], 0.0026, seg=6, ripple=0.1, rs=rh)
+        outs = [(p - pxy).normalized() for p in Lw]       # normal del cordón: hacia fuera del poste (marco sin giros)
+        _loop_tube(mb, [p + ZV * (base.z + 0.008) for p in Lw], 0.003, seg=6, ripple=0.1, rs=rh, nrm=outs)
+        zs_ = [rail_surf(hr, rt, p, True) + 0.0005 for p in Lw]
+        nL = len(zs_)
+        for _ in range(3):                    # suaviza la silla en los costados (sin quiebres: el cordón no se cruza)
+            zs_ = [0.25 * zs_[i - 1] + 0.5 * zs_[i] + 0.25 * zs_[(i + 1) % nL] for i in range(nL)]
+        _loop_tube(mb, [p + ZV * z_ for p, z_ in zip(Lw, zs_)], 0.0022, seg=6, ripple=0.1, rs=rh, nrm=outs)
         # travesaño que atraviesa el poste: cordón alrededor del tubo en cada cara (en los extremos solo la de adentro)
         qb, Tb, _ = _rail_z(br, pxy)
         Th = Vector((Tb.x, Tb.y, 0.0)).normalized()
@@ -1508,7 +1522,7 @@ def _rail_tube(mb, path, h, rs, missing, *, ends=(0.025, 0.025), post_max=1.4, s
             N0 = Tb.orthogonal().normalized()
             B0 = Tb.cross(N0)
             _loop_tube(mb, [cc + (N0 * math.cos(2 * math.pi * k / 14) + B0 * math.sin(2 * math.pi * k / 14)) * (rb + 0.0012)
-                            for k in range(14)], 0.0024, seg=6, ripple=0.1, rs=rh)
+                            for k in range(14)], 0.0024, seg=6, ripple=0.1, rs=rh, nrm=[Tb] * 14)
     for a, b in zip(sposts, sposts[1:]):
         for s in _spaced(a, b, sp, 0.06):
             base = path.at(s)
@@ -1981,7 +1995,7 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
                 continue
             roll = rr.random()
             plo = Vector((base.x, base.y, zlo))
-            phi = Vector((base.x, base.y, zhi)) + sd * rr.normal(0, 0.006) + hd * rr.normal(0, 0.006)
+            phi = Vector((base.x, base.y, zhi)) + sd * max(-0.003, min(0.003, rr.normal(0, 0.006))) + hd * rr.normal(0, 0.006)
             if drop > 0:
                 phi = phi + sd * rr.uniform(0.0, 0.05)
             if roll < missing:  # falta: queda un clavo doblado
@@ -2008,9 +2022,11 @@ def railing(kind="tube_metal", length=3.0, h=1.0, seed=0, bend=0.0, missing=0.1)
     kind:
       'baluster_concrete' — zócalo + pilastras + balaustres torneados de 12 lados + pasamanos moldurado con gotero.
             bend > 0: tramo de pasamanos ROTO con varillas expuestas dobladas hacia abajo `bend` m.
-      'tube_metal' — postes 40x40 con placa y pernos, pasamanos Ø42, travesaño Ø24, barrotes Ø14 cada 0,11 soldados.
+      'tube_metal' — postes PTR 40x40 (radio de doblez 4 mm) con placa 100x100x8 y 4 anclas (arandela, tuerca, espárrago),
+            pasamanos Ø42 con tapas abombadas, travesaño Ø24 pasante, barrotes Ø14 cada 0,11 con soldaduras en silla.
             Desplome fuera de plomo ±0,5–1°; bend > 0: un tramo empujado hacia -Y `bend` m en lo alto (y hundido).
-      'wood' — postes 9x9, tapa, travesaños, balaustres 3,5x3,5 clavados. bend > 0: vano con tapa partida y travesaño caído.
+      'wood' — postes 9x9 de cantos redondeados con grietas de secado, tapa con grietas y 2 clavos por poste, travesaños de
+            cantos matados, balaustres 3,5x3,5 clavados. bend > 0: vano con tapa partida y travesaño caído.
     missing: fracción de barrotes/balaustres faltantes (quedan muñones, clavos o muñones con varilla).
     meta: posts (x de cada poste), kind, length, h."""
     rs = rng(seed)
@@ -2223,30 +2239,39 @@ def balcony_slab(w=1.8, d=1.2, t=0.15, seed=0, spalled=0.3, *, embed=0.06, drip=
     # varillas asomando en los desconchados
     if rebar:
         rr = _sub(rs)
+        dist_bars = []
+        used = {"F": set(), "L": set(), "R": set()}    # varillas de la parrilla (cada 15 cm): una sola por posición
+
+        def grid(a_, b_):
+            return [0.075 + 0.15 * k for k in range(int(math.ceil((a_ - 0.075) / 0.15)), int(math.floor((b_ - 0.075) / 0.15)) + 1)]
         for s in sp:
             if s["D"] < 0.035:
                 continue
             ztb = t - 0.015 * d - sag - 0.03
             if s["e"] == "F":
-                for xb in np.arange(s["c"] - s["hw"] * 0.7, s["c"] + s["hw"] * 0.7, 0.15):
+                for xb in grid(s["c"] - s["hw"] * 0.7, s["c"] + s["hw"] * 0.7):
                     Dl = spall_D("F", xb)[0]
-                    if Dl < 0.03:
+                    if Dl < 0.03 or round(xb, 3) in used["F"]:
                         continue
+                    used["F"].add(round(xb, 3))
                     y_in, y_out = -d + Dl + 0.25, -d + Dl - rr.uniform(0.0, 0.07)
                     tip = Vector((xb, y_out - 0.01, ztb - rr.uniform(0.02, 0.09)))
                     pts = [Vector((xb, y_in, ztb)), Vector((xb, -d + Dl + 0.02, ztb)), Vector((xb, y_out, ztb - 0.004)), tip]
                     _rebar_run(mb, _fillet(pts, 0.02), rr, r=0.005)
                 if s["D"] > 0.045:
-                    yb_ = -d + 0.04
-                    _rebar_run(mb, [Vector((s["c"] - s["hw"] * 0.8, yb_, 0.028)), Vector((s["c"] + s["hw"] * 0.8, yb_, 0.028))],
-                               rr, r=0.004, bulge=0.006)
+                    xa_, xb_ = s["c"] - s["hw"] * 0.8, s["c"] + s["hw"] * 0.8
+                    # dos desconchados vecinos no ponen dos varillas de reparto empalmadas en la misma línea
+                    if not any(qa < xb_ and xa_ < qb for (qa, qb) in dist_bars):
+                        dist_bars.append((xa_, xb_))
+                        _rebar_run(mb, [Vector((xa_, -d + 0.04, 0.028)), Vector((xb_, -d + 0.04, 0.028))], rr, r=0.004, bulge=0.006)
             else:
                 xe = 0.0 if s["e"] == "L" else w
                 sgn = 1.0 if s["e"] == "L" else -1.0
-                for sfb in np.arange(d - s["c"] - s["hw"] * 0.7, d - s["c"] + s["hw"] * 0.7, 0.15):
+                for sfb in grid(d - s["c"] - s["hw"] * 0.7, d - s["c"] + s["hw"] * 0.7):
                     Dl = spall_D(s["e"], d - sfb)[0]
-                    if Dl < 0.03 or sfb < 0.05:
+                    if Dl < 0.03 or sfb < 0.05 or round(sfb, 3) in used[s["e"]]:
                         continue
+                    used[s["e"]].add(round(sfb, 3))
                     yy = -d + sfb
                     x_in = xe + sgn * (Dl + 0.25)
                     x_out = xe + sgn * (Dl - rr.uniform(0.0, 0.06))
@@ -2465,8 +2490,16 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
                     yf = -Rd + fill
                     al = math.acos(max(min(-yf / Rd, 1.0), -1.0))
                     P, T, U, S = frame(s)
-                    pts2 = [(Rd * math.cos(-math.pi / 2 - al + 2 * al * i / 8), Rd * math.sin(-math.pi / 2 - al + 2 * al * i / 8))
-                            for i in range(9)]
+                    pts2 = []
+                    for i in range(9):            # la tierra sigue también las abolladuras de la chapa (sin cruzarla)
+                        a_ = -math.pi / 2 - al + 2 * al * i / 8
+                        rr_ = Rd
+                        for (sd_, ad_, dep_, sz_) in dents:
+                            e_ = 1.0 - abs(s - sd_) / sz_
+                            ea_ = 1.0 - abs((a_ % (2 * math.pi)) - ad_) / 0.5
+                            if e_ > 0 and ea_ > 0:
+                                rr_ -= _ss(e_) * _ss(ea_) * dep_
+                        pts2.append((rr_ * math.cos(a_), rr_ * math.sin(a_)))
                     pts2 += [(0.0, yf + rd.uniform(0.0, 0.004) * e)]
                     dirt_rings.append([P + S * x + U * y for x, y in pts2])
                 _loft(part, dirt_rings, "sand")
@@ -2552,11 +2585,12 @@ def gutter(path, seed=0, *, radius=0.06, hanger_step=0.8, fault="auto", dirt=Tru
             pts[0] = pts[0] + U0 * 0.012
         else:
             pts = [P1 + S1 * x + U1 * y for x, y in sp2[:-n_tab]] + [P0 + S0 * x + U0 * y for x, y in sp2[-n_tab:]]
+        pts = _fillet(pts, 0.004, nseg=3)       # dobleces del fleje con radio real (no esquinas vivas)
         _sweep(mb, strap, pts, [T0] * len(pts), "metal_rust")
         hp = P0 + S0 * (-(R + 0.024) + 0.0015) + U0 * 0.08
         Mh = _axis_m(hp, S0, rh.uniform(0, 1.0))
         _washer(mb, Mh, 0.0, 0.0072, 0.0012, mat="metal_rust", seg=14)
-        _hexnut(mb, Mh @ Matrix.Translation((0, 0, 0.0009)), 0.008, 0.0042, mat="metal_rust")
+        _hexnut(mb, Mh @ Matrix.Translation((0, 0, 0.0004)), 0.008, 0.0047, mat="metal_rust")
     mb.meta = dict(kind="gutter", fault=fault, length=L, outlets=[tuple(p) for _, p in sorted(meta_out, key=lambda q: q[0])],
                    fascia_offset=R + 0.0265, corners=[tuple(pth.P[i]) for i in corner_i])
     return mb

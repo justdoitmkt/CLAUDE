@@ -45,7 +45,7 @@ RX = lambda deg: Matrix.Rotation(math.radians(deg), 4, "X")  # noqa: E731
 RY = lambda deg: Matrix.Rotation(math.radians(deg), 4, "Y")  # noqa: E731
 PI = math.pi
 WALL_T = {"board_and_batten": 0.125, "clapboard": 0.13, "brick": 0.14}
-FLOOR_T = 0.0295                    # duela 1x6 en bruto (1 1/8"): su cara inferior apoya en las vigas (cara superior a z - 0,03)
+FLOOR_T = 0.0303                    # duela 1x6 en bruto (1 1/8"): su cara inferior asienta 0,3 mm en las vigas (cara sup. a z - 0,03)
 
 
 def cfg_cab(bid):
@@ -249,7 +249,7 @@ def boards_floor(mb, x0, x1, y0, y1, z, r, holes=(), board=0.14, t=FLOOR_T, miss
                         continue
                     wd = yb - y
                     yc = (y + yb) / 2
-                    dz = r.uniform(-0.001, 0.0022)
+                    dz = r.uniform(-0.0012, 0.0002)
                     cup = -r.uniform(0.0, 0.0018)
                     lumber(mb, (pa + 0.0015, yc, z - t / 2 + dz), (pb - 0.0015, yc, z - t / 2 + dz), wd, t, mat, up=(0, 0, 1), r=r,
                            rc=0.003, step=0.6, grain=1.0, check=0.6 if r.random() < 0.18 else 0.0, cup=cup,
@@ -372,7 +372,7 @@ def gable(mb, cfg, side, z_crown, t, r, top_fn):
             for vv in (0.35, 1.0, 1.65):
                 if vv < top - 0.1:
                     nail(sub, (um, -0.021, vv), (0, -1, 0), r=0.0046, h=0.0025)
-        y_fr = (0.024, 0.124)
+        y_fr = (0.074, 0.174)                         # pies derechos detrás de los travesaños de clavar (0,024..0,072)
     else:
         ybb, ytb = cl._clap_y()
         ex, wb = cl.CLAP_EXP, cl.CLAP_W
@@ -439,11 +439,10 @@ def gable(mb, cfg, side, z_crown, t, r, top_fn):
             lumber(sub, (u, ym, 0.002), (u, ym, top), 0.05, y_fr[1] - y_fr[0], "wood", up=(0, 1, 0), r=r, rc=0.003, grain=0.5,
                    cut1=cut_at(u) if abs(u - ur) > 0.03 else None)
         u += 0.6
-    for vv in (0.45, 1.05, 1.65):
-        a, b = ur - (vr - vv - 0.08) / s, ur + (vr - vv - 0.08) / s
+    for vv in ((0.45, 1.05, 1.65) if cfg["siding"] == "board_and_batten" else ()):
+        a, b = max(0.02, ur - (vr - vv - 0.08) / s), min(d - 0.02, ur + (vr - vv - 0.08) / s)
         if b - a > 0.6:
-            yc = y_fr[0] + 0.025
-            lumber(sub, (a, yc, vv), (b, yc, vv), 0.09, 0.048, "wood", up=(0, 1, 0), r=r, rc=0.003, grain=0.4)
+            lumber(sub, (a, 0.0475, vv), (b, 0.0475, vv), 0.09, 0.048, "wood", up=(0, 1, 0), r=r, rc=0.003, grain=0.4)
     mb.join(sub, Mg)
     sub.bm.free()
 
@@ -484,6 +483,7 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
     BT = 0.022
     u = 0.0
     tops = []
+    boards = []
     while u < L - 0.03:
         bw = min(r.uniform(0.13, 0.20), L - u)
         if L - (u + bw) < 0.06:
@@ -504,6 +504,7 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
             if r.random() < 0.06:
                 tt = top - r.uniform(0.3, 0.9)
                 jag1 = 0.03
+            boards.append((pa, pb, pc, tt))
             lumber(sub, ((pa + pb) / 2, BT / 2, pc + 0.003), ((pa + pb) / 2, BT / 2, tt), pb - pa - 0.002, BT, "wood_grey",
                    up=(0, 1, 0), r=r, rc=0.003, step=0.5, grain=1.0, check=0.5 if r.random() < 0.25 else 0.0,
                    bow=r.uniform(-0.002, 0.002), cup=r.uniform(0.0, 0.002), jag1=jag1)
@@ -514,8 +515,8 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
         u += bw + r.uniform(0.003, 0.008)
     # soleras, travesaño y cabezales por la cara de atrás (y = BT .. t)
     Hm = min([H] + [top_at(0.0, L)])
-    ym = (BT + 0.0005 + t) / 2
-    dd = t - BT - 0.0005
+    ym = (BT - 0.0003 + t) / 2
+    dd = t - BT + 0.0003
     rails = [0.0445, 1.0, Hm - 0.0445] if Hm > 1.3 else [0.0445, Hm - 0.0445]
     for vv in rails:
         segs = [(0.0, L)]
@@ -537,7 +538,8 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
                 q = a + 0.08
                 while q < b - 0.05:
                     for dv in (-0.025, 0.025):
-                        nail(sub, (q, 0.0, vv + dv), (0, -1, 0), r=0.0042, h=0.0018, seg=6)
+                        if any(ba + 0.015 < q < bb - 0.015 and bc + 0.02 < vv + dv < bt_ - 0.02 for (ba, bb, bc, bt_) in boards):
+                            nail(sub, (q, 0.0, vv + dv), (0, -1, 0), r=0.0042, h=0.0018, seg=6)
                     q += r.uniform(0.15, 0.2)
     for (o0, o1, v0, v1) in ops:                                       # pies derechos de jamba y cabezal
         for uu in (o0 - 0.046, o1 + 0.001):
@@ -593,7 +595,14 @@ def build_cabin(bid, collection_root=None, dress_all=True):
         shell.box((-w / 2 - 0.05, yf - 0.05, -0.1), (w / 2 + 0.05, d / 2 + 0.05, z0), "concrete", bevel=0.015, seg=4)
     # ---------------- plataforma de PB (vigas + duela) ----------------
     jx0 = []
-    if cfg["base"] != "slab":
+    if cfg["base"] == "piers":
+        # vigas de cierre (rim) bajo los muros, detrás del pie del revestimiento: cierran la cámara de aire bajo el piso
+        zr0, zr1 = z0 - 0.23, z0 - 0.0305
+        for (a, b, ax_) in (((-w / 2 + 0.024, yf + 0.024), (w / 2 - 0.024, yf + 0.074), 0), ((-w / 2 + 0.024, d / 2 - 0.074), (w / 2 - 0.024, d / 2 - 0.024), 0),
+                            ((-w / 2 + 0.024, yf + 0.075), (-w / 2 + 0.074, d / 2 - 0.075), 1), ((w / 2 - 0.074, yf + 0.075), (w / 2 - 0.024, d / 2 - 0.075), 1)):
+            lbox(shell, (a[0], a[1], zr0), (b[0], b[1], zr1), "wood_dark", r=rw, axis=ax_, rc=0.005, check=0.8, grain=1.0, step=0.6)
+        joists(shell, -w / 2 + 0.075, w / 2 - 0.075, yf + 0.0755, d / 2 - 0.0755, z0 - 0.03, mat="wood_dark", r=rw, xs_out=jx0)
+    elif cfg["base"] != "slab":
         joists(shell, -w / 2 + t, w / 2 - t, yf + t, d / 2 - t, z0 - 0.03, mat="wood_dark", r=rw, xs_out=jx0)
     st = cfg.get("stair")
     sw, going = 0.85, 0.24
@@ -611,7 +620,7 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if cfg["base"] == "slab":                       # duela de 1" sobre la losa, clavada a rastreles ahogados en el firme
         jx0 = [x for x in [-w / 2 + t + 0.2 + 0.45 * k for k in range(40)] if x < w / 2 - t - 0.1]
     boards_floor(inter, -w / 2 + t - 0.02, w / 2 - t + 0.02, yf + t - 0.02, d / 2 - t + 0.02, zb0, rw, missing=0.03, holes=holes0,
-                 nail_xs=jx0, t=0.027 if cfg["base"] == "slab" else FLOOR_T)
+                 nail_xs=jx0, t=0.0283 if cfg["base"] == "slab" else FLOOR_T)
     # ---------------- muros ----------------
     P = []
     spec = SPECS[bid]
@@ -628,8 +637,10 @@ def build_cabin(bid, collection_root=None, dress_all=True):
         if lv > 0:
             # cinta de entrepiso: tabla de 1x8 (0,18 x 0,03) clavada sobre la junta de niveles
             bm_ = "wood_dark" if bid == "CAB_1_tablones" else "wood_grey"
-            for (a, b) in (((-w / 2 - 0.03, yf - 0.035), (w / 2 + 0.03, yf - 0.005)), ((-w / 2 - 0.03, d / 2 + 0.005), (w / 2 + 0.03, d / 2 + 0.035)),
-                           ((-w / 2 - 0.035, yf), (-w / 2 - 0.005, d / 2)), ((w / 2 + 0.005, yf), (w / 2 + 0.035, d / 2))):
+            o0, o1 = (0.026, 0.05) if cfg["siding"] == "board_and_batten" else (0.005, 0.035)   # por delante de los junquillos
+            for (a, b) in (((-w / 2 - o1, yf - o1), (w / 2 + o1, yf - o0)), ((-w / 2 - o1, d / 2 + o0), (w / 2 + o1, d / 2 + o1)),
+                           ((-w / 2 - o1, yf - o0 + 0.0005), (-w / 2 - o0, d / 2 + o0 - 0.0005)),
+                           ((w / 2 + o0, yf - o0 + 0.0005), (w / 2 + o1, d / 2 + o0 - 0.0005))):
                 ax_ = 0 if abs(b[0] - a[0]) > abs(b[1] - a[1]) else 1
                 lbox(shell, (a[0], a[1], zl - 0.12), (b[0], b[1], zl + 0.06), bm_, r=rw, axis=ax_, rc=0.004, grain=1.0, check=0.5,
                      sag=-0.004)
@@ -898,7 +909,7 @@ def _ladder(Lr, r):
             for sx, sg in ((-0.2225, 1), (0.2225, -1)):
                 lad.cyl((sx, 0.0, z), (sx + sg * r.uniform(0.06, 0.12), 0.0, z - 0.01), 0.0175, seg=24, mat="wood")
             continue
-        lad.cyl((-0.2425, 0.0, z), (0.2425, 0.0, z), 0.0175, seg=24, mat="wood")
+        lad.cyl((-0.2445, 0.0, z), (0.2445, 0.0, z), 0.0175, seg=24, mat="wood")      # espiga pasada, 2 mm saliente
         for sx in (-0.22, 0.22):
             nail(lad, (sx, -0.035, z), (0, -1, 0), r=0.0042, h=0.0018, seg=6)
     return lad
@@ -1157,7 +1168,7 @@ def brick_chimney(mb, cx, cy, wx, wy, z_bot, z_top, r, bvh=None, thimble=None):
     # corona de concreto (gotero de 5 cm, lavadero hacia afuera) y tubo de barro
     _loft_rr(mb, cx, cy, [(wx + 0.1, wy + 0.1, zc + 0.002), (wx + 0.1, wy + 0.1, zc + 0.05), (wx + 0.08, wy + 0.08, zc + 0.058),
                           (0.30, 0.30, zc + crown - 0.004), (0.29, 0.29, zc + crown)], "concrete", rad=0.012, n=4)
-    for (a, b, c_, d_) in ((-0.1, 0.1, -0.1, -0.082), (-0.1, 0.1, 0.082, 0.1), (-0.1, -0.082, -0.082, 0.082), (0.082, 0.1, -0.082, 0.082)):
+    for (a, b, c_, d_) in ((-0.1, 0.1, -0.1, -0.082), (-0.1, 0.1, 0.082, 0.1), (-0.1, -0.082, -0.0815, 0.0815), (0.082, 0.1, -0.0815, 0.0815)):
         mb.box((cx + a, cy + c_, zc + crown - 0.06), (cx + b, cy + d_, zc + crown + 0.10), "tile_clay", bevel=0.003, seg=3)
     for k in range(2):                                                          # ladrillos sueltos en la corona
         m = T(cx + r.uniform(-0.2, 0.2), cy - wy / 2 + 0.02 + 0.1 * k, zc + crown - 0.01) @ RZ(r.uniform(-30, 30)) @ RY(r.uniform(-6, 6))
@@ -1169,40 +1180,57 @@ def brick_chimney(mb, cx, cy, wx, wy, z_bot, z_top, r, bvh=None, thimble=None):
         _lathe(mb, [(0.085, -0.10), (0.1, -0.10), (0.1, 0.02), (0.085, 0.02), (0.085, -0.09)], 32, "tile_clay", Mt)
         _lathe(mb, [(0.1, 0.012), (0.13, 0.012), (0.13, 0.016), (0.1, 0.016), (0.1, 0.012)], 32, "metal_rust", Mt, caps=False)
         mb.box((-0.17, 0.004, -0.15), (0.17, 0.12, 0.15), "mortar", m=M @ T(th_u[0], 0.0, th_u[1]))   # relleno del hueco
-    # tapajuntas contra el techo: base sobre la cubierta + vuelta de 12 cm contra el ladrillo
+    # tapajuntas contra el techo: el plano de la cubierta se ajusta con rayos alrededor de la chimenea; delantal, escalonados y
+    # contrabota de lámina (1,5 mm) sobre ese plano + vuelta de 12 cm contra el ladrillo
     if bvh is not None:
-        for (fx, fy, along) in ((0, -1, "x"), (0, 1, "x"), (-1, 0, "y"), (1, 0, "y")):
-            L = wx if along == "x" else wy
-            for s in [i / 6 for i in range(7)]:
-                pass
-            px = cx + fx * (wx / 2 + 0.08)
-            py = cy + fy * (wy / 2 + 0.08)
-            samples = []
-            for s in (-0.5, -0.25, 0.0, 0.25, 0.5):
-                qx = px + (s * (L + 0.24) if along == "x" else 0.0)
-                qy = py + (s * (L + 0.24) if along == "y" else 0.0)
-                hit = bvh.ray_cast(Vector((qx, qy, z_top + 2.0)), Vector((0, 0, -1)), 10.0)
-                if hit[0] is not None:
-                    samples.append(hit[0])
-            if len(samples) < 2:
-                continue
-            for i in range(len(samples) - 1):
-                a, b = samples[i], samples[i + 1]
-                za, zb_ = a.z + 0.004, b.z + 0.004
-                if along == "x":
-                    p0 = Vector((a.x, cy + fy * (wy / 2 + 0.003), za))
-                    p1 = Vector((b.x, cy + fy * (wy / 2 + 0.003), zb_))
-                    off = Vector((0, fy * 0.075, 0))
+        import numpy as np
+        pts = []
+        for k in range(24):
+            a = 2 * PI * k / 24
+            q = Vector((cx + (wx / 2 + 0.2) * math.cos(a) * 1.15, cy + (wy / 2 + 0.2) * math.sin(a) * 1.15, z_top + 2.0))
+            hit = bvh.ray_cast(q, Vector((0, 0, -1)), 10.0)
+            if hit[0] is not None:
+                pts.append(hit[0])
+        if len(pts) >= 6:
+            A = np.array([[1.0, p.x - cx, p.y - cy] for p in pts])
+            c0, gx, gy = np.linalg.lstsq(A, np.array([p.z for p in pts]), rcond=None)[0]
+
+            def pz(px, py):
+                return c0 + gx * (px - cx) + gy * (py - cy) + 0.006
+
+            def slab(corners, th, nrm=None):
+                """Lámina de 4 esquinas (sobre el plano) con espesor th hacia arriba."""
+                bot = [mb.bm.verts.new(Vector(c)) for c in corners]
+                top = [mb.bm.verts.new(Vector(c) + (nrm if nrm is not None else Vector((0, 0, th)))) for c in corners]
+                mb.face(list(reversed(bot)), "metal_rust")
+                mb.face(top, "metal_rust")
+                for i in range(4):
+                    j = (i + 1) % 4
+                    mb.face([bot[i], bot[j], top[j], top[i]], "metal_rust")
+            e = 0.003
+            for (fx, fy) in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                if fy:
+                    xa, xb = cx - wx / 2 - 0.15, cx + wx / 2 + 0.15
+                    ya, yb = (cy + fy * (wy / 2 + e), cy + fy * (wy / 2 + 0.16))
+                    q = [(xa, ya), (xb, ya), (xb, yb), (xa, yb)]
+                    up = [(xa, ya), (xb, ya)]
                 else:
-                    p0 = Vector((cx + fx * (wx / 2 + 0.003), a.y, za))
-                    p1 = Vector((cx + fx * (wx / 2 + 0.003), b.y, zb_))
-                    off = Vector((fx * 0.075, 0, 0))
-                lumber(mb, p0 + off, p1 + off, 0.15, 0.0015, "metal_rust", up=(0, 0, 1), r=r, rc=0.0006, grain=0.0, center=True)
-                up_n = Vector((fx, fy, 0))
-                lumber(mb, p0 + Vector((0, 0, 0.06)) + up_n * 0.0008, p1 + Vector((0, 0, 0.06)) + up_n * 0.0008, 0.12, 0.0015,
-                       "metal_rust", up=tuple(up_n), r=r, rc=0.0006, grain=0.0)
-                for p in (p0 + Vector((0, 0, 0.1)), ):
-                    nail(mb, p + up_n * 0.0016, up_n, r=0.0042, h=0.002, seg=6)
+                    ya, yb = cy - wy / 2 + 0.001, cy + wy / 2 - 0.001                 # sin traslape coplanar con delantal/contrabota
+                    xa, xb = (cx + fx * (wx / 2 + e), cx + fx * (wx / 2 + 0.16))
+                    q = [(xa, ya), (xa, yb), (xb, yb), (xb, ya)]
+                    up = [(xa, max(ya, cy - wy / 2 - e)), (xa, min(yb, cy + wy / 2 + e))]
+                slab([(px, py, pz(px, py)) for px, py in q], 0.0015)
+                # vuelta contra el ladrillo (con 1 mm de holgura) y contrabota metida en una junta
+                (p0x, p0y), (p1x, p1y) = up
+                nrm = Vector((fx * 0.0015, fy * 0.0015, 0.0))
+                c4 = [(p0x, p0y, pz(p0x, p0y)), (p1x, p1y, pz(p1x, p1y)), (p1x, p1y, pz(p1x, p1y) + 0.12), (p0x, p0y, pz(p0x, p0y) + 0.12)]
+                slab(c4, 0.0, nrm=nrm)
+                c5 = [(p0x + fx * 0.002, p0y + fy * 0.002, pz(p0x, p0y) + 0.08), (p1x + fx * 0.002, p1y + fy * 0.002, pz(p1x, p1y) + 0.08),
+                      (p1x + fx * 0.0005, p1y + fy * 0.0005, pz(p1x, p1y) + 0.16), (p0x + fx * 0.0005, p0y + fy * 0.0005, pz(p0x, p0y) + 0.16)]
+                slab(c5, 0.0, nrm=nrm)
+                for f in (0.2, 0.5, 0.8):
+                    px, py = p0x + (p1x - p0x) * f, p0y + (p1y - p0y) * f
+                    nail(mb, (px + fx * 0.0035, py + fy * 0.0035, pz(px, py) + 0.13), (fx, fy, 0), r=0.0042, h=0.002, seg=6)
 
 
 def cistern(r):
@@ -1219,28 +1247,31 @@ def cistern(r):
         for k in range(5):
             x = -W / 2 + 0.18 + 0.36 * k
             y = sy * D_ / 2
-            mb.box((x - 0.025, y - (0.05 if sy < 0 else 0.0), z0 + 0.04), (x + 0.025, y + (0.0 if sy < 0 else 0.05), z0 + H - 0.04),
-                   "metal_rust", bevel=0.002, seg=2)
-            mb.box((x - 0.0025, y - (0.003 if sy < 0 else 0.0), z0 + 0.04), (x + 0.0025, y + (0.0 if sy < 0 else 0.003), z0 + H - 0.04),
-                   "metal_rust", bevel=0.0, seg=1)
+            # ángulo 50x50x5: ala contra el tanque (1 mm metida) y ala saliente
+            mb.box((x - 0.025, y + (-0.005 if sy < 0 else -0.001), z0 + 0.04), (x + 0.025, y + (0.001 if sy < 0 else 0.005), z0 + H - 0.04),
+                   "metal_rust", bevel=0.0012, seg=2)
+            mb.box((x - 0.0025, y + (-0.05 if sy < 0 else 0.0045), z0 + 0.045), (x + 0.0025, y + (-0.0045 if sy < 0 else 0.05), z0 + H - 0.045),
+                   "metal_rust", bevel=0.0012, seg=2)
     for sx in (-1, 1):
         for k in range(3):
             y = -D_ / 2 + 0.25 + 0.45 * k
             x = sx * W / 2
-            mb.box((x - (0.05 if sx < 0 else 0.0), y - 0.025, z0 + 0.04), (x + (0.0 if sx < 0 else 0.05), y + 0.025, z0 + H - 0.04),
-                   "metal_rust", bevel=0.002, seg=2)
+            mb.box((x + (-0.005 if sx < 0 else -0.001), y - 0.025, z0 + 0.04), (x + (0.001 if sx < 0 else 0.005), y + 0.025, z0 + H - 0.04),
+                   "metal_rust", bevel=0.0012, seg=2)
+            mb.box((x + (-0.05 if sx < 0 else 0.0045), y - 0.0025, z0 + 0.045), (x + (-0.0045 if sx < 0 else 0.05), y + 0.0025, z0 + H - 0.045),
+                   "metal_rust", bevel=0.0012, seg=2)
     zm = z0 + H / 2
-    for (a, b) in (((-W / 2 - 0.006, -D_ / 2 - 0.056), (W / 2 + 0.006, -D_ / 2 - 0.05)), ((-W / 2 - 0.006, D_ / 2 + 0.05), (W / 2 + 0.006, D_ / 2 + 0.056)),
-                   ((-W / 2 - 0.056, -D_ / 2 - 0.05), (-W / 2 - 0.05, D_ / 2 + 0.05)), ((W / 2 + 0.05, -D_ / 2 - 0.05), (W / 2 + 0.056, D_ / 2 + 0.05))):
-        mb.box((a[0], a[1], zm - 0.03), (b[0], b[1], zm + 0.03), "metal_rust", bevel=0.002, seg=2)
+    for (a, b) in (((-W / 2 - 0.062, -D_ / 2 - 0.0555), (W / 2 + 0.062, -D_ / 2 - 0.0495)), ((-W / 2 - 0.062, D_ / 2 + 0.0495), (W / 2 + 0.062, D_ / 2 + 0.0555)),
+                   ((-W / 2 - 0.0555, -D_ / 2 - 0.049), (-W / 2 - 0.0495, D_ / 2 + 0.049)), ((W / 2 + 0.0495, -D_ / 2 - 0.049), (W / 2 + 0.0555, D_ / 2 + 0.049))):
+        mb.box((a[0], a[1], zm - 0.03), (b[0], b[1], zm + 0.03), "metal_rust", bevel=0.0012, seg=2)     # cinturón de solera
     # registro con tapa atornillada
     zt = z0 + H
     _lathe(mb, [(0.23, zt - 0.01), (0.25, zt - 0.01), (0.25, zt + 0.06), (0.23, zt + 0.06)], 40, "metal_rust", T(0.35, 0.0, 0))
-    _lathe(mb, [(0.0, zt + 0.06), (0.29, zt + 0.06), (0.29, zt + 0.075), (0.27, zt + 0.08), (0.0, zt + 0.085)], 40, "metal_rust",
-           T(0.35, 0.0, 0) @ RY(1.2))
+    _lathe(mb, [(0.0, zt + 0.0597), (0.29, zt + 0.0597), (0.29, zt + 0.075), (0.27, zt + 0.08), (0.0, zt + 0.085)], 40, "metal_rust",
+           T(0.35, 0.0, 0))
     for k in range(12):
         a = 2 * PI * k / 12
-        bolt_head(mb, (0.35 + 0.265 * math.cos(a), 0.265 * math.sin(a), zt + 0.078), (0, 0, 1), d=0.012, kind="nut")
+        bolt_head(mb, (0.35 + 0.265 * math.cos(a), 0.265 * math.sin(a), zt + 0.0805), (0, 0, 1), d=0.012, kind="nut")
     mb.box((0.35 - 0.012, -0.12, zt + 0.08), (0.35 + 0.012, 0.12, zt + 0.1), "metal_rust", bevel=0.004, seg=3)          # asa
     # respiradero de cuello de ganso (Ø2")
     pts = [Vector((-0.5, 0.2, zt - 0.01)), Vector((-0.5, 0.2, zt + 0.06))] + \
@@ -1252,12 +1283,12 @@ def cistern(r):
     zo = z0 + 0.32
     xo = -0.3
     mb.cyl((xo, ya + 0.01, zo), (xo, ya - 0.12, zo), 0.03, seg=24, mat="metal_rust")
-    for yy in (ya - 0.12, ya - 0.135):
+    for yy in (ya - 0.12, ya - 0.136):
         _lathe(mb, [(0.03, 0.0), (0.075, 0.0), (0.075, 0.015), (0.03, 0.015)], 32, "metal_rust", axis_m(Vector((xo, yy, zo)), (0, -1, 0)))
     for k in range(4):
         a = 2 * PI * k / 4 + PI / 4
         bolt_head(mb, (xo + 0.055 * math.cos(a), ya - 0.15, zo + 0.055 * math.sin(a)), (0, -1, 0), d=0.01, kind="nut")
-    mb.box((xo - 0.06, ya - 0.33, zo - 0.06), (xo + 0.06, ya - 0.15, zo + 0.06), "metal_rust", bevel=0.012, seg=4)      # cuerpo
+    mb.box((xo - 0.06, ya - 0.33, zo - 0.06), (xo + 0.06, ya - 0.143, zo + 0.06), "metal_rust", bevel=0.012, seg=4)     # cuerpo
     mb.box((xo - 0.035, ya - 0.28, zo + 0.06), (xo + 0.035, ya - 0.2, zo + 0.17), "metal_rust", bevel=0.008, seg=4)     # bonete
     mb.cyl((xo, ya - 0.24, zo + 0.17), (xo, ya - 0.24, zo + 0.26), 0.008, seg=16, mat="metal_rust")
     _lathe(mb, [(0.012, -0.008), (0.012, 0.008), (0.0, 0.009)], 16, "metal_rust", T(xo, ya - 0.24, zo + 0.26))
@@ -1266,20 +1297,20 @@ def cistern(r):
         mb.tube(rim, 0.006, seg=12, mat="metal_rust")
     for k in range(4):
         a = 2 * PI * k / 4
-        mb.cyl((xo, ya - 0.24, zo + 0.255), (xo + 0.073 * math.cos(a), ya - 0.24 + 0.073 * math.sin(a), zo + 0.255), 0.004, seg=12,
-               mat="metal_rust")
+        mb.cyl((xo + 0.011 * math.cos(a), ya - 0.24 + 0.011 * math.sin(a), zo + 0.255),
+               (xo + 0.073 * math.cos(a), ya - 0.24 + 0.073 * math.sin(a), zo + 0.255), 0.004, seg=12, mat="metal_rust")
     mb.cyl((xo, ya - 0.33, zo), (xo, ya - 0.5, zo - 0.02), 0.03, seg=24, mat="metal_rust")
     return mb
 
 
 def barrel(seed):
-    """Tonel de duelas (barrica de 200 L: alto 0,88, Ø cabeza 0,53, Ø barriga 0,64): 26 duelas abombadas con holgura y una
-    corrida, chanfle (croze) en las bocas, tapa de 3 tablas con una faltante, 6 aros de fleje oxidado (3 cm x 2 mm) que
-    siguen la barriga; uno de los aros caído y flojo."""
+    """Tonel de duelas (barrica de 200 L, Canton Cooperage: largo 0,881, Ø cabeza 0,553, Ø barriga 0,640, 6 aros de 27 mm):
+    26 duelas abombadas de 22 mm con holgura y una corrida, tapa de 3 tablas con una faltante, fondo, aros de fleje oxidado
+    (27 x 2 mm) que siguen la barriga con sus remaches; uno de los aros caído en la arena."""
     r = rng(seed)
     mb = MB()
-    Hh = 0.88
-    Rh, Rb = 0.265, 0.32
+    Hh = 0.881
+    Rh, Rb = 0.2765, 0.32
     ns = 26
     t = 0.022
 
@@ -1324,12 +1355,12 @@ def barrel(seed):
         if z == 0.72:
             continue
         rings = []
-        for zz in (z - 0.015, z + 0.015):
+        for zz in (z - 0.0135, z + 0.0135):
             Ro = rad(zz) + 0.0015
             rings.append([Vector((Ro * math.cos(2 * PI * k / 64), Ro * math.sin(2 * PI * k / 64), zz)) for k in range(64)])
-        rings.append([p * ((rad(z + 0.015) - 0.0005) / (rad(z + 0.015) + 0.0015)) for p in rings[-1]])
-        rings[-1] = [Vector((p.x, p.y, z + 0.015)) for p in rings[-1]]
-        r2 = [Vector((p.x * (rad(z - 0.015) - 0.0005) / (rad(z - 0.015) + 0.0015), p.y * (rad(z - 0.015) - 0.0005) / (rad(z - 0.015) + 0.0015), z - 0.015))
+        rings.append([p * ((rad(z + 0.0135) - 0.0005) / (rad(z + 0.0135) + 0.0015)) for p in rings[-1]])
+        rings[-1] = [Vector((p.x, p.y, z + 0.0135)) for p in rings[-1]]
+        r2 = [Vector((p.x * (rad(z - 0.0135) - 0.0005) / (rad(z - 0.0135) + 0.0015), p.y * (rad(z - 0.0135) - 0.0005) / (rad(z - 0.0135) + 0.0015), z - 0.0135))
               for p in rings[0]]
         rings.append(r2)
         rings.append(rings[0])
@@ -1353,6 +1384,17 @@ def barrel(seed):
     return mb
 
 
+def _vspan(prof, xb):
+    """(z_min, z_max) donde la vertical x = xb corta el contorno cerrado prof [(x, z)]; None si no lo corta."""
+    zs = []
+    n = len(prof)
+    for i in range(n):
+        (ax, az), (bx, bz) = prof[i], prof[(i + 1) % n]
+        if (ax - xb) * (bx - xb) <= 0 and abs(bx - ax) > 1e-9:
+            zs.append(az + (bz - az) * (xb - ax) / (bx - ax))
+    return (min(zs), max(zs)) if zs else None
+
+
 def woodpile(seed, L, H):
     """Leñero: leña partida de 0,40–0,50 (sectores de rollo de Ø 0,14–0,24 con corteza, algunos rollos chicos enteros) en
     hiladas sobre dos durmientes, con estacas en las puntas; testas con el corte de motosierra (cara plana levemente sesgada)."""
@@ -1364,32 +1406,48 @@ def woodpile(seed, L, H):
     for x in (-0.02, L + 0.02):                                               # estacas
         for y in (-0.12, 0.12):
             lumber(mb, (x, y, -0.15), (x + r.uniform(-0.02, 0.02), y, H + 0.12), 0.05, 0.05, "wood", up=(1, 0, 0), r=r, rc=0.006, jag1=0.02)
-    z = 0.09
+    import numpy as np
+    hm = np.full(int(L / 0.01) + 2, 0.09)               # mapa de alturas a lo largo del leñero: cada leño apoya en lo que tiene debajo
     row = 0
-    while z < H - 0.06:
+    while hm[3:-3].mean() < H - 0.06 and row < 30:
         x = 0.03 + (0.04 if row % 2 else 0.0)
-        hmax = 0.0
         while x < L - 0.1:
             R0 = r.uniform(0.07, 0.12)
             kind = r.random()
             if kind < 0.2:
                 a0, a1 = 0.0, 2 * PI                                        # rollo entero chico
                 R0 *= 0.65
-            elif kind < 0.6:
-                a0 = r.uniform(0, 2 * PI)
-                a1 = a0 + PI * r.uniform(0.45, 0.6)                           # cuarto
-            else:
-                a0 = r.uniform(0, 2 * PI)
-                a1 = a0 + PI * r.uniform(0.9, 1.05)                           # mitad
+            elif kind < 0.6:                                                  # cuarto, apoyado en una cara de raja
+                a0 = PI / 2 * int(r.integers(0, 4)) + r.uniform(-0.15, 0.15)
+                a1 = a0 + PI * r.uniform(0.45, 0.6)
+            else:                                                             # mitad, casi siempre con la raja abajo
+                a0 = (0.0 if r.random() < 0.75 else PI) + r.uniform(-0.12, 0.12)
+                a1 = a0 + PI * r.uniform(0.9, 1.05)
             prof = []
+            kinds = []
             full = a1 - a0 >= 2 * PI - 1e-6
             nseg = 14 if not full else 18
             for k in range(nseg + 1 if not full else nseg):
                 a = a0 + (a1 - a0) * k / nseg
                 rr = R0 * (1.0 + 0.04 * math.sin(5 * a + R0 * 30))
                 prof.append((rr * math.cos(a), rr * math.sin(a)))
+                kinds.append("arc")
             if not full:
-                prof.append((0.0, 0.0))
+                # caras de raja onduladas (fibra arrancada): dos puntos intermedios en cada lado, fuera de la línea recta
+                e1, e0 = prof[-1], prof[0]
+                for (pa_, pb_) in ((e1, (0.0, 0.0)), ((0.0, 0.0), e0)):
+                    for f_ in (0.33, 0.66):
+                        if pb_ == (0.0, 0.0) and f_ == 0.66:
+                            pass
+                        qx, qz = pa_[0] + (pb_[0] - pa_[0]) * f_, pa_[1] + (pb_[1] - pa_[1]) * f_
+                        L_ = math.hypot(pb_[0] - pa_[0], pb_[1] - pa_[1]) or 1.0
+                        nx_, nz_ = -(pb_[1] - pa_[1]) / L_, (pb_[0] - pa_[0]) / L_
+                        o_ = r.uniform(-0.004, 0.004)
+                        prof.append((qx + nx_ * o_, qz + nz_ * o_))
+                        kinds.append("split")
+                    if pb_ == (0.0, 0.0):
+                        prof.append((0.0, 0.0))
+                        kinds.append("split")
             cxs = [p[0] for p in prof]
             czs = [p[1] for p in prof]
             mx_, mn_ = max(cxs), min(cxs)
@@ -1398,14 +1456,44 @@ def woodpile(seed, L, H):
             if x + wpc > L - 0.03:
                 break
             ln = r.uniform(0.40, 0.50)
+            i0, i1 = int(x / 0.01), int(math.ceil((x + wpc) / 0.01)) + 1
+            # apoyo: la cara inferior del leño baja hasta tocar el primer punto de lo que tiene debajo (sumido 6 mm: asienta)
+            z = 0.0
+            for ib in range(i0, min(i1, len(hm))):
+                sp_ = _vspan(prof, ib * 0.01 - x + mn_)
+                if sp_:
+                    z = max(z, float(hm[ib]) - (sp_[0] - zn))
+            z -= 0.006
+            if z + (zx - zn) > H + 0.12:
+                x += wpc + 0.01
+                continue
             rings = []
-            for q, yy in enumerate((-ln / 2, -ln / 6, ln / 6, ln / 2)):
-                sk = r.uniform(-0.012, 0.012) if q in (0, 3) else 0.0
-                rings.append([Vector((x - mn_ + px + sk * 0.3, yy + sk * pz * 3.0, z - zn + pz)) for px, pz in prof])
-            cl._cap_loft(mb, rings, "wood")
-            hmax = max(hmax, zx - zn)
+            ys_ = (-ln / 2, -ln / 4, 0.0, ln / 4, ln / 2)
+            for q, yy in enumerate(ys_):
+                sk = r.uniform(-0.012, 0.012) if q in (0, len(ys_) - 1) else 0.0
+                rg = []
+                for (px, pz), kd in zip(prof, kinds):
+                    if kd == "arc" and 0 < q < len(ys_) - 1:                    # corteza nudosa: radio que varía a lo largo
+                        kf = 1.0 + r.uniform(-0.03, 0.025)
+                        px, pz = px * kf, pz * kf
+                    elif kd == "split" and 0 < q < len(ys_) - 1:
+                        px, pz = px + r.uniform(-0.002, 0.002), pz + r.uniform(-0.002, 0.002)
+                    rg.append(Vector((x - mn_ + px + sk * 0.3, yy + sk * pz * 3.0, z - zn + pz)))
+                rings.append(rg)
+            vs = [[mb.bm.verts.new(q) for q in rg] for rg in rings]           # corteza en el arco, madera en las caras de raja
+            kk = len(prof)
+            for i in range(len(vs) - 1):
+                for j in range(kk):
+                    jj = (j + 1) % kk
+                    mb.face([vs[i][j], vs[i][jj], vs[i + 1][jj], vs[i + 1][j]], "wood_dark" if (kinds[j] == "arc" and kinds[jj] == "arc") else "wood")
+            mb.face(list(reversed(vs[0])), "wood")
+            mb.face(vs[-1], "wood")
+            # perfil superior del leño -> mapa de alturas
+            for ib in range(i0, min(i1, len(hm))):
+                sp_ = _vspan(prof, ib * 0.01 - x + mn_)
+                if sp_:
+                    hm[ib] = max(hm[ib], z - zn + sp_[1])
             x += wpc + r.uniform(0.004, 0.015)
-        z += max(0.09, hmax * 0.82)
         row += 1
     return mb
 
@@ -1440,7 +1528,8 @@ def build_porch(cfg, shell, det, roof, r):
         for x in (x0 + 0.1, sx0 - 0.08, x1 - 0.1):
             posts.append((x, y0 + 0.1))
     zpost = max(zb - (dep - 0.1) * math.tan(math.radians(pitch)), zdeck + 2.15)
-    zj_top = zdeck - FLOOR_T - 0.0005
+    DT = 0.025                                     # duela de porche 5/4x6 (25 x 140), vigas 2x6 a 0,406 (16")
+    zj_top = zdeck - DT + 0.0003
     hj = 0.15
     # ---- dados, bases y postes ----
     for (x, y) in posts:
@@ -1491,29 +1580,30 @@ def build_porch(cfg, shell, det, roof, r):
     if west:
         lbox(shell, (x1 - 0.062, y0, zj_top - hj), (x1 - 0.024, y1, zj_top), "wood_grey", r=rw, axis=1, rc=0.004, check=0.6)   # ledger
         lbox(shell, (x0 + 0.171, y0, zj_top - hj), (x0 + 0.209, y1, zj_top), "wood_grey", r=rw, axis=1, rc=0.004, check=0.6)   # borde
-        for k in range(int((y1 - y0) / 0.6) + 1):
-            yy = min(y0 + 0.03 + 0.6 * k, y1 - 0.03)
+        for k in range(int((y1 - y0) / 0.406) + 1):
+            yy = min(y0 + 0.03 + 0.406 * k, y1 - 0.03)
             jpos.append(yy)
             lumber(shell, (x0 + 0.21, yy, zj_top - hj / 2), (x1 - 0.063, yy, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
                    r=rw, rc=0.004, check=0.5 if rw.random() < 0.4 else 0.0)
-            bolt_head(shell, (x1 - 0.062, yy + 0.3, zj_top - hj / 2), (1, 0, 0), d=0.012, kind="nut") if yy + 0.3 < y1 else None
+            if yy + 0.2 < y1:                                                   # pija de la viga de amarre
+                bolt_head(shell, (x1 - 0.0625, yy + 0.2, zj_top - hj / 2), (1, 0, 0), d=0.012, kind="nut")
         tmp = MB()                                         # duela paralela a la casa (a lo largo de Y): se arma girada 90°
         lh = [(hy0, hy1, -hx1, -hx0) for (hx0, hx1, hy0, hy1) in holes]
         ys_j = min(jpos, key=lambda q: abs(q - (y1 - 1.4)))                     # junta sobre una viga
-        boards_floor(tmp, y0, ys_j, -(x1 - 0.02), -(x0 + 0.02), zdeck, rw, holes=lh, missing=0.08, mat="wood_grey", nail_xs=jpos)
-        boards_floor(tmp, ys_j, y1, -(x1 - 0.02), -(x0 + 0.02), zdeck, rw, holes=lh, missing=0.0, mat="wood_grey", nail_xs=jpos)
+        boards_floor(tmp, y0, ys_j, -(x1 - 0.02), -(x0 + 0.02), zdeck, rw, holes=lh, missing=0.08, mat="wood_grey", nail_xs=jpos, t=DT)
+        boards_floor(tmp, ys_j, y1, -(x1 - 0.02), -(x0 + 0.02), zdeck, rw, holes=lh, missing=0.0, mat="wood_grey", nail_xs=jpos, t=DT)
         shell.join(tmp, RZ(90))
         tmp.bm.free()
     else:
         lbox(shell, (x0, y1 - 0.062, zj_top - hj), (x1, y1 - 0.024, zj_top), "wood_grey", r=rw, axis=0, rc=0.004, check=0.6)
         lbox(shell, (x0, y0 + 0.171, zj_top - hj), (x1, y0 + 0.209, zj_top), "wood_grey", r=rw, axis=0, rc=0.004, check=0.6)
-        for k in range(int((x1 - x0) / 0.6) + 1):
-            xx = min(x0 + 0.03 + 0.6 * k, x1 - 0.03)
+        for k in range(int((x1 - x0) / 0.406) + 1):
+            xx = min(x0 + 0.03 + 0.406 * k, x1 - 0.03)
             jpos.append(xx)
             lumber(shell, (xx, y0 + 0.21, zj_top - hj / 2), (xx, y1 - 0.063, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
                    r=rw, rc=0.004, check=0.5 if rw.random() < 0.4 else 0.0)
-        boards_floor(shell, x0 + 0.02, x1 - 0.02, y0, y0 + 0.42, zdeck, rw, missing=0.0, mat="wood_grey", holes=holes, nail_xs=jpos)
-        boards_floor(shell, x0 + 0.02, x1 - 0.02, y0 + 0.42, y1, zdeck, rw, missing=0.08, mat="wood_grey", holes=holes, nail_xs=jpos)
+        boards_floor(shell, x0 + 0.02, x1 - 0.02, y0, y0 + 0.42, zdeck, rw, missing=0.0, mat="wood_grey", holes=holes, nail_xs=jpos, t=DT)
+        boards_floor(shell, x0 + 0.02, x1 - 0.02, y0 + 0.42, y1, zdeck, rw, missing=0.08, mat="wood_grey", holes=holes, nail_xs=jpos, t=DT)
     # ---- faldón de tablas verticales bajo el borde (sin tapar la escalera) ----
     if west:
         sk_y0, sk_y1 = y1 - 1.25 - 0.05, y1 - 0.25 + 0.05
@@ -1613,7 +1703,7 @@ def build_veranda(cfg, shell, det, r, top, z_crown):
         v = 0.0
         while v < zt - 0.02:
             hb = min(0.15, zt - v)
-            lumber(shell, (-w / 2 + 0.002, yf + 0.011, z_crown + v + hb / 2), (w / 2 - 0.002, yf + 0.011, z_crown + v + hb / 2), hb + 0.03 if v + hb < zt else hb,
+            lumber(shell, (-w / 2 + 0.002, yf + 0.011, z_crown + v + hb / 2), (w / 2 - 0.002, yf + 0.011, z_crown + v + hb / 2), hb - 0.004,
                    0.02, "wood_grey", up=(0, -1, 0), r=rw, rc=0.003, grain=1.0, check=0.4)
             for xx in [-w / 2 + 0.3 + 0.6 * k for k in range(int(w / 0.6))]:
                 nail(shell, (xx, yf + 0.0005, z_crown + v + 0.03), (0, -1, 0), r=0.0045, h=0.0024)

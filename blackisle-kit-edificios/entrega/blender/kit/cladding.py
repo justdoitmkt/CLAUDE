@@ -290,7 +290,7 @@ def bolt_head(mb, p, axis, d=0.012, mat="metal_rust", kind="carriage", seg=12):
         _lathe(mb, [(d * 0.5, z + d * 0.75), (d * 0.5, z + d * 1.15), (d * 0.38, z + d * 1.28), (0.0, z + d * 1.3)], seg, mat, M)
 
 
-def knot(mb, p, nrm, along, rx, ry, mat="wood_dark", proud=0.0008):
+def knot(mb, p, nrm, along, rx, ry, mat="wood_dark", proud=0.0012):
     """Nudo de la madera: lente ovalada (rx a lo largo de la veta) que sobresale `proud` de la cara y se hunde 1,5 mm en ella."""
     n = Vector(nrm).normalized()
     a = Vector(along).normalized()
@@ -548,7 +548,7 @@ def _brick(mb, u0, u1, v0, v1, yf, yb, r, bev=0.004, chip=0, tilt=(0.0, 0.0), ja
                 k = int(r.integers(0, 4))
                 du = r.uniform(0.01, 0.028) * (1 if k in (0, 3) else -1)
                 dv = r.uniform(0.006, 0.016) * (1 if k in (0, 1) else -1)
-                dd = r.uniform(0.004, 0.012)
+                dd = r.uniform(0.003, 0.0065)          # el despostillado no pasa detrás de la cara del núcleo de mortero (8 mm)
                 L0[k][0] += du
                 L0[k][1] += dv
                 d0[k] += dd
@@ -815,7 +815,8 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
     # ---- núcleo de mortero con los vanos y los agujeros de ladrillos faltantes ----
     _strip_wall(mb, L - 0.004, H, REC, thickness, holes, u_min=0.004)
 
-    # ---- dinteles y alféizares de piedra ----
+    # ---- dinteles y alféizares de piedra (en 'aaa' aristas redondeadas en 4 tramos: piedra labrada gastada) ----
+    lod_seg = 4 if detail == "aaa" else 1
     for (u0, u1, v0, v1) in ops:
         if v1 < H - 0.05:
             top = min(v1 + lintel_courses * COURSE, H)
@@ -825,14 +826,14 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 cut = r.uniform(u0 + 0.25 * (u1 - u0), u1 - 0.25 * (u1 - u0))
                 for (x0, x1, sg) in ((a, cut - 0.002, 1), (cut + 0.002, b, -1)):
                     m = _about(((x0 + x1) / 2, 0, v1), _R("Y", sg * r.uniform(0.3, 0.9)))
-                    mb.box((x0, -0.012, v1 + 0.002), (x1, thickness - 0.02, top - 0.002), "concrete", bevel=0.008, seg=1, m=m)
+                    mb.box((x0, -0.012, v1 + 0.002), (x1, thickness - 0.02, top - 0.002), "concrete", bevel=0.008, seg=lod_seg, m=m)
             else:
                 m = _about(((a + b) / 2, 0, v1), _R("Y", r.uniform(-0.4, 0.4)))
-                mb.box((a, -0.012, v1), (b, thickness - 0.02, top - 0.002), "concrete", bevel=0.009, seg=1, m=m)
+                mb.box((a, -0.012, v1), (b, thickness - 0.02, top - 0.002), "concrete", bevel=0.009, seg=lod_seg, m=m)
         if v0 > 0.05:
             a, b = u0 - 0.06, u1 + 0.06
             m = _about(((a + b) / 2, 0.06, v0 - 0.004), _R("X", r.uniform(5.0, 8.0)) @ _R("Y", r.uniform(-0.5, 0.5)))
-            mb.box((a, -0.045, v0 - 0.075), (b, 0.07, v0 - 0.004), "concrete", bevel=0.008, seg=1, m=m)
+            mb.box((a, -0.045, v0 - 0.075), (b, 0.07, v0 - 0.004), "concrete", bevel=0.008, seg=lod_seg, m=m)
 
     # ---- ladrillos caídos al pie del muro ----
     for idf, (lw, lh) in enumerate(fallen_list[:12]):

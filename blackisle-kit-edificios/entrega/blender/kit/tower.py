@@ -1262,6 +1262,29 @@ def _crossover(mb, n, t, base_xy, v_rail, z_c, rr, rp, pw=0.17, rr_ref=0.0241):
     return b0 + n * vp
 
 
+def _frame_bracket(mb, n, t, base, v_edge, z, rp, pa):
+    """Ménsula de un tubo de montaje al marco de la plataforma (en lugar de la placa de cruce de la rodillera): placa de 8 mm
+    atornillada al alma del canal perimetral, PTR 50 × 50 corto, placa de 12 mm contra el tubo y 2 pernos en U."""
+    n = Vector((n.x, n.y, 0.0)).normalized()
+    t = Vector((t.x, t.y, 0.0)).normalized()
+    up = Vector((0, 0, 1))
+    pa = Vector((pa.x, pa.y, z))
+    w0 = Vector((base.x, base.y, z)) + n * v_edge
+    ppl = pa - n * (rp + 0.0125)                          # cara trasera de la placa del tubo
+    Mw = Matrix(((t.x, 0, n.x, w0.x), (t.y, 0, n.y, w0.y), (0, 1, 0, z), (0, 0, 0, 1)))
+    _box(mb, (-0.07, -0.06, 0.0), (0.07, 0.06, 0.008), GALV, bevel=0.0015, seg=1, m=Mw)
+    for sx in (-1, 1):
+        bolt_at(mb, w0 + t * (sx * 0.045) - n * 0.0055, n, 0.012, 0.0135, (0, 0, 1), stub=0.3)
+    _rtube(mb, w0 + n * 0.008, ppl - n * 0.0005, 0.05, 0.05, up, r=0.004)
+    Mp = Matrix(((t.x, 0, n.x, ppl.x), (t.y, 0, n.y, ppl.y), (0, 1, 0, z), (0, 0, 0, 1)))
+    _box(mb, (-0.07, -0.07, 0.0), (0.07, 0.07, 0.012), GALV, bevel=0.002, seg=2, m=Mp)
+    vp = (pa - Vector((base.x, base.y, z))).dot(n)
+    for sz in (-1, 1):
+        o = Vector((base.x, base.y, z)) + n * vp + up * (sz * 0.045)
+        Mu = Matrix(((-n.x, 0, t.x, o.x), (-n.y, 0, t.y, o.y), (0, 1, 0, o.z), (0, 0, 0, 1)))
+        ubolt(mb, Mu, rp, d=0.012, reach=rp + 0.0005 + 0.012, seg=16, bend_seg=12)
+
+
 def _mount_pipe(mb, p, z0, z1, rp):
     lathe(mb, [(rp, z0 + 0.004), (rp, z1 - 0.004)], seg=24, mat=GALV, M=_T(p.x, p.y, 0.0), caps=False)
     lathe(mb, [(0.0, z0 - 0.002), (rp * 0.7, z0 - 0.0015), (rp + 0.0025, z0 + 0.002), (rp + 0.0025, z0 + 0.03), (rp, z0 + 0.031)],
@@ -1392,12 +1415,17 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         mb.plate([(-0.018, 0.0), (0.018, 0.0), (0.018, 0.085), (-0.018, 0.085)], 0.0085 / max(m.dot(n0), 0.3) + 0.004, GALV, m=M)
     # --- tubos de montaje con placas de cruce al pasamanos y a la rodillera
     out = []
-    for (n, t, v_edge, u, rp, z0, z1) in pipes:
+    for spec in pipes:
+        n, t, v_edge, u, rp, z0, z1 = spec[:7]
+        low = spec[7] if len(spec) > 7 else "rail"
         base = n * 0.0 + t * u
         v_rail = v_edge + 0.033
         pa = None
-        for (zz, rr) in ((z_f + 1.1, 0.0241), (z_f + 0.55, 0.0211)):
+        rails = ((z_f + 1.1, 0.0241), (z_f + 0.55, 0.0211)) if low == "rail" else ((z_f + 1.1, 0.0241),)
+        for (zz, rr) in rails:
             pa = _crossover(mb, n, t, (base.x, base.y), v_rail, zz, rr, rp, pw=0.17 if rp < 0.05 else 0.2)
+        if low == "frame":                                # abajo, ménsula corta al alma del canal perimetral: deja libre el
+            _frame_bracket(mb, n, t, base, v_edge, z_f - 0.08, rp, pa)   # tramo del tubo entre el piso y el pasamanos
         _mount_pipe(mb, pa, z0, z1, rp)
         out.append(dict(pos=(round(pa.x, 4), round(pa.y, 4)), z0=round(z0, 3), z1=round(z1, 3), od=round(2 * rp, 4),
                         facing=(round(n.x, 4), round(n.y, 4), 0.0)))
@@ -1579,7 +1607,8 @@ def _platform_specs(G):
     for i in (1, 2):
         a = ang2(LEG_ANG[i])
         t = Vector((-a.y, a.x, 0))
-        pipes_m.append((a, t, clip_m, 0.0, 0.0381, G.z_mw - 0.6, G.z_mw + 1.4))      # Ø76,2: el de las monturas de plato del kit
+        pipes_m.append((a, t, clip_m, 0.0, 0.0381, G.z_mw - 0.6, G.z_mw + 1.4, "frame"))   # Ø76,2 (monturas de plato del kit);
+        # abajo va a una ménsula al marco (no a la rodillera) para dejar libre el tramo del plato: abrazaderas, collarín y placa
     mw["pipes"] = pipes_m
     mw["holes"] = [(G.x_lad - 0.30, G.x_lad + 0.30, G.y_lad - 0.60, G.y_lad + 0.045),
                    (G.x_cab - 0.31, G.x_cab + 0.31, G.y_lad - 0.13, G.y_lad + 0.045)]
@@ -1594,7 +1623,8 @@ def _pipe_axis(n, t, v_edge, u, rp):
 
 def _mw_boxes(mb, G, specs):
     """Caja de remate (supresor/tierra) del cable de cada plato, abrazada al tubo de montaje por su costado."""
-    for (n, t, v_edge, u, rp, z0, z1) in specs["pipes"]:
+    for spec in specs["pipes"]:
+        n, t, v_edge, u, rp, z0, z1 = spec[:7]
         pa = _pipe_axis(n, t, v_edge, u, rp)
         sg = 1 if pa.x > 0 else -1
         am = math.atan2(pa.y, pa.x)
@@ -1604,8 +1634,9 @@ def _mw_boxes(mb, G, specs):
         c = pa + tv * (rp + 0.003 + 0.05)
         M = Matrix(((nn.x, tv.x, 0, c.x), (nn.y, tv.y, 0, c.y), (0, 0, 1, 0), (0, 0, 0, 1)))
         _box(mb, (-0.06, -0.05, zb), (0.06, 0.05, zb + 0.24), "aluminium", bevel=0.006, seg=2, m=M)
-        lathe(mb, [(0.0155, zb + 0.002), (0.0155, zb - 0.014), (0.012, zb - 0.02), (0.0105, zb - 0.032)], seg=24, mat="plastic",
-              M=_T(pa.x + tv.x * 0.075, pa.y + tv.y * 0.075, 0.0))
+        for off in (0.0, 0.035):                          # prensaestopas: troncal (abajo) y cable de la ODU del plato
+            lathe(mb, [(0.0155, zb + 0.002), (0.0155, zb - 0.014), (0.012, zb - 0.02), (0.0105, zb - 0.032)], seg=24, mat="plastic",
+                  M=_T(pa.x + tv.x * 0.075 + nn.x * off, pa.y + tv.y * 0.075 + nn.y * off, 0.0))
         for zz in (zb + 0.05, zb + 0.19):
             lathe(mb, [(rp + 0.0005, zz - 0.009), (rp + 0.0025, zz - 0.009), (rp + 0.0025, zz + 0.009), (rp + 0.0005, zz + 0.009)],
                   seg=32, mat="steel", M=_T(pa.x, pa.y, 0.0), closed=True, caps=False)
@@ -1651,11 +1682,12 @@ def tower_mounts(h=42.0, base_w=5.0, top_w=1.6):
                                   pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_top + 1.30, 3))))
         out["rru"].append(dict(base, rru_z=round(G.z_top - 0.45, 3),
                                pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_top - 0.45, 3))))
-    for (n, t, v_edge, u, rp, z0, z1) in mw["pipes"]:
+    for spec in mw["pipes"]:
+        n, t, v_edge, u, rp, z0, z1 = spec[:7]
         pa = _pipe_axis(n, t, v_edge, u, rp)
         out["dish"].append(dict(pipe_pos=(round(pa.x, 4), round(pa.y, 4)), pipe_z=(round(z0, 3), round(z1, 3)), pipe_od=round(2 * rp, 4),
-                                pipe_len=round(z1 - z0, 3), facing=(round(n.x, 4), round(n.y, 4), 0.0), dish_z=round(G.z_mw + 0.75, 3),
-                                pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_mw + 0.75, 3))))
+                                pipe_len=round(z1 - z0, 3), facing=(round(n.x, 4), round(n.y, 4), 0.0), dish_z=round(G.z_mw + 0.62, 3),
+                                pos=(round(pa.x + n.x * rp, 4), round(pa.y + n.y * rp, 4), round(G.z_mw + 0.62, 3))))
     zb = G.h + 1.0 - 0.1
     pl = ang2(-30.0) * 0.36
     out["light"].append(dict(pos=(round(pl.x, 4), round(pl.y, 4), round(zb + 0.025 + 0.012, 4)), up=(0.0, 0.0, 1.0),

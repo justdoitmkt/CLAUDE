@@ -24,10 +24,10 @@ Uso por el constructor (todo con las MISMAS w, d, pendiente y vuelo; colocar con
   CAB_3:        roof_frame('gable', w, d, p, ov, seed, cover='boards', tails=False) + board_roof_stepped(w, d, p, ov, seed)
   roof_top(...) da la cota del plano de cabios en (x, y) para cerrar hastiales; ridge_height(...) la de la cumbrera.
 
-Triángulos medidos (vitrina del test):
-  roof_frame 7–15 k (cabaña) · 26–33 k (APT hip 12 x 9 con daño)
-  barrel_tiles (seg=6, incluye caballetes y mortero): gable 8 x 6 ~163 k · hip 7,2 x 10,8 ~265 k · hip 12 x 9 ~338 k (seg=4/5 para LOD: -25 %/-15 %)
-  corrugated_roof 9 x 6 ~159 k · 7 x 6 ~120 k (row=0,18; subir row para LOD) · board_roof_stepped 8 x 6,5 ~51 k
+Triángulos medidos (segunda pasada AAA, 2026-11-19; clavazón, pernos, pijas con arandela, tejas con comba y canto matado):
+  roof_frame 42–69 k (cabaña) · ~95 k (hip 12 x 9 con daño)
+  barrel_tiles hip 12 x 9: 'low' ~333 k · 'high' ~420 k (antes 84 k / 233 k: el arco ya no se factea en ningún nivel)
+  corrugated_roof 9 x 6 'mid' ~225 k (de ellos ~125 k son las ~550 pijas) · board_roof_stepped 8 x 6,5 ~86 k
 """
 import math
 
@@ -186,8 +186,8 @@ def _bolt_thru(mb, p_nut, p_head, mat="metal_rust", d=0.012, r=None):
                 (0.0, d * 0.58)], Mh, seg=14, mat=mat)
     Mn = _axis_m(_vec(p_nut), a, spin)
     _washer(mb, Mn @ _T(0, 0, -0.0006), d * 0.55, d * 1.6, 0.003, mat=mat, seg=16)
-    _hexnut(mb, Mn @ _T(0, 0, 0.0022), d * 1.5, d * 0.8, mat=mat)
-    top = 0.0022 + d * 0.8 + 0.006
+    _hexnut(mb, Mn @ _T(0, 0, 0.0016), d * 1.5, d * 0.8, mat=mat)       # asienta 0,8 mm dentro de la arandela
+    top = 0.0016 + d * 0.8 + 0.006
     _lathe(mb, [(0.0, 0.002), (d * 0.5, 0.002), (d * 0.5, top - 0.0015), (d * 0.38, top), (0.0, top)], Mn, seg=12, mat=mat)
 
 
@@ -1517,7 +1517,16 @@ def _lamina(mb, P, mat, keep=None):
         for i in range(cols - 1):
             if keep is not None and not keep(i, j):
                 continue
-            mb.face([gv(i, j), gv(i + 1, j), gv(i + 1, j + 1), gv(i, j + 1)], mat)
+            # celdas del borde rasgado cuyos vértices llegaron al mismo punto del borde: triángulo o nada (si la celda se
+            # colapsara al soldar vértices dejaría aristas sueltas)
+            ids = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]
+            uniq = []
+            for q in ids:
+                if all((P[q[1]][q[0]] - P[u[1]][u[0]]).length > 0.0002 for u in uniq):
+                    uniq.append(q)
+            if len(uniq) < 3:
+                continue
+            mb.face([gv(*q) for q in uniq], mat)
 
 
 def _screw(mb, p, N, r, tilt=0.0, mat="metal_rust", kind="full"):
@@ -1537,7 +1546,7 @@ def _screw(mb, p, N, r, tilt=0.0, mat="metal_rust", kind="full"):
     # arandela de acero abombada (16 mm) y cabeza hexagonal con brida
     _lathe(mb, [(0.0, 0.0011), (0.0080, 0.0011), (0.0080, 0.0016), (0.0062, 0.0027), (0.0, 0.0029)], M, seg=seg, mat=mat)
     _lathe(mb, [(0.0, 0.0024), (0.0060, 0.0024), (0.0058, 0.0037), (0.0, 0.0037)], M, seg=seg, mat=mat)
-    _hex6(mb, M @ _T(0, 0, 0.0034), 0.008, 0.0045, mat=mat)
+    _hex6(mb, M @ _T(0, 0, 0.0030), 0.008, 0.0049, mat=mat)
 
 
 def _hex6(mb, M, af, h, mat="metal_rust"):
@@ -1751,8 +1760,16 @@ def corrugated_roof(w, d, pitch_deg, overhang, seed=0, light=False, torn=None, r
                 def keep(ii, jj, inside=inside):
                     return not (inside[jj][ii] and inside[jj][ii + 1] and inside[jj + 1][ii] and inside[jj + 1][ii + 1]) and \
                         sum((inside[jj][ii], inside[jj][ii + 1], inside[jj + 1][ii], inside[jj + 1][ii + 1])) < 3
-                with mb.soft():               # chapa ondulada: sombreado continuo (la onda real no tiene aristas)
-                    _lamina(mb, P, mat, keep if tl is not None else None)
+                if tl is None:
+                    with mb.soft():           # chapa ondulada: sombreado continuo (la onda real no tiene aristas)
+                        _lamina(mb, P, mat, None)
+                else:
+                    def torn_cell(ii, jj, inside=inside):
+                        return inside[jj][ii] or inside[jj][ii + 1] or inside[jj + 1][ii] or inside[jj + 1][ii + 1]
+                    with mb.soft():
+                        _lamina(mb, P, mat, lambda ii, jj: keep(ii, jj) and not torn_cell(ii, jj))
+                    # borde rasgado: las celdas plegadas conservan aristas duras (el doblez se lee como doblez)
+                    _lamina(mb, P, mat, lambda ii, jj: keep(ii, jj) and torn_cell(ii, jj))
 
                 # ---- tornillos en crestas sobre correas ----
                 m0 = int(math.ceil((ua + ue - CORR_P / 2) / CORR_P))
@@ -1880,8 +1897,11 @@ def _board(mb, R, s, u0, u1, vb, nb, nt, r, mat="wood_grey", lift_end=0.0, dv=0.
         g = r.uniform(0.02, exp - 0.02)
         if all(abs(g - q[0]) > 0.025 for q in grooves):
             grooves.append((g, r.uniform(0.003, 0.006), r.uniform(0.0015, 0.0035)))
-    top = sorted({round(x, 6) for x in [c, width - c, exp * 0.5, min(exp + 0.01, width - 0.01)] +
+    top = sorted({round(x, 6) for x in [c, width - c, exp * 0.25, exp * 0.5, exp * 0.75, min(exp + 0.01, width - 0.01)] +
                   [g[0] + k for g in grooves for k in (-g[1], 0.0, g[1])]})
+    # tabla vieja a la intemperie: abarquillada (el centro de la cara vista baja 0,6–1,6 mm respecto a los cantos)
+    hsh = math.sin(u0 * 12.9898 + vb * 78.233 + nb * 37.719) * 43758.5453
+    cupv = 0.0006 + 0.001 * (hsh % 1.0)
 
     def depth(w):
         for g in grooves:
@@ -1889,8 +1909,8 @@ def _board(mb, R, s, u0, u1, vb, nb, nt, r, mat="wood_grey", lift_end=0.0, dv=0.
                 return g[2]
         return 0.0
     # perfil (w a lo ancho desde el canto bajo, h en el espesor): cara inferior, canto alto, cara vista (con vetas), canto bajo
-    prof = [(c, 0.0), (width - c, 0.0), (width, c), (width, T - c)] + [(w, T - depth(w)) for w in reversed(top)] + [(0.0, T - c),
-                                                                                                                    (0.0, c)]
+    prof = [(c, 0.0), (width - c, 0.0), (width, c), (width, T - c)] + \
+        [(w, T - depth(w) - cupv * (1.0 - (2.0 * w / width - 1.0) ** 2)) for w in reversed(top)] + [(0.0, T - c), (0.0, c)]
     nst = max(2, int(math.ceil((u1 - u0) / 0.45)) + 1)
     tw = r.uniform(0.0, 0.006)                    # alabeo del canto bajo
     tw_ph = r.uniform(0, PI)

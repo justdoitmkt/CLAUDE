@@ -29,11 +29,18 @@ Montaje y profundidades (y):
 Vidrio roto: punto de impacto + grietas radiales + grieta concéntrica dentada (cuñas pegadas al junquillo, con la punta
 hacia el impacto); nunca un vidrio entero. Cortinas: la tela se apoya contra la cara interior del muro, nunca la cruza.
 
-Triángulos medidos (barrido de 864 combinaciones por tipo: 1,2–1,8 x 1,0–1,6 m, 12 semillas, con/sin cortina):
-  window: sliding 1,4–3,7 k · casement 1,6–4,5 k · shutter 2,5–4,9 k · boarded 2,4–4,7 k (presupuesto 800–5000 cumplido)
-  door: flush ~3,5 k · double_glazed 2,2–2,7 k · plank 2,3–2,6 k · metal ~3,6 k
-  rolling_shutter 2,6 x 2,6: 6–10 k (según open_frac) · security_grille 1,2 x 1,2: ~1,9 k
-  breeze_block_screen: ~230 tris por bloque 4sq con bisel (2,0 x 2,4 m ≈ 23 k); bevel=0 para lejanía.
+Segunda pasada AAA (2026-11-19): perfiles con radios reales (_fillet2d), barridos de marco CERRADOS (antes quedaba una
+rendija de ~1 cm en la esquina inferior izquierda de cada marco/hoja), herrajes torneados (_lathe, 16–32 lados): bisagras de
+libro con canutos, pasador y botones, hojas de bisagra con tornillos avellanados, manijas de palanca con roseta, cilindros,
+mirilla con lente, candado, aldaba, pernios, cierrapuertas; empaques de hule y junquillos, masilla y botaguas en las hojas de
+madera; duelas curvas reales con rizo de engrane en la cortina; celosía con chaflán de colado y conicidad de desmolde;
+reja con cordones de soldadura y anclas con remiendo de mortero; cortina con argollas, remates y soportes.
+Triángulos medidos (barrido de semillas/tamaños de sweep.py, tamaños reales de uso):
+  window: sliding 4,6–27 k (~11 k) · casement 7–35 k (~18 k) · shutter 12–44 k (~24 k) · boarded 9–36 k (~20 k)
+          (la cortina con argollas suma ~9 k por vano)
+  door: flush ~16 k · double_glazed ~24 k · plank ~10 k · metal ~17,7 k
+  rolling_shutter 2,8 x 2,8: ~57 k · 3,4 x 2,6 (HOS): ~51 k · 6 x 5,5 (muelle, duela económica): ~50 k
+  security_grille 1,8 x 0,8: ~19 k · breeze_block_screen: ~250 tris por bloque 'cross' (2,4 x 2,1 m ≈ 28 k)
 """
 import math
 
@@ -460,7 +467,7 @@ def _nail(mb, x, y, z, r, d=-1, mat="metal_rust", head=0.0045, m=None):
     hd = 2 * head * r.uniform(0.85, 1.1)
     with mb.soft():
         if pulled:   # caña de 2,8 mm visible
-            _lathe(mb, [(0.0014, 0.0), (0.0014, lift + 0.0004)], seg=10, mat=mat, M=M)
+            _lathe(mb, [(0.0014, 0.0), (0.0014, lift + 0.0004)], seg=12, mat=mat, M=M)
         _lathe(mb, [(0.0, lift), (hd / 2, lift), (hd / 2, lift + 0.0007), (hd * 0.36, lift + 0.0015), (0.0, lift + 0.0018)],
                seg=14, mat=mat, M=M)
 
@@ -716,7 +723,7 @@ def _curtains(dst, w, h, depth, r, tear=0.6):
             # soporte arrancado: queda la roseta torcida con un taquete salido y los agujeros
             _plate_bev(mb, _rrect(0.04, 0.08, 0.008, 3, ub_, zr - 0.01), depth - 0.002, 0.006, "metal_paint", face=1,
                        bev=0.0015, m=_about((ub_, depth, zr - 0.01), _R("Y", r.uniform(-12, 12))))
-            _lathe(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.022), (0.0032, 0.025), (0.0, 0.025)], seg=12, mat="plastic",
+            _lathe(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.022), (0.0032, 0.025), (0.0, 0.025)], seg=16, mat="plastic",
                    M=_mat_xy((ub_ + 0.03, depth + 0.004, zr - 0.06), (1, 0, 0), (0, 0, -1)))
             continue
         z0 = rodz(ub_)
@@ -874,7 +881,7 @@ def _al_sash(sw, sh, r, broken, mid=True, latch=False):
     if latch:   # cerrojo de media luna en el larguero de traslape, cara interior: base de 18 x 70 y leva con palanca
         zl = sh * 0.5
         _plate_bev(s, _rrect(0.018, 0.07, 0.004, 3, 0.017, zl), 0.0108, 0.004, "metal_paint", face=1, bev=0.001)
-        _lathe(s, [(0.0, 0.0), (0.0075, 0.0), (0.0075, 0.0035), (0.006, 0.005), (0.0, 0.0052)], seg=24, mat="metal_paint",
+        _lathe(s, [(0.0, -0.0006), (0.0075, -0.0006), (0.0075, 0.0035), (0.006, 0.005), (0.0, 0.0052)], seg=24, mat="metal_paint",
                M=_mat_xy((0.017, 0.0148, zl + 0.01), (1, 0, 0), (0, 0, -1)))
         arc = [(0.017 + 0.0105 * math.cos(a_), 0.0185, zl + 0.01 + 0.0105 * math.sin(a_)) for a_ in
                [math.radians(-100 + 25 * k) for k in range(7)]]
@@ -893,7 +900,7 @@ def _win_sliding(mb, w, h, depth, r, broken):
     top = cv1 - 0.004
     if h >= 1.45:   # montante fijo con travesaño
         vt = cv1 - r.uniform(0.3, 0.38)
-        fr.box((cu0 - 0.003, 0.043, vt - 0.02), (cu1 + 0.003, 0.117, vt + 0.02), "aluminium", bevel=0.003, seg=1)
+        fr.box((cu0 - 0.003, 0.043, vt - 0.02), (cu1 + 0.003, 0.117, vt + 0.02), "aluminium", bevel=0.002, seg=2)
         _glass(fr, cu0, vt + 0.02, cu1, cv1, 0.065, r, min(0.97, broken + 0.1), embed=0.006)   # entre los dos rieles
         top = vt - 0.023
     Rk = _rack(fr, w, h, r, deg=0.2, sag=0.004)   # las hojas que siguen en sus rieles se montan con el mismo descuadre
@@ -952,7 +959,7 @@ def _wd_sash(sw, sh, r, broken, cols=None, rows=None, mat="wood"):
         _sweep3(s, _fillet2d([(-0.011, -0.012), (0.011, -0.012), (0.011, 0.012), (-0.011, 0.012)],
                              [0.002, 0.002, 0.005, 0.005], n=3), [(x, 0.0, z0 - 0.004), (x, 0.0, z1 + 0.004)], mat, up=(0, 1, 0))
     for z in zs[1:-1]:   # el travesaño horizontal sobresale 0,5 mm del vertical en cada cara (sin caras coplanares)
-        _sweep3(s, _fillet2d([(-0.011, -0.0125), (0.011, -0.0125), (0.011, 0.0125), (-0.011, 0.0125)],
+        _sweep3(s, _fillet2d([(-0.011, -0.0128), (0.011, -0.0128), (0.011, 0.0128), (-0.011, 0.0128)],
                              [0.002, 0.002, 0.005, 0.005], n=3), [(x0 - 0.004, 0.0, z), (x1 + 0.004, 0.0, z)], mat, up=(0, 1, 0))
     for i in range(cols):
         for j in range(rows):
@@ -964,7 +971,7 @@ def _wd_sash(sw, sh, r, broken, cols=None, rows=None, mat="wood"):
             _glass(s, a, b, c, d, 0.0, r, bb, embed=0.007)
             # masilla en bisel del lado exterior (la que sostiene el vidrio), agrietada: le faltan tramos
             path = _rect_path(a, b, c, d, c=0.015)
-            s.sweep([(-0.001, -0.0024), (0.0075, -0.0024), (-0.001, -0.0118)], path, mat=mat, normal=(0, 1, 0), closed_path=True)
+            s.sweep([(-0.001, -0.0029), (0.0075, -0.0029), (-0.001, -0.0118)], path, mat=mat, normal=(0, 1, 0), closed_path=True)
     return s   # el alabeo (_warp) lo aplica quien la usa, DESPUÉS de montar herrajes (así se mueven con la hoja)
 
 
@@ -1173,7 +1180,7 @@ def _win_casement(mb, w, h, depth, r, broken, allow_open=True, lites=(None, None
         hx = g + 0.037 if k == 0 else w - g - 0.037
         for zz in (zb + 0.15, zb + sh - 0.15):
             sx = 1 if k == 0 else -1
-            _leafplate(hw, _mat_xy((hx, 0.0402, zz), (-sx, 0, 0), (0, -1, 0)), 0.064, 0.026, 0.0017, screws=2, sd=0.0052)
+            _leafplate(hw, _mat_xy((hx, 0.0406, zz), (-sx, 0, 0), (0, -1, 0)), 0.064, 0.026, 0.0021, screws=2, sd=0.0052)
     _merge(mb, hw, Rk)
 
 
@@ -1490,7 +1497,7 @@ def _door_flush(mb, w, h, depth, r, ang):
     _rack(sub, w, h, r, deg=0.1, sag=0.0)
     _merge(mb, sub)
     # umbral de mármol/concreto
-    mb.box((0.003, -0.012, -0.012), (w - 0.003, y1, 0.012), "concrete", bevel=0.004, seg=1)   # pasa bajo las jambas
+    mb.box((0.003, -0.012, -0.012), (w - 0.003, y1, 0.012), "concrete", bevel=0.005, seg=2)   # pasa bajo las jambas
     # hoja
     T = 0.04
     xl0 = g + 0.027 + 0.003
@@ -1589,12 +1596,12 @@ def _glazing(mb, a, b, c, d, y0, y1, yg, tg=0.005, bead=True, gasket=(-1, 1), ma
     inclinada del lado +Y (si bead) y empaque de hule (cuña) a ambos lados del vidrio, aunque el vidrio ya no esté."""
     path = _rect_path(a, b, c, d, c=0.02)
     if bead:
-        yb = yg + tg / 2 + 0.0032
+        yb = yg + tg / 2 + 0.0037
         bp = _fillet2d([(-0.001, yb), (0.0115, yb), (0.0115, yb + 0.002), (0.0045, y1 - 0.0016), (-0.001, y1 - 0.0016)],
                        [0.0, 0.0006, 0.0008, 0.0012, 0.0], n=2)
         mb.sweep(bp, path, mat=mat, normal=(0, 1, 0), closed_path=True)
     for sd in gasket:
-        yc = yg + sd * (tg / 2 + 0.0013)
+        yc = yg + sd * (tg / 2 + 0.0019)
         mb.sweep(_rrect(gw, 0.0024, 0.0011, 2, 0.0005 + gw / 2, yc), path, mat="rubber", normal=(0, 1, 0), closed_path=True)
 
 
@@ -1624,8 +1631,7 @@ def _door_glazed(mb, w, h, depth, r, ang):
         x0_ = ya + 0.012 + (yb_ - ya - 0.024) * k / nr
         x1_ = ya + 0.012 + (yb_ - ya - 0.024) * (k + 0.55) / nr
         ribs += [(x0_, 0.0075), (x0_ + 0.0006, 0.009), (x1_ - 0.0006, 0.009), (x1_, 0.0075)]
-    tprof = [(ya, -0.008), (yb_, -0.008), (yb_, -0.0045), (yb_ - 0.012, 0.0075)] + list(reversed(ribs)) + [(ya + 0.012, 0.0075),
-                                                                                                      (ya, -0.0045)]
+    tprof = [(ya, -0.008), (yb_, -0.008), (yb_, -0.0045), (yb_ - 0.012, 0.0075)] + list(reversed(ribs)) + [(ya, -0.0045)]
     _sweep3(mb, [(-yy, zz) for yy, zz in tprof], [(0.003, 0.0, 0.0), (w - 0.003, 0.0, 0.0)], "aluminium", up=(0, 0, 1))
     T = 0.045
     xin0, xin1 = g + 0.045 + 0.003, w - g - 0.045 - 0.003
@@ -1700,7 +1706,7 @@ def _strap(mb, x0, x1, z, y, r, w0=0.042, t=0.005, face=-1, bolts=4):
     for k in range(n - 1, -1, -1):
         s = k / n
         pts.append((x0 + (L - 0.05) * s, z + (w0 / 2 - (w0 / 2 - w0 * 0.2) * s ** 1.4)))
-    _plate_bev(mb, pts, y + face * 0.0006 * -1, t, "metal_rust", face=face, bev=0.0012)
+    _plate_bev(mb, pts, y - face * 0.0015, t + 0.0009, "metal_rust", face=face, bev=0.0012)
     for k in range(bolts):
         xb = x0 + 0.05 + (x1 - x0 - 0.12) * k / max(1, bolts - 1)
         _screw(mb, (xb, y + face * (t - 0.0006), z), (0, face, 0), d=0.0125 - 0.0015 * (k / max(1, bolts - 1)), kind="dome")
@@ -1772,8 +1778,8 @@ def _door_plank(mb, w, h, depth, r, ang):
         ax, az, bx, bz = 0.07, za + 0.06, Wl - 0.07, zb - 0.06
         ln = math.hypot(bx - ax, bz - az)
         an = math.degrees(math.atan2(bz - az, bx - ax))
-        p = _plank(ln, 0.1, 0.024, r, "wood_grey", step=0.35, bow=0.001, twist=0.4, cut=(0.05, -0.05))
-        _merge(leaf, p, _T(ax, 0.0366, az) @ _R("Y", -an))
+        p = _plank(ln, 0.1, 0.0232, r, "wood_grey", step=0.35, bow=0.001, twist=0.4, cut=(0.05, -0.05))
+        _merge(leaf, p, _T(ax, 0.0362, az) @ _R("Y", -an))   # la riostra queda 1 mm abajo de los barrotes (sin coplanares)
     for (xc, lo) in xs:   # clavos que atraviesan tablón y barrote
         for zc in bat:
             if zc > lo + 0.03:
@@ -1922,7 +1928,7 @@ def _door_metal(mb, w, h, depth, r, ang):
         _cylinder_rose(leaf, (xh, yy - dd * 0.001, zl - 0.075), (0, dd, 0), R=0.0145, h=0.011, turn=dd > 0)
     # zapata del brazo del cierrapuertas (cara interior, arriba): el cuerpo va en el muro sobre el vano (ver abajo)
     leaf.box((0.15, T - 0.001, Hl - 0.075), (0.2, T + 0.011, Hl - 0.035), "metal_paint", bevel=0.003, seg=2)
-    _lathe(leaf, [(0.0, 0.0), (0.0062, 0.0), (0.0062, 0.0065), (0.0045, 0.008), (0.0, 0.0082)], seg=24, mat="metal_rust",
+    _lathe(leaf, [(0.0, -0.0006), (0.0062, -0.0006), (0.0062, 0.0065), (0.0045, 0.008), (0.0, 0.0082)], seg=24, mat="metal_rust",
            M=_mat_xy((0.175, T + 0.011, Hl - 0.055), (1, 0, 0), (0, 0, -1)))
     for xb in (0.16, 0.19):
         _screw(leaf, (xb, T + 0.011, Hl - 0.067), (0, 1, 0), d=0.0055, mat="metal_paint", kind="pan")
@@ -1956,7 +1962,8 @@ def _door_metal(mb, w, h, depth, r, ang):
     arm = MB()   # brazo principal de 22 x 8 con ojos redondos en ambos extremos, partido en el ojo inferior
     arm.box((-0.011, -0.004, -0.198), (0.011, 0.004, -0.012), "metal_paint", bevel=0.0025, seg=2)
     for zz in (0.0, -0.198):
-        _lathe(arm, [(0.0, -0.004), (0.011, -0.004), (0.011, 0.004), (0.0, 0.004)], seg=24, mat="metal_paint",
+        _lathe(arm, [(0.0, -0.0048), (0.0102, -0.0048), (0.011, -0.004), (0.011, 0.004), (0.0102, 0.0048), (0.0, 0.0048)], seg=24,
+               mat="metal_paint",
                M=_mat_xy((0.0, 0.0, zz), (1, 0, 0), (0, 0, 1)))
     _lathe(arm, [(0.0, -0.0062), (0.0045, -0.0062), (0.0045, 0.0062), (0.0, 0.0062)], seg=16, mat="metal_rust",
            M=_mat_xy((0.0, 0.0, -0.198), (1, 0, 0), (0, 0, 1)))
@@ -1994,17 +2001,16 @@ def door(kind, w, h, depth=0.20, seed=0, open_angle=25, parts=False):
 # =====================================================================================================================
 # CORTINA METÁLICA ENROLLABLE
 # =====================================================================================================================
-def _slat_profile(p=0.08, bulge=0.010, t=0.0008):
+def _slat_profile(p=0.08, bulge=0.010, t=0.0008, nf=8, nc=9):
     """Duela curva de lámina (cal. 22, 0,8 mm) en (z, y), contorno cerrado: cara abombada 10 mm hacia -Y y rizo superior
     (hembra) de Ø8,4 donde entra la cola de la duela de arriba (que arranca dentro del rizo). Paso p."""
     C = [(-0.0046, 0.0036), (-0.0016, 0.0012)]
-    nf = 8
     for k in range(nf + 1):
         u = k / nf
         C.append((0.0015 + (p - 0.0085 - 0.0015) * u, -bulge * math.sin(PI * u) ** 0.85))
     zc, yc, R = p - 0.0062, 0.0042, 0.0042
-    for k in range(1, 10):
-        th = -PI / 2 + (PI / 2 + math.radians(205)) * k / 9
+    for k in range(1, nc + 1):
+        th = -PI / 2 + (PI / 2 + math.radians(205)) * k / nc
         C.append((zc + R * math.cos(th), yc + R * math.sin(th)))
     P = [Vector(c) for c in C]
     L, Rr = [], []
@@ -2062,10 +2068,10 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
         mb.box((xa, 0.0115, zbox + 0.0045), (xa + 0.004, 0.19, h - 0.0075), "metal_paint", bevel=0.0012, seg=2)
         xs_ = xa + (0.004 if sg > 0 else 0.0)
         _lathe(mb, [(0.0, -0.0005), (0.034, -0.0005), (0.034, 0.008), (0.031, 0.011), (0.022, 0.012), (0.0, 0.012)], seg=32,
-               mat="metal_paint", M=_mat_xy((xs_, 0.1, zax), (0, 0, 1), (0, sg, 0)) @ _R("X", 0))
+               mat="metal_paint", M=_mat_xy((xs_, 0.1, zax), (0, 0, 1), (0, -sg, 0)))   # chumacera hacia dentro de la caja
         for k in range(4):
             a_ = PI / 4 + PI / 2 * k
-            _bolt(mb, (xs_, 0.1 + 0.026 * math.cos(a_), zax + 0.026 * math.sin(a_)), (sg, 0, 0), r=0.005, ln=0.005)
+            _bolt(mb, (xs_, 0.1 + 0.046 * math.cos(a_), zax + 0.046 * math.sin(a_)), (sg, 0, 0), r=0.005, ln=0.005)
     # rollo de duelas: cilindro acanalado (una costura por duela) sobre el eje del tambor
     roll = 0.05 + 0.035 * max(0.0, min(1.0, open_frac))   # rollo de lamas: cabe en la caja (y 0,011–0,19)
     nr = 72
@@ -2074,16 +2080,17 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
            roll * (1.0 - 0.06 * max(0.0, math.cos(PI * nseam * k / nr)) ** 8) * math.sin(2 * PI * k / nr)) for k in range(nr)]
     with mb.soft():
         _sweep3(mb, list(reversed(rp)), [(0.02, 0.1, zax), (w - 0.02, 0.1, zax)], "metal_paint", up=(0, 0, 1))
-    _lathe(mb, [(0.0, 0.0), (0.024, 0.0), (0.024, w - 0.016), (0.0, w - 0.016)], seg=24, mat="metal_rust",
-           M=_T(0.008, 0.1, zax) @ _R("Y", 90))
+    _lathe(mb, [(0.0, 0.0), (0.024, 0.0), (0.024, w - 0.024), (0.0, w - 0.024)], seg=24, mat="metal_rust",
+           M=_T(0.012, 0.1, zax) @ _R("Y", 90))
     # cortina
     hc = zbox + 0.01
     zb0 = max(0.0, min(0.95, open_frac)) * (hc - 0.3)
     cur = MB()
     bar_h = 0.06
     n = max(1, int((hc - zb0 - bar_h) / p))
-    prof = _slat_profile(p)
-    ns = max(4, int(round(w / max(0.15, w / 30.0))))
+    big = w * h > 12.0   # cortinas de bodega (muelle): duela más económica y muestreo de 25–30 cm (presupuesto del grupo)
+    prof = _slat_profile(p, nf=5, nc=6) if big else _slat_profile(p)
+    ns = max(4, int(round(w / (max(0.25, w / 24.0) if big else max(0.15, w / 30.0)))))
     xs = [0.03 + (w - 0.06) * k / ns for k in range(ns + 1)]
     path = [(x, 0.0, 0.0) for x in xs]
     popped = int(r.integers(0, max(1, n // 3))) if r.random() < 0.35 + 0.5 * dent else -1
@@ -2169,8 +2176,10 @@ _BB_PATTERNS = {
 }
 
 
-def _bb_block(dst, pattern, D, M, r, broken=0, jit=0.0012, bevel=0.004):
+def _bb_block(dst, pattern, D, M, r, broken=0, jit=0.0012, bevel=0.004, draft=0.0015):
     """Bloque de celosía 0,20 x 0,20 x D con calado REAL: malla por celdas (sólido/hueco), soldada y cerrada.
+    Los huecos llevan la conicidad de desmolde (`draft`: el calado es 1,5 mm más grande por lado en la cara de colado) y
+    TODAS las aristas convexas vivas (contorno y bocas de los huecos, frente y dorso) un chaflán de colado de `bevel`.
     broken > 0 arranca una esquina (celdas de borde) con contorno dentado. Se evitan pellizcos diagonales (manifold)."""
     xs, holes = _BB_PATTERNS[pattern]
     n = len(xs) - 1
@@ -2196,6 +2205,7 @@ def _bb_block(dst, pattern, D, M, r, broken=0, jit=0.0012, bevel=0.004):
     for (i, j) in gone:
         rough |= {(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)}
     V = {}
+    RV = set()
     mb = MB()
     M_final, M = M, None
 
@@ -2205,10 +2215,24 @@ def _bb_block(dst, pattern, D, M, r, broken=0, jit=0.0012, bevel=0.004):
             x, z = xs[i], xs[j]
             y = 0.0 if s == 0 else D
             jx, jz, jy = r.normal(0, jit), r.normal(0, jit), r.normal(0, jit * 0.6)
-            if (i, j) in rough and 0 < i < n and 0 < j < n or ((i, j) in rough and (i in (0, n)) != (j in (0, n))):
+            isr = (i, j) in rough and 0 < i < n and 0 < j < n or ((i, j) in rough and (i in (0, n)) != (j in (0, n)))
+            if isr:
                 jx, jz = r.normal(0, 0.006), r.normal(0, 0.006)
                 jy += r.uniform(0.0, 0.01) * (1 if s == 0 else -1)
+            elif s == 0 and draft > 0:   # boca del hueco abierta por la conicidad de desmolde
+                hc = [((xs[a] + xs[a + 1]) / 2, (xs[b] + xs[b + 1]) / 2) for a in (i - 1, i) for b in (j - 1, j)
+                      if (a, b) in holes and 0 <= a < n and 0 <= b < n]
+                if hc and len(hc) < 4:
+                    cx = sum(c[0] for c in hc) / len(hc)
+                    cz = sum(c[1] for c in hc) / len(hc)
+                    dx, dz = x - cx, z - cz
+                    dl = math.hypot(dx, dz) or 1.0
+                    k = draft * (1.41 if len(hc) == 1 else 1.0)
+                    jx += dx / dl * k
+                    jz += dz / dl * k
             V[key] = mb._verts([(x + jx, y + jy, z + jz)], M)[0]
+            if isr:
+                RV.add(V[key])
         return V[key]
 
     for i in range(n):
@@ -2225,20 +2249,13 @@ def _bb_block(dst, pattern, D, M, r, broken=0, jit=0.0012, bevel=0.004):
                 mb.face([vert(i, j, 0), vert(i, j, 1), vert(i + 1, j, 1), vert(i + 1, j, 0)], "concrete")
             if not solid(i, j + 1):
                 mb.face([vert(i, j + 1, 0), vert(i + 1, j + 1, 0), vert(i + 1, j + 1, 1), vert(i, j + 1, 1)], "concrete")
-    if bevel > 0:   # chaflán real en el contorno exterior (frente, dorso y aristas de esquina); lo roto queda vivo
-        B = xs[-1]
-        e_ = 0.004
-
-        def onrim(v):
-            return (v.co.x < e_ or v.co.x > B - e_ or v.co.z < e_ or v.co.z > B - e_)
-
+    if bevel > 0:   # chaflán de colado en todas las aristas convexas (contorno y bocas de los huecos); lo roto queda vivo
+        bmesh.ops.recalc_face_normals(mb.bm, faces=mb.bm.faces)
         edges = []
         for ed in mb.bm.edges:
-            a, b = ed.verts
-            if not (onrim(a) and onrim(b)):
+            if len(ed.link_faces) != 2 or (ed.verts[0] in RV and ed.verts[1] in RV):
                 continue
-            ka = (abs(a.co.x) < e_ or abs(a.co.x - B) < e_, abs(a.co.z) < e_ or abs(a.co.z - B) < e_)
-            if abs(a.co.y - b.co.y) < 0.02 or (ka[0] and ka[1]):
+            if ed.calc_face_angle(0.0) > 1.0 and ed.is_convex:
                 edges.append(ed)
         if edges:
             res = bmesh.ops.bevel(mb.bm, geom=edges, offset=bevel, segments=1, profile=0.5, affect="EDGES", clamp_overlap=True)
@@ -2251,8 +2268,9 @@ def breeze_block_screen(w, h, seed=0, missing=0.05, pattern=None, y0=0.0, bevel=
     """Celosía de bloques de concreto 0,20 x 0,20 x 0,10 con calado real en cada bloque, junta de mortero de 1 cm
     rehundida 8 mm, bloques rotos y faltantes. Local: u 0..w, v 0..h, bloques en y = y0..y0+0,10 (cara exterior en y0).
     pattern: '4sq' (4 cuadros, por defecto), 'cross' (cruz), 'nine' (9 cuadros) o None = '4sq'.
-    bevel: chaflán del contorno de cada bloque (0,004 m; 0 = aristas vivas y ~35 % menos triángulos para lejanía).
-    Costo por bloque con bisel: 4sq ~230 tris, cross ~215, nine ~390 (sin bisel: 160 / 140 / 290)."""
+    bevel: chaflán de colado de las aristas de cada bloque (contorno y bocas de los huecos); mínimo 3 mm aunque se pida 0
+    (R-AAA: el concreto colado no tiene aristas vivas). Los huecos llevan 1,5 mm de conicidad de desmolde.
+    Costo por bloque: cross ~250 tris, 4sq ~280, nine ~480."""
     r = rng(seed)
     pattern = pattern or "4sq"
     mb = MB()
@@ -2269,7 +2287,7 @@ def breeze_block_screen(w, h, seed=0, missing=0.05, pattern=None, y0=0.0, bevel=
             x0, z0 = mx + i * P, mz + j * P
             M = _T(x0 + r.normal(0, 0.0012), y0 + r.normal(0, 0.0015), z0 + r.normal(0, 0.0008)) @ \
                 _about((B / 2, 0, B / 2), _R("Y", r.normal(0, 0.35)))
-            _bb_block(mb, pattern, D, M, r, broken=int(r.random() < 1.5 * missing + 0.04), bevel=bevel)
+            _bb_block(mb, pattern, D, M, r, broken=int(r.random() < 1.5 * missing + 0.04), bevel=max(bevel, 0.003))
     # mortero: tendeles corridos, llagas por hilada y rellenos perimetrales (rehundido 8 mm, metido 1 mm en los bloques)
     ya, yb = y0 + 0.008, y0 + D - 0.008
     top = mz + nz * P - J
@@ -2293,36 +2311,63 @@ def breeze_block_screen(w, h, seed=0, missing=0.05, pattern=None, y0=0.0, bevel=
 # =====================================================================================================================
 # REJA DE SEGURIDAD
 # =====================================================================================================================
+def _weld_bead(mb, cx, cy, z, R, a0, a1, rb, r, mat="metal_rust"):
+    """Cordón de soldadura alrededor de una barra vertical (eje en (cx, cy)) a la cota z: arco de a0 a a1 (rad) con
+    ondas de pasada (radio del cordón variable) y remates que se adelgazan. 10 lados con sombreado continuo."""
+    n = max(5, int(abs(a1 - a0) / 0.3))
+    pts, radii = [], []
+    for k in range(n + 1):
+        a = a0 + (a1 - a0) * k / n
+        pts.append((cx + R * math.cos(a), cy + R * math.sin(a), z + r.normal(0, 0.0003)))
+        e = min(k, n - k)
+        radii.append(rb * (0.35 if e == 0 else (0.75 if e == 1 else 1.0)) * (0.85 + 0.3 * r.random()))
+    with mb.soft():
+        mb.tube(pts, rb, seg=10, mat=mat, radii=radii)
+
+
 def security_grille(w, h, seed=0, bottom=0.05, y0=0.006):
-    """Reja de ventana dentro del vano (local u 0..w, v 0..h, plano y = y0..y0+0,03): marco de ángulo 30x30x4, barras
-    redondas Ø14 cada ~12 cm, dos soleras horizontales, anclas empotradas en las jambas. Oxidada; una pareja de barras
-    abierta a la fuerza y, a veces, una barra cortada. bottom = holgura inferior (deja libre el alféizar)."""
+    """Reja de ventana dentro del vano (local u 0..w, v 0..h, plano y = y0..y0+0,03): marco de ángulo 30x30x4 laminado
+    (filete de raíz de 4 mm, cantos redondos), barras redondas Ø14 (16 lados) cada ~12 cm, dos soleras de 32 x 5, cordones
+    de soldadura reales en cada cruce, anclas de solera empotradas en las jambas con su remiendo de mortero. Oxidada; una
+    pareja de barras abierta a la fuerza y, a veces, una barra cortada con segueta. bottom = holgura inferior (deja libre el
+    alféizar)."""
     r = rng(seed)
     mb = MB()
     g = 0.006
-    L = [(0.0, y0), (0.03, y0), (0.03, y0 + 0.004), (0.004, y0 + 0.004), (0.004, y0 + 0.03), (0.0, y0 + 0.03)]
+    L = _fillet2d([(0.0, y0), (0.03, y0), (0.03, y0 + 0.004), (0.004, y0 + 0.004), (0.004, y0 + 0.03), (0.0, y0 + 0.03)],
+                  [0.001, 0.0012, 0.0012, 0.004, 0.0012, 0.0012], n=3)
     fr = MB()
     fr.sweep(L, _rect_path(g, bottom, w - g, h - g, step=0.4, c=0.04), mat="metal_rust", normal=(0, 1, 0), closed_path=True)
     Rk = _rack(fr, w, h, r, deg=0.25, sag=0.002)
     _merge(mb, fr)
-    for z in (bottom + 0.15, (bottom + h) / 2, h - 0.15):   # anclas a las jambas
-        for x0, x1 in ((-0.03, g + 0.002), (w - g - 0.002, w + 0.03)):
-            mb.box((x0, y0 + 0.012, z - 0.02), (x1, y0 + 0.017, z + 0.02), "metal_rust")
+    for z in (bottom + 0.15, (bottom + h) / 2, h - 0.15):   # anclas (solera de 40 x 5) a las jambas con remiendo de mortero
+        for side, (x0, x1) in enumerate(((-0.03, g + 0.002), (w - g - 0.002, w + 0.03))):
+            mb.box((x0, y0 + 0.012, z - 0.02), (x1, y0 + 0.017, z + 0.02), "metal_rust", bevel=0.0012, seg=2)
+            pm = [(y0 + 0.0145 + 0.024 * math.cos(2 * PI * k / 12) * r.uniform(0.75, 1.2),
+                   z + 0.03 * math.sin(2 * PI * k / 12) * r.uniform(0.75, 1.2)) for k in range(12)]
+            if side == 0:
+                _plate_bev(mb, pm, 0.0015, 0.005, "mortar", face=-1, bev=0.002, m=_mat_xy((0.0, 0.0, 0.0), (0, 1, 0), (-1, 0, 0)))
+            else:
+                _plate_bev(mb, [(-a, b) for a, b in reversed(pm)], 0.0015, 0.005, "mortar", face=-1, bev=0.002,
+                           m=_mat_xy((w, 0.0, 0.0), (0, -1, 0), (1, 0, 0)))
     framed, mb = mb, MB()   # soleras, barras y soldaduras: se montan con el mismo descuadre del marco
-    zb, zt = bottom + 0.002, h - g - 0.002
+    zb, zt = bottom + 0.0035, h - g - 0.0035   # las barras entran 0,5 mm en el ángulo aunque el cabezal tenga flecha
     hs = [bottom + (h - bottom) * 0.33, bottom + (h - bottom) * 0.67]
     for z in hs:
-        mb.box((g + 0.002, y0 + 0.008, z - 0.016), (w - g - 0.002, y0 + 0.013, z + 0.016), "metal_rust")
+        mb.box((g + 0.002, y0 + 0.008, z - 0.016), (w - g - 0.002, y0 + 0.013, z + 0.016), "metal_rust", bevel=0.0012, seg=2)
     nb = max(2, int(round((w - 2 * g) / 0.12)) - 1)
     xs = [g + (w - 2 * g) * (k + 1) / (nb + 1) for k in range(nb)]
     yb = y0 + 0.02
     pair = int(r.integers(0, nb - 1)) if nb > 1 else -1
     cutb = int(r.integers(0, nb)) if r.random() < 0.5 else -1
     zmid = _uni(r, hs[0] + 0.1, hs[1] - 0.1)
+    rb = 0.007
     for k, x in enumerate(xs):
-        if k == cutb and k not in (pair, pair + 1):   # barra cortada con segueta: quedan muñones
-            mb.cyl((x, yb, zb), (x, yb, zb + r.uniform(0.04, 0.09)), 0.007, seg=8, mat="metal_rust")
-            mb.cyl((x, yb, zt - r.uniform(0.04, 0.12)), (x, yb, zt), 0.007, seg=8, mat="metal_rust")
+        if k == cutb and k not in (pair, pair + 1):   # barra cortada con segueta: quedan muñones de corte sesgado con rebaba
+            for (za, ln, up) in ((zb, r.uniform(0.04, 0.09), 1), (zt, r.uniform(0.04, 0.12), -1)):
+                Mc = _T(x, yb, za) @ (Matrix.Identity(4) if up > 0 else _R("X", 180))
+                _lathe(mb, [(0.0, -0.002), (rb, -0.002), (rb, ln - 0.0015), (rb * 1.06, ln - 0.0008), (rb * 0.8, ln), (0.0, ln)],
+                       seg=16, mat="metal_rust", M=Mc @ _about((0, 0, ln), _R("X", r.uniform(-6, 6))))
             continue
         if k in (pair, pair + 1):   # pareja de barras separadas y empujadas hacia afuera entre las soleras
             sx = -1 if k == pair else 1
@@ -2330,7 +2375,7 @@ def security_grille(w, h, seed=0, bottom=0.05, y0=0.006):
             out = r.uniform(0.01, 0.05)
             a_, b_ = hs[0] + 0.018, hs[1] - 0.018      # las soleras sujetan la barra: la curva vive entre ellas
             sm = (zmid - a_) / (b_ - a_)
-            zs_ = [zb, a_ - 0.03] + [a_ + (b_ - a_) * i / 14 for i in range(15)] + [b_ + 0.03, zt]
+            zs_ = [zb, a_ - 0.03] + [a_ + (b_ - a_) * i / 18 for i in range(19)] + [b_ + 0.03, zt]
             pts = []
             for z in zs_:
                 s_ = (z - a_) / (b_ - a_)
@@ -2340,19 +2385,17 @@ def security_grille(w, h, seed=0, bottom=0.05, y0=0.006):
                 else:
                     f = 0.0
                 pts.append((x + sx * spread * f, yb - out * f, z))
-            mb.tube(pts, 0.007, seg=8, mat="metal_rust")
+            mb.tube(pts, rb, seg=16, mat="metal_rust")
         else:   # barra con leve flecha (nada perfectamente recto)
             wob, woy = r.normal(0, 0.0015), r.normal(0, 0.0012)
-            pts = [(x + wob * math.sin(PI * t / 4), yb + woy * math.sin(PI * t / 4), zb + (zt - zb) * t / 4) for t in range(5)]
-            mb.tube(pts, 0.007, seg=8, mat="metal_rust")
-        # cordones de soldadura donde la barra toca las soleras y el ángulo del marco (gotas achatadas, irregulares)
-        if not (k == cutb and k not in (pair, pair + 1)):
-            for zw in (hs[0], hs[1]):   # un cordón por cruce, del lado que tocó al soldador
-                zz = zw + (1 if r.random() < 0.6 else -1) * 0.0175
-                mb.cyl((x - 0.0105, yb - 0.0045, zz), (x + 0.0105, yb - 0.0045, zz), 0.0032 * r.uniform(0.8, 1.2), seg=5,
-                       mat="metal_rust", r1=0.0026)
-            for zz in (bottom + 0.0055, h - g - 0.0055):
-                mb.cyl((x - 0.0095, yb + 0.0005, zz), (x + 0.0095, yb + 0.0005, zz), 0.0035 * r.uniform(0.8, 1.2), seg=4,
-                       mat="metal_rust", r1=0.0028)
+            pts = [(x + wob * math.sin(PI * t / 6), yb + woy * math.sin(PI * t / 6), zb + (zt - zb) * t / 6) for t in range(7)]
+            mb.tube(pts, rb, seg=16, mat="metal_rust")
+        # cordones de soldadura donde la barra toca las soleras (arco del lado del soldador) y el ángulo del marco
+        for zw in (hs[0], hs[1]):
+            zz = zw + (1 if r.random() < 0.6 else -1) * 0.0165
+            _weld_bead(mb, x, yb, zz, rb + 0.001, PI + 0.35, 2 * PI - 0.35, 0.0026, r)
+        for zz, sg in ((bottom + 0.0042, 1), (h - g - 0.0042, -1)):
+            _weld_bead(mb, x, yb, zz + sg * 0.0015, rb + 0.0008, PI * 0.15, PI * 0.85, 0.0028, r)
+            _weld_bead(mb, x, yb, zz + sg * 0.0015, rb + 0.0008, PI * 1.15, PI * 1.85, 0.0025, r)
     _merge(framed, mb, Rk)
     return framed

@@ -43,9 +43,19 @@ def cfg_apt_c():
     sw = 2 * STAIR_W + 0.10
     stair = dict(x0=1.025 - sw, y0=2.825 - L, w=sw, l=L, origin=(1.025, 2.825 - L))
     rects = [(-6.0, 6.0, -0.6, 6.0), (-2.4, 4.2, -6.0, -0.6, (EX, EX, EX, -EX))]
+    zl = [GROUND]
+    for hh in h:
+        zl.append(zl[-1] + hh)
+    spalls = {   # mordidas con varilla expuesta integradas (columnas y vigas exteriores)
+        ("col", 1, 1): [dict(sides=(-1, 1), start=0.4, length=0.8, depth=0.06, seed=3701)],
+        ("col", 4, 3): [dict(sides=(1, -1), start=zl[1] + 0.6, length=1.0, depth=0.08, seed=3702)],
+        ("beam", 2, "x", 0, 4): [dict(sides=(1, -1), start=0.6, length=1.3, depth=0.08, seed=3703)],
+        ("beam", 1, "y", 0, 2): [dict(sides=(-1, -1), start=0.5, length=1.2, depth=0.07, seed=3704)],
+        ("beam", 2, "y", 4, 2): [dict(sides=(1, -1), start=1.2, length=1.0, depth=0.07, seed=3705)],
+    }
     return dict(id="APT_C_3p", xs=xs, ys=ys, h=h, cells=cells, corner_nodes=corners, stair=stair, seed=37, loggia_depth=0.0,
                 lookdev=dict(under="brick", paint_tint=(0.90, 0.89, 0.86)),
-                stair_levels={1, 2}, slab_rects=rects)
+                stair_levels={1, 2}, slab_rects=rects, spalls=spalls)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -53,7 +63,7 @@ def cfg_apt_c():
 # ----------------------------------------------------------------------------------------------
 def build_facades(cfg, shell):
     P = []
-    pan = lambda *a, **k: ac.panel(cfg, shell, *a, collect=P, **k)  # noqa: E731
+    pan = lambda *a, **k: ab.panel_patched(cfg, shell, *a, collect=P, **k)  # noqa: E731
     up = (1, 2)
     # frente: ala A (crujías 0 y 3 sobre la línea y = -0,6) y hastial del ala B (línea y = -6,0)
     pan("front", 2, 0, 0, [("window", 0.3), ("vent", 0.85)], tag="pb")
@@ -264,14 +274,44 @@ def build_roof(cfg, roof, det):
     roof.join(tB, _T(0, 0, z0))
     ch = MB()
     zc = z0 + zr + 0.85
-    ch.box((chx - cw / 2, chy - cd / 2, z0), (chx + cw / 2, chy + cd / 2, zc), "brick", bevel=0.01, seg=1)
+    # bajo la cubierta: núcleo liso (ático, no se ve); sobre la teja: tabique rojo 7 × 14 × 28 cm a soga, cuatrapeado,
+    # con junta de mortero de 1 cm rehundida 8 mm (R-AAA: aparejo real, no una caja con textura)
+    zroof = z0 + min(top_A(A, chx + dx, chy + dy) for dx in (-cw / 2, cw / 2) for dy in (-cd / 2, cd / 2))
+    zb0 = zroof - 0.15
+    ch.box((chx - cw / 2, chy - cd / 2, z0), (chx + cw / 2, chy + cd / 2, zb0 + 0.02), "brick", bevel=0.01, seg=1)
+    ch.box((chx - cw / 2 + 0.008, chy - cd / 2 + 0.008, zb0), (chx + cw / 2 - 0.008, chy + cd / 2 - 0.008, zc - 0.24), "mortar")
+    rb = rng(seed + 9)
+    BL, BH, J = 0.28, 0.07, 0.01
+    nk = int((zc - 0.24 - zb0) / (BH + J))
+    for k in range(nk):
+        za, zb_ = zb0 + k * (BH + J) + J / 2, zb0 + k * (BH + J) + J / 2 + BH
+        for face in range(4):
+            if face in (0, 2):                             # caras ±y: ladrillos a lo largo de x
+                L0, L1, fixed, sg = chx - cw / 2, chx + cw / 2, chy + (-1 if face == 0 else 1) * cd / 2, (-1 if face == 0 else 1)
+            else:
+                L0, L1, fixed, sg = chy - cd / 2, chy + cd / 2, chx + (-1 if face == 3 else 1) * cw / 2, (-1 if face == 3 else 1)
+            sh = (BL / 2 if (k + face) % 2 else 0.0) - 0.02
+            u = L0 + sh - BL
+            while u < L1:
+                a, b = max(u + J / 2, L0), min(u + J / 2 + BL, L1)
+                if b - a > 0.03:
+                    o = float(rb.uniform(-0.002, 0.002))
+                    if face in (0, 2):
+                        y0_, y1_ = sorted((fixed - sg * 0.06, fixed + sg * o))
+                        ch.box((a, y0_, za), (b, y1_, zb_), "brick", bevel=0.004, seg=1)
+                    else:
+                        x0_, x1_ = sorted((fixed - sg * 0.06, fixed + sg * o))
+                        ch.box((x0_, a, za), (x1_, b, zb_), "brick", bevel=0.004, seg=1)
+                u += BL + J
     for i in range(3):                                     # hiladas salientes de remate
         e = 0.03 * (i + 1) if i < 2 else 0.02
         ch.box((chx - cw / 2 - e, chy - cd / 2 - e, zc - 0.24 + 0.08 * i), (chx + cw / 2 + e, chy + cd / 2 + e, zc - 0.16 + 0.08 * i), "brick",
                bevel=0.006, seg=1)
     ch.box((chx - cw / 2 - 0.08, chy - cd / 2 - 0.08, zc), (chx + cw / 2 + 0.08, chy + cd / 2 + 0.08, zc + 0.06), "concrete", bevel=0.01, seg=1)
-    for dx in (-0.14, 0.14):
-        ch.cyl((chx + dx, chy, zc + 0.06), (chx + dx, chy, zc + 0.36), 0.075, seg=12, mat="tile", r1=0.06)
+    from kit.clinic_equipo import revolve
+    for dx in (-0.14, 0.14):                               # sombreretes de barro (hueco, con ceja), 32 lados
+        revolve(ch, [(0.0, 0.0), (0.082, 0.0), (0.082, 0.018), (0.074, 0.05), (0.064, 0.255), (0.072, 0.266), (0.073, 0.295),
+                     (0.066, 0.30), (0.055, 0.30), (0.055, 0.04), (0.0, 0.04)], "tile", seg=32, M=_T(chx + dx, chy, zc + 0.058))
     det.join(ch)
     # canalones (solo en aleros) y bajantes
     zeA = rf.roof_top("gable", A["w"], A["d"], PITCH, OVH, x=0.0, y=-(A["d"] / 2 + OVH) + 0.01) - 0.06
@@ -363,7 +403,7 @@ def dress_services(cfg, P, bal, det, inter, far="low", near="mid"):
     return n
 
 
-def dress_damage(cfg, shell, det, inter, skirt, detail="low"):
+def dress_damage(cfg, shell, det, inter, skirt, detail="high"):
     from kit import damage as dm
     r = rng(cfg["seed"] + 606)
     zl = level_z(cfg)
@@ -394,7 +434,8 @@ def build_apt_c(collection_root=None, dress_all=True):
     cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage")}
     out = {k: [] for k in cols}
     shell, det, inter, sk = MB(), MB(), MB(), MB()
-    ab.build_frame(cfg, shell)
+    dmg = {k: MB() for k in ("Shell", "Details", "Interior")}
+    ab.build_frame(cfg, shell, spall_mb=dmg["Shell"] if dress_all else None)
     P = build_facades(cfg, shell)
     build_gables(cfg, shell)
     doors = []
@@ -419,7 +460,6 @@ def build_apt_c(collection_root=None, dress_all=True):
     rear = (-2.4, 6.0, -0.4, 9.0)
     out["stats_skirt"] = build_skirt_l(cfg, sk, keep_clear=(entry, rear))
     if dress_all:
-        dmg = {k: MB() for k in ("Shell", "Details", "Interior")}
         stats["damage"] = dress_damage(cfg, dmg["Shell"], dmg["Details"], dmg["Interior"], sk)
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))
         for nm, mbd in dmg.items():

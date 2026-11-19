@@ -132,7 +132,7 @@ def _node_on(cfg, i, j):
 SLAB_BAND = 0.06       # canto de losa perimetral (barrido con goterón) que sustituye la orilla de la losa
 
 
-def slab_band(mb, path, closed, z_top, t=SLAB, mat="concrete"):
+def slab_band(mb, path, closed, z_top, t=SLAB, mat="concrete"):  # noqa: C901
     """Canto de losa: perfil de 6 cm (2 cm fuera de la cara del relleno) con aristas superior e inferior redondeadas
     (r 8 mm) y GOTERÓN de 10 × 10 mm a 1,2 cm de la orilla en la cara de abajo, barrido por la orilla (recorrido
     antihorario en planta: el perfil x crece hacia afuera). Cerrado o abierto (ramas de una planta en L)."""
@@ -223,7 +223,32 @@ def build_frame(cfg, mb, spall_mb=None):
                 y0, y1 = Y0 + (w if on[2] else 0.0), Y1 - (w if on[3] else 0.0)
                 corners = [(X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)]
                 side_on = [on[2], on[1], on[3], on[0]]            # recorrido antihorario: abajo, derecha, arriba, izquierda
-                if all(side_on):
+                touch = [hh for hh in cfg.get("holes", {}).get(k, [])
+                         if hh[0] < X0 + w or hh[1] > X1 - w or hh[2] < Y0 + w or hh[3] > Y1 - w]
+                if touch:
+                    # un hueco (colapso) llega a la orilla: canto por lado, a tope en las esquinas, cortado donde está el hueco
+                    for sd in range(4):
+                        if not side_on[sd]:
+                            continue
+                        A, B = Vector((*corners[sd], 0.0)), Vector((*corners[(sd + 1) % 4], 0.0))
+                        dv = B - A
+                        Ls = dv.length
+                        dv /= Ls
+                        nrm = Vector((dv.y, -dv.x, 0.0))          # hacia afuera
+                        blocked = []
+                        for (hx0, hx1, hy0, hy1) in touch:
+                            ts = []
+                            for q in ((hx0, hy0), (hx1, hy0), (hx1, hy1), (hx0, hy1)):
+                                ts.append((Vector((q[0], q[1], 0.0)) - A).dot(dv))
+                            ds = [(Vector((q[0], q[1], 0.0)) - A).dot(nrm) for q in ((hx0, hy0), (hx1, hy0), (hx1, hy1), (hx0, hy1))]
+                            if min(ds) < 0.0 and max(ds) > -w:            # el hueco toca la franja del canto
+                                blocked.append((min(ts), max(ts)))
+                        t0 = 0.0
+                        for (b0, b1) in sorted(blocked) + [(Ls - w, Ls + 1.0)]:
+                            if b0 > t0 + 0.05:
+                                slab_band(mb, [tuple(A + dv * t0)[:2], tuple(A + dv * min(b0, Ls - w))[:2]], False, zt)
+                            t0 = max(t0, b1)
+                elif all(side_on):
                     slab_band(mb, corners, True, zt)
                 else:
                     k0 = next(q for q in range(4) if not side_on[q])
@@ -260,6 +285,18 @@ PENT_H = 2.7          # casetón de escalera sobre la losa de azotea
 PENT_XW = 2.30        # cara exterior del muro oeste del casetón: deja un descanso de llegada x 2,45..3,70 como en los pisos
 
 
+def coping(mb, path, z, closed=True, w=0.17, mat="concrete"):
+    """Remate (albardilla) de concreto sobre un pretil de 12 cm: 17 × 5 cm con vuelo de 2,5 cm a cada lado, cantos
+    redondeados, pendiente de 6 mm hacia adentro y gotero de 6 × 6 mm bajo cada vuelo; se asienta 2 mm en el pretil.
+    path: eje del pretil en planta, antihorario (el lado + del perfil queda hacia afuera)."""
+    h = w / 2
+    prof = [(-0.060, -0.002), (-0.070, 0.0), (-0.070, 0.006), (-0.076, 0.006), (-0.076, 0.0), (-h + 0.002, 0.0), (-h, 0.004),
+            (-h, 0.040), (-h + 0.004, 0.047), (-h + 0.011, 0.050), (h - 0.011, 0.056), (h - 0.004, 0.053), (h, 0.046), (h, 0.004),
+            (h - 0.002, 0.0), (0.076, 0.0), (0.076, 0.006), (0.070, 0.006), (0.070, 0.0), (0.060, -0.002)]
+    mb.sweep(list(reversed(prof)), [Vector((p[0], p[1], z)) for p in path], mat=mat, closed_profile=True, closed_path=closed,
+             normal=(0, 0, 1))
+
+
 def build_penthouse(cfg, mb, details=None):
     """Casetón sobre el núcleo: prolonga las 4 columnas (3.6/7.2, ±1.8), vigas perimetrales, losa de techo con pretil,
     muros norte/sur ciegos, muro este con ventilas. Se alarga al oeste hasta x = PENT_XW para que la escalera llegue a un
@@ -282,6 +319,7 @@ def build_penthouse(cfg, mb, details=None):
     mb.box((x0, y0, z1 - SLAB), (x1, y1, z1), "concrete", bevel=0.015, seg=2)
     for (a, b) in (((x0, y0), (x1, y0 + 0.12)), ((x0, y1 - 0.12), (x1, y1)), ((x0, y0 + 0.12), (x0 + 0.12, y1 - 0.12)), ((x1 - 0.12, y0 + 0.12), (x1, y1 - 0.12))):
         mb.box((a[0], a[1], z1), (b[0], b[1], z1 + 0.35), "concrete", bevel=0.01, seg=1)
+    coping(mb, [(x0 + 0.06, y0 + 0.06), (x1 - 0.06, y0 + 0.06), (x1 - 0.06, y1 - 0.06), (x0 + 0.06, y1 - 0.06)], z1 + 0.35)
     H = PENT_H - 0.40
     # muros norte y sur (ciegos), tramo entre columnas + prolongación hasta el muro oeste
     for sg, y in ((-1, cy[0]), (1, cy[1])):
@@ -302,6 +340,212 @@ def build_penthouse(cfg, mb, details=None):
     vents = [(round(L / 2 - 0.9, 4), round(L / 2 - 0.3, 4), 1.5, 2.0), (round(L / 2 + 0.3, 4), round(L / 2 + 0.9, 4), 1.5, 2.0)]
     wall_with_openings(mb, L, H, INFILL, vents, mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=me)
     return dict(door=(mw, door), vents=(me, vents), top_z=z1, rect=(x0, y0, x1, y1))
+
+
+# ----------------------------------------------------------------------------------------------
+# aplanado caído y grietas: el block a la vista (R-AAA, 2026-11-19 — antes los muros eran un plano liso)
+# ----------------------------------------------------------------------------------------------
+PLASTER_T = 0.015                       # aplanado de mortero (cemento-arena) de 1,5 cm
+BLOCK_H, BLOCK_L, JOINT = 0.20, 0.40, 0.01   # block hueco 15/12 × 20 × 40 (NMX, homedepot.com.mx) con junta de 1 cm
+
+
+def plan_patches(L, H, openings, r, n, size=(0.4, 1.3), margin=0.12, edge=0.07, crack=0.3):
+    """Hasta n parches (tipo, u0, u1, v0, v1) en un muro L × H que no tocan los vanos (margen: alféizares, rejas) ni los
+    bordes. tipo 'spall' = aplanado caído (se ve el block), 'crack' = grieta que atraviesa el aplanado."""
+    out = []
+    for _ in range(n * 8):
+        if len(out) >= n:
+            break
+        kind = "crack" if r.random() < crack else "spall"
+        if kind == "crack":
+            w, h = float(r.uniform(0.22, 0.45)), float(r.uniform(0.5, 1.1))
+        else:
+            w, h = float(r.uniform(*size)), float(r.uniform(size[0] * 0.8, size[1] * 0.85))
+        if w > L - 2 * edge or h > H - 2 * edge:
+            continue
+        u0 = float(r.uniform(edge, L - edge - w))
+        v0 = float(r.uniform(edge, H - edge - h))
+        rect = (u0, u0 + w, v0, v0 + h)
+        others = list(openings) + [q[1:] for q in out]
+        if any(not (rect[1] + margin < o[0] or rect[0] - margin > o[1] or rect[3] + margin < o[2] or rect[2] - margin > o[3])
+               for o in others):
+            continue
+        out.append((kind,) + tuple(round(x, 4) for x in rect))
+    return out
+
+
+def _ring_rect(u0, u1, v0, v1, n, start=None):
+    """n puntos en el perímetro del rectángulo, antihorario (u, v), CON las 4 esquinas (si no, el anillo del aplanado
+    corta la esquina y deja un agujerito), desde el punto más cercano a `start`."""
+    sides = [((u0, v0), (u1, v0)), ((u1, v0), (u1, v1)), ((u1, v1), (u0, v1)), ((u0, v1), (u0, v0))]
+    lens = [abs(u1 - u0), abs(v1 - v0), abs(u1 - u0), abs(v1 - v0)]
+    per = sum(lens)
+    cnt = [max(1, int(round(n * L / per))) for L in lens]
+    cnt[0] += n - sum(cnt)
+    pts = []
+    for (a, b), c in zip(sides, cnt):
+        for k in range(c):
+            t = k / c
+            pts.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    if start is not None:
+        k0 = min(range(n), key=lambda i: (pts[i][0] - start[0]) ** 2 + (pts[i][1] - start[1]) ** 2)
+        pts = pts[k0:] + pts[:k0]
+    return pts
+
+
+def _resample_closed(pts, n):
+    P = [Vector((p[0], p[1], 0.0)) for p in pts]
+    L = [(P[(i + 1) % len(P)] - P[i]).length for i in range(len(P))]
+    tot = sum(L)
+    out, i, acc = [], 0, 0.0
+    for k in range(n):
+        d = tot * k / n
+        while acc + L[i] < d - 1e-12:
+            acc += L[i]
+            i += 1
+        t = (d - acc) / max(L[i], 1e-12)
+        q = P[i].lerp(P[(i + 1) % len(P)], t)
+        out.append((q.x, q.y))
+    return out
+
+
+def patch_fill(mb, m, patch, t, r, filler="block", lip=PLASTER_T, mat_face="plaster", mat_back="plaster"):
+    """Rellena el hueco `patch` (tipo, u0, u1, v0, v1) abierto en un muro (coordenadas del muro: u, v; cara exterior y = 0,
+    interior y = t): aplanado roto alrededor (contorno irregular, canto de fractura con chaflán) y detrás, a 1,5 cm,
+    hiladas de block 40 × 20 cuatrapeadas con junta de mortero rehundida 8 mm (filler='block'), o concreto rugoso con la
+    malla de varilla del panel a la vista (filler='concrete', paneles de APT_D). Por dentro el muro conserva su aplanado.
+    'crack': el aplanado cubre todo menos una grieta de 2–6 mm que deja ver el fondo."""
+    kind, u0, u1, v0, v1 = patch
+    tmp = MB()
+    off = Vector((float(r.uniform(-300, 300)), float(r.uniform(-300, 300)), 0.0))
+    from mathutils import noise as mn
+    yb0, yb1 = lip + 0.001, t - PLASTER_T - 0.001
+    if filler == "block":
+        tmp.box((u0 + 0.001, yb0 + 0.008, v0 + 0.001), (u1 - 0.001, yb1 - 0.001, v1 - 0.001), "mortar", bevel=0.0)
+        pitch_v, pitch_u = BLOCK_H + JOINT, BLOCK_L + JOINT
+        for k in range(int(math.floor(v0 / pitch_v)) - 1, int(math.ceil(v1 / pitch_v)) + 1):
+            va, vb = k * pitch_v + JOINT / 2, k * pitch_v + JOINT / 2 + BLOCK_H
+            va, vb = max(va, v0 + 0.002), min(vb, v1 - 0.002)
+            if vb - va < 0.015:
+                continue
+            shift = pitch_u / 2 if k % 2 else 0.0
+            for j in range(int(math.floor((u0 - shift) / pitch_u)) - 1, int(math.ceil((u1 - shift) / pitch_u)) + 1):
+                ua, ub = shift + j * pitch_u + JOINT / 2, shift + j * pitch_u + JOINT / 2 + BLOCK_L
+                ua, ub = max(ua, u0 + 0.002), min(ub, u1 - 0.002)
+                if ub - ua < 0.015:
+                    continue
+                yo = float(r.uniform(-0.0015, 0.0025))
+                tmp.box((ua, yb0 + yo, va), (ub, yb1, vb), "block", bevel=0.004, seg=1)
+    else:
+        dep = 0.03                                         # el recubrimiento se cayó: queda el concreto y la malla
+        tmp.box((u0 + 0.001, yb0 + dep, v0 + 0.001), (u1 - 0.001, yb1, v1 - 0.001), "concrete", bevel=0.0)
+        bars = MB()
+        from kit import damage as dm
+        for uu in [u0 + 0.05 + 0.15 * i for i in range(int((u1 - u0 - 0.06) / 0.15) + 1)]:
+            dm._rebar(bars, [Vector((uu, yb0 + dep - 0.004, v0 + 0.004)), Vector((uu, yb0 + dep - 0.004, v1 - 0.004))], 0.0048,
+                      ribs=False, seg=12)
+        for vv in [v0 + 0.06 + 0.15 * i for i in range(int((v1 - v0 - 0.07) / 0.15) + 1)]:
+            dm._rebar(bars, [Vector((u0 + 0.004, yb0 + dep - 0.013, vv)), Vector((u1 - 0.004, yb0 + dep - 0.013, vv))], 0.0048,
+                      ribs=False, seg=12)
+        with tmp.soft():
+            tmp.join(bars)
+    # aplanado interior intacto; el aro de aplanado y esta placa llegan EXACTO al canto del hueco (con holgura se leía el
+    # rectángulo del parche como una raya fina); la carcasa no se suelda (merge=0), así no hay aristas de 4 caras
+    tmp.box((u0, t - PLASTER_T, v0), (u1, t, v1), mat_back, bevel=0.0)
+    # aplanado roto: anillo entre el borde del hueco y el contorno de la fractura
+    N = 64
+    cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+    if kind == "spall":
+        outer = _ring_rect(u0, u1, v0, v1, N)
+        inner = []
+        for (a, b) in outer:
+            th = math.atan2(b - cv, a - cu)
+            k = 0.70 + 0.16 * mn.noise(Vector((math.cos(th) * 1.6, math.sin(th) * 1.6, 0.0)) + off) \
+                + 0.05 * mn.noise(Vector((math.cos(th) * 6.0, math.sin(th) * 6.0, 0.0)) + off)
+            inner.append((cu + (a - cu) * k, cv + (b - cv) * k))
+    else:
+        # grieta: de una esquina a la opuesta con quiebres; ancho 2–6 mm que se adelgaza en las puntas
+        flip = r.random() < 0.5
+        A = Vector((u0 + 0.03, v0 + 0.03)) if not flip else Vector((u1 - 0.03, v0 + 0.03))
+        B = Vector((u1 - 0.03, v1 - 0.03)) if not flip else Vector((u0 + 0.03, v1 - 0.03))
+        npt = 14
+        path = []
+        for i in range(npt + 1):
+            s = i / npt
+            q = A.lerp(B, s)
+            nrm = Vector((-(B - A).y, (B - A).x)).normalized()
+            q = q + nrm * (0.035 * mn.noise(Vector((s * 4.0, 0.0, 0.0)) + off) + 0.01 * mn.noise(Vector((s * 13.0, 3.0, 0.0)) + off)) * math.sin(math.pi * s)
+            path.append(q)
+        left, right = [], []
+        for i, q in enumerate(path):
+            d = (path[min(i + 1, npt)] - path[max(i - 1, 0)]).normalized()
+            nrm = Vector((-d.y, d.x))
+            wdt = (0.0012 + 0.0022 * math.sin(math.pi * i / npt) * (0.7 + 0.3 * mn.noise(Vector((i * 0.7, 5.0, 0.0)) + off)))
+            left.append(q + nrm * wdt)
+            right.append(q - nrm * wdt)
+        slit = [(p.x, p.y) for p in right] + [(p.x, p.y) for p in reversed(left)][1:-1]
+        area = sum(slit[i][0] * slit[(i + 1) % len(slit)][1] - slit[(i + 1) % len(slit)][0] * slit[i][1] for i in range(len(slit)))
+        if area < 0:
+            slit = list(reversed(slit))
+        inner = _resample_closed(slit, N)
+        outer = _ring_rect(u0, u1, v0, v1, N, start=inner[0])
+    # anillos: exterior al frente, fractura al frente (chaflán de 2–4 mm), fractura al fondo, exterior al fondo
+    def V(u, y, v):
+        return tmp.bm.verts.new((u, y, v))
+    of = [V(a, 0.0, b) for (a, b) in outer]
+    ob = [V(a, lip, b) for (a, b) in outer]
+    inf, inb = [], []
+    for (a, b), (oa, obb) in zip(inner, outer):
+        dv = Vector((a - cu, b - cv))
+        dn = dv.normalized() if dv.length > 1e-6 else Vector((0.0, 0.0))
+        ch = float(r.uniform(0.002, 0.004)) if kind == "spall" else 0.0008
+        inf.append(V(a + dn.x * ch, 0.0, b + dn.y * ch))
+        jag = float(r.uniform(-0.003, 0.002)) if kind == "spall" else 0.0
+        inb.append(V(a - dn.x * jag, lip, b - dn.y * jag))
+    for i in range(N):
+        j = (i + 1) % N
+        tmp.face([of[i], of[j], inf[j], inf[i]], mat_face)
+        tmp.face([inf[i], inf[j], inb[j], inb[i]], "mortar")
+        tmp.face([inb[i], inb[j], ob[j], ob[i]], "mortar")
+        tmp.face([ob[i], ob[j], of[j], of[i]], "mortar")
+    mb.join(tmp, m)
+
+
+def _wall_patches(cfg, side, key, L, H, openings, density):
+    """Parches de una pared (semilla estable por pared): número según la densidad de la fachada."""
+    import zlib
+    r = rng(cfg["seed"] * 1000 + zlib.crc32(repr(key).encode()) % 100000)
+    n = int(density) + (1 if r.random() < density - int(density) else 0)
+    return plan_patches(L, H, openings, r, n) if n > 0 else [], r
+
+
+PATCH_DENSITY = {"front": 0.8, "back": 0.9, "west": 2.0, "east": 0.8}
+
+
+def panel_patched(cfg, mb, side, line, bay, lv, kinds, H=None, d=0.0, z0=None, mat="plaster", collect=None, tag=""):
+    """apt_common.panel con aplanado caído y grietas (block a la vista) en el muro: mismo dict de panel (ops y matriz),
+    los parches NO van en 'ops' (no son vanos que se vistan ni cuentan para el grafiti)."""
+    import apt_common as ac
+    coords, sizes, face = ac.line_geom(cfg, side, line)
+    a0, a1 = bay_span(coords, bay, sizes)
+    L = a1 - a0
+    zl = level_z(cfg)
+    z0 = zl[lv] if z0 is None else z0
+    H = cfg["h"][lv] - BEAM_D if H is None else H
+    ops = ac.layout_openings(kinds, L, H)
+    m = ac.panel_matrix(side, a0, a1, face, z0, d)
+    no = any(k in ("shutter", "portico", "lobby", "lobby_door") for k, _ in ops)
+    dens = 0.0 if no else cfg.get("patch_density", PATCH_DENSITY).get(side, 0.0)
+    patches, pr = _wall_patches(cfg, side, (line, bay, lv), L, H, [o for _, o in ops], dens)
+    wall_with_openings(mb, L, H, INFILL, [o for _, o in ops] + [q[1:] for q in patches], mat_out=mat, mat_in="plaster",
+                       mat_reveal="concrete", m=m)
+    for q in patches:
+        patch_fill(mb, m, q, INFILL, pr)
+    p = dict(side=side, line=line, bay=bay, level=lv, a0=a0, a1=a1, L=L, z0=z0, H=H, face=face, recess=d, m=m, ops=ops, tag=tag,
+             patches=patches)
+    if collect is not None:
+        collect.append(p)
+    return p
 
 
 # ----------------------------------------------------------------------------------------------
@@ -368,7 +612,12 @@ def build_facade(cfg, mb, side):
             m = m_wall_y(p["a1"], p["face"] + d, p["z0"], +1)
         else:
             m = m_wall_y(p["a0"], p["face"] - d, p["z0"], -1)
-        wall_with_openings(mb, L, H, INFILL, openings, mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
+        dens = cfg.get("patch_density", PATCH_DENSITY).get(side, 0.0) if kind not in ("breeze", "shutter", "lobby") else 0.0
+        patches, pr = _wall_patches(cfg, side, (p["level"], p["bay"]), L, H, openings, dens)
+        wall_with_openings(mb, L, H, INFILL, openings + [q[1:] for q in patches], mat_out="plaster", mat_in="plaster",
+                           mat_reveal="concrete", m=m)
+        for q in patches:
+            patch_fill(mb, m, q, INFILL, pr)
         if d > 0:  # retornos laterales de loggia / vestíbulo rehundido
             for a in (p["a0"], p["a1"] - INFILL):
                 if side == "front":
@@ -521,6 +770,54 @@ def dress_openings(cfg, placed, details, interior):
     return n
 
 
+def door_frame_remnant(w, h, t, seed=0, mat=None):
+    """Lo que queda de un marco de puerta interior cuya hoja se arrancó (R-AAA: el vano no queda como un corte limpio en el
+    muro): forro de jambas y cabezal de pino de 19 mm del espesor del muro, chambrana de 70 × 15 mm con canto redondeado en
+    las dos caras (a veces arrancada en un tramo, con la punta astillada), tope de 12 × 35 mm, las 2 o 3 bisagras rotas
+    (media hoja con nudillo) y el contra del pestillo. Local del vano: u 0..w, v 0..h, muro y 0..t."""
+    from kit.clinic_equipo import revolve
+    r = rng(seed)
+    mat = mat or ("wood" if r.random() < 0.55 else "wood_dark")
+    mb = MB()
+    jt = 0.019
+    # forro (jambas y cabezal): tablas del espesor del muro
+    e = 0.0006                                   # holgura con el canto del vano (sin caras coincidentes)
+    mb.box((e, e, 0.0), (jt + e, t - e, h - e), mat, bevel=0.002, seg=1)
+    mb.box((w - jt - e, e, 0.0), (w - e, t - e, h - e), mat, bevel=0.002, seg=1)
+    mb.box((jt + e + 0.0005, e, h - jt - e), (w - jt - e - 0.0005, t - e, h - e), mat, bevel=0.002, seg=1)
+    # tope (donde cerraba la hoja), a 4 cm de la cara interior
+    for (a, b) in (((jt, t - 0.075), (jt + 0.012, t - 0.04)), ((w - jt - 0.012, t - 0.075), (w - jt, t - 0.04))):
+        mb.box((a[0], a[1], 0.0), (b[0], b[1], h - jt), mat, bevel=0.0015, seg=1)
+    mb.box((jt + 0.0125, t - 0.075, h - jt - 0.012), (w - jt - 0.0125, t - 0.04, h - jt - 0.0005), mat, bevel=0.0015, seg=1)
+    # chambranas en las dos caras: jambas + cabezal a inglete (perfil 70 × 15 con canto redondeado de 5 mm)
+    cw, ct = 0.07, 0.015
+    for face, sg in ((0.0, -1), (t, 1)):
+        yb, ye = sorted((face, face + sg * ct))
+        for side in (0, 1):
+            if r.random() < 0.18:                 # tramo arrancado: queda un pedazo de abajo con la punta rota
+                hh = float(r.uniform(0.25, 1.2))
+                x0 = -cw + 0.004 if side == 0 else w - 0.004
+                mb.box((x0, yb, 0.0), (x0 + cw, ye, hh), mat, bevel=0.004, seg=2)
+                for k in range(5):                # astillas de la rotura
+                    xx = x0 + cw * (k + 0.5) / 5
+                    ln = float(r.uniform(0.01, 0.06))
+                    mb.box((xx - 0.006, yb + 0.002, hh - 0.002), (xx + 0.006, ye - 0.002, hh + ln), mat, bevel=0.002, seg=1)
+                continue
+            x0 = -cw + 0.004 if side == 0 else w - 0.004
+            mb.box((x0, yb, 0.0), (x0 + cw, ye, h + cw - 0.004), mat, bevel=0.004, seg=2)
+        if r.random() < 0.85:                     # cabezal a tope entre las jambas (sin traslape coplanar)
+            mb.box((0.0045, yb, h - 0.004), (w - 0.0045, ye, h + cw - 0.004), mat, bevel=0.004, seg=2)
+    # bisagras rotas (media hoja de 89 mm atornillada al forro con su nudillo) y contra del pestillo
+    hx = jt if r.random() < 0.5 else w - jt
+    sgn = 1 if hx == jt else -1
+    for zc in ((0.25, h - 0.28) if r.random() < 0.5 else (0.25, h / 2, h - 0.28)):
+        mb.box((hx, t - 0.04 - 0.0, zc - 0.045), (hx + sgn * 0.0025, t - 0.004, zc + 0.045), "steel", bevel=0.0006, seg=1)
+        revolve(mb, [(0.0, -0.045), (0.0065, -0.045), (0.0065, 0.045), (0.0, 0.045)], "steel", seg=16, M=_T(hx + sgn * 0.004, t - 0.002, zc))
+    lx = w - jt if hx == jt else jt
+    mb.box((lx - 0.0015, t - 0.065, 0.98), (lx + 0.0015, t - 0.04, 1.08), "brass", bevel=0.0005, seg=1)
+    return mb
+
+
 def dress_interior_doors(cfg, doors, interior):
     from kit import openings as op
     r = rng(cfg["seed"] + 202)
@@ -528,6 +825,9 @@ def dress_interior_doors(cfg, doors, interior):
     for d in doors:
         keep = 0.45 if d["tag"] == "entry" else 0.06         # saqueo: casi todas las hojas interiores arrancadas (queda el vano)
         if r.random() > keep:
+            if d["tag"] != "open":                           # el marco se queda (los vanos de paso abiertos no llevan)
+                interior.join(door_frame_remnant(d["w"], d["h"], d["t"], seed=int(cfg["seed"] * 997 + n * 13 + int(d["u0"] * 1000))),
+                              d["m"] @ _T(d["u0"], 0, 0))
             continue
         M = d["m"] @ _T(d["u0"], 0, 0)
         interior.join(op.door("flush", d["w"], d["h"], d["t"], seed=int(r.integers(0, 10**6)), open_angle=max(80.0, float(r.uniform(0, 95)))), M)   # nunca casi cerrada: se debe poder pasar

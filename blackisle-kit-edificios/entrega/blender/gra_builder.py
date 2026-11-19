@@ -22,7 +22,12 @@ import apt_common as ac
 from kit import clinic as cl
 from kit import services as sv
 from kit.common import MB, get_collection, rng, wall_with_openings
+from kit.farm import bplate, log_post, nsides
+from kit.farm import cyl as rcyl
+from kit.farm import lathe as rlathe
+from kit.farm import tube as rtube_
 
+PI = math.pi
 # ---------------------------------------------------------------------------------------------------------- granero
 BX0, BX1, BY0, BY1 = -6.0, 6.0, -8.0, 8.0
 TB = 0.20                       # block
@@ -284,10 +289,21 @@ def corrugated_plane(mb, p0, p1, y0, y1, mat, pitch=0.076, amp=0.009, nseg=8, sc
         w = y0 + pitch / 4 + pitch * 3 * 0.5
         while w < y1 - 0.05:
             c = Vector(p0) + D * s + Y * (w - Vector(p0).y) + N * amp
-            mb.cyl(tuple(c), tuple(c + N * 0.004), 0.011, seg=8, mat="rubber", caps=True)
-            mb.cyl(tuple(c + N * 0.004), tuple(c + N * 0.0095), 0.0075, seg=6, mat="steel", caps=True)
+            _roof_screw(mb, c, N)
             w += pitch * 3
         s += screw_rows
+
+
+def _roof_screw(mb, c, N):
+    """Tornillo autotaladrante de lámina 1/4-14 con rondana de neopreno vulcanizada a copa de acero (Ø 14 mm) y cabeza
+    hexagonal con brida de 5/16" (8 mm entre caras); la rondana se aplasta 0,5 mm sobre la cresta. Se repite ~2 000 veces y se
+    ve a >= 2,5 m: rondana de 10 lados con sombreado continuo (flecha 0,34 mm)."""
+    M = Matrix.Translation(Vector(c) - Vector(N) * 0.0005) @ Vector(N).to_track_quat("Z", "Y").to_matrix().to_4x4()
+    from kit.clinic_equipo import revolve as _rev
+    with mb.soft():
+        _rev(mb, [(0.007, 0.0), (0.007, 0.0022), (0.0062, 0.0034), (0.0049, 0.0037)], ["rubber", "steel", "steel"], seg=10, M=M,
+             caps=False)
+    _rev(mb, [(0.0049, 0.0037), (0.0049, 0.0052), (0.0045, 0.0088), (0.0, 0.0093)], "steel", seg=6, M=M, phase=PI / 6, caps=False)
 
 
 def barn_roof(roof, det, inter):
@@ -379,7 +395,8 @@ def _bolt_plate(mb, c, nrm, size=0.10):
     for dv in (-size * 0.55, size * 0.55):
         p = M @ Vector((0, dv, 0.006))
         mb.cyl(tuple(p), tuple(p + n * 0.012), 0.012, seg=6, mat="metal_rust")
-        mb.cyl(tuple(p + n * 0.012), tuple(p + n * 0.03), 0.007, seg=8, mat="metal_rust")
+        rcyl(mb, tuple(p + n * 0.012), tuple(p + n * 0.026), 0.007, mat="metal_rust")
+        rlathe(mb, [(0.007, 0.0), (0.0055, 0.0025), (0.0, 0.003)], mat="metal_rust", M=Matrix.Translation(p + n * 0.026) @ n.to_track_quat("Z", "Y").to_matrix().to_4x4(), caps=False)
 
 
 def barn_frame(inter):
@@ -396,7 +413,7 @@ def barn_frame(inter):
             inter.box((x - 0.10, y - 0.10, FLOOR_B + 0.06), (x + 0.10, y + 0.10, ztop), "wood", bevel=0.008)
             for sgn in (-1, 1):                                                                       # estribo de acero
                 inter.box((x - 0.105, y + sgn * 0.10, FLOOR_B + 0.06), (x + 0.105, y + sgn * 0.106, FLOOR_B + 0.30), "metal_rust",
-                          bevel=0.0)
+                          bevel=0.0012)
                 for zb in (FLOOR_B + 0.13, FLOOR_B + 0.24):                                         # pernos del estribo
                     p = Vector((x, y + sgn * 0.106, zb))
                     inter.cyl(tuple(p), tuple(p + Vector((0, sgn * 0.012, 0))), 0.011, seg=6, mat="metal_rust")
@@ -477,41 +494,115 @@ def board_leaf(mb, M, w, h, t=0.05, brace="X", trim=True, seed=0, board_mat="woo
 
 
 def strap_hinge(mb, M, u, v, L=0.45, side=1):
-    """Bisagra de cinta (forja) con 3 pijas, sobre la cara exterior (local de la hoja)."""
-    mb.box((u, -0.006, v - 0.022), (u + side * L, 0.0, v + 0.022), "metal_rust", bevel=0.002, m=M) if side > 0 else \
-        mb.box((u + side * L, -0.006, v - 0.022), (u, 0.0, v + 0.022), "metal_rust", bevel=0.002, m=M)
-    for k in (0.08, 0.22, 0.38):
-        p = M @ Vector((u + side * k * L / 0.45, -0.006, v))
-        mb.cyl(tuple(p), tuple(p + (M.to_3x3() @ Vector((0, -0.005, 0)))), 0.008, seg=8, mat="metal_rust")
+    """Bisagra de cinta forjada (T de granero): cola de solera de 3/16" que se adelgaza de 44 a 26 mm y remata en punta
+    redondeada, nudillo enrollado sobre el perno con su gozne en el marco, 3 pijas de cabeza de gota (local de la hoja: cara
+    exterior y = 0, la cola corre en ±u desde u)."""
+    t = 0.0048
+    w0, w1 = 0.044, 0.026
+    out = [(0.0, -w0 / 2)]
+    for k in range(1, 7):
+        x = L * 0.92 * k / 6
+        out.append((x, -(w0 + (w1 - w0) * k / 6) / 2))
+    for k in range(9):                                            # punta redondeada
+        a = -PI / 2 + PI * k / 8
+        out.append((L * 0.92 + w1 / 2 * math.cos(a), w1 / 2 * math.sin(a)))
+    for k in range(6, 0, -1):
+        x = L * 0.92 * k / 6
+        out.append((x, (w0 + (w1 - w0) * k / 6) / 2))
+    out.append((0.0, w0 / 2))
+    Ms = M @ _T(u, -t, v) @ _Rx(90) @ (Matrix.Diagonal((side, 1.0, 1.0, 1.0)) if side < 0 else Matrix())
+    if side < 0:
+        out = [(x, -y) for (x, y) in reversed(out)]
+    bplate(mb, out, t, "metal_rust", M=Ms, e=0.0012)
+    Mk = M @ _T(u, -0.011, v) @ _Rx(0)
+    rcyl(mb, tuple(Mk @ Vector((0, 0, -w0 / 2))), tuple(Mk @ Vector((0, 0, w0 / 2))), 0.0085, mat="metal_rust")      # nudillo
+    for k in (0.1, 0.42, 0.74):
+        p = Vector((u + side * k * L, -t, v))
+        rlathe(mb, [(0.0058, 0.0), (0.0056, 0.0012), (0.0042, 0.0026), (0.0022, 0.0033), (0.0, 0.0035)], mat="metal_rust",
+               M=M @ _T(*p) @ _Rx(90), caps=False)
+
+
+def _box_rail(det, x0, x1, y, z, w=0.044, h=0.057, t=0.0025, r=0.004, slot=0.018):
+    """Riel de caja (box rail) de lámina galvanizada de 1-3/4" × 2-1/4" con ranura inferior (los carros ruedan adentro sobre
+    las pestañas): perfil cerrado barrido a lo largo de X; y = centro, z = cara inferior."""
+    def rr_(cx, cz, rad, a0, a1, n=4):
+        return [(cx + rad * math.cos(math.radians(a0 + (a1 - a0) * k / n)), cz + rad * math.sin(math.radians(a0 + (a1 - a0) * k / n)))
+                for k in range(n + 1)]
+    hw = w / 2
+    o = [(-slot / 2, 0.0)] + rr_(-hw + r, r, r, 270, 180) + rr_(-hw + r, h - r, r, 180, 90) + rr_(hw - r, h - r, r, 90, 0) + \
+        rr_(hw - r, r, r, 0, -90) + [(slot / 2, 0.0), (slot / 2, t)]
+    ri = max(r - t, 0.0008)
+    i_ = rr_(hw - r, r, ri, -90, 0) + rr_(hw - r, h - r, ri, 0, 90) + rr_(-hw + r, h - r, ri, 90, 180) + rr_(-hw + r, r, ri, 180, 270)
+    i_ = [(x, max(zz, t)) for (x, zz) in i_]
+    prof = o + i_ + [(-slot / 2, t)]
+    prof = [(py, z + pz) for (py, pz) in prof]
+    rings = [[Vector((x, y + py, pz)) for (py, pz) in prof] for x in (x0, x1)]
+    from kit.clinic_equipo import loft_rings
+    loft_rings(det, rings, "galvanized", cap0=True, cap1=True)
+
+
+def _trolley(det, xc, y, zr, zleaf, M):
+    """Carro de 4 ruedas dentro del riel de caja y su colgador: cuerpo de lámina, ruedas de acero Ø 38 con balero sobre las
+    pestañas, perno pasante con tuerca, solera colgante que baja por la ranura y se atornilla al cabezal de la hoja (2 pernos
+    de coche con tuerca)."""
+    for dx in (-0.032, 0.032):
+        for sy in (-1, 1):
+            c = Vector((xc + dx, y + sy * 0.0085, zr + 0.0025 + 0.019))
+            rcyl(det, tuple(c - Vector((0, 0.0035, 0))), tuple(c + Vector((0, 0.0035, 0))), 0.019, mat="steel")
+            rcyl(det, tuple(c - Vector((0, 0.0045, 0))), tuple(c + Vector((0, 0.0045, 0))), 0.007, mat="galvanized")
+    det.box((xc - 0.05, y - 0.004, zr + 0.012), (xc + 0.05, y + 0.004, zr + 0.042), "galvanized", bevel=0.0015)
+    det.box((xc - 0.025, y - 0.003, zleaf - 0.12), (xc + 0.025, y + 0.003, zr + 0.03), "metal_rust", bevel=0.0012)
+    rlathe(det, [(0.012, 0.0), (0.012, 0.004)], seg=6, mat="metal_rust", M=_T(xc, y + 0.0035, zr + 0.022) @ _Rx(-90), phase=PI / 6)
+    for dz in (-0.04, -0.09):
+        rlathe(det, [(0.011, -0.0003), (0.0105, 0.002), (0.008, 0.0045), (0.004, 0.006), (0.0, 0.0063)], mat="metal_rust",
+               M=_T(xc, y - 0.003, zleaf + dz) @ _Rx(90), caps=False)
 
 
 def barn_doors(det):
-    """Portón corredizo de dos hojas sobre riel de acero (una abierta), puerta del tapanco con viga de polea, puerta trasera de
-    dos hojas, puertas de hombre en los costados."""
+    """Portón corredizo de dos hojas (una abierta) colgado de riel de caja galvanizado sobre cabezal de 2x8 con ménsulas a cada
+    60 cm, carros de 4 ruedas, topes de hule en los extremos y guías de rodillo en el piso; jaladera de barra redonda en cada
+    hoja; puerta del tapanco con viga de polea, puerta trasera de dos hojas, puertas de hombre en los costados."""
     yf = BY0 - 0.02 - 0.03                       # paño de las tablas del hastial
-    # riel con ménsulas y topes
-    zr = DOOR_H + 0.25
-    det.box((-4.7, yf - 0.16, zr), (4.7, yf - 0.08, zr + 0.09), "metal_rust", bevel=0.004)
-    x = -4.5
-    while x <= 4.6:
-        det.box((x - 0.04, yf - 0.16, zr + 0.09), (x + 0.04, yf, zr + 0.14), "metal_rust", bevel=0.003)
-        det.box((x - 0.04, yf - 0.012, zr - 0.05), (x + 0.04, yf, zr + 0.14), "metal_rust", bevel=0.002)
-        x += 1.0
-    for x in (-4.66, 4.62):
-        det.box((x, yf - 0.20, zr - 0.04), (x + 0.04, yf - 0.06, zr + 0.13), "metal_rust", bevel=0.003)
+    zr = DOOR_H + 0.25                           # cara inferior del riel
+    yr = yf - 0.10                               # eje del riel (sobre el plano de las hojas)
+    # cabezal de 2x8 sobre las tablas, con pijas
+    det.box((-4.85, yf - 0.038, zr - 0.07), (4.85, yf + 0.006, zr + 0.12), "wood", bevel=0.005)
+    _box_rail(det, -4.72, 4.72, yr, zr)
+    x = -4.62
+    while x <= 4.65:                                             # ménsulas: placa al cabezal, brazo y abrazadera sobre el riel
+        det.box((x - 0.025, yf - 0.046, zr - 0.03), (x + 0.025, yf - 0.038, zr + 0.105), "galvanized", bevel=0.0015)
+        det.box((x - 0.025, yr - 0.026, zr + 0.057), (x + 0.025, yf - 0.042, zr + 0.065), "galvanized", bevel=0.0015)
+        det.box((x - 0.025, yr - 0.026, zr + 0.02), (x + 0.025, yr - 0.0225, zr + 0.065), "galvanized", bevel=0.0012)
+        for z in (zr - 0.005, zr + 0.08):
+            rlathe(det, [(0.007, 0.0), (0.007, 0.0025), (0.0055, 0.004), (0.0, 0.0042)], seg=6, mat="galvanized",
+                   M=_T(x, yf - 0.046, z) @ _Rx(90), phase=PI / 6)
+        rlathe(det, [(0.0065, 0.0), (0.0062, 0.0015), (0.004, 0.0028), (0.0, 0.003)], mat="galvanized", M=_T(x, yr, zr + 0.065))
+        x += 0.60
+    for xe in (-4.70, 4.70):                                     # topes de hule dentro del riel
+        rcyl(det, (xe - math.copysign(0.035, xe), yr, zr + 0.028), (xe, yr, zr + 0.028), 0.016, mat="rubber")
     leaves = [(-DOOR_W / 2 - 2.2, 0), (0.0 - 0.02, 1)]       # izquierda abierta (corrida a la izquierda), derecha cerrada
     for (x0, k) in leaves:
         w = DOOR_W / 2 + 0.12
         M = _T(x0, yf - 0.14, FLOOR_B * 0.3) @ _Rz(0)
         board_leaf(det, M, w, DOOR_H + 0.05, seed=11 + k)
-        for ut in (0.25, w - 0.25):                                                              # carros colgantes
-            det.box((ut - 0.05, -0.012 - 0.01, DOOR_H - 0.12), (ut + 0.05, 0.0 - 0.01, zr + 0.06), "metal_rust", bevel=0.002, m=M)
-            pc = M @ Vector((ut, -0.05, zr + 0.11))
-            det.cyl(tuple(pc + Vector((0, -0.03, 0))), tuple(pc + Vector((0, 0.03, 0))), 0.045, seg=16, mat="metal_rust")
-        det.box((w * 0.5 - 0.012, -0.08, 1.05), (w * 0.5 + 0.012, -0.03, 1.40), "metal_rust", bevel=0.004, m=M)       # jaladera
-        for vv in (1.05, 1.40):
-            det.box((w * 0.5 - 0.015, -0.05, vv - 0.015), (w * 0.5 + 0.015, -0.0, vv + 0.015), "metal_rust", bevel=0.002, m=M)
-    det.box((-0.09, yf - 0.20, 0.0), (0.09, yf - 0.06, 0.05), "metal_rust", bevel=0.004)                  # guía de piso
+        zleaf = FLOOR_B * 0.3 + DOOR_H + 0.05
+        for ut in (0.28, w - 0.28):                                                              # carros colgantes
+            _trolley(det, x0 + ut, yr, zr, zleaf, M)
+        ug = w - 0.055 if k == 0 else 0.055                     # jaladera en el larguero del lado que cierra
+        pts = [(ug, -0.028, 1.0), (ug, -0.085, 1.0), (ug, -0.085, 1.36), (ug, -0.028, 1.36)]
+        rtube_(det, [tuple(M @ Vector(p)) for p in cl.fillet(pts, 0.03, 6)], 0.0105, mat="metal_rust", caps=False)
+        for vv in (1.0, 1.36):
+            det.box((ug - 0.022, -0.036, vv - 0.035), (ug + 0.022, -0.028, vv + 0.035), "metal_rust", bevel=0.002, m=M)
+            for dv in (-0.022, 0.022):
+                rlathe(det, [(0.004, 0.0), (0.0038, 0.0012), (0.0026, 0.0022), (0.0, 0.0024)], mat="metal_rust",
+                       M=M @ _T(ug, -0.036, vv + dv) @ _Rx(90), caps=False)
+    for xg in (-DOOR_W / 2 - 0.12, DOOR_W / 2 + 0.12):           # guías de rodillo en el piso (a cada lado del plano de las hojas)
+        det.box((xg - 0.06, yf - 0.215, 0.0), (xg + 0.06, yf - 0.075, 0.008), "galvanized", bevel=0.002)
+        for yy in (yf - 0.185, yf - 0.098):
+            rcyl(det, (xg, yy, 0.008), (xg, yy, 0.07), 0.014, mat="rubber")
+            rlathe(det, [(0.0065, 0.07), (0.0065, 0.075), (0.004, 0.077), (0.0, 0.0775)], mat="galvanized", M=_T(xg, yy, 0.0))
+        for xx in (xg - 0.045, xg + 0.045):
+            rlathe(det, [(0.006, 0.008), (0.0055, 0.0095), (0.0035, 0.0108), (0.0, 0.011)], mat="galvanized", M=_T(xx, yf - 0.142, 0.0))
     # puerta del tapanco (dos hojas, una entreabierta) y viga de polea
     lx0, lx1, lz0, lz1 = LOFT_DOOR
     w2 = (lx1 - lx0) / 2
@@ -679,8 +770,8 @@ def awning(det, roof):
     for x in (SX0 + 0.15, (SX0 + SX1) / 2, SX1 - 0.15):
         lean = float(r.uniform(-0.012, 0.012))
         det.box((x - 0.12, ypost - 0.12, S_FFL), (x + 0.12, ypost + 0.12, S_FFL + 0.10), "concrete", bevel=0.01)
-        det.tube([(x, ypost, S_FFL + 0.08), (x + lean, ypost + lean * 0.5, zb - 0.16)], 0.075, seg=14, mat="wood", caps=True,
-                 radii=[0.078, 0.07])
+        log_post(det, (x, ypost, S_FFL + 0.07), (x + lean, ypost + lean * 0.5, zb - 0.16), 0.078, 0.068, "wood", r, crook=0.012,
+                 top=False, checks=2, rough=0.05)
         det.box((x - 0.06, ypost - 0.012, zb - 0.30), (x + 0.06, ypost + 0.0, zb - 0.16), "metal_rust", bevel=0.002)
     det.box((SX0 - 0.15, ypost - 0.05, zb - 0.18), (SX1 + 0.15, ypost + 0.05, zb), "wood", bevel=0.006)
     det.box((SX0 - 0.15, SY0 - 0.08, zl - 0.18), (SX1 + 0.15, SY0, zl), "wood", bevel=0.006)
@@ -718,8 +809,7 @@ def _corr_x(mb, p0, p1, x0, x1, mat, pitch=0.076, amp=0.009, nseg=8):
         w = pitch / 4
         while w < x1 - x0 - 0.05:
             c = p0 + D * s + X * w + N * amp
-            mb.cyl(tuple(c), tuple(c + N * 0.004), 0.011, seg=8, mat="rubber")
-            mb.cyl(tuple(c + N * 0.004), tuple(c + N * 0.0095), 0.0075, seg=6, mat="steel")
+            _roof_screw(mb, c, N)
             w += pitch * 3
 
 
@@ -744,12 +834,12 @@ def store_openings(det, furn):
                     det.box((-0.05, -0.36, -0.06), (w + 0.05, -0.0, -0.02), "wood", bevel=0.008, m=Mo)
                     for uu in (0.15, w - 0.15):
                         det.box((uu - 0.02, -0.30, -0.30), (uu + 0.02, -0.0, -0.06), "metal_rust", bevel=0.003, m=Mo)
-                        det.tube([tuple(Mo @ Vector((uu, -0.28, -0.06))), tuple(Mo @ Vector((uu, -0.01, -0.28)))], 0.008, seg=6,
-                                 mat="metal_rust")
+                        rtube_(det, [tuple(Mo @ Vector((uu, -0.28, -0.06))), tuple(Mo @ Vector((uu, -0.01, -0.28)))], 0.008,
+                               mat="metal_rust")
                     pc = Mo @ Vector((w - 0.25, -0.2, -0.02))
-                    det.cyl(tuple(pc), tuple(pc + Vector((0, 0, 0.012))), 0.045, seg=20, mat="steel")
-                    det.cyl(tuple(pc + Vector((0, 0, 0.012))), tuple(pc + Vector((0, 0, 0.05))), 0.035, seg=20, mat="aluminium",
-                            r1=0.012)
+                    rlathe(det, [(0.0, 0.0), (0.045, 0.0), (0.046, 0.004), (0.044, 0.012), (0.0, 0.012)], mat="steel", M=_T(*pc))
+                    rlathe(det, [(0.0, 0.012), (0.035, 0.012), (0.036, 0.016), (0.03, 0.03), (0.018, 0.044), (0.008, 0.05), (0.006, 0.058),
+                                 (0.0, 0.06)], mat="aluminium", M=_T(*pc))              # campana de mostrador
     signs(det)
 
 
@@ -769,7 +859,7 @@ def security_gate(w, h, ang=-160.0):
     out = MB()
     out.join(g, M)
     for v in (0.3, h - 0.3):                                                     # bisagras de barril
-        out.cyl((0.0, -0.035, v - 0.06), (0.0, -0.035, v + 0.06), 0.014, seg=12, mat="metal_rust")
+        rcyl(out, (0.0, -0.035, v - 0.06), (0.0, -0.035, v + 0.06), 0.014, mat="metal_rust")
     return out
 
 
@@ -782,7 +872,7 @@ def heavy_bars(w, h):
         mb.box(a, b, "paint_green", bevel=0.003)
     u = 0.10
     while u < w - 0.08:
-        mb.cyl((u, -t / 2, 0.335), (u, -t / 2, h - 0.035), 0.0095, seg=10, mat="paint_green")
+        rcyl(mb, (u, -t / 2, 0.335), (u, -t / 2, h - 0.035), 0.0095, mat="paint_green")
         u += 0.10
     return mb
 
@@ -805,19 +895,61 @@ def store_services(det, furn):
              _T(SX0 + 0.45, SY0, 1.45) @ _Rz(180))
     det.join(cl.remap(sv.conduit([(SX0 + 0.45, SY0, 1.95), (SX0 + 0.45, SY0, S_PARA - 0.1), (SX0 + 0.45, SY0 + 0.25, S_PARA + 0.3)],
                                  seed=5, detail="high"), {"metal_rust": "steel"}))
-    # tinaco en base de ángulo de 0,9 m
+    # tinaco sobre base de ángulo de 2" × 3/16" (0,9 m): 4 patas, 2 marcos de ángulo, cama de solera y placas de desplante
     tx, ty = SX1 - 1.4, SY1 - 1.6
-    for (dx, dy) in ((-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5), (0.5, 0.5)):
-        det.box((tx + dx - 0.025, ty + dy - 0.025, S_ST), (tx + dx + 0.025, ty + dy + 0.025, S_ST + 0.9), "steel", bevel=0.002)
+    hb = 0.52
+    for (sx, sy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        c = (tx + sx * hb, ty + sy * hb)
+        _angle(det, (c[0], c[1], S_ST + 0.008), (c[0], c[1], S_ST + 0.9), legs=((-sx, 0), (0, -sy)))
+        det.box((c[0] - 0.06, c[1] - 0.06, S_ST), (c[0] + 0.06, c[1] + 0.06, S_ST + 0.008), "steel", bevel=0.002)
+        for (ax, ay) in ((-sx * 0.036, sy * 0.032), (sx * 0.032, -sy * 0.036)):      # taquetes de anclaje (tuerca hexagonal)
+            rlathe(det, [(0.009, 0.008), (0.009, 0.0135), (0.0075, 0.015), (0.0, 0.0155)], seg=6, mat="steel",
+                   M=_T(c[0] + ax, c[1] + ay, 0.0), phase=PI / 6)
+            rlathe(det, [(0.0045, 0.0155), (0.0045, 0.022), (0.0035, 0.0235), (0.0, 0.024)], mat="steel", M=_T(c[0] + ax, c[1] + ay, 0.0))
     for z in (S_ST + 0.30, S_ST + 0.88):
-        for (a, b) in (((tx - 0.52, ty - 0.52), (tx + 0.52, ty - 0.48)), ((tx - 0.52, ty + 0.48), (tx + 0.52, ty + 0.52)),
-                       ((tx - 0.52, ty - 0.52), (tx - 0.48, ty + 0.52)), ((tx + 0.48, ty - 0.52), (tx + 0.52, ty + 0.52))):
-            det.box((a[0], a[1], z - 0.02), (b[0], b[1], z + 0.02), "steel", bevel=0.002)
-    det.box((tx - 0.56, ty - 0.56, S_ST + 0.9), (tx + 0.56, ty + 0.56, S_ST + 0.93), "steel", bevel=0.003)
+        for (p0, p1, lg) in (((tx - hb, ty - hb), (tx + hb, ty - hb), ((0, 1), (0, 0))), ((tx - hb, ty + hb), (tx + hb, ty + hb), ((0, -1), (0, 0))),
+                             ((tx - hb, ty - hb), (tx - hb, ty + hb), ((1, 0), (0, 0))), ((tx + hb, ty - hb), (tx + hb, ty + hb), ((-1, 0), (0, 0)))):
+            _angle(det, (p0[0], p0[1], z), (p1[0], p1[1], z), legs=(lg[0], None))
+    for k in range(5):                                           # cama de soleras
+        x = tx - 0.44 + 0.22 * k
+        det.box((x - 0.025, ty - 0.55, S_ST + 0.9), (x + 0.025, ty + 0.55, S_ST + 0.906), "steel", bevel=0.0015)
+    det.box((tx - 0.55, ty - 0.55, S_ST + 0.906), (tx + 0.55, ty + 0.55, S_ST + 0.93), "plywood", bevel=0.004)
     det.join(sv.water_tank(seed=6, detail="high"), _T(tx, ty, S_ST + 0.93))
     det.join(cl.remap(sv.ac_unit("split_outdoor", seed=7, detail="mid"), {"metal_rust": "enamel", "metal_paint": "sign_white"}),
              _T(SX0 + 1.4, SY1 + 0.02, 1.0) @ _Rz(180))
-    det.cyl((SX1 - 0.3, SY1 + 0.05, 0.25), (SX1 - 0.3, SY1 + 0.05, S_ST + 0.05), 0.05, seg=14, mat="plastic")      # bajada pluvial
+    # bajada pluvial de PVC de 4": gárgola por el pretil al nivel de la losa, codo, tubo con abrazaderas y zapata abajo
+    bx, by, rp = SX1 - 0.3, SY1 + 0.055, 0.0505
+    path = [(bx, SY1 - 0.18, S_ST + 0.07), (bx, by, S_ST + 0.07), (bx, by, 0.32), (bx, by + 0.12, 0.2)]
+    rtube_(det, cl.fillet(path, 0.09, 8), rp, mat="plastic")
+    for z in (0.9, 2.2):                                          # abrazaderas de solera con dos pijas
+        loop = [(bx + (rp + 0.0018) * math.cos(a), by + (rp + 0.0018) * math.sin(a), z) for a in np.linspace(0, PI, 17)]
+        loop = [(bx + rp + 0.03, SY1 + 0.002, z)] + loop + [(bx - rp - 0.03, SY1 + 0.002, z)]
+        rtube_(det, loop, 0.0018, mat="galvanized")
+        for sxx in (-1, 1):
+            det.box((bx + sxx * (rp + 0.008) - 0.012, SY1 + 0.0, z - 0.012), (bx + sxx * (rp + 0.008) + 0.012, SY1 + 0.003, z + 0.012),
+                    "galvanized", bevel=0.0008)
+            rlathe(det, [(0.0045, 0.0), (0.0042, 0.0012), (0.0028, 0.0022), (0.0, 0.0024)], mat="steel",
+                   M=_T(bx + sxx * (rp + 0.008), SY1 + 0.003, z) @ _Rx(-90), caps=False)
+
+
+def _angle(mb, p0, p1, legs, a=0.0508, t=0.0048, mat="steel"):
+    """Ángulo de lados iguales (2" × 3/16") de p0 a p1 con raíz redondeada: legs = (dirección del ala 1, dirección del ala 2) en
+    el plano perpendicular (vectores 2D en XY para piezas verticales; para horizontales el ala 2 es vertical hacia arriba)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = (p1 - p0).normalized()
+    if abs(d.z) > 0.9:
+        u = Vector((legs[0][0], legs[0][1], 0.0))
+        v = Vector((legs[1][0], legs[1][1], 0.0))
+    else:
+        u = Vector((legs[0][0], legs[0][1], 0.0))
+        v = Vector((0.0, 0.0, 1.0))
+    r = 0.006
+    prof = [(0.0, 0.0), (a - 0.0012, 0.0), (a, 0.0012), (a, t - 0.0008), (a - 0.0008, t)]
+    prof += [(t + r - r * math.sin(PI / 2 * k / 4), t + r - r * math.cos(PI / 2 * k / 4)) for k in range(5)]
+    prof += [(t, a - 0.0008), (t - 0.0008, a), (0.0012, a), (0.0, a - 0.0012)]
+    rings = [[q + u * x + v * y for (x, y) in prof] for q in (p0, p1)]
+    from kit.clinic_equipo import loft_rings
+    loft_rings(mb, rings, mat, cap0=True, cap1=True)
 
 
 # ------------------------------------------------------------------------------------------------- vestido (utilería)
@@ -828,7 +960,7 @@ def _mod(name):
         return None
 
 
-def dress(furn, r):
+def dress(furn, r, wire=None):
     """Utilería AAA de kit/farm.py y kit/store.py (y del hospital: luminarias, extintor, minisplit, gas). Lo que se puede
     chocar deja su caja de colisión en PROXIES. Si un módulo aún no existe, se omite (pruebas de arquitectura)."""
     farm, st = _mod("farm"), _mod("store")
@@ -865,12 +997,17 @@ def dress(furn, r):
         put(farm.sack_pile(6, seed=6), -4.4, -6.6, FLOOR_B)
         put(farm.drum(seed=7), -4.9, 6.9, FLOOR_B)
         put(farm.drum(seed=8), -4.2, 7.1, FLOOR_B)
-        put(farm.rope_coil(seed=9), -XP_AISLE - 0.10, -3.80, 1.7, "-x", solid=False)
-        lad = farm.ladder(3.6)
-        put(lad, 0, 0, M=_T(-1.30, -2.0, FLOOR_B) @ _Ry(-13.0) @ face_to("-x"))
-        put(farm.pitchfork(seed=10), 0, 0, M=_T(XP_AISLE + 0.16, 0.25, FLOOR_B) @ _Rx(-9) @ _Rz(20))
-        put(farm.shovel(seed=11), 0, 0, M=_T(XP_AISLE + 0.20, -0.25, FLOOR_B) @ _Rx(-10) @ _Rz(-15))
-        put(farm.wheelbarrow(seed=12), 0.7, -2.6, FLOOR_B, "+x")
+        put(farm.rope_coil(seed=9), -XP_AISLE - 0.10, FRAMES[0], 1.7, "-x", solid=False)        # estaca en la cara del poste
+        # escalera al tapanco: 4,4 m, 13° de la vertical; apoya el lomo de los largueros en la arista del guardapolvo (x -1,86,
+        # z 3,67) y sobresale ~0,7 m del piso del tapanco para bajarse; nada la atraviesa
+        lad = farm.ladder(4.4)
+        put(lad, 0, 0, M=_T(-0.99, -2.0, FLOOR_B) @ _Ry(-13.0) @ face_to("-x"))
+        # bieldo y pala recargados en la cara del poste del pasillo (x 1,90): el mango toca el poste arriba, la punta en el piso
+        put(farm.pitchfork(seed=10), 0, 0, M=_T(XP_AISLE - 0.10 - 0.0145 - 1.66 * math.sin(math.radians(9.5)), 0.07, FLOOR_B)
+            @ _Ry(9.5) @ _Rz(180))
+        put(farm.shovel(seed=11), 0, 0, M=_T(XP_AISLE - 0.10 - 0.0148 - 1.53 * math.sin(math.radians(10.0)), -0.07, FLOOR_B)
+            @ _Ry(10.0))
+        put(farm.wheelbarrow(seed=12), 1.0, -2.6, FLOOR_B, "+x")                 # a un lado: el carril central queda libre
         for (x, y) in ((-0.6, 2.2), (0.9, 5.5), (-1.2, -6.2)):
             put(farm.loose_hay(1.3, 0.9, seed=int(abs(x * 10 + y)) + 70), x, y, FLOOR_B, solid=False)
         # corrales vacíos al oriente: divisiones y frentes con puerta
@@ -884,13 +1021,15 @@ def dress(furn, r):
             put(farm.loose_hay(1.6, 1.2, seed=int(y + 60)), x - 0.6, y - 0.4, FLOOR_B, solid=False)
         put(farm.water_trough(1.2, seed=13), 4.6, 5.9, FLOOR_B, "-x")
         # afuera, frente: pacas, tarimas, bebedero, costales
-        put(farm.hay_stack(2, 2, 2, seed=14), -3.6, -9.3, 0.0)
-        put(farm.hay_bale(seed=15), -2.3, -9.6, 0.0, M=_T(-2.3, -9.7, 0.0) @ _Rz(17))
-        # tarimas recargadas en el hastial: giran sobre su canto inferior (y local -0,5), que queda en el piso
-        put(farm.pallet(seed=16), 0, 0, M=_T(-5.0, BY0 - 0.32, 0.0) @ _Rx(78) @ _T(0, 0.5, 0))
-        put(farm.pallet(seed=17), 0, 0, M=_T(-4.55, BY0 - 0.44, 0.0) @ _Rx(76) @ _T(0, 0.5, 0))
-        put(farm.water_trough(1.8, seed=18), 3.7, -9.4, 0.0)
-        put(farm.sack_pile(4, seed=19), 2.6, -8.9, 0.0)
+        # (fuera del recorrido de las hojas del portón, x ±4,7, y del paso de x ±2 frente al vano)
+        put(farm.hay_stack(2, 2, 2, seed=14), -4.0, -9.75, 0.0)
+        put(farm.hay_bale(seed=15), 0, 0, M=_T(-2.75, -10.35, 0.0) @ _Rz(17))
+        # tarimas recargadas en el hastial, paradas a lo largo (1,2 m de alto) a la izquierda del riel: giran sobre su canto
+        # inferior, que queda en el piso, y la de atrás apoya su canto superior en las tablas
+        put(farm.pallet(seed=16), 0, 0, M=_T(-5.42, BY0 - 0.29, 0.0) @ _Rx(78) @ _T(0, 0.6, 0) @ _Rz(90))
+        put(farm.pallet(seed=17), 0, 0, M=_T(-5.40, BY0 - 0.42, 0.0) @ _Rx(77) @ _T(0, 0.6, 0) @ _Rz(90))
+        put(farm.water_trough(1.8, seed=18), 4.15, -9.95, 0.0)
+        put(farm.sack_pile(4, seed=19), 2.95, -8.85, 0.0)
         # tejaban: pacas, costales y corral vacío
         put(farm.hay_stack(3, 6, 3, seed=20), -8.1, -4.0, 0.0, "+x")
         put(farm.sack_pile(6, seed=21), -8.0, -0.4, 0.0, "+x")
@@ -899,9 +1038,10 @@ def dress(furn, r):
         put(farm.pen_fence(5.1, seed=24), 0, 0, M=_T(-10.5, 1.0, 0.0) @ _Rz(90))
         put(farm.water_trough(1.2, seed=25), -9.6, 4.6, 0.0, "+x")
         put(farm.loose_hay(1.8, 1.4, seed=26), -8.0, 3.2, 0.0, solid=False)
-        # alambrado al fondo (contexto de potrero, sin ganado)
-        for k, x0 in enumerate((-12.0, -6.0, 0.0, 6.0)):
-            put(farm.wire_fence(6.0, seed=30 + k), 0, 0, M=_T(x0, BY1 + 2.2, 0.0), solid=False)
+        # alambrado de púas al fondo (contexto de potrero, sin ganado): un solo tendido de 24 m con tornapuntas en H en los
+        # extremos, en su propia malla (alambre redondo, como la malla de MIL_1)
+        if wire is not None:
+            wire.join(farm.wire_fence(24.0, seed=30, brace_ends=True), _T(-12.0, BY1 + 2.2, 0.0))
         put(farm.drum(seed=34), SX1 - 0.3, SY1 + 0.6, 0.0)
     if st is not None:
         yi0, yi1 = SY0 + TS, SY1 - TS
@@ -915,7 +1055,7 @@ def dress(furn, r):
         for k, (x, stock) in enumerate(((10.45, "dry"), (11.75, "canned"))):
             put(st.grocery_shelving(1.2, seed=48 + k, stock=stock), x, yi1, S_FFL, "-y")               # espalda al muro del fondo
         put(st.beer_cooler(seed=50), 13.05, yi1 - 0.37, S_FFL, "-y")
-        put(st.chalkboard(seed=51), 14.75, yi1, S_FFL + 1.25, "-y", solid=False)
+        put(st.chalkboard(w=0.66, h=1.15, seed=51), 14.93, yi1, S_FFL + 1.2, "-y", solid=False)     # entre la puerta y el muro
         put(st.hand_scale(seed=52), 14.05, -3.6, S_FFL + 0.95, "-x", solid=False)
         put(st.cash_box(seed=53), 14.1, -5.2, S_FFL + 0.95, "-x", solid=False)
         put(cl.trash_bin(pedal=False), 12.9, -6.9, S_FFL)
@@ -923,7 +1063,7 @@ def dress(furn, r):
         put(st.chest_freezer(seed=54), 12.65, SY0 - 0.42, S_FFL, "-y")
         put(st.bottle_crate(seed=55), 13.75, SY0 - 0.30, S_FFL, "-y")
         put(st.bottle_crate(seed=56), 13.78, SY0 - 0.31, S_FFL + 0.29, "-y")
-        put(st.bench(1.3, seed=57), SX0 + 0.75, SY0 - 0.35, S_FFL, "-y")
+        put(st.bench(1.0, seed=57), SX0 + 0.36, SY0 - 0.35, S_FFL, "-y")                        # a un lado de la puerta
         put(st.open_sign(), 14.4, SY0 - 0.06, S_FFL + 1.95, "-y", solid=False)
 
 
@@ -939,7 +1079,7 @@ def build_gra(bid="GRA_1_tienda", collection_root=None, dress_on=True, **kw):
     keys = ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage", "Furniture")
     cols = {k: get_collection(f"{cid}_{k}", root) for k in keys}
     out = {k: [] for k in cols}
-    shell, det, inter, roof, furn = MB(), MB(), MB(), MB(), MB()
+    shell, det, inter, roof, furn, wire = MB(), MB(), MB(), MB(), MB(), MB()
     r = rng(cfg["seed"])
     barn_walls(shell, det, inter)
     barn_roof(roof, det, inter)
@@ -951,8 +1091,10 @@ def build_gra(bid="GRA_1_tienda", collection_root=None, dress_on=True, **kw):
     store_openings(det, furn)
     store_services(det, furn)
     if dress_on and kw.get("dress", True):
-        dress(furn, r)
-    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Furniture", furn)):
+        dress(furn, r, wire=wire)
+    cols["Wire"] = get_collection(f"{cid}_Wire", root)
+    out["Wire"] = []
+    for nm, mb in (("Shell", shell), ("Details", det), ("Interior", inter), ("Roof", roof), ("Furniture", furn), ("Wire", wire)):
         if len(mb.bm.faces):
             out[nm].append(mb.finish(f"{cid}_{nm}", cols[nm], uv_size=2.0, merge=0))
     out["stats"] = dict(interior_dress=dict(bulb_pos=list(LIGHTS)), proxies=list(PROXIES))

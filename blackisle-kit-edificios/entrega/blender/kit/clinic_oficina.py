@@ -289,17 +289,21 @@ def smooth_path(pts, n=6):
     return [tuple(p) for p in out]
 
 
-def keycap(mb, M, w, d, hgt, mat="plastic", top_in=0.0019, ch=0.0016):
-    """Tecla: tronco de pirámide (base w x d, alto hgt), base en z = 0 local. Sin cara inferior: la base va embebida en la
-    carcasa y nunca se ve (presupuesto: 10 triángulos por tecla)."""
+def keycap(mb, M, w, d, hgt, mat="plastic", top_in=0.0019, ch=0.0016, legend=None, legend_mat="cable"):
+    """Tecla: tronco de pirámide de esquinas redondeadas (base w x d, alto hgt) con canto superior boleado; base en z = 0 local
+    (embebida en la carcasa, sin cara inferior). legend: rótulo impreso en relieve de 0,5 mm en la esquina superior izquierda."""
+    from kit.clinic_servicios import rr_pts, skin
     del ch
-    b = [mb.bm.verts.new(_ap(M, p)) for p in ((-w / 2, -d / 2, 0.0), (w / 2, -d / 2, 0.0), (w / 2, d / 2, 0.0), (-w / 2, d / 2, 0.0))]
-    hw, hd = w / 2 - top_in, d / 2 - top_in
-    t = [mb.bm.verts.new(_ap(M, p)) for p in ((-hw, -hd, hgt), (hw, -hd, hgt), (hw, hd, hgt), (-hw, hd, hgt))]
-    for i in range(4):
-        j = (i + 1) % 4
-        mb.face([b[i], b[j], t[j], t[i]], mat)
-    mb.face(t, mat)
+    hw, hd = w - 2 * top_in, d - 2 * top_in
+    loops = [[(x, y, 0.0) for (x, y) in rr_pts(w, d, 0.0012, 2)],
+             [(x, y, hgt - 0.0009) for (x, y) in rr_pts(hw, hd, 0.0022, 2)],
+             [(x, y, hgt) for (x, y) in rr_pts(hw - 0.0014, hd - 0.0014, 0.0016, 2)]]
+    skin(mb, loops, mat, M, cap0=False, cap1=True)
+    if legend:
+        from kit.fonts import text_font
+        sz = 0.0048 if len(legend) == 1 else 0.0026
+        text_font(mb, legend, sz, 0.0005, legend_mat, M @ _T(-hw / 2 + 0.0025 + (0.0005 if len(legend) == 1 else 0.0), hd / 2 - 0.0062, hgt),
+                  font="sign", res=1, align="LEFT")
 
 
 def glide(mb, x, y, z=0.0, r=0.0125, mat="plastic"):
@@ -330,7 +334,7 @@ def small_caster(mb, M, d=0.05, brake=False, swivel=0.0, mat_tire="rubber"):
     Mz = M @ _Rz(swivel)
     zt = d + 0.022
     mb.box((-0.03, -0.03, zt), (0.03, 0.03, zt + 0.004), "steel", bevel=0.0015, seg=1, m=Mz)
-    port.lathe(mb, [(0.019, zt - 0.009), (0.021, zt - 0.005), (0.019, zt)], seg=10, mat="steel", M=Mz)
+    port.lathe(mb, [(0.019, zt - 0.009), (0.021, zt - 0.005), (0.019, zt)], seg=18, mat="steel", M=Mz)
     off = rr * 0.5
     for s in (-1, 1):
         prof = [(-0.016, zt - 0.009), (0.016, zt - 0.009), (off + 0.012, rr + 0.006), (off + 0.008, rr - 0.008),
@@ -339,8 +343,8 @@ def small_caster(mb, M, d=0.05, brake=False, swivel=0.0, mat_tire="rubber"):
         mb.plate(fillet2d(prof, 0.004, 1), 0.0025, "steel", m=Mz @ _T(s * 0.0145 - (0.0025 if s > 0 else 0), 0, 0) @ perm)
     Mw = Mz @ _T(0, off, rr) @ _Ry(90)
     port.lathe(mb, [(rr * 0.62, -0.0115), (rr - 0.002, -0.0105), (rr, -0.004), (rr, 0.004), (rr - 0.002, 0.0105), (rr * 0.62, 0.0115)],
-               seg=14, mat=mat_tire, M=Mw)
-    port.lathe(mb, [(0.0075, -0.0135), (0.0085, -0.0115), (0.0085, 0.0115), (0.0075, 0.0135)], seg=8, mat="steel", M=Mw)
+               seg=24, mat=mat_tire, M=Mw)
+    port.lathe(mb, [(0.0075, -0.0135), (0.0085, -0.0115), (0.0085, 0.0115), (0.0075, 0.0135)], seg=16, mat="steel", M=Mw)
     if brake:
         mb.box((-0.011, -0.04, zt - 0.014), (0.011, -0.012, zt - 0.006), "sign_red", bevel=0.003, seg=1, m=Mz)
 
@@ -400,8 +404,18 @@ def _keyboard(mb, M):
     def yrow(i):
         return y0 + 0.0105 + u / 2 + i * u + (0.45 * u if i == 5 else 0.0)
 
-    def put(xl, row, widths, tall=None):
+    legends = {
+        5: ["Esc", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"],
+        4: list("`1234567890-=") + ["Bksp"],
+        3: ["Tab"] + list("QWERTYUIOP[]") + ["\\"],
+        2: ["Caps"] + list("ASDFGHJKL;'") + ["Enter"],
+        1: ["Shift"] + list("ZXCVBNM,./") + ["Shift"],
+        0: ["Ctrl", "", "Alt", "", "Alt", "", "", "Ctrl"],
+    }
+
+    def put(xl, row, widths, tall=None, labels=None):
         x = xl
+        k = 0
         for wu in widths:
             if wu < 0:
                 x += -wu * u
@@ -411,10 +425,12 @@ def _keyboard(mb, M):
             if tall:
                 cy -= u / 2
                 dd += u
-            keycap(mb, M @ _T(cx, cy, ztop(cy) - 0.0025) @ _Rx(math.degrees(sl)), wu * u - 0.0036, dd, 0.0105, "plastic")
+            lab = labels[k] if labels and k < len(labels) else None
+            keycap(mb, M @ _T(cx, cy, ztop(cy) - 0.0025) @ _Rx(math.degrees(sl)), wu * u - 0.0036, dd, 0.0105, "plastic", legend=lab)
             x += wu * u
+            k += 1
     for row, ws in rows.items():
-        put(x0, row, ws)
+        put(x0, row, ws, labels=legends.get(row))
     for row, ws in nav.items():
         put(x0 + 15.5 * u, row, ws)
     for row, ws in pad.items():
@@ -424,7 +440,7 @@ def _keyboard(mb, M):
     for k in range(3):                            # LEDs
         x = x0 + 19.6 * u + k * 0.017
         y = y1 - 0.0085
-        port.lathe(mb, [(0.0018, -0.001), (0.0018, 0.0006), (0.0012, 0.0013)], seg=6, mat="sign_green",
+        port.lathe(mb, [(0.0018, -0.001), (0.0018, 0.0006), (0.0012, 0.0013)], seg=12, mat="sign_green",
                    M=M @ _T(x, y, ztop(y)) @ _Rx(math.degrees(sl)))
     return M @ Vector((-0.06, y1 + 0.001, 0.016))
 
@@ -438,8 +454,8 @@ def _mouse(mb, M):
     def ztop(y):
         return 0.0355 * max(0.0, 1 - ((y - 0.012) / 0.058) ** 2) ** 0.5
     pts = [(0.0, y, ztop(y) + 0.0004) for y in np.linspace(-0.05, -0.004, 4)]
-    mb.tube([tuple(M @ Vector(p)) for p in pts], 0.0009, seg=4, mat="cable")
-    port.lathe(mb, [(0.0085, -0.0032), (0.0095, -0.0015), (0.0095, 0.0015), (0.0085, 0.0032)], seg=10,
+    mb.tube([tuple(M @ Vector(p)) for p in pts], 0.0009, seg=8, mat="cable")
+    port.lathe(mb, [(0.0085, -0.0032), (0.0095, -0.0015), (0.0095, 0.0015), (0.0085, 0.0032)], seg=18,
                mat="rubber", M=M @ _T(0.0, -0.026, ztop(-0.026) - 0.006) @ _Ry(90))
     return M @ Vector((0.0, -0.05, 0.008))
 
@@ -450,9 +466,9 @@ def _monitor(mb, M):
     zloft(mb, [(0.0, 0.214, 0.164, 0.0), (0.003, 0.222, 0.172, 0.0), (0.009, 0.219, 0.169, 0.001), (0.013, 0.200, 0.150, 0.006),
                (0.016, 0.130, 0.090, 0.014), (0.017, 0.100, 0.062, 0.016)], seg=20, mat="cable", M=M, ex=3.2)
     zloft(mb, [(0.012, 0.076, 0.036, 0.024), (0.03, 0.068, 0.033, 0.028), (0.17, 0.060, 0.030, 0.042), (0.206, 0.060, 0.030, 0.045),
-               (0.214, 0.050, 0.022, 0.045)], seg=12, mat="cable", M=M, ex=3.5)
+               (0.214, 0.050, 0.022, 0.045)], seg=20, mat="cable", M=M, ex=3.5)
     mb.box((-0.012, 0.059, 0.09), (0.012, 0.064, 0.13), "cable", bevel=0.002, seg=1, m=M)       # pasacables del cuello
-    port.lathe(mb, [(0.015, -0.034), (0.0165, -0.031), (0.0165, 0.031), (0.015, 0.034)], seg=12,
+    port.lathe(mb, [(0.015, -0.034), (0.0165, -0.031), (0.0165, 0.031), (0.015, 0.034)], seg=20,
                mat="cable", M=M @ _T(0, 0.046, 0.20) @ _Ry(90))
     W, H, bw = 0.51, 0.31, 0.016
     Mp = M @ _T(0, 0.046, 0.20) @ _Rx(-6) @ _T(0, -0.09, 0.07)
@@ -471,10 +487,10 @@ def _monitor(mb, M):
         mb.box((x - 0.0028, 0.0255, 0.112), (x + 0.0028, 0.0285, 0.142), "cable", bevel=0.0, m=Mp)
     mb.box((-0.055, 0.062, -0.105), (0.055, 0.075, -0.035), "cable", bevel=0.003, seg=1, m=Mp)   # placa VESA
     for (x, z) in ((-0.04, -0.09), (0.04, -0.09), (-0.04, -0.05), (0.04, -0.05)):
-        port.lathe(mb, [(0.004, 0.0), (0.0035, 0.002)], seg=6, mat="steel", M=Mp @ _T(x, 0.075, z) @ _Rx(-90))
+        port.lathe(mb, [(0.004, 0.0), (0.0035, 0.002)], seg=12, mat="steel", M=Mp @ _T(x, 0.075, z) @ _Rx(-90))
     for k in range(4):                                                                            # botones y LED
         x = W / 2 - 0.03 - k * 0.017
-        port.lathe(mb, [(0.0032, -0.0006), (0.0032, 0.0008), (0.0024, 0.0014)], seg=6,
+        port.lathe(mb, [(0.0032, -0.0006), (0.0032, 0.0008), (0.0024, 0.0014)], seg=12,
                    mat=("sign_blue" if k == 0 else "cable"), M=Mp @ _T(x, 0.0, -H / 2 + bw * 0.45) @ _Rx(90))
     return Mp
 
@@ -493,7 +509,8 @@ def _phone(mb, M, seed=0):
     for i in range(4):                                                                            # teclado 3 x 4
         for j in range(3):
             x, y = 0.012 + j * 0.022, -0.075 + i * 0.019
-            keycap(mb, M @ _T(x, y, zt(y) - 0.0015) @ _Rx(math.degrees(sl)), 0.016, 0.013, 0.0055, "plastic")
+            keycap(mb, M @ _T(x, y, zt(y) - 0.0015) @ _Rx(math.degrees(sl)), 0.016, 0.013, 0.0055, "plastic",
+                   legend="*0#789456123"[i * 3 + j])
     for i in range(5):                                                                            # teclas de función
         y = -0.08 + i * 0.016
         keycap(mb, M @ _T(0.084, y, zt(y) - 0.0015) @ _Rx(math.degrees(sl)), 0.014, 0.010, 0.0045, "cable")
@@ -504,20 +521,20 @@ def _phone(mb, M, seed=0):
     for y in (-0.072, 0.072):
         mb.box((-0.088, y - 0.012, -0.002), (-0.032, y + 0.012, 0.007), "plastic", bevel=0.003, seg=1,
                m=M @ _T(0, 0, zt(y)) @ _Rx(math.degrees(sl)))
-        port.lathe(mb, [(0.004, 0.0), (0.004, 0.004)], seg=6, mat="cable",
+        port.lathe(mb, [(0.004, 0.0), (0.004, 0.004)], seg=12, mat="cable",
                    M=M @ _T(-0.06, y + (0.016 if y > 0 else -0.016), zt(y) + 0.004))
     # auricular (sobre los soportes, inclinado con la base)
     st = [(-0.105, 0.040, 0.014, -0.006), (-0.099, 0.050, 0.028, -0.002), (-0.082, 0.052, 0.032, 0.0), (-0.060, 0.036, 0.025, 0.006),
           (0.052, 0.034, 0.024, 0.006), (0.074, 0.048, 0.030, 0.0), (0.095, 0.052, 0.030, -0.002), (0.105, 0.044, 0.014, -0.006)]
     swap = Matrix(((0, 1, 0, 0), (1, 0, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
     Mh = M @ _T(-0.06, 0.0, zt(0.0) + 0.022) @ _Rx(math.degrees(sl))
-    port.loft(mb, st, seg=12, mat="plastic", M=Mh @ swap, ex=2.5)
+    port.loft(mb, st, seg=20, mat="plastic", M=Mh @ swap, ex=2.5)
     # cordón en espiral desde el micrófono hasta el costado izquierdo de la base
     p0 = Mh @ Vector((0.0, -0.104, -0.002))
     pts = [tuple(p0), tuple(M @ Vector((-0.075, -0.118, 0.02))), tuple(M @ Vector((-0.112, -0.112, 0.0055))),
            tuple(M @ Vector((-0.135, -0.06, 0.0055))), tuple(M @ Vector((-0.125, -0.012, 0.0075))), tuple(M @ Vector((-0.1, -0.005, 0.012)))]
-    coil(mb, smooth_path(pts, 6), R=0.0042, pitch=0.0058, r=0.0013, seg=3, ppt=5)
-    port.lathe(mb, [(0.0035, 0.0), (0.0035, 0.008)], seg=6, mat="cable", M=M @ _T(-0.1, -0.005, 0.012) @ _Ry(90))
+    coil(mb, smooth_path(pts, 6), R=0.0042, pitch=0.0058, r=0.0013, seg=6, ppt=10)
+    port.lathe(mb, [(0.0035, 0.0), (0.0035, 0.008)], seg=12, mat="cable", M=M @ _T(-0.1, -0.005, 0.012) @ _Ry(90))
     del seed
     return M @ Vector((0.05, yB, 0.012))
 
@@ -525,7 +542,7 @@ def _phone(mb, M, seed=0):
 def _pen_cup(mb, M, seed=0):
     """Portalápices con 3-4 plumas (capuchón con clip) y un lápiz hexagonal con punta y goma."""
     r = rng(seed)
-    port.lathe(mb, [(0.034, 0.0), (0.0355, 0.003), (0.0355, 0.098), (0.0336, 0.1006), (0.0315, 0.098), (0.0315, 0.007)], seg=14,
+    port.lathe(mb, [(0.034, 0.0), (0.0355, 0.003), (0.0355, 0.098), (0.0336, 0.1006), (0.0315, 0.098), (0.0315, 0.007)], seg=24,
                mat="plastic_blue", M=M)
     n = int(r.integers(3, 5))
     for k in range(n + 1):
@@ -536,15 +553,15 @@ def _pen_cup(mb, M, seed=0):
             body = ("plastic", "sign_blue", "sign_red", "cable", "plastic_blue")[int(r.integers(0, 5))]
             if k >= 2:                                   # presupuesto: 2 plumas + lápiz (la punta queda dentro del vaso)
                 continue
-            port.lathe(mb, [(0.0034, 0.017), (0.004, 0.02), (0.004, 0.118)], seg=6, mat=body, M=Mb)
-            port.lathe(mb, [(0.0044, 0.1175), (0.0044, 0.139), (0.0036, 0.1425), (0.0, 0.1435)], seg=6,
+            port.lathe(mb, [(0.0034, 0.017), (0.004, 0.02), (0.004, 0.118)], seg=12, mat=body, M=Mb)
+            port.lathe(mb, [(0.0044, 0.1175), (0.0044, 0.139), (0.0036, 0.1425), (0.0, 0.1435)], seg=12,
                        mat=("cable" if body != "cable" else "sign_blue"), M=Mb)
             mb.box((-0.0012, 0.0040, 0.104), (0.0012, 0.0056, 0.139), "steel", bevel=0.0, m=Mb)
         else:
-            port.lathe(mb, [(0.0011, 0.0031), (0.0036, 0.016)], seg=6, mat="wood_varnish", M=Mb)          # madera afilada
-            port.lathe(mb, [(0.0036, 0.0162), (0.0036, 0.1505)], seg=6, mat="paint_yellow", M=Mb)          # cuerpo hexagonal
-            port.lathe(mb, [(0.0036, 0.15), (0.0039, 0.1505), (0.0039, 0.161), (0.0036, 0.1615)], seg=8, mat="aluminium", M=Mb)
-            port.lathe(mb, [(0.0035, 0.1612), (0.0035, 0.168), (0.0028, 0.171), (0.0, 0.1715)], seg=8, mat="sign_red", M=Mb)
+            port.lathe(mb, [(0.0011, 0.0031), (0.0036, 0.016)], seg=12, mat="wood_varnish", M=Mb)          # madera afilada
+            port.lathe(mb, [(0.0036, 0.0162), (0.0036, 0.1505)], seg=12, mat="paint_yellow", M=Mb)          # cuerpo hexagonal
+            port.lathe(mb, [(0.0036, 0.15), (0.0039, 0.1505), (0.0039, 0.161), (0.0036, 0.1615)], seg=16, mat="aluminium", M=Mb)
+            port.lathe(mb, [(0.0035, 0.1612), (0.0035, 0.168), (0.0028, 0.171), (0.0, 0.1715)], seg=16, mat="sign_red", M=Mb)
 
 
 def _binder(mb, M, bw, dd, hh, mat, label):
@@ -561,11 +578,11 @@ def _binder(mb, M, bw, dd, hh, mat, label):
     zh = hh * 0.22
     Mr = M @ _T(0, -dd / 2, zh) @ _Rx(90)
     lathe_closed(mb, [(0.0103, -0.0015), (0.0138, -0.0015), (0.0132, 0.0023), (0.0106, 0.0021)], 12, "steel", Mr)
-    port.lathe(mb, [(0.0106, -0.0012), (0.0106, 0.0013)], seg=12, mat="cable", M=Mr)
+    port.lathe(mb, [(0.0106, -0.0012), (0.0106, 0.0013)], seg=20, mat="cable", M=Mr)
     lw = bw / 2 - 0.007
     mb.box((-lw, -dd / 2 - 0.0016, hh - 0.125), (lw, -dd / 2 + 0.0008, hh - 0.022), "paper", bevel=0.0, m=M)
     for z in (hh - 0.125, hh - 0.022):
-        mb.cyl(M @ Vector((-lw - 0.001, -dd / 2 - 0.0016, z)), M @ Vector((lw + 0.001, -dd / 2 - 0.0016, z)), 0.0017, seg=6, mat="glass")
+        mb.cyl(M @ Vector((-lw - 0.001, -dd / 2 - 0.0016, z)), M @ Vector((lw + 0.001, -dd / 2 - 0.0016, z)), 0.0017, seg=12, mat="glass")
     sz = min(0.0105, 2.0 * lw / max(len(label), 1) * 1.1)
     _text(mb, label, sz, 0.0016, "cable", M @ _T(0, -dd / 2 - 0.0014, hh - 0.055) @ _Rx(90), res=2)
 
@@ -600,7 +617,7 @@ def _paper_stack(mb, M, seed, n_loose=2, folder=False):
         Mt = Mf @ _T(-0.1175, 0, 0.0042) @ _Ry(-2.5) @ _T(0.1175, 0, 0)
         paper_sheet(mb, Mt, 0.235, 0.30, t=0.0009, curl=0.009, lift=0.01, wave=0.0015, seed=int(r.integers(1e6)), mat="paint_yellow",
                     curl_dir=-1, nu=4, nv=5)
-        mb.tube([tuple(Mf @ Vector((-0.1175, y, 0.0022))) for y in (-0.15, 0.15)], 0.0021, seg=5, mat="paint_yellow")
+        mb.tube([tuple(Mf @ Vector((-0.1175, y, 0.0022))) for y in (-0.15, 0.15)], 0.0021, seg=10, mat="paint_yellow")
 
 
 # ======================================================================================================== escritorio
@@ -733,22 +750,22 @@ def desk(w=1.4, d=0.7, seed=0, monitor=True, papers=True):
             zc_ = h + 0.0035 + k * 0.0045
             pts = [tuple(p0), tuple(Mp @ Vector((dx, 0.07, -0.16))), (xm + dx * 1.5, ym + 0.1, zc_), (xm + 0.06 + dx, d / 2 - 0.004, zc_),
                    (xm + 0.062 + dx, d / 2 + 0.0055, zc_ - 0.01), (xm + 0.07 + dx, d / 2 + 0.006, h - 0.3)]
-            mb.tube(fillet(pts, 0.03, 2), 0.0032 if k else 0.0028, seg=5, mat="cable")
+            mb.tube(fillet(pts, 0.03, 2), 0.0032 if k else 0.0028, seg=10, mat="cable")
             mb.box(p0 + Vector((-0.009, -0.004, -0.006)), p0 + Vector((0.009, 0.012, 0.006)), "cable", bevel=0.002, seg=1)
         pts = [tuple(kc), (kc.x - 0.01, kc.y + 0.04, h + 0.0026), (xm - 0.1, ym - 0.02, h + 0.0026), (xm - 0.13, ym + 0.09, h + 0.0026),
                (xm - 0.12, d / 2 - 0.004, h + 0.0026), (xm - 0.119, d / 2 + 0.0042, h - 0.008), (xm - 0.115, d / 2 + 0.0045, h - 0.25)]
-        mb.tube(fillet(pts, 0.03, 2), 0.0022, seg=4, mat="cable")
+        mb.tube(fillet(pts, 0.03, 2), 0.0022, seg=8, mat="cable")
         pts = [tuple(mc), (mc.x + 0.01, mc.y - 0.03, h + 0.0052), (mx + 0.06, my - 0.06, h + 0.0052), (mx + 0.1, my + 0.07, h + 0.0052),
                (mx + 0.09, my + 0.13, h + 0.0022), (xm + 0.2, ym + 0.06, h + 0.0022), (xm + 0.16, d / 2 - 0.004, h + 0.0022),
                (xm + 0.159, d / 2 + 0.0038, h - 0.008), (xm + 0.155, d / 2 + 0.004, h - 0.22)]
-        mb.tube(fillet(pts, 0.03, 2), 0.0018, seg=4, mat="cable")
+        mb.tube(fillet(pts, 0.03, 2), 0.0018, seg=8, mat="cable")
     # teléfono en la esquina trasera izquierda
     px, py = -w / 2 + 0.17, d / 2 - 0.14
     Mph = _T(px, py, h) @ _Rz(float(r.uniform(8, 22)))
     pc = _phone(mb, Mph, seed=int(r.integers(1e6)))
     occ.append((px - 0.17, py - 0.15, px + 0.12, py + 0.12))
     mb.tube(fillet([tuple(pc), (pc.x + 0.02, pc.y + 0.02, h + 0.0025), (pc.x + 0.04, d / 2 - 0.004, h + 0.0025),
-                    (pc.x + 0.041, d / 2 + 0.0038, h - 0.008), (pc.x + 0.045, d / 2 + 0.004, h - 0.18)], 0.03, 2), 0.0018, seg=4, mat="cable")
+                    (pc.x + 0.041, d / 2 + 0.0038, h - 0.008), (pc.x + 0.045, d / 2 + 0.004, h - 0.18)], 0.03, 2), 0.0018, seg=8, mat="cable")
     # carpetas de palanca con sujetalibros sobre el pedestal derecho
     if papers:
         nb = int(r.integers(3, 6))
@@ -823,16 +840,16 @@ def filing_cabinet(seed=0, n=4):
         mb.sweep(rr_profile(0.011, 0.02, 0.0045, 2), path, mat="steel", normal=(0, 0, 1))
         for x in (-0.062, 0.062):                                            # escudos de la jaladera
             mb.box((x - 0.011, yfd - 0.003, zh - 0.017), (x + 0.011, yfd + 0.001, zh + 0.017), "steel", bevel=0.0012, seg=1)
-            port.lathe(mb, [(0.0028, 0.0), (0.0027, 0.0008), (0.0016, 0.0015)], seg=6, mat="steel",
+            port.lathe(mb, [(0.0028, 0.0), (0.0027, 0.0008), (0.0016, 0.0015)], seg=12, mat="steel",
                        M=_T(x + (0.006 if x > 0 else -0.006), yfd - 0.003, zh + 0.011) @ _Rx(90))
         mb.box((-0.03, yfd - 0.013, zh - 0.0125), (0.03, yfd - 0.0005, zh - 0.0075), "steel", bevel=0.0015, seg=1)   # gatillo
         zl = zh + 0.052                                                       # portaetiqueta
         mb.box((-0.046, yfd - 0.0016, zl - 0.021), (0.046, yfd + 0.0005, zl + 0.021), "steel", bevel=0.0007, seg=1)
         mb.box((-0.039, yfd - 0.0031, zl - 0.0145), (0.039, yfd - 0.0012, zl + 0.0145), "paper", bevel=0.0)
         for zz in (zl - 0.016, zl + 0.016):
-            mb.cyl((-0.043, yfd - 0.0026, zz), (0.043, yfd - 0.0026, zz), 0.0016, seg=6, mat="steel")
+            mb.cyl((-0.043, yfd - 0.0026, zz), (0.043, yfd - 0.0026, zz), 0.0016, seg=12, mat="steel")
         for xx in (-0.043, 0.043):
-            mb.cyl((xx, yfd - 0.0026, zl - 0.0175), (xx, yfd - 0.0026, zl + 0.0175), 0.0016, seg=6, mat="steel")
+            mb.cyl((xx, yfd - 0.0026, zl - 0.0175), (xx, yfd - 0.0026, zl + 0.0175), 0.0016, seg=12, mat="steel")
         _text(mb, labels[(k + lab0) % len(labels)], 0.011, 0.0016, "cable", _T(0, yfd - 0.0029, zl - 0.0045) @ _Rx(90), res=2)
     return mb
 
@@ -869,7 +886,7 @@ def _reception(mb, w, d, h, r, top, front):
            ne=3)
     for i in range(int(w / 0.6) + 1):                                                                 # tornillos de la defensa
         x = -w / 2 + 0.08 + i * (w - 0.16) / int(w / 0.6)
-        port.lathe(mb, [(0.0, 0.0), (0.0035, 0.0), (0.0033, 0.0008), (0.002, 0.0015), (0.0, 0.0016)], seg=8, mat="steel",
+        port.lathe(mb, [(0.0, 0.0), (0.0035, 0.0), (0.0033, 0.0008), (0.002, 0.0015), (0.0, 0.0016)], seg=16, mat="steel",
                    M=_T(x, y0c - 0.0123, zb) @ _Rx(90))
     # costados en L (alto al frente, bajo en el lado de trabajo) con canto de PVC
     gab = [(yk, 0.002), (yE, 0.002), (yE, zW1), (yR, zW1), (yR, zT0), (y0c + tc, zT0), (y0c + tc, 0.105), (yk, 0.105)]
@@ -899,7 +916,7 @@ def _reception(mb, w, d, h, r, top, front):
     Mph = _T(px, py, zW1) @ _Rz(180 + float(r.uniform(10, 25)))
     pc = _phone(mb, Mph, seed=int(r.integers(1e6)))
     mb.tube(smooth_path([tuple(pc), (pc.x + 0.03, pc.y + 0.005, zW1 + 0.0025), (gx - 0.03, gy - 0.03, zW1 + 0.0025),
-                         (gx, gy - 0.02, zW1 + 0.0028), (gx, gy - 0.015, zW1 - 0.05)], 5), 0.0018, seg=5, mat="cable")
+                         (gx, gy - 0.02, zW1 + 0.0028), (gx, gy - 0.015, zW1 - 0.05)], 5), 0.0018, seg=10, mat="cable")
     sx = -xi + 0.28 + float(r.uniform(0, 0.25))
     _paper_stack(mb, _T(sx, (yR + d / 2) / 2 + 0.005, zW1 + 0.0012) @ _Rz(float(r.uniform(-8, 8)) + 90), int(r.integers(1e6)),
                  n_loose=2, folder=False)
@@ -1004,7 +1021,7 @@ def _boot(mb, x, y0, slope, r=0.0135, h=0.04, mat="rubber"):
     st = []
     for (z, f) in ((0.0, 0.93), (0.0025, 1.0), (h - 0.006, 1.0), (h, 0.9)):
         st.append((z, 2 * r * f, 2 * r * f * k, y0 + slope * z))
-    zloft(mb, st, seg=10, mat=mat, M=_T(x, 0, 0), ex=2.0)
+    zloft(mb, st, seg=18, mat=mat, M=_T(x, 0, 0), ex=2.0)
 
 
 def folding_chair(seed=0):
@@ -1021,28 +1038,28 @@ def folding_chair(seed=0):
     sf = (K[0] - F[0]) / (K[1] - F[1])
     sr = (R1[0] - R0[0]) / (R1[1] - R0[1])
     for s in (-1, 1):
-        mb.tube(fillet([(s * xf, F[0], F[1]), (s * xf, K[0], K[1]), (s * xf, Tp[0], Tp[1])], 0.12, 5), 0.011, seg=10, mat=fr)
-        mb.tube([(s * xr, R0[0], R0[1]), (s * xr, R1[0], R1[1])], 0.0095, seg=10, mat=fr)
+        mb.tube(fillet([(s * xf, F[0], F[1]), (s * xf, K[0], K[1]), (s * xf, Tp[0], Tp[1])], 0.12, 5), 0.011, seg=18, mat=fr)
+        mb.tube([(s * xr, R0[0], R0[1]), (s * xr, R1[0], R1[1])], 0.0095, seg=18, mat=fr)
         _boot(mb, s * xf, F[0] - sf * F[1], sf)
         _boot(mb, s * xr, R0[0] - sr * R0[1], sr, r=0.012)
         d_ = Vector((0, Tp[0] - K[0], Tp[1] - K[1])).normalized()                     # tapón del poste
-        port.lathe(mb, [(0.0115, 0.0), (0.0118, 0.006), (0.0105, 0.011), (0.006, 0.0138)], seg=10, mat="rubber",
+        port.lathe(mb, [(0.0115, 0.0), (0.0118, 0.006), (0.0105, 0.011), (0.006, 0.0138)], seg=18, mat="rubber",
                    M=_T(s * xf, Tp[0] - d_.y * 0.004, Tp[1] - d_.z * 0.004) @ _Rx(-math.degrees(math.atan2(d_.y, d_.z))))
     # pivote de tijera: cruce de las rectas de pata delantera y trasera
     tz = (R0[0] - F[0] + sf * F[1] - sr * R0[1]) / (sf - sr)
     py = F[0] + sf * (tz - F[1])
     for s in (-1, 1):
-        port.lathe(mb, [(0.0068, 0.0), (0.0064, 0.0018), (0.004, 0.0034), (0.0015, 0.0038)], seg=8, mat="steel",
+        port.lathe(mb, [(0.0068, 0.0), (0.0064, 0.0018), (0.004, 0.0034), (0.0015, 0.0038)], seg=16, mat="steel",
                    M=_T(s * (xf + 0.0105), py, tz) @ _Ry(90 * s))
-        port.lathe(mb, [(0.0075, 0.0), (0.0075, 0.0035)], seg=8, mat="steel", M=_T(s * (xr + 0.0092), py, tz) @ _Ry(90 * s))
+        port.lathe(mb, [(0.0075, 0.0), (0.0075, 0.0035)], seg=16, mat="steel", M=_T(s * (xr + 0.0092), py, tz) @ _Ry(90 * s))
         port.bolt(mb, _T(s * (xr - 0.0092), py, tz) @ _Ry(-90 * s), d=0.0055, stud=0.002, mat="steel")
     # travesaños con cordón de soldadura
     zs = 0.11
     ys = F[0] + sf * (zs - F[1])
-    mb.tube([(-xf, ys, zs), (xf, ys, zs)], 0.0085, seg=8, mat=fr)
+    mb.tube([(-xf, ys, zs), (xf, ys, zs)], 0.0085, seg=16, mat=fr)
     zr = 0.085
     yr = R0[0] + sr * (zr - R0[1])
-    mb.tube([(-xr, yr, zr), (xr, yr, zr)], 0.0078, seg=8, mat=fr)
+    mb.tube([(-xr, yr, zr), (xr, yr, zr)], 0.0078, seg=16, mat=fr)
     for (x, y, z, rr_) in ((xf - 0.0095, ys, zs, 0.0085), (-xf + 0.0095, ys, zs, 0.0085), (xr - 0.0082, yr, zr, 0.0078),
                            (-xr + 0.0082, yr, zr, 0.0078)):
         lathe_closed(mb, [(rr_ - 0.0005, -0.0028), (rr_ + 0.002, -0.0006), (rr_ + 0.0008, 0.0024), (rr_ - 0.0005, 0.0026)], 8, fr,
@@ -1053,10 +1070,10 @@ def folding_chair(seed=0):
     pan_shell(mb, seat, "paint_green", M=_T(0, 0, zt), dish=0.007, lip=0.016)
     for s in (-1, 1):                                                                  # ménsulas y remaches
         mb.box((s * 0.158 - 0.012, -0.135, zt - 0.031), (s * 0.158 + 0.012, -0.085, zt - 0.0045), "steel", bevel=0.0015, seg=1)
-        port.lathe(mb, [(0.0055, 0.0), (0.005, 0.0016), (0.003, 0.0029)], seg=6, mat="steel",
+        port.lathe(mb, [(0.0055, 0.0), (0.005, 0.0016), (0.003, 0.0029)], seg=12, mat="steel",
                    M=_T(s * (xr + 0.0095), R1[0] + 0.004, R1[1] - 0.004) @ _Ry(90 * s))
         mb.box((s * 0.181 - 0.0016, 0.012, zt - 0.03), (s * 0.181 + 0.0016, 0.07, zt - 0.006), "steel", bevel=0.0007, seg=1)
-        port.lathe(mb, [(0.0055, 0.0), (0.005, 0.0016), (0.003, 0.0029)], seg=6, mat="steel",
+        port.lathe(mb, [(0.0055, 0.0), (0.005, 0.0016), (0.003, 0.0029)], seg=12, mat="steel",
                    M=_T(s * (xf + 0.0105), 0.042, zt - 0.018) @ _Ry(90 * s))
     # respaldo curvo
     zc = 0.758
@@ -1077,7 +1094,7 @@ def folding_chair(seed=0):
     Mb = Mb @ Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
     for s in (-1, 1):
         for zz in (-0.045, 0.045):
-            port.lathe(mb, [(0.0052, -0.001), (0.0048, 0.0008), (0.003, 0.0019)], seg=6, mat="steel", M=Mb @ _T(s * xf, zz, -0.0001))
+            port.lathe(mb, [(0.0052, -0.001), (0.0048, 0.0008), (0.003, 0.0019)], seg=12, mat="steel", M=Mb @ _T(s * xf, zz, -0.0001))
     return mb
 
 
@@ -1129,11 +1146,11 @@ def _welt_loop(W, L, re, z, n=4, dens=0.035):
 def _twin_caster(mb, M):
     """Rodaja doble de silla de oficina (Ø 50): capuchón, espiga, dos ruedas con maza. Origen en el piso bajo la espiga."""
     zloft(mb, [(0.02, 0.014, 0.052, 0.012), (0.038, 0.016, 0.058, 0.008), (0.05, 0.014, 0.046, 0.002), (0.057, 0.01, 0.022, -0.004)],
-          seg=10, mat="cable", M=M, ex=2.6)
+          seg=18, mat="cable", M=M, ex=2.6)
     for s in (-1, 1):                                    # la espiga queda dentro de la cuenca de la base: no se modela
         Mw = M @ _T(s * 0.0155, 0.014, 0.025) @ _Ry(90)
         port.lathe(mb, [(0.0075, -0.0082 * s), (0.021, -0.0082 * s), (0.025, -0.003 * s), (0.025, 0.003 * s), (0.021, 0.0082 * s),
-                        (0.0085, 0.0084 * s), (0.0075, 0.0096 * s)], seg=12, mat="cable", M=Mw, caps=True)
+                        (0.0085, 0.0084 * s), (0.0075, 0.0096 * s)], seg=20, mat="cable", M=Mw, caps=True)
 
 
 def office_chair(seed=0):
@@ -1148,28 +1165,28 @@ def office_chair(seed=0):
     for k in range(5):                                                                 # base de 5 brazos
         Ma = _Rz(72 * k + ph)
         port.loft(mb, [(0.035, 0.064, 0.052, 0.088), (0.12, 0.052, 0.046, 0.083), (0.22, 0.044, 0.036, 0.074),
-                       (0.285, 0.041, 0.033, 0.07), (0.302, 0.036, 0.026, 0.07)], seg=12, mat="cable", M=Ma, ex=3.2)
-        port.loft(mb, [(0.05, 0.012, 0.016, 0.112), (0.25, 0.01, 0.01, 0.089), (0.27, 0.006, 0.004, 0.0855)], seg=6, mat="cable",
+                       (0.285, 0.041, 0.033, 0.07), (0.302, 0.036, 0.026, 0.07)], seg=20, mat="cable", M=Ma, ex=3.2)
+        port.loft(mb, [(0.05, 0.012, 0.016, 0.112), (0.25, 0.01, 0.01, 0.089), (0.27, 0.006, 0.004, 0.0855)], seg=12, mat="cable",
                   M=Ma, ex=2.4)
-        port.lathe(mb, [(0.0165, 0.05), (0.0175, 0.054), (0.0175, 0.066)], seg=10, mat="cable", M=Ma @ _T(0.288, 0, 0))
+        port.lathe(mb, [(0.0165, 0.05), (0.0175, 0.054), (0.0175, 0.066)], seg=18, mat="cable", M=Ma @ _T(0.288, 0, 0))
         _twin_caster(mb, Ma @ _T(0.288, 0, 0) @ _Rz(float(r.uniform(0, 360))))
     port.lathe(mb, [(0.046, 0.058), (0.052, 0.068), (0.052, 0.104), (0.044, 0.116), (0.034, 0.12)], seg=16, mat="cable")
     port.lathe(mb, [(0.0315, 0.118), (0.0315, 0.205), (0.0292, 0.209), (0.0288, 0.272), (0.0265, 0.276), (0.0262, 0.298)], seg=16,
                mat="cable")
-    port.lathe(mb, [(0.0142, 0.296), (0.0142, 0.39)], seg=12, mat="steel")
+    port.lathe(mb, [(0.0142, 0.296), (0.0142, 0.39)], seg=20, mat="steel")
     # mecanismo
     zs = 0.43
-    port.lathe(mb, [(0.02, 0.37), (0.03, 0.398), (0.03, 0.404)], seg=12, mat="cable")
+    port.lathe(mb, [(0.02, 0.37), (0.03, 0.398), (0.03, 0.404)], seg=20, mat="cable")
     mb.box((-0.095, -0.135, 0.398), (0.095, 0.115, zs), "cable", bevel=0.006, seg=2)
     mb.box((-0.12, -0.15, zs - 0.004), (0.12, 0.14, zs + 0.002), "cable", bevel=0.002, seg=1)
     Mk = _T(0, -0.135, 0.405) @ _Rx(90)
-    port.lathe(mb, [(0.024, 0.0), (0.03, 0.006), (0.031, 0.012), (0.03, 0.03), (0.024, 0.036)], seg=12, mat="cable", M=Mk)
+    port.lathe(mb, [(0.024, 0.0), (0.03, 0.006), (0.031, 0.012), (0.03, 0.03), (0.024, 0.036)], seg=20, mat="cable", M=Mk)
     for k in range(12):                                                                # estrías de la perilla de tensión
         Mr = Mk @ _Rz(30 * k + 15) @ _T(0.0308, 0, 0)
         mb.box((-0.0018, -0.0022, 0.008), (0.0018, 0.0022, 0.029), "cable", bevel=0.0, m=Mr)
-    mb.tube(fillet([(0.09, -0.06, 0.41), (0.15, -0.075, 0.405), (0.2, -0.1, 0.39)], 0.03, 3), 0.0045, seg=6, mat="steel")
+    mb.tube(fillet([(0.09, -0.06, 0.41), (0.15, -0.075, 0.405), (0.2, -0.1, 0.39)], 0.03, 3), 0.0045, seg=12, mat="steel")
     port.loft(mb, [(0.0, 0.018, 0.008, 0.0), (0.012, 0.024, 0.012, 0.0), (0.055, 0.026, 0.012, 0.0), (0.065, 0.016, 0.008, 0.0)],
-              seg=8, mat="cable", M=_T(0.195, -0.098, 0.391) @ _Rz(-27) @ _Ry(12), ex=2.6)
+              seg=16, mat="cable", M=_T(0.195, -0.098, 0.391) @ _Rz(-27) @ _Ry(12), ex=2.6)
     # concha y cojín de asiento
     mb.box((-0.236, -0.226, zs), (0.236, 0.222, zs + 0.024), "cable", bevel=0.009, seg=2)
     Ws, Ls, Hs, rs = 0.47, 0.45, 0.075, 0.028
@@ -1185,7 +1202,7 @@ def office_chair(seed=0):
     _soft_block(mb, Mseat, Ws, Ls, Hs, rs, "vinyl", seat_def, step=0.05, n_round=3, drop=((2, -1),))
     loop = np.array([(x, y, Hs - rs + (rs + 0.0012) * math.sin(PI / 4)) for (x, y) in _welt_loop(Ws, Ls, rs, 0)])
     X, Y, Z = seat_def(loop[:, 0], loop[:, 1], loop[:, 2])
-    mb.tube([tuple(Mseat @ Vector(p)) for p in zip(X, Y, Z)], 0.0034, seg=5, mat="vinyl")
+    mb.tube([tuple(Mseat @ Vector(p)) for p in zip(X, Y, Z)], 0.0034, seg=10, mat="vinyl")
     # respaldo: cojín con curva lumbar sobre concha plástica
     Wb, Lb, Hb, rb_ = 0.44, 0.066, 0.485, 0.026
 
@@ -1204,10 +1221,10 @@ def office_chair(seed=0):
     for (x, z) in _welt_loop(Wb, Hb, rb_, 0):
         X, Y, Z = back_def(np.array([x]), np.array([-Lb / 2 + rb_ - (rb_ + 0.0012) * math.sin(PI / 4)]), np.array([z + Hb / 2]))
         pts.append((float(X[0]), float(Y[0]), float(Z[0])))
-    mb.tube([tuple(Mback @ Vector(p)) for p in pts], 0.0032, seg=5, mat="vinyl")
+    mb.tube([tuple(Mback @ Vector(p)) for p in pts], 0.0032, seg=10, mat="vinyl")
     xs = np.linspace(-Wb / 2 + rb_ * 0.6, Wb / 2 - rb_ * 0.6, 13)                    # costura horizontal con vivo
     X, Y, Z = back_def(xs, np.full_like(xs, -Lb / 2), np.full_like(xs, 0.30))
-    mb.tube([tuple(Mback @ Vector((float(a), float(b) + 0.0008, float(c)))) for a, b, c in zip(X, Y, Z)], 0.0028, seg=5, mat="vinyl")
+    mb.tube([tuple(Mback @ Vector((float(a), float(b) + 0.0008, float(c)))) for a, b, c in zip(X, Y, Z)], 0.0028, seg=10, mat="vinyl")
     # solera del respaldo, placa de unión y perilla de altura
     pa = Mback @ Vector((0, Lb / 2 + 0.036 + float(bend(0.0, 0.10)), 0.10))
     pb = Mback @ Vector((0, Lb / 2 + 0.036 + float(bend(0.0, 0.25)), 0.25))
@@ -1216,16 +1233,16 @@ def office_chair(seed=0):
     mb.box((-0.055, -0.007, 0.0), (0.055, 0.004, 0.13), "cable", bevel=0.003, seg=1,
            m=Mback @ _T(0, Lb / 2 + 0.031 + float(bend(0.0, 0.2)), 0.13))
     for (x, z) in ((-0.04, 0.15), (0.04, 0.15), (-0.04, 0.24), (0.04, 0.24)):
-        port.lathe(mb, [(0.0045, 0.0), (0.004, 0.0015)], seg=6, mat="steel",
+        port.lathe(mb, [(0.0045, 0.0), (0.004, 0.0015)], seg=12, mat="steel",
                    M=Mback @ _T(x, Lb / 2 + 0.035 + float(bend(0.0, z)), z) @ _Rx(-90))
-    port.lathe(mb, [(0.016, 0.0), (0.019, 0.004), (0.019, 0.016), (0.015, 0.02)], seg=12, mat="cable",
+    port.lathe(mb, [(0.016, 0.0), (0.019, 0.004), (0.019, 0.016), (0.015, 0.02)], seg=20, mat="cable",
                M=_T(0, pa.y + 0.004, pa.z - 0.02) @ _Rx(-90))
     # descansabrazos en T
     for s in (-1, 1):
         path = fillet([(s * 0.12, -0.02, zs - 0.006), (s * 0.255, -0.02, zs - 0.006), (s * 0.262, -0.02, 0.63)], 0.05, 5)
         mb.sweep(rr_profile(0.012, 0.055, 0.004, 2), path, mat="cable", normal=(0, 1, 0))
         for yy in (-0.035, -0.005):
-            port.lathe(mb, [(0.006, 0.0), (0.0055, 0.002)], seg=6, mat="steel", M=_T(s * 0.15, yy, zs - 0.012) @ _Rx(180))
+            port.lathe(mb, [(0.006, 0.0), (0.0055, 0.002)], seg=12, mat="steel", M=_T(s * 0.15, yy, zs - 0.012) @ _Rx(180))
         mb.box((s * 0.262 - 0.03, -0.12, 0.628), (s * 0.262 + 0.03, 0.07, 0.638), "cable", bevel=0.003, seg=1)
         mb.box((s * 0.262 - 0.035, -0.155, 0.637), (s * 0.262 + 0.035, 0.095, 0.663), "rubber", bevel=0.011, seg=3)
     return mb
@@ -1313,7 +1330,7 @@ def bedside_cabinet(seed=0):
     dpull(mb, _T(xo - 0.045, yF - 0.018, 0.36) @ _Ry(90), cc=0.096, proj=0.028, r=0.0045)
     for zh in (0.15, 0.40):                                                  # bisagras de libro
         for (z0, z1) in ((zh - 0.025, zh - 0.0005), (zh + 0.0005, zh + 0.025)):
-            port.lathe(mb, [(0.0042, z0), (0.0045, z0 + 0.001), (0.0045, z1 - 0.001), (0.0042, z1)], seg=8,
+            port.lathe(mb, [(0.0042, z0), (0.0045, z0 + 0.001), (0.0045, z1 - 0.001), (0.0042, z1)], seg=16,
                        mat="steel", M=_T(-xo - 0.0005, yF - 0.009, 0.0))
         mb.box((-xo - 0.0005 - 0.0012, yF - 0.004, zh - 0.024), (-xo + 0.0004, yF + 0.012, zh + 0.024), "steel", bevel=0.0004, seg=1)
     # cubierta moldeada con ceja
@@ -1326,9 +1343,9 @@ def bedside_cabinet(seed=0):
              normal=(0, 0, 1))
     # toallero y toalla
     xb, zb = xo + 0.028, 0.70
-    mb.tube(fillet([(xo + 0.001, -0.13, zb), (xb, -0.13, zb), (xb, 0.13, zb), (xo + 0.001, 0.13, zb)], 0.02, 4), 0.0065, seg=8, mat="steel")
+    mb.tube(fillet([(xo + 0.001, -0.13, zb), (xb, -0.13, zb), (xb, 0.13, zb), (xo + 0.001, 0.13, zb)], 0.02, 4), 0.0065, seg=16, mat="steel")
     for y in (-0.13, 0.13):
-        port.lathe(mb, [(0.012, 0.0), (0.012, 0.003), (0.008, 0.007)], seg=10, mat="steel", M=_T(xo, y, zb) @ _Ry(90))
+        port.lathe(mb, [(0.012, 0.0), (0.012, 0.003), (0.008, 0.007)], seg=18, mat="steel", M=_T(xo, y, zb) @ _Ry(90))
     if r.random() < 0.65:
         _towel(mb, xb, zb, 0.0065, int(r.integers(1e6)))
     # jarra y vaso
@@ -1336,11 +1353,11 @@ def bedside_cabinet(seed=0):
         Mj = _T(0.1, 0.05, zt1) @ _Rz(float(r.uniform(-30, 30)))
         port.lathe(mb, [(0.04, 0.0), (0.0445, 0.004), (0.047, 0.03), (0.046, 0.15), (0.041, 0.188), (0.038, 0.196)], seg=16, mat="plastic",
                    M=Mj)
-        port.lathe(mb, [(0.0405, 0.195), (0.041, 0.201), (0.031, 0.211), (0.012, 0.215), (0.011, 0.224), (0.004, 0.23)], seg=14,
+        port.lathe(mb, [(0.0405, 0.195), (0.041, 0.201), (0.031, 0.211), (0.012, 0.215), (0.011, 0.224), (0.004, 0.23)], seg=24,
                    mat="plastic_blue", M=Mj)
         mb.tube([tuple(Mj @ Vector(p)) for p in fillet([(0.04, 0.0, 0.165), (0.072, 0.0, 0.158), (0.07, 0.0, 0.06), (0.042, 0.0, 0.05)],
-                                                      0.02, 3)], 0.0065, seg=8, mat="plastic")
-        port.loft(mb, [(0.03, 0.03, 0.01, 0.19), (0.05, 0.026, 0.008, 0.193), (0.058, 0.02, 0.006, 0.196)], seg=8, mat="plastic",
+                                                      0.02, 3)], 0.0065, seg=16, mat="plastic")
+        port.loft(mb, [(0.03, 0.03, 0.01, 0.19), (0.05, 0.026, 0.008, 0.193), (0.058, 0.02, 0.006, 0.196)], seg=16, mat="plastic",
                   M=Mj @ _Rz(180), ex=2.2)
         Mg = _T(-0.08, 0.02, zt1)
         port.lathe(mb, [(0.029, 0.0), (0.0335, 0.092), (0.0326, 0.0935), (0.0316, 0.092), (0.0275, 0.004)], seg=16, mat="glass", M=Mg)
@@ -1475,10 +1492,10 @@ def clock(seed=0):
     hand(0.108, 0.02, 0.0065, 0.003, zf + 0.0062, "cable", (mm + ss / 60) * 6)
     Ms = M @ _Rz(-ss * 6) @ _T(0, 0, zf + 0.0085)
     mb.plate([(-0.0007, -0.028), (0.0007, -0.028), (0.0006, 0.118), (-0.0006, 0.118)], 0.0006, "sign_red", m=Ms)
-    port.lathe(mb, [(0.0042, 0.0), (0.0042, 0.0006)], seg=10, mat="sign_red", M=Ms @ _T(0, -0.024, 0))
-    port.lathe(mb, [(0.0055, zf), (0.0055, zf + 0.0085), (0.0035, zf + 0.0105), (0.0028, zf + 0.0112), (0.0, zf + 0.0118)], seg=10,
+    port.lathe(mb, [(0.0042, 0.0), (0.0042, 0.0006)], seg=18, mat="sign_red", M=Ms @ _T(0, -0.024, 0))
+    port.lathe(mb, [(0.0055, zf), (0.0055, zf + 0.0085), (0.0035, zf + 0.0105), (0.0028, zf + 0.0112), (0.0, zf + 0.0118)], seg=18,
                mat="sign_red", M=M)
-    port.lathe(mb, [(0.0068, zf + 0.0048), (0.0068, zf + 0.0062)], seg=12, mat="cable", M=M)
+    port.lathe(mb, [(0.0068, zf + 0.0048), (0.0068, zf + 0.0062)], seg=20, mat="cable", M=M)
     # cristal abombado: casquete de 1,5 mm asentado bajo el aro (perfil cerrado: cara interior, canto y cara exterior)
     outer = [(0.139 * (1 - k / 5), 0.0405 + 0.0072 * (1 - (1 - k / 5) ** 2)) for k in range(6)]
     inner = [(rr_, z - 0.0015) for (rr_, z) in outer]
@@ -1552,7 +1569,7 @@ def potted_plant(seed=0, h=0.9):
         rz, ry = float(r.uniform(0, 60)), float(r.uniform(-20, 20))
         if k >= 6:
             continue
-        port.lathe(mb, [(0.0, -s_ * 0.5), (s_ * 0.8, -s_ * 0.3), (s_ * 0.85, s_ * 0.3), (0.0, s_ * 0.5)], seg=5, mat="concrete",
+        port.lathe(mb, [(0.0, -s_ * 0.5), (s_ * 0.8, -s_ * 0.3), (s_ * 0.85, s_ * 0.3), (0.0, s_ * 0.5)], seg=10, mat="concrete",
                    M=_T(rr_ * math.cos(a), rr_ * math.sin(a), z) @ _Rz(rz) @ _Ry(ry))
     nl = int(r.integers(13, 18))
     for k in range(nl):
@@ -1566,7 +1583,7 @@ def potted_plant(seed=0, h=0.9):
         p1 = b0 + d * Ls + Vector((0, 0, -0.03 * Ls))
         mid = b0 + d * (Ls * 0.5) + Vector((0, 0, 0.012))
         stem = smooth_path([tuple(b0 - Vector((0, 0, 0.015))), tuple(mid), tuple(p1)], 2)
-        mb.tube(stem, 0.0032, seg=4, mat="vegetation", radii=[0.0042 - 0.0016 * i / (len(stem) - 1) for i in range(len(stem))])
+        mb.tube(stem, 0.0032, seg=8, mat="vegetation", radii=[0.0042 - 0.0016 * i / (len(stem) - 1) for i in range(len(stem))])
         el0 = math.degrees(es) - float(r.uniform(12, 28))
         _leaf(mb, p1 - d * 0.004, az + float(r.uniform(-0.15, 0.15)), el0, float(r.uniform(65, 100)) if not inner else float(r.uniform(45, 70)),
               float(r.uniform(0.27, 0.34)) * sc, float(r.uniform(0.085, 0.11)) * sc, fold=0.3, twist=float(r.uniform(-25, 25)), nu=8, nv=5)
@@ -1574,11 +1591,11 @@ def potted_plant(seed=0, h=0.9):
         az = float(r.uniform(0, 2 * PI))
         b0 = Vector((0.02 * math.cos(az), 0.02 * math.sin(az), 0.312))
         top_ = b0 + Vector((0.08 * math.cos(az), 0.08 * math.sin(az), 0.52 * sc))
-        mb.tube(smooth_path([tuple(b0 - Vector((0, 0, 0.015))), tuple(b0 + Vector((0, 0, 0.25 * sc))), tuple(top_)], 3), 0.0028, seg=5,
+        mb.tube(smooth_path([tuple(b0 - Vector((0, 0, 0.015))), tuple(b0 + Vector((0, 0, 0.25 * sc))), tuple(top_)], 3), 0.0028, seg=10,
                 mat="vegetation")
         _leaf(mb, top_ - Vector((0, 0, 0.005)), az + 0.3, 82, 40, 0.11 * sc, 0.06 * sc, t0=0.0012, fold=0.75, nu=6, nv=5, mat="sign_white",
               shape=0.6, twist=20)
         sp = top_ + Vector((0.01 * math.cos(az + 0.3 + PI), 0.01 * math.sin(az + 0.3 + PI), 0.0))
-        port.lathe(mb, [(0.0, 0.0), (0.0058, 0.008), (0.0055, 0.035), (0.0, 0.05)], seg=6, mat="paint_yellow",
+        port.lathe(mb, [(0.0, 0.0), (0.0058, 0.008), (0.0055, 0.035), (0.0, 0.05)], seg=12, mat="paint_yellow",
                    M=_T(sp.x, sp.y, sp.z) @ _Rz(math.degrees(az)) @ _Ry(-12))
     return mb

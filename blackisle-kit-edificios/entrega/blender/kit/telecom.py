@@ -1764,10 +1764,18 @@ def _engine_bay(mb, L, W, z0, z1, xb0=-0.04, seed=0):
     for k in range(9):
         x = x0 + 0.06 + k * 0.06
         _box(mb, (x - 0.004, -0.178, zc - 0.29), (x + 0.004, 0.178, zc - 0.15), "cable", bevel=0.002, seg=1)
-    _box(mb, (x0, -0.20, zc - 0.12), (x1, 0.20, zc + 0.24), "sign_blue", bevel=0.010, seg=3)
-    for k in range(3):                                    # resaltes de los cilindros en el costado del bloque
+    slab(mb, _T((x0 + x1) / 2, 0, zc - 0.12), x1 - x0, 0.40, 0.36, rc=0.018, re=0.012, mat="sign_blue", nc=3, ne=2)   # bloque fundido
+    for k in range(4):                                    # nervios de fundición verticales entre cilindros (ambos costados)
+        x = x0 + 0.005 + k * 0.197
+        for sy in (-1, 1):
+            _box(mb, (x - 0.008, min(sy * 0.198, sy * 0.214), zc - 0.10), (x + 0.008, max(sy * 0.198, sy * 0.214), zc + 0.22),
+                 "sign_blue", bevel=0.004, seg=2)
+    _box(mb, (x0 + 0.01, -0.212, zc + 0.205), (x1 - 0.01, 0.212, zc + 0.235), "sign_blue", bevel=0.006, seg=2)   # ceja de la cabeza
+    for k in range(3):                                    # tapones de las camisas de agua (copa embutida) y respiradero
         x = x0 + 0.10 + k * 0.20
-        _box(mb, (x - 0.07, -0.21, zc + 0.02), (x + 0.07, 0.21, zc + 0.22), "sign_blue", bevel=0.012, seg=3)
+        lathe(mb, [(0.0, 0.0), (0.024, 0.0), (0.025, 0.002), (0.025, 0.006), (0.021, 0.007), (0.0, 0.007)], seg=24, mat="steel",
+              M=_T(x, -0.199, zc + 0.10) @ _Rx(90))
+    _box(mb, (x0 + 0.42, -0.2015, zc - 0.06), (x0 + 0.50, -0.199, zc - 0.02), "aluminium", bevel=0.0006, seg=1)   # placa del motor
     _box(mb, (x0 + 0.02, -0.18, zc + 0.24), (x1 - 0.02, 0.18, zc + 0.35), "sign_blue", bevel=0.008, seg=2)
     slab(mb, _T((x0 + x1) / 2, 0, zc + 0.35), x1 - x0 - 0.08, 0.27, 0.07, rc=0.03, re=0.018, mat="cable", nc=4, ne=3)
     for k in range(6):                                    # tornillos de la tapa
@@ -2388,23 +2396,31 @@ def signs():
     t = 0.0016
     yf = -t - 0.0004                                   # cara impresa
 
-    def txt(mb, s, size, mat, x, z, bold=True):
-        label(mb, s, size, mat, _MF(x, yf, z), depth=0.0012, bold=bold, res=RES)
+    def txt(mb, s, size, mat, x, z, bold=True, maxw=0.25):
+        """La tipografía de señalización es más angosta que la de Blender: se agranda 30 % (como en un letrero real, el texto
+        llena la placa) sin pasar de `maxw`."""
+        sz = size * 1.3
+        probe = MB()
+        w = label(probe, s, sz, mat, _MF(x, yf, z), depth=0.0012, bold=bold, res=RES)
+        if w > maxw:
+            probe = MB()
+            label(probe, s, sz * maxw / w, mat, _MF(x, yf, z), depth=0.0012, bold=bold, res=RES)
+        mb.join(probe)
 
     # AUTHORIZED PERSONNEL ONLY
     mb = _sign_base(0.30, 0.20, "sign_red")
     slab(mb, _MF(0, yf + 0.0001, 0.0) @ _T(0, 0.10, 0), 0.272, 0.172, 0.0003, rc=0.006, re=0.0001, mat="sign_white", nc=2, ne=1, re0=0.0,
          cap0=False)
     for k, s_ in enumerate(("AUTHORIZED", "PERSONNEL", "ONLY")):
-        txt(mb, s_, 0.034, "cable", 0.0, 0.135 - k * 0.048)
+        txt(mb, s_, 0.034, "cable", 0.0, 0.135 - k * 0.048, maxw=0.255)
     out["AUTHORIZED PERSONNEL ONLY"] = mb
     # DANGER HIGH VOLTAGE (encabezado tipo ANSI genérico)
     mb = _sign_base(0.254, 0.178, "sign_white", mount="rivet")
     _box(mb, (-0.119, yf - 0.0002, 0.112), (0.119, yf + 0.0001, 0.17), "cable", bevel=0.0, m=None)
     mb.plate(rr_pts(0.17, 0.042, 0.02, n=4), 0.0003, "sign_red", m=_MF(0, yf - 0.0002, 0.141) @ _T(0, 0, 0.0))
-    txt(mb, "DANGER", 0.03, "sign_white", 0.0, 0.1295)
-    txt(mb, "HIGH", 0.034, "cable", 0.0, 0.066)
-    txt(mb, "VOLTAGE", 0.034, "cable", 0.0, 0.02)
+    txt(mb, "DANGER", 0.03, "sign_white", 0.0, 0.1295, maxw=0.15)
+    txt(mb, "HIGH", 0.034, "cable", 0.0, 0.066, maxw=0.22)
+    txt(mb, "VOLTAGE", 0.034, "cable", 0.0, 0.02, maxw=0.22)
     out["DANGER HIGH VOLTAGE"] = mb
     # RF EXPOSURE: DO NOT CLIMB
     mb = _sign_base(0.254, 0.178, "paint_yellow")
@@ -2413,19 +2429,19 @@ def signs():
     mb.plate([(0.0, 0.034), (-0.031, -0.0175), (0.031, -0.0175)], 0.0003, "paint_yellow", m=_MF(-0.075, yf - 0.0003, 0.11))
     _box(mb, (-0.075 - 0.0035, yf - 0.0012, 0.104), (-0.075 + 0.0035, yf - 0.0003, 0.132), "cable", bevel=0.0)
     _box(mb, (-0.075 - 0.0035, yf - 0.0012, 0.094), (-0.075 + 0.0035, yf - 0.0003, 0.1005), "cable", bevel=0.0)
-    txt(mb, "RF", 0.04, "cable", 0.05, 0.115)
-    txt(mb, "EXPOSURE", 0.028, "cable", 0.0, 0.058)
-    txt(mb, "DO NOT CLIMB", 0.024, "cable", 0.0, 0.018)
+    txt(mb, "RF", 0.04, "cable", 0.05, 0.115, maxw=0.10)
+    txt(mb, "EXPOSURE", 0.028, "cable", 0.0, 0.058, maxw=0.22)
+    txt(mb, "DO NOT CLIMB", 0.024, "cable", 0.0, 0.018, maxw=0.22)
     out["RF EXPOSURE: DO NOT CLIMB"] = mb
     # NO TRESPASSING
     mb = _sign_base(0.30, 0.15, "sign_white")
-    txt(mb, "NO", 0.05, "sign_red", 0.0, 0.08)
-    txt(mb, "TRESPASSING", 0.033, "sign_red", 0.0, 0.03)
+    txt(mb, "NO", 0.05, "sign_red", 0.0, 0.08, maxw=0.26)
+    txt(mb, "TRESPASSING", 0.033, "sign_red", 0.0, 0.03, maxw=0.265)
     out["NO TRESPASSING"] = mb
     # SITE ID 2047
     mb = _sign_base(0.20, 0.10, "aluminium", mount="rivet", rc=0.008)
-    txt(mb, "SITE ID", 0.022, "cable", 0.0, 0.058)
-    txt(mb, "2047", 0.032, "cable", 0.0, 0.02)
+    txt(mb, "SITE ID", 0.022, "cable", 0.0, 0.058, maxw=0.17)
+    txt(mb, "2047", 0.032, "cable", 0.0, 0.02, maxw=0.17)
     out["SITE ID 2047"] = mb
     return out
 
@@ -3135,6 +3151,9 @@ def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
       jumpers amarillos en lazo; servidores; distribución CD + ODF; reserva con tapas ciegas).
     - Fila S (contra el muro -Y, frente a +Y, a partir de x = -L/2 + 1,6): 4 racks 600 × 600 × 2000 (planta de rectificadores
       48 V con controlador y distribución, 2 gabinetes de baterías de litio de 5 módulos, ODF / patch).
+    - Cada rack arma su propia variante de cada equipo (EQ: LEDs en estados distintos, puertos y SFP ocupados, módulos que
+      faltan, etiquetas de inventario), rieles EIA-310 con sus barrenos cuadrados reales y cordones de parcheo RJ45 del switch
+      al panel (en lazo por el organizador o por el costado del rack).
     - Charolas tipo escalera de 300 mm a z 2,16 (cama) sobre cada fila y una transversal junto al muro +X, colgadas de trapecios con
       varilla roscada; cables negros (RF/híbridos del puerto, fuerza CD) y amarillos (fibra) tendidos en la charola, que bajan a
       cada rack por su pasacables de cepillo.

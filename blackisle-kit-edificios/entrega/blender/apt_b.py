@@ -47,9 +47,19 @@ def cfg_apt_b():
             return False
         return (ax == "x" and j == 0 and i in (0, 1)) or (ax == "y" and j == 0 and i in (0, 1))
 
+    # mordidas con varilla expuesta integradas en columnas y vigas (antes: envolventes que tapaba la columna sana)
+    spalls = {
+        ("col", 2, 0): [dict(sides=(-1, -1), start=zl[1] + 0.45, length=0.9, depth=0.08, seed=2301)],
+        ("col", 3, 0): [dict(sides=(1, -1), start=zl[2] + 0.45, length=0.9, depth=0.08, seed=2302)],
+        ("col", 4, 0): [dict(sides=(1, -1), start=zl[1] + 0.45, length=0.9, depth=0.08, seed=2303)],
+        ("beam", 2, "x", 2, 0): [dict(sides=(-1, -1), start=0.7, length=1.3, depth=0.08, seed=2304)],
+        ("beam", 3, "x", 3, 0): [dict(sides=(-1, -1), start=0.5, length=1.0, depth=0.07, seed=2305)],
+        ("beam", 2, "y", 0, 2): [dict(sides=(-1, -1), start=0.9, length=1.4, depth=0.08, seed=2306)],
+        ("beam", 1, "x", 1, 3): [dict(sides=(1, -1), start=0.6, length=1.2, depth=0.07, seed=2307)],
+    }
     return dict(id="APT_B_4p", xs=xs, ys=ys, h=h, stair=stair, seed=23, loggia_depth=0.0, lookdev=dict(under="brick"),
                 stair_levels={1, 2, 3}, holes={len(h): [COLLAPSE]}, skip_beam=skip_beam,
-                col_top={(0, 0): zl[3] + 1.25, (1, 0): zl[3] + 1.9})
+                col_top={(0, 0): zl[3] + 1.25, (1, 0): zl[3] + 1.9}, spalls=spalls)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -58,7 +68,7 @@ def cfg_apt_b():
 def build_facades(cfg, shell):
     """Todos los muros de relleno exteriores. Devuelve la lista de paneles (para vestir y para el grafiti)."""
     P = []
-    pan = lambda *a, **k: ac.panel(cfg, shell, *a, collect=P, **k)
+    pan = lambda *a, **k: ab.panel_patched(cfg, shell, *a, collect=P, **k)
     top = len(cfg["h"]) - 1
     # FRENTE ---------------------------------------------------------------------------------
     for b, kinds in enumerate(([("door_service", 0.3)], [("window_high", 0.5)], [("portico", 0.5)], [("shutter", 0.5)])):
@@ -109,7 +119,9 @@ def build_portico(cfg, shell, P):
     yf = p["face"]
     yo = yf - 1.15
     z0 = GROUND + v1 + 0.25
-    shell.box((x0, yo, z0), (x1, yf, z0 + 0.14), "concrete", bevel=0.012, seg=2)
+    # losa de la marquesina: núcleo + canto barrido con goterón en las 3 orillas libres (el agua no escurre al muro)
+    shell.box((x0 + ab.SLAB_BAND, yo + ab.SLAB_BAND, z0), (x1 - ab.SLAB_BAND, yf, z0 + 0.14), "concrete", bevel=0.0)
+    ab.slab_band(shell, [(x0, yf), (x0, yo), (x1, yo), (x1, yf)], False, z0 + 0.14, t=0.14)
     for (a, b) in (((x0, yo), (x1, yo + 0.08)), ((x0, yo + 0.08), (x0 + 0.08, yf)), ((x1 - 0.08, yo + 0.08), (x1, yf))):
         shell.box((a[0], a[1], z0 + 0.14), (b[0], b[1], z0 + 0.32), "concrete", bevel=0.008, seg=1)
     for x in (x0 + 0.12, x1 - 0.12):
@@ -317,7 +329,7 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
     return n
 
 
-def dress_damage(cfg, shell, det, inter, skirt, detail="low"):
+def dress_damage(cfg, shell, det, inter, skirt, detail="high"):
     from kit import damage as dm
     r = rng(cfg["seed"] + 606)
     zl = level_z(cfg)
@@ -337,15 +349,7 @@ def dress_damage(cfg, shell, det, inter, skirt, detail="low"):
     for x in (-6.3, -4.6, -2.7):
         add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=5, length=0.55, stump=(0.25, 0.2, 0.12), detail=detail),
             _T(x, COLLAPSE[3] + 0.12, zt) @ ac._rot_z(float(r.uniform(-20, 20))), det)
-    # columnas de galería con aristas mordidas
-    for (i, lv) in ((2, 1), (3, 2), (4, 1)):
-        c = ab.col_size(i, 0, cfg) / 2 + 0.002
-        z0 = zl[lv] + 0.25
-        mbx = MB()
-        dm.spalled_box(mbx, (xs[i] - c, ys[0] - c, z0), (xs[i] + c, ys[0] + c, z0 + 1.5),
-                       [dict(axis="z", sides=(-1, int(r.choice([-1, 1]))), start=0.2, length=0.9, depth=0.08, seed=int(r.integers(1e6)))],
-                       detail=detail)
-        add("spalled_column", mbx, Matrix(), shell)
+    # (columnas y vigas con mordidas: integradas en build_frame, ver cfg['spalls'])
     # escombro: galería del piso 3 bajo el colapso, cuarto expuesto, pie de la esquina SO, local de PB
     for (x, y, z, rad, tgt) in ((-2.7, -4.95, zl[3], 0.7, det), (-5.4, -4.9, zl[3], 0.9, inter), (-8.7, -6.9, 0.0, 1.5, skirt),
                                 (-5.6, -7.6, 0.0, 0.9, skirt), (-4.0, -3.0, zl[0], 0.8, inter)):
@@ -372,7 +376,8 @@ def build_apt_b(collection_root=None, dress_all=True):
     cols = {k: get_collection(f"{cid}_{k}", root) for k in ("Shell", "Details", "Interior", "Skirt", "Roof", "Damage")}
     out = {k: [] for k in cols}
     shell = MB()
-    ab.build_frame(cfg, shell)
+    dmg_shell = MB()
+    ab.build_frame(cfg, shell, spall_mb=dmg_shell if dress_all else None)
     P = build_facades(cfg, shell)
     portico = build_portico(cfg, shell, P)
     inter = MB()
@@ -382,7 +387,7 @@ def build_apt_b(collection_root=None, dress_all=True):
     stats = {}
     det = MB()
     sk = MB()
-    dmg_shell, dmg_det, dmg_int = MB(), MB(), MB()
+    dmg_det, dmg_int = MB(), MB()
     if dress_all:
         stats = dress(cfg, P, det, inter, doors, portico)
         roof = MB()

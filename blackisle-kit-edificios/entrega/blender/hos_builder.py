@@ -44,6 +44,7 @@ BACK_WALL_Y, SIDE_WALL_XW, SIDE_WALL_XE = 13.5, -17.0, 27.0
 WIN_Z = (FFL + 1.15, FFL + 2.35)
 HIGH_Z = (FFL + 2.0, FFL + 2.5)
 RAMP_W = (-16.9, -11.0)            # rampa del pórtico (x): 0,35 m en 5,90 m = 5,9 % (NOM-030: <= 6 %, tramo <= 6,00 m)
+RAMP_WY = (-11.95, -10.75)         # ancho de la rampa del pórtico (y): 1,20 m libres, al norte de la columna de la esquina
 ER_RAMP = (-12.45, -6.6)           # rampa del pasillo cubierto (y): 5,85 m = 5,98 %; descanso inferior de 2,05 m
 ER_DOOR = (-6.0, -4.4)             # puerta de urgencias (muro oriente), sobre el descanso de y -6,6 a -4,0
 ER_STEPS = (-4.0, -3.1)            # 3 escalones del descanso al firme de la puerta lateral de la cochera
@@ -98,7 +99,7 @@ def ext_wall(shell, side, a0, a1, face, ops, z_top, z_split, t=TE, mat_in="paint
                        m=M @ _T(0, 0, z_split))
     if coping:
         shell.box((u_trim - (0.03 if u_trim == 0 else 0), -0.03, z_top), (L - u_trim + (0.03 if u_trim == 0 else 0), t + 0.03, z_top + 0.05),
-                  "concrete", m=M)
+                  "concrete", bevel=0.008, seg=2, m=M)                                  # remate colado con aristas boleadas
     return M
 
 
@@ -374,8 +375,8 @@ def place_doors(det, r):
             det.join(cl.door_panel(w, h, depth=depth, seed=int(r.integers(1e6)), ang=ang), M)
         elif kind == "flush2":
             leaf = w / 2
-            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang), M)
-            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang * 0.15),
+            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang, jambs=(True, False)), M)
+            det.join(cl.door_panel(leaf, h, depth=depth, seed=int(r.integers(1e6)), ang=ang * 0.15, jambs=(True, False)),
                      M @ _T(w, 0, 0) @ Matrix.Scale(-1, 4, Vector((1, 0, 0))))
         elif kind == "double_glazed":
             det.join(cl.door_glass_double(w, h, depth=depth, seed=int(r.integers(1e6)), angles=(ang, ang * 0.3),
@@ -398,10 +399,10 @@ def wedge(mb, x0, x1, y0, y1, z0a, z0b, mat="concrete", axis="y"):
 
 def cornice(shell, x0, x1, y0, y1, z, h=0.1, proud=0.05):
     """Moldura corrida bajo el pretil: frente y fondo de esquina a esquina, costados entre ellos (sin caras encimadas)."""
-    shell.box((x0 - proud, y0 - proud, z), (x1 + proud, y0, z + h), "plaster")
-    shell.box((x0 - proud, y1, z), (x1 + proud, y1 + proud, z + h), "plaster")
-    shell.box((x0 - proud, y0, z), (x0, y1, z + h), "plaster")
-    shell.box((x1, y0, z), (x1 + proud, y1, z + h), "plaster")
+    shell.box((x0 - proud, y0 - proud, z), (x1 + proud, y0, z + h), "plaster", bevel=0.008, seg=2)
+    shell.box((x0 - proud, y1, z), (x1 + proud, y1 + proud, z + h), "plaster", bevel=0.008, seg=2)
+    shell.box((x0 - proud, y0, z), (x0, y1, z + h), "plaster", bevel=0.008, seg=2)
+    shell.box((x1, y0, z), (x1 + proud, y1, z + h), "plaster", bevel=0.008, seg=2)
 
 
 def site(shell, inter, det, roof, r):
@@ -431,11 +432,12 @@ def site(shell, inter, det, roof, r):
 
     def zs_w(x):
         return PAVE + (FFL - PAVE) * (x - xb) / (xt - xb)
-    wedge(inter, xb, xt, -12.4, -11.2, PAVE, FFL, axis="x")
-    for c in (-12.45, -11.15):
+    ya, yb = RAMP_WY
+    wedge(inter, xb, xt, ya, yb, PAVE, FFL, axis="x")
+    for c in (ya - 0.05, yb + 0.05):
         _curb(inter, xb, xt, c, 0.10, zs_w, axis="x")
-    _grip_strips(det, xb + 0.2, xt - 0.1, -12.39, -11.21, zs_w, axis="x")
-    for c in (-12.45, -11.15):
+    _grip_strips(det, xb + 0.2, xt - 0.1, ya + 0.01, yb - 0.01, zs_w, axis="x")
+    for c in (ya - 0.05, yb + 0.05):
         _ramp_rail(det, (xb, c, zs_w(xb)), (xt, c, zs_w(xt)))
     # pasillo cubierto de urgencias: descanso inferior, rampa (5,98 %, 5,85 m), descanso de la puerta, escalones a la cochera
     y0r, y1r = ER_RAMP
@@ -457,7 +459,7 @@ def site(shell, inter, det, roof, r):
     _canopy(det, r)
     # descansos con escalones de la salida de emergencia (poniente) y de la puerta de servicio (fondo)
     _stoop(inter, det, _T(X0, -2.95, 0.0) @ _Rz(90), 1.7, 1.3)
-    _stoop(inter, det, _T(12.1, Y1, 0.0) @ _Rz(180), 1.8, 1.3)
+    _stoop(inter, det, _T(12.1, Y1, 0.0), 1.8, 1.3)
     # barda perimetral de block con castillos y remate; portón de servicio
     walls = [((SIDE_WALL_XW, BACK_WALL_Y), (SIDE_WALL_XE, BACK_WALL_Y)), ((SIDE_WALL_XW, -10.0), (SIDE_WALL_XW, BACK_WALL_Y)),
              ((SIDE_WALL_XE, GY0), (SIDE_WALL_XE, BACK_WALL_Y))]
@@ -478,12 +480,12 @@ def site(shell, inter, det, roof, r):
                         shell.box((s0, a[1] - 0.075, 0.0), (s1, a[1] + 0.075, 1.8), "concrete", bevel=0.006, seg=2)
                         shell.box((s0, a[1] - 0.1, 1.8), (s1, a[1] + 0.1, 1.88), "concrete", bevel=0.012, seg=3)
                 if not (gate[0] - 0.2 < xa < gate[1] + 0.2):
-                    shell.box((xa - 0.1, a[1] - 0.1, 0.0), (xa + 0.1, a[1] + 0.1, 1.85), "concrete", bevel=0.012, seg=3)
+                    shell.box((xa - 0.1, a[1] - 0.1, 0.0), (xa + 0.1, a[1] + 0.1, 1.8), "concrete", bevel=0.012, seg=3)   # castillo bajo el remate
             else:
                 ya, yb = a[1] + p0, a[1] + p1
                 shell.box((a[0] - 0.075, ya, 0.0), (a[0] + 0.075, yb, 1.8), "concrete", bevel=0.006, seg=2)
                 shell.box((a[0] - 0.1, ya, 1.8), (a[0] + 0.1, yb, 1.88), "concrete", bevel=0.012, seg=3)
-                shell.box((a[0] - 0.1, ya - 0.1, 0.0), (a[0] + 0.1, ya + 0.1, 1.85), "concrete", bevel=0.012, seg=3)
+                shell.box((a[0] - 0.1, ya - 0.1, 0.0), (a[0] + 0.1, ya + 0.1, 1.8), "concrete", bevel=0.012, seg=3)
             pos += seg
     for x in gate:
         shell.box((x - 0.15, BACK_WALL_Y - 0.15, 0.0), (x + 0.15, BACK_WALL_Y + 0.15, 2.1), "concrete", bevel=0.012, seg=3)
@@ -764,14 +766,14 @@ def _pipe_clamp(mb, c, a, n, r, w=0.02, t=0.0016, mat="galvanized"):
         cs.screw(mb, Mz, r=0.0035, seg=12, cross=False)
 
 
-def _vent_pipe(h=0.6, R=0.057):
-    """Tubo de ventilación sanitaria de PVC de 4" (Ø ext. 114 mm) en la azotea: bota de impermeabilizante con faldón, tubo con
+def _vent_pipe(h=0.6, R=0.055):
+    """Tubo de ventilación de PVC sanitario de 110 mm (NMX-E-199: Ø ext. 110 mm, pared de 2,3–2,7 mm) en la azotea: bota de impermeabilizante con faldón, tubo con
     boca de pared real, sombrerete cónico sobre 3 patas de solera."""
     mb = cl.MB()
     ce.lathe(mb, [(0.0, 0.0), (0.17, 0.0), (0.172, 0.002), (0.17, 0.005), (0.14, 0.0085), (0.122, 0.016), (R + 0.016, 0.07), (R + 0.009, 0.1),
                   (R + 0.004, 0.106), (0.0, 0.106)], seg=32, mat="rubber")
-    cs.lathe(mb, [(0.0, 0.1), (R, 0.1), (R, h), (R - 0.0006, h + 0.0012), (R - 0.0045, h + 0.0012), (R - 0.0052, h),
-                  (R - 0.0052, h - 0.03), (0.0, h - 0.03)], seg=32, mat="plastic")
+    cs.lathe(mb, [(0.0, 0.1), (R, 0.1), (R, h), (R - 0.0006, h + 0.0012), (R - 0.0019, h + 0.0012), (R - 0.0025, h),
+                  (R - 0.0025, h - 0.03), (0.0, h - 0.03)], seg=32, mat="plastic")
     zc = h + 0.07
     cs.lathe(mb, [(0.0, zc + 0.052), (0.06, zc + 0.03), (0.088, zc + 0.006), (0.094, zc), (0.096, zc + 0.003),
                   (0.092, zc + 0.01), (0.062, zc + 0.036), (0.0, zc + 0.058)], seg=40, mat="plastic")
@@ -784,8 +786,8 @@ def _vent_pipe(h=0.6, R=0.057):
     return mb
 
 
-def _scupper(p0, p1, s_wall, R=0.0505, t=0.0042):
-    """Gárgola de PVC de 4" a través del pretil (de p0 en la azotea a p1 afuera): tubo hueco con boca de pared real y
+def _scupper(p0, p1, s_wall, R=0.055, t=0.0025):
+    """Gárgola de PVC sanitario de 110 mm a través del pretil (de p0 en la azotea a p1 afuera): tubo hueco con boca de pared real y
     chaflán de mortero contra la cara exterior del muro (a la distancia s_wall de p0 a lo largo del tubo)."""
     mb = cl.MB()
     p0, p1 = Vector(p0), Vector(p1)
@@ -802,8 +804,8 @@ def _roof_hatch():
     """Registro de azotea: brocal de concreto boleado, tapa de lámina con faldón, 2 bisagras de libro con nudillos, aldaba con
     candado y jaladera de varilla (origen: losa, centro; bisagras hacia +Y)."""
     mb = cl.MB()
-    cs.slab(mb, _T(0, 0, 0), 0.9, 0.9, 0.35, rc=0.03, re=0.012, re0=0.0, mat="concrete", nc=4, ne=3)
-    zt = 0.35
+    cs.slab(mb, _T(0, 0, 0), 0.9, 0.9, 0.305, rc=0.03, re=0.012, re0=0.0, mat="concrete", nc=4, ne=3)   # brocal de 12"
+    zt = 0.305
     cs.slab(mb, _T(0, 0, zt + 0.004), 1.0, 1.0, 0.03, rc=0.02, re=0.006, mat="paint_green", nc=4, ne=2)
     for (w, d, cx, cy) in ((1.0, 0.003, 0.0, -0.4985), (1.0, 0.003, 0.0, 0.4985), (0.003, 0.994, -0.4985, 0.0), (0.003, 0.994, 0.4985, 0.0)):
         cs.slab(mb, _T(cx, cy, zt - 0.04), w, d, 0.05, rc=0.0012, re=0.001, mat="paint_green", nc=1, ne=1)
@@ -937,7 +939,7 @@ def _gas_cage(W=1.40, D=0.80, H=1.85, seed=0):
     dx0, dx1, dz0, dz1 = x0 + 0.045, x1 - 0.045, 0.06, H - 0.06
     yd = y0 - 0.012
     for (a, b) in (((dx0, dz0), (dx1, dz0)), ((dx0, dz1), (dx1, dz1)), ((dx0, (dz0 + dz1) / 2), (dx1, (dz0 + dz1) / 2))):
-        cl.rtube(mb, (a[0], yd, a[1]), (b[0], yd, b[1]), 0.025, 0.025, "paint_green", up=(0, 0, 1), r=0.003)
+        cl.rtube(mb, (a[0] + 0.0125, yd, a[1]), (b[0] - 0.0125, yd, b[1]), 0.024, 0.024, "paint_green", up=(0, 0, 1), r=0.003)
     for x in (dx0, dx1):
         cl.rtube(mb, (x, yd, dz0 - 0.0125), (x, yd, dz1 + 0.0125), 0.025, 0.025, "paint_green", up=(1, 0, 0), r=0.003)
     mesh((dx0 + 0.0125, yd + 0.002, dz0 + 0.0125), (1, 0, 0), (0, 0, 1), dx1 - dx0 - 0.025, dz1 - dz0 - 0.025)
@@ -990,15 +992,15 @@ def _cone():
     return mb
 
 
-def _tire_flat(R=0.385, Rb=0.203, W=0.225, seed=0):
-    """Llanta de camioneta LT 225/75 R16 acostada (Ø 770 mm, ancho 225 mm): sección de cuerda con costado abombado, hombros,
+def _tire_flat(R=0.372, Rb=0.203, W=0.224, seed=0):
+    """Llanta de camioneta LT 225/75 R16 acostada (Ø 744 mm = 29,3", ancho 224 mm): sección de cuerda con costado abombado, hombros,
     banda con 3 ranuras perimetrales y bloques por ranuras transversales alternadas, ceja y talón (origen: piso, eje)."""
     mb = cl.MB()
     tread = [(R - 0.006, 0.03), (R - 0.0015, 0.045), (R, 0.06), (R, 0.068), (R - 0.009, 0.07), (R - 0.009, 0.08), (R, 0.082), (R, 0.104),
              (R - 0.009, 0.106), (R - 0.009, 0.119), (R, 0.121), (R, 0.143), (R - 0.009, 0.145), (R - 0.009, 0.155), (R, 0.157),
              (R, 0.165), (R - 0.0015, 0.18), (R - 0.006, 0.195)]
-    prof = [(Rb + 0.004, 0.012), (Rb + 0.02, 0.004), (0.26, 0.0), (0.31, 0.004), (0.345, 0.01), (0.368, 0.02)] + tread + \
-           [(0.368, W - 0.02), (0.345, W - 0.012), (0.31, W - 0.004), (0.26, W), (Rb + 0.02, W - 0.004), (Rb + 0.004, W - 0.012),
+    prof = [(Rb + 0.004, 0.012), (Rb + 0.02, 0.004), (0.26, 0.0), (R - 0.075, 0.004), (R - 0.04, 0.01), (R - 0.017, 0.02)] + tread + \
+           [(R - 0.017, W - 0.02), (R - 0.04, W - 0.012), (R - 0.075, W - 0.004), (0.26, W), (Rb + 0.02, W - 0.004), (Rb + 0.004, W - 0.012),
             (Rb, W - 0.03), (Rb - 0.002, 0.03)]
     nt = len(prof)
     i_tread = set(range(6, 6 + len(tread)))
@@ -1263,14 +1265,14 @@ def furnish(inter, det, r):
     _wall_item(det, cl.clock(), -8.0, y1, z + 2.25, "-y")
     for k, s in enumerate(("WASH YOUR HANDS", "VACCINATION DAY", "STAY HYDRATED")):
         _wall_item(det, cl.poster(s), -13.1 + k * 0.6, y1, z + 1.35, "-y")
-    _wall_item(det, cl.sanitizer(), -8.0, y0, z + 1.2, "+y")
+    _wall_item(det, cl.sanitizer(), -9.6, y0, z + 1.2, "+y")              # sobre el bote, no en el vano de la puerta principal
     _wall_item(det, cl.exit_sign(), -8.0, y0, z + 2.5, "+y")
     det.join(cl.hanging_sign("WAITING ROOM", 1.3, 0.28), _T(-8.6, -6.2, CEIL))
     for (x, y) in ((-10.5, -7.0), (-5.5, -7.0)):
         det.join(cl.ceiling_fan(int(r.integers(1e6))), _T(x, y, CEIL))
     put(det, cl.trash_bin(pedal=False), -9.6, y0 + 0.3)
     _wall_item(det, cl.sign_plate("RECEPTION", 1.1, 0.24, size=0.13), x1, -7.2, z + 2.3, "-x")
-    _wall_item(det, cl.extinguisher(), x0, -5.0, z, "+x")
+    _wall_item(det, cl.extinguisher(), x0, -5.0, z - 0.4, "+x")           # NOM-002-STPS: parte alta a <= 1,50 m del piso
     # ventanilla de recepción: cancel de aluminio y repisas a ambos lados
     det.join(cl.window_clean(1.6, 1.15, depth=TI, seed=int(r.integers(1e6)), sill=False, open_frac=0.6),
              _T(-2.0 + TI / 2, -8.0, z + 1.05) @ _Rz(90))
@@ -1297,7 +1299,7 @@ def furnish(inter, det, r):
                          z + 0.3, r, open_runs=(1,))
     put(inter, cl.stretcher(int(r.integers(1e6))), 12.0, -8.9, "-x")      # fuera del abatimiento de la puerta de urgencias
     put(inter, cl.cylinder_rack(2, seed=int(r.integers(1e6))), 11.9, y1 - 0.35, "-y")
-    put(inter, cl.shelving(1.0, 0.4, 2.0, 5, seed=int(r.integers(1e6))), 7.2, y1 - 0.25, "-y")
+    put(inter, cl.shelving(1.0, 0.4, 2.0, 5, seed=int(r.integers(1e6))), 4.3, y1 - 0.25, "-y")       # no frente a la puerta doble
     _wall_item(det, cl.sink(), x0, -6.5, z, "+x")
     put(det, cl.wheelchair(int(r.integers(1e6))), 10.8, y1 - 0.5, "+x")
     put(det, cl.trash_bin(), x0 + 0.3, -7.5)
@@ -1307,8 +1309,8 @@ def furnish(inter, det, r):
     # pasillo: pasamanos de madera, letreros de puerta, colgante, extintor, camilla y silla de ruedas estacionadas
     x0, x1, y0, y1, _ = R["pasillo"]
     for (yy, d) in ((y0, "+y"), (y1, "-y")):
-        segs = _runs(x0 + 0.1, x1 - 0.1, _gaps_on("x", -4.0 if yy == y0 else -1.8, x0, x1) +
-                     ([(CXW - TE / 2 - 2.0, CXE + TE / 2)] if yy == y1 else []))
+        gaps = [(g0 - 0.15, g1 + 0.15) for (g0, g1) in _gaps_on("x", -4.0 if yy == y0 else -1.8, x0, x1)]   # libra marcos y chambranas
+        segs = _runs(x0 + 0.1, x1 - 0.1, sorted(gaps + ([(CXW - TE / 2 - 2.0, CXE + TE / 2)] if yy == y1 else [])))
         for (a, b) in segs:
             if b - a < 0.4:
                 continue
@@ -1318,9 +1320,9 @@ def furnish(inter, det, r):
         _wall_item(det, cl.sign_plate(txt, 0.55, 0.15, size=0.075), x, y1, z + 2.25, "-y")
     for (txt, x) in (("RECEPTION", 0.65), ("EMERGENCY ROOM", 6.75)):
         _wall_item(det, cl.sign_plate(txt, 0.75 if len(txt) > 10 else 0.55, 0.15, size=0.07), x, y0, z + 2.3, "+y")
-    det.join(cl.hanging_sign("EXAM ROOMS", 1.2, 0.26), _T(-9.5, (y0 + y1) / 2, CEIL))
-    det.join(cl.hanging_sign("EXIT", 0.6, 0.2, bg="sign_green", fg="sign_white"), _T(-12.5, (y0 + y1) / 2, CEIL))
-    _wall_item(det, cl.extinguisher(), 2.0, y1, z, "-y")
+    det.join(cl.hanging_sign("EXAM ROOMS", 1.2, 0.26), _T(-9.5, (y0 + y1) / 2 + 0.42, CEIL))        # fuera de la línea de luminarias
+    det.join(cl.hanging_sign("EXIT", 0.6, 0.2, bg="sign_green", fg="sign_white"), _T(-12.5, (y0 + y1) / 2 + 0.42, CEIL))
+    _wall_item(det, cl.extinguisher(), 1.45, CYS - TE / 2, z - 0.4, "-y")   # entre la puerta y la ventana del patio, no sobre el vidrio
     put(inter, cl.stretcher(int(r.integers(1e6))), 8.2, y1 - 0.45, "-x")
     put(det, cl.wheelchair(int(r.integers(1e6))), -2.0, y0 + 0.45, "-x")
     _wall_item(det, cl.exit_sign(), x0, -2.95, z + 2.35, "+x")
@@ -1328,13 +1330,16 @@ def furnish(inter, det, r):
     for (nm, sx) in (("consultorio1", 1), ("consultorio2", -1)):
         x0, x1, y0, y1, _ = R[nm]
         xm = (x0 + x1) / 2
-        put(inter, cl.exam_table(int(r.integers(1e6))), x0 + 0.45 if sx > 0 else x1 - 0.45, (y0 + y1) / 2 + 0.6, "+x" if sx > 0 else "-x")
-        put(inter, cl.desk(1.2, 0.6, seed=int(r.integers(1e6))), xm, y0 + 0.5, "+y")
-        put(inter, cl.office_chair(int(r.integers(1e6))), xm + 0.1, y0 + 1.15, "-y")
-        put(inter, cl.folding_chair(int(r.integers(1e6))), xm - 0.6, y0 + 1.25, "-y")
+        # mesa de exploración a lo largo del muro (cabecera al muro del fondo, peldaños hacia la puerta); escritorio contra el muro
+        # opuesto, fuera del abatimiento de la puerta; silla del médico frente al escritorio y silla del paciente a su lado
+        put(inter, cl.exam_table(int(r.integers(1e6))), x0 + 0.45 if sx > 0 else x1 - 0.45, y1 - 1.06, "-y")
+        xd = x1 - 0.3 if sx > 0 else x0 + 0.3
+        put(inter, cl.desk(1.2, 0.6, seed=int(r.integers(1e6))), xd, 0.0, "-x" if sx > 0 else "+x")
+        put(inter, cl.office_chair(int(r.integers(1e6))), xd - sx * 0.68, 0.05, "+x" if sx > 0 else "-x")
+        put(inter, cl.folding_chair(int(r.integers(1e6))), xd - sx * 0.12, -0.95, "+y")
         _wall_item(det, cl.sink(), x1 if sx > 0 else x0, y1 - 0.6, z, "-x" if sx > 0 else "+x")
         put(det, cl.trash_bin(), x1 - 0.3 if sx > 0 else x0 + 0.3, y1 - 1.3)
-        put(det, cl.iv_stand(int(r.integers(1e6)), bag=False), x0 + 0.4 if sx > 0 else x1 - 0.4, y1 - 0.4)
+        put(det, cl.iv_stand(int(r.integers(1e6)), bag=False), x0 + 0.4 if sx > 0 else x1 - 0.4, 0.95)
         _wall_item(det, cl.poster("WASH YOUR HANDS"), xm, y1, z + 1.35, "-y")
         cl.curtain_track(det, [(x0 + 1.4 if sx > 0 else x1 - 1.4, y1), (x0 + 1.4 if sx > 0 else x1 - 1.4, y0 + 1.6)], CEIL, z + 0.3, r,
                          open_runs=(0,))
@@ -1356,8 +1361,8 @@ def furnish(inter, det, r):
     put(inter, cl.xray_unit(int(r.integers(1e6))), (x0 + x1) / 2 + 0.3, (y0 + y1) / 2, "-x")
     _wall_item(det, cl.wall_bucky(), x1, (y0 + y1) / 2 + 1.3, z, "-x", solid=True)
     put(inter, cl.lead_screen(), x0 + 1.0, y0 + 0.9, "+x")
-    put(inter, cl.desk(1.0, 0.55, seed=int(r.integers(1e6))), x0 + 0.5, y0 + 0.45, "+x")
-    _wall_item(det, cl.sign_plate("CAUTION X-RAY", 0.6, 0.18, bg="paint_yellow", fg="cable", size=0.06), x0 + 1.95, y0, z + 1.6, "+y")
+    put(inter, cl.desk(1.0, 0.55, seed=int(r.integers(1e6))), x0 + 0.5, y0 + 0.56, "+x")
+    _wall_item(det, cl.sign_plate("CAUTION X-RAY", 0.6, 0.18, bg="paint_yellow", fg="cable", size=0.06), 12.25, y0, z + 1.6, "+y")   # junto a la puerta, no sobre ella
     # pasillo norte
     x0, x1, y0, y1, _ = R["pasillo_n"]
     for (txt, x) in (("NURSES", -0.75), ("RESTROOM", 0.9), ("RESTROOM", 3.0), ("KITCHEN", 5.45), ("LAUNDRY", 10.45)):
@@ -1368,7 +1373,7 @@ def furnish(inter, det, r):
     put(det, cl.mop_bucket(int(r.integers(1e6))), 12.9, y1 - 0.4)
     # encamados: 4 camas con buró, portasueros y cortinas
     x0, x1, y0, y1, _ = R["encamados"]
-    for k, x in enumerate((-12.6, -10.35, -8.1, -5.85)):
+    for k, x in enumerate((-12.75, -10.55, -8.35, -6.15)):                      # buró del 4.º sin cruzar el tabique de x = -5
         put(inter, cl.hospital_bed(int(r.integers(0, 6)), rails_up=k % 2 == 0, fowler=(32.0 if k == 2 else 0.0), blanket=k != 3),
             x, y1 - 1.15, "-y")                                   # cabecera contra el muro del fondo
         put(inter, cl.bedside_cabinet(int(r.integers(1e6))), x + 0.8, y1 - 0.35, "-y")
@@ -1381,7 +1386,7 @@ def furnish(inter, det, r):
     _wall_item(det, cl.sanitizer(), x1, 7.2, z + 1.2, "-x")
     # enfermería: mostrador al pasillo, escritorio, archivero, anaquel, lavabo, tablero
     x0, x1, y0, y1, _ = R["enfermeria"]
-    put(inter, cl.counter(2.7, 0.55, h=1.05, seed=int(r.integers(1e6))), -2.95, y0 + 0.3, "-y")
+    put(inter, cl.counter(2.7, 0.55, h=1.05, seed=int(r.integers(1e6))), -2.95, y0 + 0.33, "-y")
     put(inter, cl.desk(1.4, 0.65, seed=int(r.integers(1e6))), -2.8, y1 - 0.4, "-y")
     put(inter, cl.office_chair(int(r.integers(1e6))), -2.9, y1 - 1.1, "+y")
     put(inter, cl.office_chair(int(r.integers(1e6))), -3.9, y0 + 0.9, "-y")
@@ -1404,8 +1409,8 @@ def furnish(inter, det, r):
     put(inter, cl.counter(2.4, 0.6, h=0.9, seed=int(r.integers(1e6)), top="steel", front="plastic"), 6.3, y1 - 0.3, "-y")
     put(inter, cl.stove(int(r.integers(1e6))), x1 - 0.45, y1 - 0.32, "-y")
     put(inter, cl.fridge(int(r.integers(1e6))), x0 + 0.38, y1 - 0.4, "-y")
-    put(inter, cl.kitchen_table(1.6, 0.9, 0.75, seed=int(r.integers(1e6))), 6.4, 7.55)
-    for (x, y, d) in ((6.0, 6.75, "+y"), (6.8, 6.75, "+y"), (6.0, 8.4, "-y"), (6.8, 8.4, "-y")):
+    put(inter, cl.kitchen_table(1.6, 0.9, 0.75, seed=int(r.integers(1e6))), 6.6, 7.55)
+    for (x, y, d) in ((6.2, 6.75, "+y"), (7.0, 6.75, "+y"), (6.2, 8.4, "-y"), (7.0, 8.4, "-y")):
         put(inter, cl.folding_chair(int(r.integers(1e6))), x, y, d)
     # lavandería
     x0, x1, y0, y1, _ = R["lavanderia"]
@@ -1427,9 +1432,9 @@ def furnish(inter, det, r):
     for k in range(3):                                                       # conos encimados
         det.join(_cone(), _T(gx1 - 0.3, 0.05, zg + k * 0.034) @ _Rz(17.0 * k))
     for k in range(3):
-        det.join(_tire_flat(seed=k), _T(gx1 - 0.45, 1.3, zg + k * 0.225) @ _Rz(40.0 * k))
+        det.join(_tire_flat(seed=k), _T(gx1 - 0.45, 1.3, zg + k * 0.224) @ _Rz(40.0 * k))
     det.join(_hose_reel(), _T(gx0, -4.2, zg + 1.2) @ face_to("+x"))
-    det.join(cl.extinguisher(), _T(gx0, -1.0, zg) @ face_to("+x"))
+    det.join(cl.extinguisher(), _T(gx0, -1.0, zg - 0.4) @ face_to("+x"))
     for (x, y) in ((18.4, -5.0), (22.4, -5.0), (18.4, -1.0), (22.4, -1.0)):
         det.join(cl.fluorescent(), _T(x, y, G_SB) @ _Rz(90))
         LIGHTS.append([x, y, round(G_SB - 0.085, 3)])

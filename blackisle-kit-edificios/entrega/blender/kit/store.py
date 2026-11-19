@@ -38,6 +38,7 @@ from kit.farm import cyl, nsides, qsegs, revolve, rr_pts, rrframe, slab, tube  #
 from kit.farm import lathe as slathe
 from kit.farm import rope_tube
 from kit.clinic_equipo import revolve as _revolve_raw
+from kit.clinic_servicios import slab as _slab0
 
 
 def rtube_lo(mb, p0, p1, w, h, mat, up=(0, 0, 1), r=0.004, n=2, caps=True):
@@ -617,18 +618,18 @@ def can(R=0.037, H=0.11, label="sign_red", seg=14, lod=0, band=None, style="pape
             zm = zb0 + (zb1 - zb0) * 0.62
             body = [(R * 0.97, zb0), (Rl, zb0 + 0.0008), (Rl, zm), (Rl, zm + 0.012), (Rl, zb1 - 0.0008), (R * 0.97, zb1)]
             bm = ["steel", label, band or label, label, "steel"]
-        prof = [(0.0, 0.0012), (R * 0.82, 0.0005), (R * 0.95, 0.0), (R * 0.985, 0.003), (R * 0.985, 0.006), (R * 0.97, zb0)] + body[1:] + \
-               [(R, H - 0.0058), (R, H - 0.0012), (R * 0.97, H - 0.0006), (R * 0.9, H - 0.0045), (R * 0.75, H - 0.0045),
-                (R * 0.72, H - 0.0035), (R * 0.69, H - 0.0045), (R * 0.45, H - 0.0045), (R * 0.42, H - 0.0036), (R * 0.39, H - 0.0045),
-                (0.0, H - 0.0045)]
-        mats = ["steel"] * 5 + bm + ["steel"] * 11
+        prof = [(0.0, 0.0012), (R * 0.82, 0.0005), (R * 0.95, 0.0), (R * 0.985, 0.0035), (R * 0.97, zb0)] + body[1:] + \
+               [(R, H - 0.0058), (R, H - 0.0012), (R * 0.97, H - 0.0006), (R * 0.9, H - 0.0045), (R * 0.72, H - 0.0045),
+                (R * 0.69, H - 0.0035), (R * 0.66, H - 0.0045), (0.0, H - 0.0045)]
+        mats = ["steel"] * 4 + bm + ["steel"] * 8
         _revolve_raw(mb, prof, mats, seg=max(seg, 24))     # 24 lados: flecha 0,3 mm en Ø 75 (se repite cientos de veces)
         if pull:                                                  # remache, lengüeta y argolla del abre-fácil
             zt = H - 0.0045
             revolve(mb, [(0.0035, zt), (0.0035, zt + 0.0008), (0.0, zt + 0.0012)], "aluminium", seg=16, M=_T(0, 0, 0), caps=False)
             Mr = _T(R * 0.42, 0.0, zt + 0.0006) @ _Rz(180)
             ring = [(0.009 * math.cos(2 * PI * k / 16) + 0.0, 0.0072 * math.sin(2 * PI * k / 16), 0.0) for k in range(16)]
-            tube(mb, [tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, mat="aluminium", caps=False)
+            with mb.soft():                                       # argolla de Ø 1,8 mm: 8 lados suaves (se repite cientos de veces)
+                mb.tube([tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, seg=8, mat="aluminium", caps=False)
             slab(mb, _T(R * 0.18, 0, zt + 0.0003), 0.016, 0.009, 0.0006, rc=0.003, re=0.0002, mat="aluminium")
     else:
         prof = [(R * 0.985, 0.0), (R * 0.985, H - 0.0095), (R, H - 0.0058), (R, H - 0.0025), (R * 0.88, H - 0.0045), (0.0, H - 0.0045)]
@@ -641,7 +642,7 @@ def oval_can(L=0.105, W=0.065, H=0.03, label="sign_red", band="paint_yellow"):
     """Lata oval de sardinas (125 g): cuerpo de estadio litografiado con franja, doble engargolado arriba y abajo, tapa
     rehundida con la llave abre-fácil (argolla y lengüeta) en un extremo."""
     mb = MB()
-    n = 48
+    n = 36
 
     def oval(off, z):
         return [(x + nx * off, y + ny * off, z) for (x, y, nx, ny) in _oval_pts(L, W, n)]
@@ -653,7 +654,8 @@ def oval_can(L=0.105, W=0.065, H=0.03, label="sign_red", band="paint_yellow"):
     zt = H - 0.0025
     Mr = _T(-L / 2 + 0.016, 0.0, zt + 0.0006)
     ring = [(0.0085 * math.cos(2 * PI * k / 16), 0.0068 * math.sin(2 * PI * k / 16), 0.0) for k in range(16)]
-    tube(mb, [tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, mat="aluminium", caps=False)
+    with mb.soft():
+        mb.tube([tuple(Mr @ Vector(p)) for p in ring + [ring[0]]], 0.0009, seg=8, mat="aluminium", caps=False)
     slab(mb, _T(-L / 2 + 0.028, 0, zt), 0.014, 0.008, 0.0006, rc=0.003, re=0.0002, mat="aluminium")
     return mb
 
@@ -689,14 +691,14 @@ def glass_jar(R=0.04, H=0.13, fill="cardboard", label="paper", lid="sign_red", b
             (R + 0.0003, H * 0.55), (R + 0.0003, H * 0.7), (R, H * 0.71), (R, H * 0.8), (R * 0.93, H * 0.87), (Rn, H * 0.9),
             (Rn, H - 0.012)]
     mats = ["glass", "glass", "glass", "glass", label, band or label, label, "glass", "glass", "glass", "glass", "glass", "glass"]
-    revolve(mb, prof, mats, seg=48, caps=False)
-    revolve(mb, [(0.0, 0.0045), (R * 0.95, 0.0045), (R * 0.95, H * 0.72), (R * 0.75, H * 0.86), (0.0, H * 0.86)], fill, seg=32)
+    _revolve_raw(mb, prof, mats, seg=32, caps=False)
+    _revolve_raw(mb, [(0.0, 0.0045), (R * 0.95, 0.0045), (R * 0.95, H * 0.72), (R * 0.75, H * 0.86), (0.0, H * 0.86)], fill, seg=24)
     lp = [(Rn + 0.0035, H - 0.016), (Rn + 0.0045, H - 0.0145)]
     for k in range(5):
         zz = H - 0.014 + k * 0.0028
         lp += [(Rn + 0.0045, zz), (Rn + 0.0037, zz + 0.0014)]
     lp += [(Rn + 0.0045, H + 0.0012), (Rn + 0.003, H + 0.0022), (Rn * 0.7, H + 0.0024), (0.0, H + 0.0022)]
-    revolve(mb, lp, lid, seg=56)
+    _revolve_raw(mb, lp, lid, seg=32)
     return mb
 
 
@@ -1074,6 +1076,7 @@ class Placer:
 
     def flush(self, r, budget):
         tot = _tris(self.mb) + sum(_tris(h) for (h, _, _) in self.items)
+        self.asked = tot
         keep = [True] * len(self.items)
         kids = {}
         for i, on in enumerate(self.deps):
@@ -1117,9 +1120,27 @@ class SKU:
     """Producto de anaquel: malla héroe (fn), huella w (frente) × d (fondo), alto h, frentes min-max, filas de fondo, estiba
     máxima, giro libre (round) o acostado a lo largo (rz). Las combinaciones de colores lo hacen reconocible sin marcas."""
 
-    def __init__(self, key, fn, w, d, h, f=(2, 5), rows=3, stack=1, round_=False, rz=0.0, back=None):
+    def __init__(self, key, fn, w, d, h, f=(2, 5), rows=3, stack=1, round_=False, rz=0.0, back=None, lo=None):
         self.key, self.fn, self.w, self.d, self.h = key, fn, w, d, h
         self.f, self.rows, self.stack, self.round, self.rz, self.back = f, rows, stack, round_, rz, back
+        if back is None and lo is not None:                     # filas de atrás: solo se les ve la tapa y un filo
+            kind, m1, m2 = lo
+            self.back = (lambda: _lo_cyl(w / 2 - 0.001, h, m1, m2)) if kind == "cyl" else (lambda: _lo_box(w - 0.004, d - 0.004, h, m1, m2))
+
+
+def _lo_cyl(R, H, body, top):
+    """Retaguardia de un producto redondo (fila de atrás del anaquel): cilindro de 20 lados con canto y tapa."""
+    mb = MB()
+    _revolve_raw(mb, [(0.0, 0.0), (R * 0.96, 0.0), (R, 0.004), (R, H - 0.005), (R * 0.97, H - 0.001), (R * 0.85, H), (0.0, H)],
+                 ["steel", "steel", body, top, top, top], seg=20)
+    return mb
+
+
+def _lo_box(w, d, h, body, top):
+    """Retaguardia de un producto de caja o bolsa (fila de atrás del anaquel)."""
+    mb = MB()
+    _slab0(mb, _T(0, 0, 0), w, d, h, rc=0.006, re=0.004, mat=body, nc=2, ne=2, mats=None)
+    return mb
 
 
 def _cat_canned():
@@ -1187,6 +1208,30 @@ def _cat_household():
     ]
 
 
+def _auto_lo(hero, sku):
+    """Retaguardia barata de un producto (fila de atrás): cilindro o caja de su huella con el material dominante del costado y
+    de la tapa del héroe (de atrás solo se ve la tapa y un filo entre los productos de enfrente)."""
+    side, top = {}, {}
+    hero.bm.normal_update()
+    for f in hero.bm.faces:
+        m = hero.mats[f.material_index]
+        a = f.calc_area()
+        if abs(f.normal.z) < 0.5:
+            side[m] = side.get(m, 0.0) + a
+        elif f.normal.z > 0.7:
+            top[m] = top.get(m, 0.0) + a
+    body = max(side, key=side.get) if side else "steel"
+    tp = max(top, key=top.get) if top else body
+    zs = [v.co.z for v in hero.bm.verts]
+    h = max(zs) - min(zs)
+    if sku.round:
+        return _lo_cyl(sku.w / 2 - 0.001, h, body, tp)
+    mb = MB()
+    _slab0(mb, _T(0, 0, 0), sku.w - 0.004 if not sku.rz else sku.d - 0.004, sku.d - 0.004 if not sku.rz else sku.w - 0.004, h,
+           rc=0.006, re=min(0.004, h * 0.3), mat=body, nc=2, ne=2)
+    return mb
+
+
 def _fill_level(P, r, H, cat, x0, x1, y0, y1, z, zmax, gap=0.12):
     """Llena un entrepaño con bloques de producto (frentes de 1-8, varias filas de fondo, estibas) y huecos de lo vendido; la
     fila de enfrente es prioridad 0, las estibas 1 y las filas traseras 2 (el presupuesto quita primero lo de atrás)."""
@@ -1207,7 +1252,7 @@ def _fill_level(P, r, H, cat, x0, x1, y0, y1, z, zmax, gap=0.12):
         rows = max(1, min(sku.rows, int((y1 - y0 - 0.006) / (sku.d + 0.004))))
         nst = max(1, min(sku.stack, int((zmax - z) / (sku.h + 0.0006))))
         hero = H.get(("sku", sku.key), sku.fn)
-        back = H.get(("skub", sku.key), sku.back) if sku.back else hero
+        back = H.get(("skub", sku.key), sku.back if sku.back else (lambda: _auto_lo(hero, sku)))
         for fi in range(nf):
             cx = x + sku.w / 2 + fi * (sku.w + 0.002) + _jit(r, 0.0015)
             for row in range(rows):
@@ -1216,7 +1261,7 @@ def _fill_level(P, r, H, cat, x0, x1, y0, y1, z, zmax, gap=0.12):
                 below = None
                 for st in range(ns):
                     rz = _f(r.uniform(0, 360)) if sku.round else sku.rz + _jit(r, 4)
-                    h_ = hero if (row == 0 or not sku.back) else back
+                    h_ = hero if row == 0 else back
                     below = _put(P, h_, cx + _jit(r, 0.002 * st), cy + _jit(r, 0.002 * st), z + st * (sku.h + 0.0004), rz=rz,
                                  prio=(0 if st == 0 else 1) if row == 0 else 2, on=below)
         x += nf * (sku.w + 0.002) + _f(r.uniform(0.008, 0.03))
@@ -1347,7 +1392,7 @@ def grocery_shelving(w=1.2, d=0.40, h=2.0, seed=0, stock="canned"):
             _stock_dry(mb, r, H, x0, x1, y0, y1, zs, zmax, kind, i)
         else:
             _stock_household(mb, r, H, x0, x1, y0, y1, zs, zmax, kind, i)
-    mb.flush(r, 48000)
+    mb.flush(r, 95000)
     return base
 
 
@@ -1635,7 +1680,7 @@ def beer_cooler(seed=0):
     hose(mb, [(0.2, D / 2 - 0.02, 0.09), (0.2, D / 2 + 0.03, 0.09), (0.22, D / 2 + 0.035, 0.0045), (0.3, D / 2 + 0.03, 0.0045),
               (0.31, D / 2 - 0.04, 0.0045)], 0.0045, bend=0.03, mat="cable", seg=6, nseg=4)
     revolve(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.006, 0.012), (0.0, 0.012)], "plastic", seg=24, M=_T(0.2, D / 2, 0.09) @ _Rx(-90))
-    P.flush(r, 60000)
+    P.flush(r, 90000)
     return base
 
 
@@ -2202,7 +2247,7 @@ def bottle_crate(seed=0, empty=True):
             x = -W / 2 + 0.008 + (i + 0.5) * c + _jit(r, 0.0015)
             y = -D / 2 + 0.008 + (j + 0.5) * c + _jit(r, 0.0015)
             _put(P, hero, x, y, 0.008, rz=_f(r.uniform(0, 360)), prio=0 if (j == 0 or i in (0, nx - 1)) else 1)
-    P.flush(r, 4950)
+    P.flush(r, 17500)
     return base
 
 
@@ -2401,7 +2446,7 @@ def ammo_cabinet(seed=0):
     _put(P, c1, -0.22, -D / 2, H, rz=_jit(r, 4), prio=1)
     c2 = carton(0.36, 0.3, 0.16, seed=seed + 6)
     _put(P, c2, 0.24, -D / 2 + 0.01, H, rz=_jit(r, 6), prio=1)
-    P.flush(r, 11900)
+    P.flush(r, 37000)
     return base
 
 
@@ -2558,5 +2603,5 @@ def medical_shelf(seed=0):
     _put(P, H_.get(("mbx", "sign_red"), lambda: ammo_box(0.045, 0.095, 0.06, mat="sign_white", band="sign_red")), xi0 + 0.45,
          yf + 0.07, levels[0], rz=25)
     _put(P, carton(0.34, 0.26, 0.22, seed=seed + 12, crush=0.002), xi1 - 0.19, yf + 0.14, levels[0], rz=_jit(r, 5), prio=1)
-    P.flush(r, 11900)
+    P.flush(r, 37000)
     return base

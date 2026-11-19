@@ -324,7 +324,7 @@ def fluorescent(L=1.22, W=0.30, recessed=False):
         prof = [(0.0, 0.0), (rt + 0.0004, 0.0), (rt + 0.0004, 0.013), (rt, 0.0135), (rt, Lt - 0.0135), (rt + 0.0004, Lt - 0.013),
                 (rt + 0.0004, Lt), (0.0, Lt)]
         mats = ["aluminium", "aluminium", "aluminium", "plastic", "aluminium", "aluminium", "aluminium"]
-        revolve(mb, prof, mats, seg=10, M=_T(x0, yt, zt) @ _Ry(90))
+        revolve(mb, prof, mats, seg=18, M=_T(x0, yt, zt) @ _Ry(90))
     return mb
 
 
@@ -408,17 +408,17 @@ def ceiling_fan(seed=0, drop=0.35):
     # --- tubo bajante con rosca, yugo, perno y chaveta
     z0 = -drop
     rd = 0.0133
-    mb.cyl((0, 0, -0.057), (0, 0, z0 + 0.012), rd, seg=12, mat="steel", caps=False)           # extremos ocultos en florón y yugo
+    mb.cyl((0, 0, -0.057), (0, 0, z0 + 0.012), rd, seg=20, mat="steel", caps=False)           # extremos ocultos en florón y yugo
     zy = z0 + 0.012                                       # yugo (collar del motor)
     revolve(mb, [(0.0, z0 + 0.001), (0.03, z0 + 0.001), (0.03, z0 + 0.004), (0.026, z0 + 0.008), (0.026, zy + 0.034),
                  (0.0235, zy + 0.037), (0.0145, zy + 0.037), (0.0145, zy + 0.03), (0.0, zy + 0.03)], "sign_white", seg=16)
     zp = zy + 0.022
-    revolve(mb, [(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.0028), (0.0035, 0.0038), (0.0, 0.0038)], "steel", seg=8,
+    revolve(mb, [(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.0028), (0.0035, 0.0038), (0.0, 0.0038)], "steel", seg=16,
             M=_T(-0.0262, 0, zp) @ _Ry(-90))                                       # cabeza del perno
-    mb.cyl((-0.0262, 0, zp), (0.033, 0, zp), 0.0028, seg=8, mat="steel")
+    mb.cyl((-0.0262, 0, zp), (0.033, 0, zp), 0.0028, seg=16, mat="steel")
     hp = [(0.031, 0.0, zp), (0.031, -0.004, zp - 0.003), (0.03, -0.012, zp - 0.006), (0.026, -0.02, zp - 0.008),
           (0.02, -0.024, zp - 0.008)]
-    mb.tube(fillet([(0.031, 0.0, zp + 0.001)] + [(x, y, z) for (x, y, z) in hp], 0.003, 2), 0.0011, seg=4, mat="steel")
+    mb.tube(fillet([(0.031, 0.0, zp + 0.001)] + [(x, y, z) for (x, y, z) in hp], 0.003, 2), 0.0011, seg=8, mat="steel")
     for a in (PI / 2 + 0.6, -PI / 2 - 0.6):                                       # opresores del yugo
         n = Vector((math.cos(a), math.sin(a), 0))
         Mx = Matrix.Translation(n * 0.0262 + Vector((0, 0, zy + 0.008))) @ n.to_track_quat("Z", "Y").to_matrix().to_4x4()
@@ -449,7 +449,7 @@ def ceiling_fan(seed=0, drop=0.35):
         p = Vector((0.0598 * math.cos(a), 0.0598 * math.sin(a), zb - 0.0135))
         screw_lo(mb, Matrix.Translation(p - n * 0.0006) @ n.to_track_quat("Z", "Y").to_matrix().to_4x4(), d=0.0065)
     revolve(mb, [(0.0, zb - 0.026), (0.0105, zb - 0.026), (0.012, zb - 0.029), (0.0115, zb - 0.0335), (0.008, zb - 0.0375),
-                 (0.004, zb - 0.0395), (0.0, zb - 0.04)], "aluminium", seg=12)
+                 (0.004, zb - 0.0395), (0.0, zb - 0.04)], "aluminium", seg=20)
     # --- brazos, empaques, aspas y tornillos
     pitch = 12.0
     a0 = float(r.uniform(0, 120))
@@ -471,7 +471,7 @@ def ceiling_fan(seed=0, drop=0.35):
         for (xs, ys) in ((0.215, 0.0), (0.262, -0.016), (0.262, 0.016)):
             zt = -0.0025 - 0.0015 - 0.0095 * (1.0 - 0.22 * (xs - 0.18) / 0.5)
             Mt = Mb @ _T(xs, ys, zt) @ _Rx(180)
-            lathe(mb, [(0.0035, -0.0002), (0.0065, -0.0002), (0.0065, 0.001), (0.0035, 0.001)], seg=8, mat="rubber", M=Mt)
+            lathe(mb, [(0.0035, -0.0002), (0.0065, -0.0002), (0.0065, 0.001), (0.0035, 0.001)], seg=16, mat="rubber", M=Mt)
             screw(mb, Mt @ _T(0, 0, 0.001), d=0.0082, seg=8, recess=None)
     return mb
 
@@ -618,17 +618,17 @@ def split_indoor(seed=0):
     rings = [[Vector((x, y, z)) for (y, z) in sec] for x in (-0.333, 0.333)]
     loft_rings(mb, rings, "sign_white")
     for sx in (-1, 1):
-        mb.cyl((sx * 0.333, -0.153, 0.032), (sx * 0.3365, -0.153, 0.032), 0.003, seg=8, mat="steel")
+        mb.cyl((sx * 0.333, -0.153, 0.032), (sx * 0.3365, -0.153, 0.032), 0.003, seg=16, mat="steel")
     # ventana de display con LEDs y receptor IR (sobresale 1,2 mm del frente)
     Md = _T(0.255, -0.2008, 0.128) @ _Rx(90)
     mb.plate(rrect(0.078, 0.024, 0.006, n=3), 0.002, "glass", m=Md @ _T(0, 0, -0.0008))
     for k, mat in enumerate(("sign_green", "sign_blue", "paint_yellow")):
-        lathe(mb, [(0.0, 0.0), (0.0016, 0.0), (0.0016, 0.0006), (0.0, 0.0009)], seg=8, mat=mat, M=Md @ _T(-0.025 + k * 0.012, -0.004, 0.0012))
-    lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, 0.0005), (0.0, 0.0022)], seg=12, mat="cable", M=Md @ _T(0.024, 0.0, 0.0012))
+        lathe(mb, [(0.0, 0.0), (0.0016, 0.0), (0.0016, 0.0006), (0.0, 0.0009)], seg=16, mat=mat, M=Md @ _T(-0.025 + k * 0.012, -0.004, 0.0012))
+    lathe(mb, [(0.0, 0.0), (0.0042, 0.0), (0.0042, 0.0005), (0.0, 0.0022)], seg=20, mat="cable", M=Md @ _T(0.024, 0.0, 0.0012))
     # haz de tubería con cinta en espiral + manguera de condensado, entrando al muro por un chapetón ovalado
-    hose(mb, [(0.30, -0.032, 0.03), (0.30, -0.032, -0.006), (0.30, 0.002, -0.006)], 0.0155, mat="vinyl", seg=12,
+    hose(mb, [(0.30, -0.032, 0.03), (0.30, -0.032, -0.006), (0.30, 0.002, -0.006)], 0.0155, mat="vinyl", seg=20,
          rib=(0.019, 0.07), rad=0.016, nseg=8)
-    hose(mb, [(0.336, -0.03, 0.03), (0.336, -0.03, -0.004), (0.336, 0.002, -0.004)], 0.0068, mat="plastic", seg=8,
+    hose(mb, [(0.336, -0.03, 0.03), (0.336, -0.03, -0.004), (0.336, 0.002, -0.004)], 0.0068, mat="plastic", seg=16,
          rib=(0.009, 0.13), rad=0.012, nseg=6)
     esc = [(p[0] + 0.317, -0.0045, p[1] - 0.006) for p in rrect(0.09, 0.05, 0.024, n=3)]
     mb.sweep([(0.0, 0.0), (0.0, 0.0044), (0.003, 0.0044), (0.008, 0.0016), (0.008, 0.0)],
@@ -698,42 +698,42 @@ def extinguisher(seed=0):
           (-0.0105, 0.0045), (-0.0125, 0.0045)]
     sweep_frame(mb, ch, fillet([(0, yc + 0.02, zh + 0.006), (0, yc + 0.05, zh + 0.004), (0, yc + 0.088, zh - 0.004)], 0.03, 3),
                 "steel", up=(0, 0, 1))
-    revolve(mb, [(0.0, 0.0), (0.0135, 0.0), (0.0135, 0.004), (0.0, 0.004)], "plastic", seg=8,
+    revolve(mb, [(0.0, 0.0), (0.0135, 0.0), (0.0135, 0.004), (0.0, 0.004)], "plastic", seg=16,
             M=_T(0, yc + 0.088, zh - 0.004) @ _Rx(-90))                                  # tapón del extremo
     sweep_frame(mb, [(x, -y) for (x, y) in ch], fillet([(0, yc - 0.016, zh + 0.026), (0, yc + 0.03, zh + 0.035),
                                                          (0, yc + 0.092, zh + 0.05)], 0.04, 3), "steel", up=(0, 0, 1))
     for sx in (-1, 1):                                                  # orejas y perno del pivote
         mb.box((sx * 0.0125 - 0.0015, yc - 0.024, zh + 0.012), (sx * 0.0125 + 0.0015, yc - 0.008, zh + 0.032), "steel", bevel=0.0007,
                seg=1)
-    mb.cyl((-0.016, yc - 0.016, zh + 0.026), (0.016, yc - 0.016, zh + 0.026), 0.0022, seg=8, mat="steel")
+    mb.cyl((-0.016, yc - 0.016, zh + 0.026), (0.016, yc - 0.016, zh + 0.026), 0.0022, seg=16, mat="steel")
     # pasador de seguridad con argolla y cincho de garantía
     zp = zh + 0.017
-    mb.cyl((-0.018, yc + 0.006, zp), (0.016, yc + 0.006, zp), 0.0016, seg=8, mat="steel")
+    mb.cyl((-0.018, yc + 0.006, zp), (0.016, yc + 0.006, zp), 0.0016, seg=16, mat="steel")
     ring = [(-0.018 - 0.011 + 0.011 * math.cos(a), yc + 0.006, zp + 0.011 * math.sin(a)) for a in [2 * PI * k / 10 for k in range(10)]]
-    loop_tube(mb, ring, 0.0013, seg=5, mat="steel", normal=(0, 1, 0))
+    loop_tube(mb, ring, 0.0013, seg=10, mat="steel", normal=(0, 1, 0))
     seal = [(-0.03, yc + 0.006, zp + 0.011), (-0.026, yc + 0.012, zp + 0.02), (-0.012, yc + 0.03, zp + 0.024),
             (0.0, yc + 0.034, zp + 0.019), (0.012, yc + 0.03, zp + 0.016)]
-    mb.tube(fillet(seal, 0.006, 2), 0.0008, seg=4, mat="paint_yellow")
+    mb.tube(fillet(seal, 0.006, 2), 0.0008, seg=8, mat="paint_yellow")
     mb.box((-0.0025, yc + 0.026, zp + 0.012), (0.0035, yc + 0.034, zp + 0.016), "paint_yellow", bevel=0.0006, seg=1)
     # manómetro al frente
-    mb.cyl((0, yc - 0.012, zt + 0.026), (0, yc - 0.026, zt + 0.026), 0.0045, seg=8, mat="steel", caps=False)
+    mb.cyl((0, yc - 0.012, zt + 0.026), (0, yc - 0.026, zt + 0.026), 0.0045, seg=16, mat="steel", caps=False)
     hexnut(mb, _T(0, yc - 0.017, zt + 0.026) @ _Rx(90), d=0.0055, washer=False)
     gauge(mb, _T(0, yc - 0.026, zt + 0.026) @ _Rx(90), r=0.0155, depth=0.0105, needle=float(r.uniform(-9.0, 6.0)))
     # salida, manguera y boquilla con clip
     hexnut(mb, _T(0.0145, yc, zt + 0.02) @ _Ry(90), d=0.008, h=0.009, washer=False)
-    mb.cyl((0.02, yc, zt + 0.02), (0.04, yc, zt + 0.02), 0.0088, seg=10, mat="steel")
+    mb.cyl((0.02, yc, zt + 0.02), (0.04, yc, zt + 0.02), 0.0088, seg=18, mat="steel")
     for k in range(3):
         xk = 0.024 + k * 0.006
-        mb.cyl((xk, yc, zt + 0.02), (xk + 0.0025, yc, zt + 0.02), 0.0101, seg=10, mat="steel")
+        mb.cyl((xk, yc, zt + 0.02), (xk + 0.0025, yc, zt + 0.02), 0.0101, seg=18, mat="steel")
     hp = [(0.039, yc, zt + 0.02), (0.06, yc + 0.002, zt + 0.012), (0.0915, yc + 0.006, zt - 0.06), (0.0925, yc + 0.004, zb + 0.30),
           (0.0915, yc - 0.002, zb + 0.16), (0.0905, yc - 0.006, zb + 0.13)]
-    hose(mb, hp, 0.0076, mat="rubber", seg=8, rad=0.05, nseg=3)
+    hose(mb, hp, 0.0076, mat="rubber", seg=16, rad=0.05, nseg=3)
     pe = Vector(hp[-1])
     dn = (pe - Vector(hp[-2])).normalized()
     Mn = Matrix.Translation(pe) @ dn.to_track_quat("Z", "Y").to_matrix().to_4x4()
     revolve(mb, [(0.0, -0.004), (0.0092, -0.004), (0.0092, 0.012), (0.0085, 0.014), (0.0068, 0.016), (0.0068, 0.05),
                  (0.0058, 0.066), (0.0035, 0.066), (0.0035, 0.06), (0.0, 0.06)], ["steel", "steel", "steel", "cable", "cable", "cable",
-                                                                                    "cable", "cable", "cable"], seg=8, M=Mn)
+                                                                                    "cable", "cable", "cable"], seg=16, M=Mn)
     # clip del fleje que sujeta la boquilla
     ang = math.atan2(pe.y - yc, pe.x)
     cpos = Vector((R * math.cos(ang), yc + R * math.sin(ang), zb + 0.092))
@@ -757,12 +757,12 @@ def extinguisher(seed=0):
     Mp = _T(0, -0.008, zs + 0.06) @ _Rx(90)
     mb.plate(rrect(0.24, 0.12, 0.01, n=2), 0.003, "sign_red", m=Mp @ _T(0, 0, 0.0))
     fr = rrect(0.226, 0.106, 0.006, n=2)                                # filete blanco perimetral
-    loop_tube(mb, [tuple(Mp @ Vector((x, y, 0.003))) for (x, y) in fr], 0.0011, seg=4, mat="sign_white")
+    loop_tube(mb, [tuple(Mp @ Vector((x, y, 0.003))) for (x, y) in fr], 0.0011, seg=8, mat="sign_white")
     text(mb, "FIRE", 0.05, 0.0017, "sign_white", Mp @ _T(0, -0.002, 0.0028), bold=True, res=2, back=False)
     text(mb, "EXTINGUISHER", 0.019, 0.0015, "sign_white", Mp @ _T(0, -0.036, 0.0028), res=1, back=False)
     for sx in (-1, 1):
-        mb.cyl((sx * 0.1, -0.0002, zs + 0.06), (sx * 0.1, -0.0082, zs + 0.06), 0.006, seg=8, mat="steel", caps=False)
-        lathe(mb, [(0.0, 0.0), (0.0065, 0.0), (0.0065, 0.002), (0.005, 0.0035), (0.0, 0.0038)], seg=8, mat="steel",
+        mb.cyl((sx * 0.1, -0.0002, zs + 0.06), (sx * 0.1, -0.0082, zs + 0.06), 0.006, seg=16, mat="steel", caps=False)
+        lathe(mb, [(0.0, 0.0), (0.0065, 0.0), (0.0065, 0.002), (0.005, 0.0035), (0.0, 0.0038)], seg=16, mat="steel",
               M=_T(sx * 0.1, -0.011, zs + 0.06) @ _Rx(90))
     return mb
 
@@ -840,12 +840,12 @@ def weld(mb, M, r, w=0.004, seg=12, mat="steel"):
 def _o2_valve(mb, M, cap=False, outlet=True):
     """Válvula de cilindro (latón cromado): cuerpo, salida al frente (-Y) con niple roscado, disco de seguridad, vástago y volante
     moleteado. Local: z = 0 en la boca del cuello."""
-    revolve(mb, [(0.017, -0.01), (0.017, 0.006)], "aluminium", seg=12, M=M, caps=False)        # espiga (extremos ocultos)
+    revolve(mb, [(0.017, -0.01), (0.017, 0.006)], "aluminium", seg=20, M=M, caps=False)        # espiga (extremos ocultos)
     mb.box(M @ Vector((-0.0215, -0.019, 0.006)), M @ Vector((0.0215, 0.019, 0.062)), "aluminium", bevel=0.005, seg=2)
-    revolve(mb, [(0.0, 0.062), (0.012, 0.062), (0.012, 0.074), (0.009, 0.077), (0.0, 0.077)], "aluminium", seg=6, M=M,
+    revolve(mb, [(0.0, 0.062), (0.012, 0.062), (0.012, 0.074), (0.009, 0.077), (0.0, 0.077)], "aluminium", seg=12, M=M,
             phase=PI / 6)                                                                     # tuerca del bonete
     if not cap:                                       # bajo el capuchón el volante y el vástago quedan dentro del domo
-        mb.cyl(M @ Vector((0, 0, 0.077)), M @ Vector((0, 0, 0.088)), 0.005, seg=8, mat="steel", caps=False)
+        mb.cyl(M @ Vector((0, 0, 0.077)), M @ Vector((0, 0, 0.088)), 0.005, seg=16, mat="steel", caps=False)
         wheel = lambda a: 1.0 + 0.06 * max(0.0, math.cos(12 * a)) ** 3
         revolve(mb, [(0.0, 0.086), (0.026, 0.086), (0.029, 0.089), (0.029, 0.097), (0.026, 0.1), (0.0, 0.101)], "cable",
                 seg=36, M=M, rmod=wheel)
@@ -853,10 +853,10 @@ def _o2_valve(mb, M, cap=False, outlet=True):
     if outlet:                                                                                # niple de salida al frente
         Mo = M @ _T(0, -0.019, 0.034) @ _Rx(90)
         revolve(mb, [(0.0125, -0.001), (0.0125, 0.008)] + [(0.0118 if k % 2 else 0.0128, 0.008 + 0.0045 * k) for k in range(1, 4)]
-                + [(0.0105, 0.026), (0.0, 0.026)], "aluminium", seg=12, M=Mo)
-        revolve(mb, [(0.0, 0.026), (0.004, 0.026), (0.004, 0.0262), (0.0, 0.0262)], "cable", seg=8, M=Mo)
+                + [(0.0105, 0.026), (0.0, 0.026)], "aluminium", seg=20, M=Mo)
+        revolve(mb, [(0.0, 0.026), (0.004, 0.026), (0.004, 0.0262), (0.0, 0.0262)], "cable", seg=16, M=Mo)
     hexnut(mb, M @ _T(0.0215, 0, 0.03) @ _Ry(90), d=0.0085, h=0.008, washer=False)            # disco de ruptura
-    revolve(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.012), (0.0, 0.012)], "aluminium", seg=8, M=M @ _T(0.029, 0, 0.03) @ _Ry(90))
+    revolve(mb, [(0.0, 0.0), (0.004, 0.0), (0.004, 0.012), (0.0, 0.012)], "aluminium", seg=16, M=M @ _T(0.029, 0, 0.03) @ _Ry(90))
 
 
 def _o2_cap(mb, M, h=0.15):
@@ -878,35 +878,35 @@ def _o2_regulator(mb, M, rr):
     Mo = M @ _Rx(90)
     revolve(mb, [(0.0, -0.006), (0.0155, -0.006), (0.0155, 0.012), (0.0, 0.012)], "aluminium", seg=6, M=Mo, phase=PI / 6)  # tuerca
     revolve(mb, [(0.0, 0.012), (0.024, 0.012), (0.026, 0.016), (0.026, 0.05), (0.024, 0.054), (0.0, 0.054)], "aluminium", seg=16, M=Mo)
-    revolve(mb, [(0.0, 0.054), (0.009, 0.054), (0.009, 0.06), (0.0, 0.06)], "aluminium", seg=8, M=Mo)
+    revolve(mb, [(0.0, 0.054), (0.009, 0.054), (0.009, 0.06), (0.0, 0.06)], "aluminium", seg=16, M=Mo)
     gauge(mb, M @ _T(0, -0.06, 0.0) @ _Rx(90), r=0.022, depth=0.014)
     # flujómetro sobre el regulador
     zf = 0.024
     Mf = M @ _T(0, -0.034, zf)
-    revolve(mb, [(0.014, 0.0), (0.014, 0.018), (0.011, 0.022), (0.0, 0.022)], "aluminium", seg=12, M=Mf)
-    revolve(mb, [(0.0125, 0.022), (0.0125, 0.112)], "glass", seg=12, M=Mf, caps=False)
-    revolve(mb, [(0.0, 0.0), (0.0035, 0.0), (0.0035, 0.004), (0.0, 0.004)], "sign_green", seg=8, M=Mf @ _T(0, -0.0128, 0.06))
+    revolve(mb, [(0.014, 0.0), (0.014, 0.018), (0.011, 0.022), (0.0, 0.022)], "aluminium", seg=20, M=Mf)
+    revolve(mb, [(0.0125, 0.022), (0.0125, 0.112)], "glass", seg=20, M=Mf, caps=False)
+    revolve(mb, [(0.0, 0.0), (0.0035, 0.0), (0.0035, 0.004), (0.0, 0.004)], "sign_green", seg=16, M=Mf @ _T(0, -0.0128, 0.06))
     for z in (0.04, 0.056, 0.072, 0.088):                                                      # escala grabada (en relieve)
         mb.box((-0.004, -0.0132, z), (0.004, -0.0122, z + 0.0012), "sign_white", bevel=0.0, m=Mf)
-    revolve(mb, [(0.0, 0.112), (0.0135, 0.112), (0.0135, 0.126), (0.011, 0.13), (0.0, 0.13)], "aluminium", seg=12, M=Mf)
+    revolve(mb, [(0.0, 0.112), (0.0135, 0.112), (0.0135, 0.126), (0.011, 0.13), (0.0, 0.13)], "aluminium", seg=20, M=Mf)
     knob = lambda a: 1.0 + 0.08 * max(0.0, math.cos(10 * a)) ** 2
     revolve(mb, [(0.0105, 0.1294), (0.0125, 0.134), (0.0125, 0.145), (0.009, 0.149), (0.0, 0.149)], "sign_green", seg=30,
             M=Mf, rmod=knob)
     # salida lateral con espiga y humidificador
     Mh = Mf @ _T(0.014, 0, 0.012) @ _Ry(90)
-    revolve(mb, [(0.006, 0.0), (0.006, 0.022)], "aluminium", seg=8, M=Mh, caps=False)
+    revolve(mb, [(0.006, 0.0), (0.006, 0.022)], "aluminium", seg=16, M=Mh, caps=False)
     Mb = Mf @ _T(0.05, 0, 0.012)
     revolve(mb, [(0.0, 0.0), (0.02, 0.0), (0.021, -0.004), (0.021, -0.018), (0.02, -0.02), (0.0, -0.02)], "sign_white", seg=24,
             M=Mb, rmod=lambda a: 1.0 + 0.03 * (math.cos(12 * a) > 0.5))                       # tapa estriada
     revolve(mb, [(0.019, -0.02), (0.0205, -0.026), (0.0205, -0.11), (0.018, -0.118), (0.0, -0.12)], "plastic", seg=16, M=Mb)
     for z in (-0.04, -0.06, -0.08):                                                            # marcas de nivel
         arc_solid(mb, 0.0203, 0.0213, z, z + 0.0014, -PI / 2 - 0.4, -PI / 2 + 0.4, 3, "sign_blue", M=Mb)
-    revolve(mb, [(0.0045, 0.0), (0.0045, 0.014), (0.003, 0.016), (0.0, 0.016)], "sign_white", seg=8,
+    revolve(mb, [(0.0045, 0.0), (0.0045, 0.014), (0.003, 0.016), (0.0, 0.016)], "sign_white", seg=16,
             M=Mb @ _T(0.019, 0, -0.008) @ _Ry(90))
     p0 = Mb @ Vector((0.033, 0, -0.008))
     tub = [p0, p0 + Vector((0.02, -0.01, -0.03)), p0 + Vector((0.03, -0.04, -0.2)), p0 + Vector((0.015, -0.05, -0.4)),
            p0 + Vector((-0.02, -0.035, -0.43)), p0 + Vector((-0.05, -0.02, -0.38))]
-    hose(mb, [tuple(p) for p in tub], 0.0028, mat="sign_green", seg=5, rad=0.05, nseg=3)
+    hose(mb, [tuple(p) for p in tub], 0.0028, mat="sign_green", seg=10, rad=0.05, nseg=3)
 
 
 def _o2_cylinder(mb, x, z0, cap, reg, rr):
@@ -936,7 +936,7 @@ def _o2_cylinder(mb, x, z0, cap, reg, rr):
     # marbete de estado: argolla en el cuello, alambre y tarjeta de plástico apoyada en el hombro (sigue la curvatura)
     zt = zn - 0.003
     ring = [(x + 0.0325 * math.cos(a), 0.0325 * math.sin(a), z0 + zt + 0.0012 * math.sin(3 * a)) for a in [2 * PI * k / 10 for k in range(10)]]
-    loop_tube(mb, ring, 0.0012, seg=4, mat="steel", normal=(0, 0, 1))
+    loop_tube(mb, ring, 0.0012, seg=8, mat="steel", normal=(0, 0, 1))
     shp = [(R, zs), (0.1145, zs + 0.015), (0.112, zs + 0.035), (0.106, zs + 0.06), (0.096, zs + 0.082), (0.082, zs + 0.102),
            (0.065, zs + 0.117), (0.048, zs + 0.126)]
     acc = [0.0]
@@ -966,10 +966,10 @@ def _o2_cylinder(mb, x, z0, cap, reg, rr):
         v.co = wrap(*v.co)
     mb.join(tmp)
     loop_tube(mb, [tuple(wrap(0.0045 * math.cos(a), 0.024 + 0.0045 * math.sin(a), 0.0016)) for a in [2 * PI * k / 6 for k in range(6)]],
-              0.0009, seg=4, mat="steel")
+              0.0009, seg=8, mat="steel")
     p1 = wrap(0.0, 0.0285, 0.0016)
     p0 = Vector((x + 0.0325 * math.cos(ang0), 0.0325 * math.sin(ang0), z0 + zt))
-    mb.tube([tuple(p0), tuple(p0.lerp(p1, 0.5) + Vector((0, 0, 0.004))), tuple(p1)], 0.0008, seg=4, mat="steel")
+    mb.tube([tuple(p0), tuple(p0.lerp(p1, 0.5) + Vector((0, 0, 0.004))), tuple(p1)], 0.0008, seg=8, mat="steel")
 
 
 def _lp_tank(mb, x, y, rr, mat):
@@ -999,13 +999,13 @@ def _lp_tank(mb, x, y, rr, mat):
     # válvula POL: cuerpo, volante de latón y salida lateral con rosca izquierda
     revolve(mb, [(0.0, 1.06), (0.022, 1.06), (0.022, 1.075), (0.017, 1.08), (0.017, 1.13), (0.012, 1.135), (0.0, 1.135)],
             "aluminium", seg=6, M=M, phase=PI / 6)
-    mb.cyl(M @ Vector((0, 0, 1.135)), M @ Vector((0, 0, 1.152)), 0.005, seg=6, mat="steel", caps=False)
+    mb.cyl(M @ Vector((0, 0, 1.135)), M @ Vector((0, 0, 1.152)), 0.005, seg=12, mat="steel", caps=False)
     wheel = lambda a: 1.0 + 0.07 * max(0.0, math.cos(10 * a)) ** 2
     revolve(mb, [(0.0, 1.148), (0.034, 1.148), (0.036, 1.153), (0.033, 1.163), (0.0, 1.166)],
             "aluminium", seg=30, M=M, rmod=wheel)
     Mo = M @ _T(0.017, 0, 1.105) @ _Ry(90)
     revolve(mb, [(0.011, -0.001), (0.011, 0.012)] + [(0.0095 if k % 2 else 0.0108, 0.012 + 0.004 * k) for k in range(1, 4)]
-            + [(0.0, 0.028)], "aluminium", seg=10, M=Mo)
+            + [(0.0, 0.028)], "aluminium", seg=18, M=Mo)
     # letras troqueladas en relieve (sin cara trasera: van embutidas en el cuerpo)
     text_cyl(mb, "LP GAS", 0.07, 0.0019, mat, R - 0.0002, 0.72, ang=-PI / 2 - math.radians(float(rr.uniform(-10, 10))), M=M, bold=True,
              res=2, back=False)
@@ -1037,7 +1037,7 @@ def cylinder_rack(n=2, seed=0, medical=True):
     mb.box((-X + 0.004, -Y + 0.004, zt - 0.0002), (X - 0.004, Y - 0.004, zt + 0.004), "steel", bevel=0.0015)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            lathe(mb, [(0.02, -0.0003), (0.021, 0.006), (0.019, 0.01), (0.0, 0.01)], seg=6, mat="rubber",
+            lathe(mb, [(0.02, -0.0003), (0.021, 0.006), (0.019, 0.01), (0.0, 0.01)], seg=12, mat="rubber",
                   M=_T(sx * (X - 0.02), sy * (Y - 0.02), 0.0))
     for x in xs:                                                         # aros de contención soldados a la plataforma
         revolve(mb, [(0.121, zt + 0.004), (0.126, zt + 0.004), (0.126, zt + 0.055), (0.121, zt + 0.055)],
@@ -1046,21 +1046,21 @@ def cylinder_rack(n=2, seed=0, medical=True):
     yp = 0.125
     xp = X - 0.035
     zt2 = 1.17
-    mb.tube(fillet([(-xp, yp, zt + 0.002), (-xp, yp, zt2), (xp, yp, zt2), (xp, yp, zt + 0.002)], 0.08, 6), 0.016, seg=10, mat="steel")
+    mb.tube(fillet([(-xp, yp, zt + 0.002), (-xp, yp, zt2), (xp, yp, zt2), (xp, yp, zt + 0.002)], 0.08, 6), 0.016, seg=18, mat="steel")
     for sx in (-1, 1):
-        weld(mb, _T(sx * xp, yp, zt + 0.004), 0.016, w=0.004, seg=10)
+        weld(mb, _T(sx * xp, yp, zt + 0.004), 0.016, w=0.004, seg=18)
         port.gusset(mb, _T(sx * xp, yp - 0.016, zt + 0.004) @ _Rz(-90), 0.07, 0.09, t=0.004, mat="steel", chamfer=0.015)
     for zr in (0.3, 1.0):
-        mb.tube([(-xp + 0.012, yp, zr), (xp - 0.012, yp, zr)], 0.0125, seg=10, mat="steel", caps=False)   # extremos en los postes
+        mb.tube([(-xp + 0.012, yp, zr), (xp - 0.012, yp, zr)], 0.0125, seg=18, mat="steel", caps=False)   # extremos en los postes
         for x in xs:                                                     # cuna de solera rolada detrás de cada cilindro
             arc_solid(mb, 0.1205, 0.1245, zr - 0.02, zr + 0.02, math.radians(28), math.radians(152), 6, "steel", M=_T(x, 0, 0))
             mb.box((x - 0.012, 0.118, zr - 0.012), (x + 0.012, yp - 0.006, zr + 0.012), "steel", bevel=0.003, seg=1)
     # cadena frontal con armella y gancho
     zc = 1.02
     for sx in (-1, 1):
-        mb.cyl((sx * xp, yp - 0.014, zc), (sx * (xp + 0.004), yp - 0.034, zc), 0.004, seg=6, mat="steel")
+        mb.cyl((sx * xp, yp - 0.014, zc), (sx * (xp + 0.004), yp - 0.034, zc), 0.004, seg=12, mat="steel")
         ring = [(sx * (xp + 0.006) + 0.0, yp - 0.042 + 0.009 * math.cos(a), zc + 0.009 * math.sin(a)) for a in [2 * PI * k / 8 for k in range(8)]]
-        loop_tube(mb, ring, 0.0025, seg=5, mat="steel", normal=(1, 0, 0))
+        loop_tube(mb, ring, 0.0025, seg=10, mat="steel", normal=(1, 0, 0))
     cpts = [(-xp - 0.006, yp - 0.05, zc), (-X + 0.0, -0.06, zc - 0.01), (xs[0] - 0.05, -0.128, zc - 0.015)]
     cpts += [(x, -0.126 if k % 2 == 0 else -0.124, zc - 0.035) for k, x in enumerate(xs)]
     cpts += [(xs[-1] + 0.05, -0.128, zc - 0.015), (X - 0.0, -0.06, zc - 0.01), (xp + 0.006, yp - 0.05, zc)]
@@ -1105,20 +1105,20 @@ def _lp_rack(mb, n, r):
     angle_l(mb, (-X + 0.03, yb, zt - 0.04), (X - 0.03, yb, zt - 0.04), 0.04, 0.004, up=(0, 0, 1), s=-1)
     zm = zt - 0.09
     ym = yb - 0.02
-    mb.cyl((-X + 0.08, ym, zm), (X - 0.12, ym, zm), 0.0135, seg=10, mat="steel")               # múltiple de 1/2"
+    mb.cyl((-X + 0.08, ym, zm), (X - 0.12, ym, zm), 0.0135, seg=18, mat="steel")               # múltiple de 1/2"
     for x in (-X + 0.12, X - 0.16):                                                              # abrazaderas en U
         mb.tube(fillet([(x, ym + 0.02, zm + 0.0), (x, ym + 0.02, zm + 0.017), (x, ym - 0.017, zm + 0.017), (x, ym - 0.017, zm - 0.03),
-                        (x, ym + 0.02, zm - 0.03)], 0.012, 2), 0.003, seg=5, mat="steel")
-    revolve(mb, [(0.0, 0.0), (0.015, 0.0), (0.015, 0.012), (0.0, 0.012)], "steel", seg=6, M=_T(-X + 0.08, ym, zm) @ _Ry(-90))
+                        (x, ym + 0.02, zm - 0.03)], 0.012, 2), 0.003, seg=10, mat="steel")
+    revolve(mb, [(0.0, 0.0), (0.015, 0.0), (0.015, 0.012), (0.0, 0.012)], "steel", seg=12, M=_T(-X + 0.08, ym, zm) @ _Ry(-90))
     for k, x in enumerate(xs):                                                                   # tes y colas de cochino
         hexnut(mb, _T(x, ym, zm - 0.0135) @ _Rx(180), d=0.012, h=0.014, washer=False)
         Mt = Ms[k]
-        revolve(mb, [(0.0, 0.0), (0.0095, 0.0), (0.0095, 0.022), (0.0, 0.022)], "aluminium", seg=6, M=Mt @ _T(0.067, 0, 1.105) @ _Ry(-90),
+        revolve(mb, [(0.0, 0.0), (0.0095, 0.0), (0.0095, 0.022), (0.0, 0.022)], "aluminium", seg=12, M=Mt @ _T(0.067, 0, 1.105) @ _Ry(-90),
                 phase=PI / 6)                                                                    # tuerca POL
         loc = [Vector((0.066, 0.0, 1.105)), Vector((0.084, 0.0, 1.11)), Vector((0.088, 0.0, 1.16)), Vector((0.07, 0.03, 1.235))]
         pts = [Mt @ p for p in loc] + [Vector((x + 0.02, ym - 0.03, zm - 0.06)), Vector((x, ym, zm - 0.04)), Vector((x, ym, zm - 0.024))]
-        hose(mb, [tuple(p) for p in pts], 0.0065, mat="rubber", seg=8, rad=0.03, nseg=3)
-        mb.cyl(tuple(Mt @ Vector((0.064, 0, 1.105))), tuple(Mt @ Vector((0.074, 0, 1.105))), 0.0075, seg=8, mat="aluminium")
+        hose(mb, [tuple(p) for p in pts], 0.0065, mat="rubber", seg=16, rad=0.03, nseg=3)
+        mb.cyl(tuple(Mt @ Vector((0.064, 0, 1.105))), tuple(Mt @ Vector((0.074, 0, 1.105))), 0.0075, seg=16, mat="aluminium")
     # regulador de baja presión (campana con venteo) y tubo de cobre al firme
     xr = X - 0.12
     Mr = _T(xr + 0.03, ym, zm)
@@ -1126,9 +1126,9 @@ def _lp_rack(mb, n, r):
             M=Mr @ _Rx(-90))
     revolve(mb, [(0.0, 0.0), (0.03, 0.0), (0.03, 0.008), (0.0, 0.008)], "paint_white", seg=20, M=Mr @ _T(0, 0.03, 0) @ _Rx(-90))
     hexnut(mb, Mr @ _T(0, -0.016, 0.046), d=0.008, washer=False)
-    revolve(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.012), (0.0, 0.014)], "cable", seg=10, M=Mr @ _T(0, -0.016, 0.046 + 0.006))
+    revolve(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.012), (0.0, 0.014)], "cable", seg=18, M=Mr @ _T(0, -0.016, 0.046 + 0.006))
     cu = [(xr + 0.03, ym, zm - 0.046), (xr + 0.03, ym, 0.12), (xr + 0.03, ym + 0.05, 0.08), (xr + 0.03, ym + 0.05, -0.03)]
-    hose(mb, cu, 0.0065, mat="steel", seg=8, rad=0.04, nseg=4)
+    hose(mb, cu, 0.0065, mat="steel", seg=16, rad=0.04, nseg=4)
     for z in (0.35, 0.8):                                                                         # grapas al poste
         mb.box((xr + 0.02, ym - 0.008, z), (X - 0.027, ym + 0.008, z + 0.012), "steel", bevel=0.001, seg=1)
     # cadena al frente de los tanques
@@ -1208,21 +1208,21 @@ def xray_unit(seed=0):
             mb.box((xa, y - 0.015, 0.667), (xb, y + 0.015, 0.683), "steel", bevel=0.002, seg=1)
             screw(mb, _T(sx * 0.415, y, 0.675) @ _Ry(90 * sx), d=0.008, seg=8)
         for y in (-0.98, 0.98):
-            lathe(mb, [(0.0, -0.002), (0.0068, -0.002), (0.0072, 0.004), (0.0, 0.006)], seg=8, mat="cable",
+            lathe(mb, [(0.0, -0.002), (0.0068, -0.002), (0.0072, 0.004), (0.0, 0.006)], seg=16, mat="cable",
                   M=_T(sx * 0.4105, y, 0.675) @ _Rx(90 if y < 0 else -90))
     cushion(mb, _T(0, 0.0, 0.695), 0.72, 2.0, 0.045, mat="vinyl", r=0.018, crown=0.006, seg=(18, 8))
     # charola del bucky bajo el tablero, con jaladera al lado -x
     rbox(mb, (-0.3, -0.3, 0.612), (0.3, 0.22, 0.655), "sign_white", r=0.006)
     mb.box((-0.312, -0.06, 0.618), (-0.3, 0.06, 0.65), "plastic", bevel=0.002, seg=1)
     mb.tube(fillet([(-0.312, -0.045, 0.634), (-0.345, -0.045, 0.634), (-0.345, 0.045, 0.634), (-0.312, 0.045, 0.634)], 0.012, 5),
-            0.0055, seg=8, mat="steel")
+            0.0055, seg=16, mat="steel")
     # pedal de freno del tablero en el piso, con cable a la base
     rbox(mb, (-0.07, -1.25, 0.0), (0.07, -1.11, 0.03), "sign_white", r=0.008)
     for k in range(6):
         y = -1.235 + k * 0.022
         mb.box((-0.06, y, 0.03), (0.06, y + 0.012, 0.038), "rubber", bevel=0.0015, seg=1)
     hose(mb, [(0.0, -1.11, 0.015), (0.03, -1.0, 0.007), (0.08, -0.75, 0.007), (0.1, -0.5, 0.007), (0.1, -0.44, 0.04)], 0.006,
-         mat="cable", seg=8, rad=0.05, nseg=4)
+         mat="cable", seg=16, rad=0.05, nseg=4)
     # ------------------------------------------------------------------ riel de piso y columna
     xc = 0.72
     mb.sweep([(-0.055, 0.0), (0.055, 0.0), (0.05, 0.014), (0.016, 0.016), (0.016, 0.024), (-0.016, 0.024), (-0.016, 0.016),
@@ -1236,7 +1236,7 @@ def xray_unit(seed=0):
     rbox(mb, (xc - 0.08, -0.13, 0.024), (xc + 0.08, 0.13, 0.13), "sign_white", r=0.02)        # carro de la columna
     for sy in (-1, 1):
         mb.box((xc - 0.06, sy * 0.1305 - 0.003, 0.03), (xc + 0.06, sy * 0.1305 + 0.003, 0.09), "rubber", bevel=0.0015, seg=1)  # topes
-    mb.tube(fillet([(xc - 0.08, 0.06, 0.1), (xc - 0.13, 0.06, 0.1), (xc - 0.13, 0.0, 0.1)], 0.02, 4), 0.006, seg=8, mat="steel")
+    mb.tube(fillet([(xc - 0.08, 0.06, 0.1), (xc - 0.13, 0.06, 0.1), (xc - 0.13, 0.0, 0.1)], 0.02, 4), 0.006, seg=16, mat="steel")
     _knob(mb, _T(xc - 0.13, 0.0, 0.1) @ _Ry(-90), r=0.012, h=0.02, mat="sign_red")             # freno del carro
     zc0, zc1 = 0.13, 2.07
     rtube(mb, (xc, 0.0, zc0), (xc, 0.0, zc1), 0.16, 0.12, "sign_white", up=(1, 0, 0), r=0.012)
@@ -1257,10 +1257,10 @@ def xray_unit(seed=0):
     for sy in (-1, 1):
         for z in (zk + 0.04, zk + 0.2):
             Mr = _T(xc + 0.02, sy * 0.11, z) @ _Rx(-90 * sy)
-            lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.016, 0.004), (0.011, 0.007), (0.0, 0.007)], seg=12, mat="steel", M=Mr)
+            lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.016, 0.004), (0.011, 0.007), (0.0, 0.007)], seg=20, mat="steel", M=Mr)
             hexnut(mb, Mr @ _T(0, 0, 0.007), d=0.006, washer=False)
     _knob(mb, _T(xc - 0.01, -0.11, zk + 0.12) @ _Rx(90), r=0.02, h=0.025, mat="cable", flutes=8)
-    mb.cyl((xc - 0.01, -0.11, zk + 0.12), (xc - 0.01, -0.118, zk + 0.12), 0.006, seg=8, mat="steel")
+    mb.cyl((xc - 0.01, -0.11, zk + 0.12), (xc - 0.01, -0.118, zk + 0.12), 0.006, seg=16, mat="steel")
     za = zk + 0.07
     rtube(mb, (xc - 0.1, 0.0, za), (0.2, 0.0, za), 0.11, 0.1, "sign_white", up=(0, 0, 1), r=0.012)   # brazo exterior
     mb.box((0.19, -0.058, za - 0.053), (0.215, 0.058, za + 0.053), "sign_white", bevel=0.005, seg=2)  # boca del brazo
@@ -1325,7 +1325,7 @@ def xray_unit(seed=0):
     mb.box((0.04, -0.1156, zc + 0.036), (0.075, -0.1136, zc + 0.039), "cable", bevel=0.0)
     for sx in (-1, 1):                                                                          # asas laterales
         mb.tube(fillet([(sx * 0.11, -0.07, zc + 0.03), (sx * 0.145, -0.07, zc + 0.03), (sx * 0.145, 0.07, zc + 0.03),
-                        (sx * 0.11, 0.07, zc + 0.03)], 0.02, 6), 0.009, seg=10, mat="cable")
+                        (sx * 0.11, 0.07, zc + 0.03)], 0.02, 6), 0.009, seg=18, mat="cable")
     # ------------------------------------------------------------------ cables de alta tensión con caída
     for k, (sy, p0) in enumerate(zip((-1, 1), cab)):
         y = sy * 0.03
@@ -1334,9 +1334,9 @@ def xray_unit(seed=0):
                (0.36, sy * 0.14, za + 0.075 - sag), (0.56, sy * 0.13, za + 0.16), (xc - 0.03, sy * 0.14, zk + 0.27),
                (xc + 0.106, sy * 0.07, zk + 0.2), (xc + 0.104, y, zk - 0.06), (xc + 0.08, y, zk - 0.32), (xc + 0.075, y, 0.6),
                (xc + 0.072, y, 0.16)]
-        hose(mb, pts, 0.011, mat="cable", seg=8, rad=0.07, nseg=4)
+        hose(mb, pts, 0.011, mat="cable", seg=16, rad=0.07, nseg=4)
     for z in (0.5, 1.0, 1.4):                                                                     # grapas de los cables
-        mb.tube([(xc + 0.0625, -0.05, z), (xc + 0.09, -0.05, z), (xc + 0.09, 0.05, z), (xc + 0.0625, 0.05, z)], 0.003, seg=6,
+        mb.tube([(xc + 0.0625, -0.05, z), (xc + 0.09, -0.05, z), (xc + 0.09, 0.05, z), (xc + 0.0625, 0.05, z)], 0.003, seg=12,
                 mat="steel")
     # caja de piso por donde bajan los cables (al generador)
     mb.box((xc + 0.02, -0.07, 0.13), (xc + 0.1, 0.07, 0.15), "steel", bevel=0.003, seg=2)
@@ -1345,13 +1345,13 @@ def xray_unit(seed=0):
     mb.box((xc - 0.045, -0.1515, 1.2), (xc + 0.045, -0.149, 1.285), "cable", bevel=0.001)      # carátula
     for k, (z, mat) in enumerate(((1.26, "sign_green"), (1.26, "sign_red"), (1.225, "plastic"))):
         x = xc + (-0.022 + 0.044 * (k % 2)) if k < 2 else xc
-        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.007, 0.009), (0.0, 0.0095)], seg=14, mat=mat,
+        lathe(mb, [(0.0, 0.0), (0.009, 0.0), (0.009, 0.006), (0.007, 0.009), (0.0, 0.0095)], seg=24, mat=mat,
               M=_T(x, -0.151, z) @ _Rx(90))
-    lathe(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.004), (0.0, 0.004)], seg=12, mat="steel", M=_T(xc - 0.025, -0.15, 1.16) @ _Rx(90))
+    lathe(mb, [(0.0, 0.0), (0.008, 0.0), (0.008, 0.004), (0.0, 0.004)], seg=20, mat="steel", M=_T(xc - 0.025, -0.15, 1.16) @ _Rx(90))
     mb.box((xc - 0.0262, -0.1545, 1.157), (xc - 0.0238, -0.15, 1.163), "cable", bevel=0.0)     # llave
-    lathe(mb, [(0.0, 0.0), (0.006, 0.0), (0.006, 0.006), (0.0, 0.007)], seg=10, mat="paint_yellow", M=_T(xc + 0.025, -0.15, 1.16) @ _Rx(90))
+    lathe(mb, [(0.0, 0.0), (0.006, 0.0), (0.006, 0.006), (0.0, 0.007)], seg=18, mat="paint_yellow", M=_T(xc + 0.025, -0.15, 1.16) @ _Rx(90))
     hose(mb, [(xc, -0.115, 1.12), (xc, -0.115, 1.06), (xc + 0.0, -0.096, 0.9), (xc, -0.088, 0.4), (xc, -0.088, 0.15)], 0.0055,
-         mat="cable", seg=8, rad=0.04, nseg=4)
+         mat="cable", seg=16, rad=0.04, nseg=4)
     for z in (0.35, 0.75):
         mb.box((xc - 0.012, -0.096, z), (xc + 0.012, -0.0798, z + 0.012), "steel", bevel=0.002)
     return mb
@@ -1391,13 +1391,13 @@ def wall_bucky():
     for sx in (-1, 1):
         for z in (zk + 0.05, zk + 0.31):
             M = _T(sx * 0.125, yc - 0.055, z) @ _Ry(90 * sx)
-            lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.004), (0.008, 0.007), (0.0, 0.007)], seg=12, mat="steel", M=M)
+            lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.004), (0.008, 0.007), (0.0, 0.007)], seg=20, mat="steel", M=M)
     pv = Vector((0.125, yc - 0.06, zk + 0.18))
-    lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.008), (0.0, 0.008)], seg=12, mat="steel", M=_T(*pv) @ _Ry(90))
+    lathe(mb, [(0.0, 0.0), (0.012, 0.0), (0.012, 0.008), (0.0, 0.008)], seg=20, mat="steel", M=_T(*pv) @ _Ry(90))
     lever = fillet([tuple(pv + Vector((0.006, 0, 0))), tuple(pv + Vector((0.012, -0.03, 0.0))), tuple(pv + Vector((0.016, -0.05, -0.1)))],
                    0.02, 5)
     sweep_frame(mb, rr_profile(0.006, 0.016, 0.0025, n=2), lever, "steel", up=(1, 0, 0))
-    lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.012, 0.03), (0.01, 0.045), (0.0, 0.048)], seg=12, mat="sign_red",
+    lathe(mb, [(0.0, 0.0), (0.011, 0.0), (0.012, 0.03), (0.01, 0.045), (0.0, 0.048)], seg=20, mat="sign_red",
           M=_T(*(pv + Vector((0.016, -0.05, -0.1)))) @ _Rx(180) @ _Rx(-10))
     # receptor (bucky)
     yb0, yb1 = yc - 0.068, -0.205
@@ -1419,17 +1419,17 @@ def wall_bucky():
     for sx in (-1, 1):                                                                           # asas laterales
         x = sx * 0.245
         mb.tube(fillet([(x - sx * 0.004, -0.17, z0 + 0.1), (x + sx * 0.022, -0.17, z0 + 0.1), (x + sx * 0.022, -0.17, z1 - 0.1),
-                        (x - sx * 0.004, -0.17, z1 - 0.1)], 0.016, 6), 0.0095, seg=10, mat="cable")
+                        (x - sx * 0.004, -0.17, z1 - 0.1)], 0.016, 6), 0.0095, seg=18, mat="cable")
     # charola de chasis por el costado +x con jaladera
     zt = zm - 0.02
     mb.box((0.2449, -0.19, zt - 0.012), (0.246, -0.09, zt + 0.012), "cable", bevel=0.0)       # boca de la charola
     rbox(mb, (0.24, -0.185, zt - 0.009), (0.252, -0.095, zt + 0.009), "plastic", r=0.003)
-    mb.tube(fillet([(0.252, -0.175, zt), (0.268, -0.175, zt), (0.268, -0.105, zt), (0.252, -0.105, zt)], 0.008, 4), 0.0045, seg=8,
+    mb.tube(fillet([(0.252, -0.175, zt), (0.268, -0.175, zt), (0.268, -0.105, zt), (0.252, -0.105, zt)], 0.008, 4), 0.0045, seg=16,
             mat="steel")
     # cable del motor: del receptor a la columna, baja por la columna y entra a una caja en el muro
     pts = [(-0.18, yb0 + 0.004, z0 + 0.02), (-0.2, -0.08, z0 - 0.06), (-0.12, -0.03, z0 - 0.25), (-0.095, -0.02, 0.6),
            (-0.095, -0.02, 0.32), (-0.13, -0.012, 0.22)]
-    hose(mb, pts, 0.0055, mat="cable", seg=8, rad=0.05, nseg=5)
+    hose(mb, pts, 0.0055, mat="cable", seg=16, rad=0.05, nseg=5)
     for z in (0.5, 0.75):                                                                        # grapas del cable
         mb.box((-0.104, -0.03, z), (-0.086, -0.0098, z + 0.012), "steel", bevel=0.002)
     rbox(mb, (-0.19, -0.04, 0.16), (-0.12, -0.0002, 0.26), "sign_white", r=0.006)              # caja de registro
@@ -1458,7 +1458,7 @@ def _small_caster(mb, M, d=0.075, brake=False):
     revolve(mb, [(r * 0.62, -0.0135), (r * 0.9, -0.0135), (r, -0.008), (r, 0.008), (r * 0.9, 0.0135), (r * 0.62, 0.0135)], "rubber",
             seg=20, M=Mw, closed=True)
     revolve(mb, [(0.0, -0.014), (r * 0.62, -0.014), (r * 0.62, 0.014), (0.0, 0.014)], "plastic", seg=20, M=Mw)
-    mb.cyl(M @ Vector((-0.024, off, r)), M @ Vector((0.024, off, r)), 0.004, seg=8, mat="steel")
+    mb.cyl(M @ Vector((-0.024, off, r)), M @ Vector((0.024, off, r)), 0.004, seg=16, mat="steel")
     for s in (-1, 1):
         hexnut(mb, M @ _T(s * 0.0215, off, r) @ _Ry(90 * s), d=0.006, washer=False)
     if brake:
@@ -1513,10 +1513,10 @@ def lead_screen():
     # asas de tubo con postes (cara posterior +Y)
     for sx in (-1, 1):
         x = sx * 0.4
-        mb.tube(fillet([(x, t / 2, 0.9), (x, t / 2 + 0.06, 0.92), (x, t / 2 + 0.06, 1.28), (x, t / 2, 1.3)], 0.025, 6), 0.0125, seg=12,
+        mb.tube(fillet([(x, t / 2, 0.9), (x, t / 2 + 0.06, 0.92), (x, t / 2 + 0.06, 1.28), (x, t / 2, 1.3)], 0.025, 6), 0.0125, seg=20,
                 mat="steel")
         for z in (0.9, 1.3):
-            lathe(mb, [(0.0, 0.0), (0.022, 0.0), (0.022, 0.004), (0.016, 0.007), (0.0, 0.007)], seg=14, mat="steel",
+            lathe(mb, [(0.0, 0.0), (0.022, 0.0), (0.022, 0.004), (0.016, 0.007), (0.0, 0.007)], seg=24, mat="steel",
                   M=_T(x, t / 2 - 0.0005, z) @ _Rx(-90))
     # base: patas de PTR, postes del perfil y cartelas, rodajas
     for sx in (-1, 1):
@@ -1545,7 +1545,7 @@ def wall_lamp():
     mb.plate(out, 0.0062, "enamel", m=_Rx(90) @ _T(0, 0, 0.0001))
     mb.plate(rrect(0.1, 0.18, 0.042, n=6), 0.005, "enamel", m=_Rx(90) @ _T(0, 0, 0.0061))
     for z in (-0.068, 0.068):
-        lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.0025), (0.006, 0.006), (0.0025, 0.0075), (0.0, 0.0075)], seg=12, mat="enamel",
+        lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.0085, 0.0025), (0.006, 0.006), (0.0025, 0.0075), (0.0, 0.0075)], seg=20, mat="enamel",
               M=_T(0, -0.0108, z) @ _Rx(90))
     lathe(mb, [(0.0, 0.0), (0.026, 0.0), (0.026, 0.005), (0.019, 0.01), (0.014, 0.018), (0.0, 0.018)], seg=20, mat="enamel",
           M=_T(0, -0.0108, 0.03) @ _Rx(90))                                                       # roseta del brazo
@@ -1558,7 +1558,7 @@ def wall_lamp():
         a = ph + PI / 3 * k
         p0 = Vector((rb * math.cos(a), yl + rb * math.sin(a), zb))
         p1 = Vector((rt_ * math.cos(a), yl + rt_ * math.sin(a), zt))
-        mb.tube([tuple(p0), tuple(p1)], 0.0042, seg=4, mat="enamel")
+        mb.tube([tuple(p0), tuple(p1)], 0.0042, seg=8, mat="enamel")
     for k in range(6):                                                                           # cristales
         a0, a1 = ph + PI / 3 * k, ph + PI / 3 * (k + 1)
         am = (a0 + a1) / 2
@@ -1581,30 +1581,30 @@ def wall_lamp():
             j = (i + 1) % 4
             mb.face([V0[i], V0[j], V1[j], V1[i]], "glass")
     revolve(mb, [(rb - 0.004, zb - 0.004), (rb + 0.006, zb - 0.004), (rb + 0.006, zb + 0.008), (rb - 0.004, zb + 0.008)], "enamel",
-            seg=6, M=_T(0, yl, 0), phase=ph, closed=True)
+            seg=12, M=_T(0, yl, 0), phase=ph, closed=True)
     revolve(mb, [(rt_ - 0.004, zt - 0.008), (rt_ + 0.006, zt - 0.008), (rt_ + 0.006, zt + 0.004), (rt_ - 0.004, zt + 0.004)], "enamel",
-            seg=6, M=_T(0, yl, 0), phase=ph, closed=True)
+            seg=12, M=_T(0, yl, 0), phase=ph, closed=True)
     # techo piramidal con alero, chimenea ventilada y remate
     revolve(mb, [(0.0, zt + 0.004), (0.088, zt + 0.004), (0.09, zt + 0.009), (0.086, zt + 0.012), (0.05, zt + 0.042), (0.026, zt + 0.056),
-                 (0.0, zt + 0.056)], "enamel", seg=6, M=_T(0, yl, 0), phase=ph)
+                 (0.0, zt + 0.056)], "enamel", seg=12, M=_T(0, yl, 0), phase=ph)
     for k in range(6):                                                                           # nervios de las limatesas
         a = ph + PI / 3 * k
         c, s_ = math.cos(a), math.sin(a)
-        mb.tube([(0.086 * c, yl + 0.086 * s_, zt + 0.0125), (0.027 * c, yl + 0.027 * s_, zt + 0.0575)], 0.0028, seg=6, mat="enamel")
+        mb.tube([(0.086 * c, yl + 0.086 * s_, zt + 0.0125), (0.027 * c, yl + 0.027 * s_, zt + 0.0575)], 0.0028, seg=12, mat="enamel")
     for k in range(6):
         a = ph + PI / 3 * k
         arc_solid(mb, 0.019, 0.023, zt + 0.055, zt + 0.07, a - 0.18, a + 0.18, 2, "enamel", M=_T(0, yl, 0))
-    revolve(mb, [(0.0, zt + 0.069), (0.032, zt + 0.069), (0.033, zt + 0.073), (0.02, zt + 0.081), (0.0, zt + 0.083)], "enamel", seg=6,
+    revolve(mb, [(0.0, zt + 0.069), (0.032, zt + 0.069), (0.033, zt + 0.073), (0.02, zt + 0.081), (0.0, zt + 0.083)], "enamel", seg=12,
             M=_T(0, yl, 0), phase=ph)
-    revolve(mb, [(0.0, zt + 0.082), (0.007, zt + 0.082), (0.009, zt + 0.088), (0.006, zt + 0.094), (0.0, zt + 0.096)], "enamel", seg=10,
+    revolve(mb, [(0.0, zt + 0.082), (0.007, zt + 0.082), (0.009, zt + 0.088), (0.006, zt + 0.094), (0.0, zt + 0.096)], "enamel", seg=18,
             M=_T(0, yl, 0))
     # charola inferior con remate
     revolve(mb, [(0.0, zb - 0.004), (rb + 0.004, zb - 0.004), (rb - 0.004, zb - 0.011), (0.02, zb - 0.014), (0.0, zb - 0.014)],
-            "enamel", seg=6, M=_T(0, yl, 0), phase=ph)
-    revolve(mb, [(0.0, zb - 0.013), (0.009, zb - 0.013), (0.006, zb - 0.017), (0.004, zb - 0.02), (0.0, zb - 0.021)], "enamel", seg=10,
+            "enamel", seg=12, M=_T(0, yl, 0), phase=ph)
+    revolve(mb, [(0.0, zb - 0.013), (0.009, zb - 0.013), (0.006, zb - 0.017), (0.004, zb - 0.02), (0.0, zb - 0.021)], "enamel", seg=18,
             M=_T(0, yl, 0))
     # portalámparas y foco
-    revolve(mb, [(0.0, zb - 0.004), (0.016, zb - 0.004), (0.016, zb + 0.04), (0.0135, zb + 0.044), (0.0, zb + 0.044)], "cable", seg=14,
+    revolve(mb, [(0.0, zb - 0.004), (0.016, zb - 0.004), (0.016, zb + 0.04), (0.0135, zb + 0.044), (0.0, zb + 0.044)], "cable", seg=24,
             M=_T(0, yl, 0))
     revolve(mb, [(0.0, zb + 0.044), (0.0125, zb + 0.044), (0.014, zb + 0.052), (0.022, zb + 0.07), (0.03, zb + 0.095),
                  (0.03, zb + 0.11), (0.024, zb + 0.125), (0.012, zb + 0.133), (0.0, zb + 0.135)], "plastic", seg=18, M=_T(0, yl, 0))
@@ -1612,7 +1612,7 @@ def wall_lamp():
     za = zt + 0.096 + 0.006
     arm = fillet([(0, -0.012, 0.03), (0, -0.05, 0.035), (0, -0.09, za + 0.004), (0, yl + 0.012, za + 0.004), (0, yl - 0.004, za - 0.002),
                   (0, yl, zt + 0.092)], 0.02, 6)
-    mb.tube(arm, 0.0068, seg=10, mat="enamel")
+    mb.tube(arm, 0.0068, seg=18, mat="enamel")
     curl = []
     for k in range(22):                                                                          # voluta: espiral + recta
         th = 2.6 * PI * k / 21

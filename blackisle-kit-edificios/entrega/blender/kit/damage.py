@@ -650,10 +650,11 @@ def rubble_pile(radius=1.0, seed=0, n=60, detail="high", gravel=2.5):
             base = Hm * max(0.0, 1.0 - min(rr_, 1.0) ** 1.6) ** 1.4 * (1.0 - 0.35 * off)
             edge = min(1.0, (1 - min(rr_, 1.0)) * 4)
             bmp = sum(h * math.exp(-((x - bx) ** 2 + (y - by) ** 2) / (w * w)) for (bx, by, w, h) in bumps)
+            fine = (0.006 * nz(Vector((x, y, 13)), 47.0) + 0.003 * abs(nz(Vector((x, y, 17)), 95.0))) if _LOD.aaa else 0.0
             return base + edge * (bmp + 0.045 * R * nz(Vector((x, y, 0)), 3.0 / R) + 0.015 * nz(Vector((x, y, 5)), 9.0)
-                                  + 0.012 * nz(Vector((x, y, 9)), 23.0))
+                                  + 0.012 * nz(Vector((x, y, 9)), 23.0) + fine)
 
-        nr, ns = _lv((14, 56), (9, 36), (6, 22))
+        nr, ns = _lv((24, 104), (9, 36), (6, 22)) if _LOD.aaa else _lv((14, 56), (9, 36), (6, 22))   # R-AAA: base de finos con grano
         center = mb.bm.verts.new((0.0, 0.0, hgt(0.0, 0.0)))
         rings = []
         ts = [(i / nr) ** 0.85 for i in range(1, nr)] + [0.985, 1.0, 1.035]

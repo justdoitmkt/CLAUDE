@@ -589,8 +589,8 @@ def mw_dish(d=0.9, seed=0, cable=True):
               (Rs + 0.0035, zc - 0.024), (Rs + 0.0032, zc - 0.040), (Rs + 0.0030, zc - 0.058), (Rs - 0.002, zc - 0.058),
               (Rs - 0.002, zc - 0.002), (0.0, zc + 0.002)]
     nw = int(14 + 10 * d)                         # arrugas de tensión
-    wr = [(float(r.uniform(0, 2 * PI)), float(r.uniform(0.022, 0.06)), float(r.uniform(0.52, 0.82)),
-           float(r.choice([-0.45, 1.0, 1.0, 1.0])) * float(r.uniform(0.0016, 0.0034))) for _ in range(nw)]
+    wr = [(float(r.uniform(0, 2 * PI)), float(r.uniform(0.02, 0.05)), float(r.uniform(0.50, 0.80)),
+           float(r.choice([-0.45, 1.0, 1.0, 1.0])) * float(r.uniform(0.0026, 0.0055))) for _ in range(nw)]
     npl = int(round(26 * d / 0.9)) * 2            # pliegues del faldón
     pw = [float(r.uniform(-0.35, 0.35)) for _ in range(npl)]
 

@@ -687,8 +687,8 @@ def bollard(seed=0):
         z = float(r.uniform(0.14, 0.39))
         rad = prof_r(z)
         w, hh = float(r.uniform(0.015, 0.03)), float(r.uniform(0.01, 0.022))
-        M = _R("Z", math.degrees(a)) @ _T(rad + 0.0004, 0, z) @ _R("Y", 90) @ _R("Z", float(r.uniform(0, 180)))
-        bev_plate(mb, [(-w / 2, -hh / 2), (w / 2, -hh / 2 + 0.003), (w / 2 - 0.004, hh / 2), (-w / 2 + 0.006, hh / 2)], 0.0006,
+        M = _R("Z", math.degrees(a)) @ _T(rad - 0.0003, 0, z) @ _R("Y", 90) @ _R("Z", float(r.uniform(0, 180)))
+        bev_plate(mb, [(-w / 2, -hh / 2), (w / 2, -hh / 2 + 0.003), (w / 2 - 0.004, hh / 2), (-w / 2 + 0.006, hh / 2)], 0.0009,
                   "metal_rust", M=M, ch=0.0)
     mb.meta = dict(top=0.571)
     return mb
@@ -769,7 +769,7 @@ def _barnacles(mb, r, pts_normals, size=(0.006, 0.014), mat="rubble"):
             s = float(r.uniform(*size))
             M, _ = frame_on(Vector(p), Vector(p) + Vector(n))
             M = M @ _R("Y", 90) @ _R("Z", float(r.uniform(0, 360)))
-            lathe_n(mb, [(0.0, -0.002), (s, -0.002), (s * 0.95, s * 0.25), (s * 0.62, s * 0.62), (s * 0.4, s * 0.72), (s * 0.3, s * 0.5),
+            lathe_n(mb, [(0.0, -0.004), (s, -0.004), (s * 0.95, s * 0.25), (s * 0.62, s * 0.62), (s * 0.4, s * 0.72), (s * 0.3, s * 0.5),
                          (0.0, s * 0.45)], seg=8, mat=mat, M=M)
 
 
@@ -860,12 +860,12 @@ def timber_fender(height, seed=0, wl=None):
     for z in zf:
         psweep(mb, prof, [(p[0], p[1], z) for p in path], "metal_rust", up=(0, 0, 1), closed=True)
         bev_plate(mb, [(-0.045, -0.045), (0.045, -0.045), (0.045, 0.045), (-0.045, 0.045)], 0.01, "metal_rust",
-                  M=_T(0, w + 0.009, z) @ _R("X", -90), ch=0.0015)
-        hexnut(mb, _T(0, w + 0.019, z) @ _R("X", -90), af=0.036, mat="metal_rust", stud=0.022)
+                  M=_T(0, w + 0.0085, z) @ _R("X", -90), ch=0.0015)
+        hexnut(mb, _T(0, w + 0.0185, z) @ _R("X", -90), af=0.036, mat="metal_rust", stud=0.022)
     # percebes en la franja de mareas
     if wl is not None:
         pts = []
-        for _ in range(140):
+        for _ in range(90):
             z = float(r.uniform(max(0.05, wl - 1.6), wl + 0.25))
             face = int(r.integers(0, 4))
             u = float(r.uniform(-w / 2 + 0.03, w / 2 - 0.03))
@@ -897,7 +897,7 @@ def marine_ladder(z0, z1, seed=0, standoff=0.17, brackets=None, wl=None):
         for dx in xs:
             # solera horizontal del muro al larguero, soldada al costado exterior del larguero
             sx = 1 if dx > 0 else -1
-            mb.box((dx + sx * 0.006 - (0.012 if sx < 0 else 0.0), 0.012, z - 0.025), (dx + sx * 0.006 + (0.012 if sx > 0 else 0.0),
+            mb.box((dx + sx * 0.006 - (0.012 if sx < 0 else 0.0), 0.008, z - 0.025), (dx + sx * 0.006 + (0.012 if sx > 0 else 0.0),
                    standoff + 0.025, z + 0.025), "metal_rust", bevel=0.0015)
             bev_plate(mb, [(-0.05, -0.065), (0.05, -0.065), (0.05, 0.065), (-0.05, 0.065)], 0.012, "metal_rust",
                       M=_T(dx + sx * 0.012, 0.0, z) @ _R("X", -90), ch=0.002)
@@ -968,7 +968,7 @@ def light_pole(height=9.0, seed=0, broken=False, arm=1.6):
     sueltos."""
     r = rng(seed)
     mb = PMB()
-    _rr_loft(mb, [(-0.01, 0.5, 0.5, 0.04), (0.015, 0.5, 0.5, 0.04), (0.025, 0.47, 0.47, 0.03)], "concrete", corner_n=4)
+    _rr_loft(mb, [(-0.01, 0.5, 0.5, 0.04), (0.01, 0.5, 0.5, 0.04), (0.018, 0.47, 0.47, 0.03)], "concrete", corner_n=4)
     bev_plate(mb, [(-0.22, -0.2), (-0.2, -0.22), (0.2, -0.22), (0.22, -0.2), (0.22, 0.2), (0.2, 0.22), (-0.2, 0.22), (-0.22, 0.2)],
               0.025, "metal_paint", M=_T(0, 0, 0.025), ch=0.003)
     for (x, y) in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
@@ -1002,7 +1002,7 @@ def light_pole(height=9.0, seed=0, broken=False, arm=1.6):
     yf = -Rh * math.cos(math.pi / 8)
     psweep(mb, rr_profile(0.012, 0.01, 0.003, n=2), [(x, yf - 0.004, z) for (x, z) in rr_profile(0.1, 0.36, 0.03, n=4, cy=0.75)],
            "metal_paint", up=(0, -1, 0), closed=True)
-    mb.box((-0.05, yf - 0.0165, 0.58), (0.05, yf - 0.0095, 0.92), "metal_paint", bevel=0.003)
+    mb.box((-0.05, yf - 0.0165, 0.58), (0.05, yf - 0.0085, 0.92), "metal_paint", bevel=0.003)
     for z in (0.61, 0.89):
         hexnut(mb, _T(0, yf - 0.0165, z) @ _R("X", 90), af=0.012, mat="metal_rust", washer=False, stud=0.0)
     lathe_n(mb, [(0.0, -0.004), (0.012, -0.004), (0.012, 0.02), (0.009, 0.024), (0.0, 0.025)], seg=16, mat="copper",
@@ -1081,9 +1081,9 @@ def drum(seed=0):
     weld(mb, [(0.287, 0.0, z) for z in (0.31, 0.57)], r=0.0018, mat="metal_paint")
     weld(mb, [(0.287, 0.0, z) for z in (0.62, 0.845)], r=0.0018, mat="metal_paint")
     for (x, y, rr, hex_) in ((0.17, 0.0, 0.032, True), (-0.13, 0.11, 0.017, False)):
-        lathe_n(mb, [(rr * 1.45, 0.874), (rr * 1.45, 0.879), (rr * 1.25, 0.884), (rr * 1.05, 0.884), (rr * 1.05, 0.878)], seg=24,
+        lathe_n(mb, [(rr * 1.45, 0.869), (rr * 1.45, 0.879), (rr * 1.25, 0.884), (rr * 1.05, 0.884), (rr * 1.05, 0.869)], seg=24,
                 mat="metal_paint", M=_T(x, y, 0), caps=False)
-        lathe_n(mb, [(rr * 1.05, 0.876), (rr, 0.889), (rr * 0.98, 0.892), (rr * 0.5, 0.892), (rr * 0.48, 0.886), (0.0, 0.886)],
+        lathe_n(mb, [(rr * 1.05, 0.87), (rr * 1.05, 0.876), (rr, 0.889), (rr * 0.98, 0.892), (rr * 0.5, 0.892), (rr * 0.48, 0.886), (0.0, 0.886)],
                 seg=24, mat="metal_rust", M=_T(x, y, 0), caps=False)
         if hex_:
             mb.box((x - rr * 0.42, y - rr * 0.12, 0.886), (x + rr * 0.42, y + rr * 0.12, 0.893), "metal_rust", bevel=0.001)
@@ -1217,12 +1217,12 @@ def _door_leaf(mb, M, lw, lh, r, sg, mat, open_ang=0.0):
         lathe_n(d, [(0.0, -0.035), (0.026, -0.035), (0.028, -0.025), (0.028, 0.025), (0.026, 0.035), (0.0, 0.035)], seg=24,
                 mat="metal_rust", M=_T(xb, yy, hz))
         ang = float(r.uniform(-4, 4)) if open_ang == 0 else float(r.uniform(-4, 35))
-        hp = [(xb + 0.03, yy, hz), (xb + 0.06, yy, hz)]
+        hp = [(xb + 0.018, yy, hz), (xb + 0.06, yy, hz)]
         a = math.radians(ang)
         tip = (xb + 0.06, yy - sg * 0.3 * math.cos(a), hz - 0.3 * math.sin(a))
         psweep(d, rr_profile(0.014, 0.03, 0.005), fillet([hp[0], hp[1], tip], 0.03, 5), "metal_rust", up=(0, 0, 1))
         yr = yy - sg * 0.26
-        d.box((0.07, yr - 0.02, hz - 0.035), (0.125, yr + 0.02, hz - 0.018), "metal_rust", bevel=0.004)      # retén de la manija
+        d.box((0.036, yr - 0.02, hz - 0.035), (0.125, yr + 0.02, hz - 0.018), "metal_rust", bevel=0.004)      # retén de la manija
     if sg < 0:                                                           # placa de datos remachada en la hoja izquierda
         d.box((0.044, y0 + 0.2, 1.35), (0.05, y0 + 0.5, 1.55), "aluminium", bevel=0.002)
         for (py, pz) in ((0.21, 1.36), (0.49, 1.36), (0.21, 1.54), (0.49, 1.54)):
@@ -1281,8 +1281,8 @@ def container(seed=0, open_doors=False, mat="container"):
                                                                   (0.0045, 0.152), (0.0045, hp + 0.004))], 0.002, 2)
             psweep(mb, cp2, [(a, Y, 0.0), (b, Y, 0.0)], m, up=(0, 0, 1), miter=False)
             yi0, yi1 = (Y, Y + sy * 0.006)
-            mb.box((a - 0.012, min(yi0, yi1) - 0.002, zr), (a, max(yi0, yi1) + 0.002, zr + hp + 0.01), m)
-            mb.box((b, min(yi0, yi1) - 0.002, zr), (b + 0.012, max(yi0, yi1) + 0.002, zr + hp + 0.01), m)
+            mb.box((a - 0.01, min(yi0, yi1) - 0.002, zr + 0.001), (a + 0.002, max(yi0, yi1) + 0.002, zr + hp + 0.01), m)
+            mb.box((b - 0.002, min(yi0, yi1) - 0.002, zr + 0.001), (b + 0.01, max(yi0, yi1) + 0.002, zr + hp + 0.01), m)
             if sy > 0:
                 for (xa, xb_) in ((a, a + 0.006), (b - 0.006, b)):
                     mb.box((xa, 0.006, zr), (xb_, W - 0.006, zr + hp), m, bevel=0.001)
@@ -1306,7 +1306,7 @@ def container(seed=0, open_doors=False, mat="container"):
         else:
             Ms = Matrix(((-1, 0, 0, L - 0.12), (0, -1, 0, Y - 0.04), (0, 0, 1, 0.0), (0, 0, 0, 1)))
         dside = dents(r, int(r.integers(2, 6)), 0.3, L - 0.6, 0.4, 2.3, amp=(0.008, 0.04), rad=(0.15, 0.55))
-        csheet(mb, Ms, ups, zr + 0.152, H - 0.058, m, nrows=12, t=0.002, dent=dside)
+        csheet(mb, Ms, ups, zr + 0.154, H - 0.058, m, nrows=12, t=0.002, dent=dside)
     # --- techo corrugado transversal (peralte 20, paso 209) con abolladuras hacia abajo
     upr = corr_pts(L - 0.21, pitch=0.209, depth=0.02, outer=0.06, inner=0.06, phase=0.0)
     Mr = Matrix(((1, 0, 0, 0.09), (0, 0, 1, 0.0), (0, -1, 0, H - 0.025), (0, 0, 0, 1)))      # u -> x, v -> y, peralte -> +z
@@ -1359,8 +1359,8 @@ def _hook(mb, M, scale=1.0, mat="metal_rust"):
     adelgaza, pestillo de seguridad. Plano XZ local, la caña sube por +Z desde el origen."""
     S = scale
     path = [(0.0, 0.0, 0.0), (0.0, 0.0, -0.06 * S), (0.0, 0.0, -0.12 * S)]
-    for k in range(1, 17):
-        a = math.radians(180 + 240 * k / 16)
+    for k in range(1, 33):
+        a = math.radians(180 + 240 * k / 32)
         path.append((0.09 * S + 0.09 * S * math.cos(a), 0.0, -0.2 * S + 0.09 * S * math.sin(a)))
     n = len(path)
     sc = []
@@ -1373,7 +1373,7 @@ def _hook(mb, M, scale=1.0, mat="metal_rust"):
     lathe_n(mb, [(0.0, 0.0), (0.024 * S, 0.0), (0.024 * S, 0.09 * S), (0.021 * S, 0.095 * S), (0.0, 0.095 * S)], seg=24, mat=mat, M=M)
     hexnut(mb, M @ _T(0, 0, 0.095 * S), af=0.06 * S, mat=mat, washer=True, stud=0.02 * S)
     tip = M @ Vector(path[-1])
-    p0 = M @ Vector((0.03 * S, 0.0, -0.07 * S))
+    p0 = M @ Vector((0.012 * S, 0.0, -0.07 * S))
     Ml, Ll = frame_on(p0, tip, up=tuple(M.to_3x3() @ Vector((0, 1, 0))))
     bev_plate(mb, [(0.0, -0.012 * S), (Ll * 0.92, -0.012 * S), (Ll * 0.92, 0.012 * S), (0.0, 0.012 * S)], 0.003 * S, mat,
               M=Ml @ _T(0, 0, -0.0015 * S), ch=0.0008)
@@ -1405,7 +1405,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     weld(mb, [(0.704 * math.cos(math.radians(150)), 0.704 * math.sin(math.radians(150)), z) for z in (0.55, 4.27)], r=0.005,
          mat="metal_paint")
     for k in range(8):
-        Mg = _R("Z", 22.5 + 45 * k) @ _T(0.7, 0.008, 0.52) @ _R("X", 90)
+        Mg = _R("Z", 45 * k) @ _T(0.7, 0.008, 0.52) @ _R("X", 90)
         bev_plate(mb, [(-0.02, 0.0), (0.22, 0.0), (0.22, 0.04), (0.0, 0.52), (-0.02, 0.52)], 0.016, "metal_paint", M=Mg, ch=0.002)
     # puerta de registro al pie (cara -Y): marco ovalado sobre el cilindro, hoja curva, 2 bisagras, 4 trinquetes
     def cyl_pt(x, z, rad):
@@ -1431,7 +1431,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
         lathe_n(mb, [(0.0, -0.05), (0.022, -0.05), (0.022, 0.05), (0.0, 0.05)], seg=20, mat="metal_rust", M=_T(p.x, p.y, z))
         mb.box((p.x, p.y - 0.012, z - 0.03), (p.x + 0.12, p.y + 0.004, z + 0.03), "metal_rust", bevel=0.004)
     for (x, z) in ((0.25, 1.05), (0.25, 1.45), (0.0, 1.66), (0.0, 0.84)):
-        p = cyl_pt(x, z, 0.74)
+        p = cyl_pt(x, z, 0.735 if x == 0.0 else 0.74)
         Mh, _ = frame_on(p, p + Vector((0, -1, 0)))
         lathe_n(mb, [(0.0, 0.0), (0.018, 0.0), (0.018, 0.03), (0.0, 0.03)], seg=16, mat="metal_rust", M=Mh @ _R("Y", 90))
         mb.box(tuple(p + Vector((-0.06, -0.05, -0.012))), tuple(p + Vector((0.06, -0.03, 0.012))), "metal_rust", bevel=0.005)
@@ -1447,7 +1447,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
         for (da, rr_) in ((0.0, Ro), (0.18, Ro), (0.32, Rt), (0.68, Rt), (0.82, Ro)):
             a = 2 * math.pi * (k + da) / nt
             gear.append((rr_ * math.cos(a), rr_ * math.sin(a)))
-    zb_, zt_ = 4.38, 4.50
+    zb_, zt_ = 4.381, 4.50
     ob = [mb.bm.verts.new((x, y, zb_)) for (x, y) in gear]
     ot = [mb.bm.verts.new((x, y, zt_)) for (x, y) in gear]
     ib = [mb.bm.verts.new((Ri * math.cos(2 * math.pi * k / 72), Ri * math.sin(2 * math.pi * k / 72), zb_)) for k in range(72)]
@@ -1470,22 +1470,22 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     # --- parte giratoria
     R = _T(0, 0, 4.58) @ _R("Z", yaw)
     up = PMB()
-    lathe_n(up, [(0.52, -0.08), (0.655, -0.08), (0.655, -0.005), (0.52, -0.005), (0.52, -0.08)], seg=72, mat="metal_paint",
+    lathe_n(up, [(0.52, -0.081), (0.665, -0.081), (0.665, 0.001), (0.52, 0.001), (0.52, -0.081)], seg=72, mat="metal_paint",
             caps=False)
     px0, px1, py0, py1 = -1.6, 1.6, -2.7, 3.1
     up.box((px0, py0, 0.0), (px1, py1, 0.02), "metal_rust", bevel=0.004)
-    path = [(px0 + 0.04, py0 + 0.04, -0.075), (px1 - 0.04, py0 + 0.04, -0.075), (px1 - 0.04, py1 - 0.04, -0.075),
-            (px0 + 0.04, py1 - 0.04, -0.075)]
+    path = [(px0 + 0.04, py0 + 0.04, -0.0765), (px1 - 0.04, py0 + 0.04, -0.0765), (px1 - 0.04, py1 - 0.04, -0.0765),
+            (px0 + 0.04, py1 - 0.04, -0.0765)]
     psweep(up, rr_profile(0.08, 0.15, 0.008), path, "metal_paint", up=(0, 0, 1), closed=True)
     for x in (-0.55, 0.55):
-        psweep(up, [(-0.07, -0.2), (0.07, -0.2), (0.07, -0.186), (0.006, -0.186), (0.006, -0.014), (0.07, -0.014), (0.07, 0.0),
-                    (-0.07, 0.0), (-0.07, -0.014), (-0.006, -0.014), (-0.006, -0.186), (-0.07, -0.186)],
+        psweep(up, [(-0.07, -0.2), (0.07, -0.2), (0.07, -0.186), (0.006, -0.186), (0.006, -0.014), (0.07, -0.014), (0.07, 0.001),
+                    (-0.07, 0.001), (-0.07, -0.014), (-0.006, -0.014), (-0.006, -0.186), (-0.07, -0.186)],
                [(x, py0 + 0.1, 0.0), (x, py1 - 0.1, 0.0)], "metal_paint", up=(0, 0, 1), miter=False)
     # escotilla de la escalera interior
     up.box((-0.3, -0.62, 0.02), (0.3, -0.02, 0.035), "metal_rust", bevel=0.004)
     for x in (-0.2, 0.2):
         lathe_n(up, [(0.0, -0.04), (0.012, -0.04), (0.012, 0.04), (0.0, 0.04)], seg=16, mat="metal_rust",
-                M=_T(x, -0.01, 0.04) @ _R("Y", 90))
+                M=_T(x, -0.018, 0.04) @ _R("Y", 90))
     up.tube(fillet([(-0.08, -0.55, 0.035), (-0.08, -0.55, 0.07), (0.08, -0.55, 0.07), (0.08, -0.55, 0.035)], 0.02, 4), 0.008, seg=14,
             mat="metal_rust")
     # piñón y motorreductor de giro
@@ -1502,9 +1502,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     lathe_n(up, [(0.0, 0.02), (0.17, 0.02), (0.17, 0.2), (0.15, 0.22), (0.12, 0.22), (0.12, 0.62), (0.1, 0.65), (0.0, 0.66)], seg=40,
             mat="metal_paint", M=_T(gx, gy, 0.0))
     for k in range(12):
-        a = 2 * math.pi * k / 12
-        up.box((gx + 0.118 * math.cos(a) - 0.004, gy + 0.118 * math.sin(a) - 0.004, 0.26), (gx + 0.132 * math.cos(a) + 0.004,
-               gy + 0.132 * math.sin(a) + 0.004, 0.58), "metal_paint", bevel=0.002)
+        up.box((0.112, -0.003, 0.26), (0.136, 0.003, 0.58), "metal_paint", bevel=0.0012, m=_T(gx, gy, 0.0) @ _R("Z", 30 * k))
     # --- casa de máquinas
     hx0, hx1, hy0, hy1, hz = -1.2, 1.2, 0.3, 2.3, 2.0
     for (x, y, sx, sy) in ((hx0, hy0, 1, 1), (hx1, hy0, -1, 1), (hx1, hy1, -1, -1), (hx0, hy1, 1, -1)):
@@ -1531,15 +1529,15 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     del up_c
     W_ = hx1 - hx0
     D_ = hy1 - hy0
-    wall(0.02, W_ - 0.02, 0.04, hz - 0.02, "front")
-    wall(0.02, W_ - 0.02, 0.04, hz - 0.02, "back")
+    wall(0.065, W_ - 0.065, 0.04, hz - 0.02, "front")
+    wall(0.065, W_ - 0.065, 0.04, hz - 0.02, "back")
     # oeste: puerta (u 0.7..1.5 desde y1)
-    wall(0.02, 0.7, 0.04, hz - 0.02, "west")
-    wall(1.5, D_ - 0.02, 0.04, hz - 0.02, "west")
+    wall(0.065, 0.7, 0.04, hz - 0.02, "west")
+    wall(1.5, D_ - 0.065, 0.04, hz - 0.02, "west")
     wall(0.7, 1.5, 1.95, hz - 0.02, "west")
     # este: persianas (u 0.6..1.4 desde y0, z 0.9..1.6)
-    wall(0.02, 0.6, 0.04, hz - 0.02, "east")
-    wall(1.4, D_ - 0.02, 0.04, hz - 0.02, "east")
+    wall(0.065, 0.6, 0.04, hz - 0.02, "east")
+    wall(1.4, D_ - 0.065, 0.04, hz - 0.02, "east")
     wall(0.6, 1.4, 0.04, 0.9, "east")
     wall(0.6, 1.4, 1.6, hz - 0.02, "east")
     for z in (0.04, hz - 0.03):
@@ -1554,7 +1552,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
         if i == 3 and r.random() < 0.8:
             continue                                  # una aleta perdida
         Ml = _T(hx1, 0, zz) @ _R("Y", -35)
-        up.box((-0.045, yl0 + 0.03, -0.005), (0.045, yl1 - 0.03, 0.005), "metal_paint", bevel=0.002, m=Ml)
+        up.box((-0.045, yl0 + 0.018, -0.005), (0.045, yl1 - 0.018, 0.005), "metal_paint", bevel=0.002, m=Ml)
     # puerta oeste entreabierta
     yd0, yd1 = hy1 - 1.5, hy1 - 0.7
     psweep(up, rr_profile(0.05, 0.05, 0.004), [(hx0, yd0, 0.03), (hx0, yd0, 1.95), (hx0, yd1, 1.95), (hx0, yd1, 0.03)], "metal_paint",
@@ -1628,7 +1626,7 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
                 up.join(tmp, Mx)
     up.tube(fillet([(cx0 + 0.3, cy0 - 0.02, 1.85), (cx0 + 0.42, cy0 - 0.02, 1.35)], 0.01, 2), 0.004, seg=12, mat="rubber")
     lathe_n(up, [(0.0, 0.0), (0.015, 0.0), (0.015, 0.03), (0.0, 0.035)], seg=16, mat="metal_paint",
-            M=_T(cx0 + 0.42, cy0 - 0.005, 1.35) @ _R("X", 90))
+            M=_T(cx0 + 0.42, cy0 - 0.002, 1.35) @ _R("X", 90))
     # puerta trasera de la cabina (cara y = cy1) con ventanilla
     up.box((cx0 + 0.12, cy1, 0.04), (cx0 + 0.8, cy1 + 0.035, 1.95), "metal_paint", bevel=0.006)
     psweep(up, rr_profile(0.025, 0.025, 0.006), [(cx0 + 0.22, cy1 + 0.04, 1.2), (cx0 + 0.7, cy1 + 0.04, 1.2),
@@ -1724,8 +1722,10 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
         p0 = Mbm @ Vector((boom_len + dx, -0.21, dz))
         p1 = Mbm @ Vector((boom_len + dx, 0.21, dz))
         up.tube([p0, p1], 0.035, seg=24, mat="metal_rust")
+        mid = (p0 + p1) / 2
         for q in (p0, p1):
-            hexnut(up, frame_on(q, q + (q - (p0 + p1) / 2).normalized())[0] @ _R("Y", 90), af=0.055, mat="metal_rust", stud=0.0)
+            dq = (q - mid).normalized()
+            hexnut(up, frame_on(mid + dq * 0.19, mid + dq)[0] @ _R("Y", 90), af=0.055, mat="metal_rust", stud=0.012)
     Mt = _T(tip.x, tip.y, tip.z)
     sheave(up, Mt @ _R("Z", 90), R=0.3, w=0.1)
     tipb = Mbm @ Vector((boom_len - 0.7, 0.0, 0.0))
@@ -1733,12 +1733,16 @@ def pedestal_crane(seed=0, yaw=-25.0, luff=38.0, boom_len=15.0, hook_z=-0.3):
     # aparejo de la pluma (4 ramales) y cable de izaje
     for dx in (-0.045, -0.015, 0.015, 0.045):
         rope(up, [(dx, -0.2, apex + 0.17), (tipb.x + dx, tipb.y, tipb.z + 0.16)], r=0.009)
-    hook_top = Vector((tip.x, tip.y - 0.3, hook_z + 1.2 - 4.58))
+    hook_top = Vector((tip.x, tip.y - 0.17, hook_z + 1.2 - 4.58))
     rope(up, fillet([(0.0, 0.8, hz + 0.045), (0.0, -0.05, apex - 0.02), (tip.x, tip.y + 0.05, tip.z + 0.3)], 0.15, 4), r=0.011)
-    for dx in (-0.045, 0.045):
-        rope(up, [(tip.x + dx, tip.y - 0.3, tip.z), (hook_top.x + dx, hook_top.y, hook_top.z + 0.42)], r=0.011)
-    # motón y gancho
-    Mb = _T(hook_top.x, hook_top.y, hook_top.z)
+    # dos ramales verticales: del frente de la polea de punta y del punto muerto en la cabeza, a ambos lados de la polea
+    # del motón (su eje es paralelo al de la punta)
+    rope(up, [(tip.x, tip.y - 0.3, tip.z), (hook_top.x, hook_top.y - 0.095, hook_top.z + 0.22)], r=0.011)
+    dead = Vector((tip.x, tip.y - 0.04, tip.z - 0.26))
+    rope(up, [dead + Vector((0, 0, 0.05)), (hook_top.x, hook_top.y + 0.095, hook_top.z + 0.22)], r=0.011)
+    up.tube([dead + Vector((-0.2, 0, 0.05)), dead + Vector((0.2, 0, 0.05))], 0.03, seg=24, mat="metal_rust")      # perno del punto muerto
+    # motón y gancho (girado para que su polea quede en el plano de la de punta)
+    Mb = _T(hook_top.x, hook_top.y, hook_top.z) @ _R("Z", 90)
     for sg in (-1, 1):
         bev_plate(up, round_poly([(-0.17, 0.0), (0.17, 0.0), (0.17, 0.3), (0.12, 0.44), (-0.12, 0.44), (-0.17, 0.3)], 0.05, 4), 0.02,
                   "metal_paint", M=Mb @ _T(0, sg * 0.06 + (0.01 if sg < 0 else -0.01), 0) @ _R("X", 90) @ _T(0, 0, -0.01), ch=0.003)

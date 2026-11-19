@@ -44,6 +44,7 @@ DOOR_CX = -5.40
 DX0, DX1 = DOOR_CX - DOOR_W / 2, DOOR_CX + DOOR_W / 2
 FRAME = 0.05
 PORT = (4.6, 2.6)                                   # (y, z) del puerto de cables en el muro oriente
+PORT_U = [-0.24 + 0.08 * i for i in range(7)]       # columnas de botas del puerto (a lo largo del muro, +y)
 IN_CX, IN_CY = (SH_X0 + SH_X1) / 2, (SH_Y0 + SH_Y1) / 2
 IN_L, IN_W, IN_H = SH_X1 - SH_X0 - 2 * SH_T, SH_Y1 - SH_Y0 - 2 * SH_T, Z_CEIL - Z_FLOOR
 # ------------------------------------------------------------------------------------------------------------ equipo
@@ -241,8 +242,8 @@ def roof_details(det):
         pts = cl.fillet([(x, y + 0.03, z + 0.43), (x, y + 0.06, z + 0.12), (x, y + 0.14, roof_z(y + 0.14) + 0.006),
                          (x, ye - 0.03, ze + 0.006), (x, ye + 0.008, ze - 0.03), (x, ye + 0.008, Z_CEIL - 0.07),
                          (x, yc, Z_CEIL - 0.09), (x, yc, zc), (SH_X1 - 0.03, yc, zc), (xc, yc, zc), (xc, SH_Y1 - 0.03, zc),
-                         (xc, PORT[0] + 0.30, zc), (xc + 0.03, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.20),
-                         (SH_X1 + 0.08, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.085), (SH_X1 + 0.05, PORT[0] + 0.195 - 0.13 * k, PORT[1] + 0.085)],
+                         (xc, PORT[0] + 0.30, zc), (xc + 0.03, PORT[0] + PORT_U[6], PORT[1] + 0.20 - 0.085 * k),
+                         (SH_X1 + 0.075, PORT[0] + PORT_U[6], PORT[1] + 0.085 - 0.085 * k), (SH_X1 + 0.05, PORT[0] + PORT_U[6], PORT[1] + 0.085 - 0.085 * k)],
                         0.035, 6)
         det.tube(pts, 0.0045, seg=16, mat="cable")
         cl.rtube(det, ((x + SH_X1) / 2 - 0.012, yc, zc), ((x + SH_X1) / 2 + 0.012, yc, zc), 0.014, 0.016, "plastic",
@@ -425,17 +426,22 @@ def wall_services(det, r):
         pts = cl.fillet([(SH_X1 + 0.045, py + dy, 1.24), (SH_X1 + 0.06, py + dy, 1.05), (SH_X1 + 0.06, py + dy * 0.4, Z_PAD + 0.30),
                          (SH_X1 + 0.22, py + dy * 0.2, Z_PAD + 0.05), (SH_X1 + 0.30, py + dy * 0.2, Z_PAD - 0.04)], 0.05, 6)
         det.tube(pts, 0.0055, seg=16, mat="sign_green" if k % 2 == 0 else "copper")
-    # puerto de entrada de cables (12 botas de hule de 4") con capucha
+    # puerto de entrada de cables (21 botas de hule de 3", 7 × 3: 18 troncales, 2 GPS y una libre con tapón) con capucha;
+    # un cable por bota (las botas no se comparten)
     port = cl.MB()
-    _rbox(port, (-0.28, -0.012, -0.16), (0.28, 0.0, 0.16), "galvanized", r=0.004)
-    for i in range(4):
+    _rbox(port, (-0.30, -0.012, -0.16), (0.30, 0.0, 0.16), "galvanized", r=0.004)
+    for i in range(7):
         for j in range(3):
-            u, v = -0.195 + i * 0.13, -0.085 + j * 0.085
-            port.cyl((u, -0.012, v), (u, -0.022, v), 0.040, seg=32, mat="galvanized")
-            ce.lathe(port, [(0.0, 0.0), (0.036, 0.0), (0.036, 0.020), (0.030, 0.030), (0.030, 0.052), (0.026, 0.060),
-                            (0.0, 0.060)], seg=24, mat="rubber", M=_T(u, -0.022, v) @ _Rx(90))
-            port.cyl((u, -0.040, v), (u, -0.050, v), 0.0325, seg=24, mat="steel")    # abrazadera
-    for (u, v) in ((-0.26, -0.14), (0.26, -0.14), (-0.26, 0.14), (0.26, 0.14)):
+            u, v = PORT_U[i], -0.085 + j * 0.085
+            port.cyl((u, -0.012, v), (u, -0.022, v), 0.033, seg=32, mat="galvanized")
+            if i == 6 and j == 0:                         # libre: tapón ciego de hule
+                ce.lathe(port, [(0.0, 0.0), (0.030, 0.0), (0.030, 0.016), (0.026, 0.024), (0.0, 0.026)], seg=24, mat="rubber",
+                         M=_T(u, -0.022, v) @ _Rx(90))
+                continue
+            ce.lathe(port, [(0.0, 0.0), (0.030, 0.0), (0.030, 0.018), (0.0255, 0.027), (0.0255, 0.046), (0.0225, 0.054),
+                            (0.0, 0.054)], seg=24, mat="rubber", M=_T(u, -0.022, v) @ _Rx(90))
+            port.cyl((u, -0.036, v), (u, -0.045, v), 0.0275, seg=24, mat="steel")    # abrazadera
+    for (u, v) in ((-0.28, -0.14), (0.28, -0.14), (-0.28, 0.14), (0.28, 0.14)):
         ce.hexnut(port, _T(u, -0.012, v) @ _Rx(90), d=0.008, mat="steel")
     # capucha de lámina doblada
     rain_hood(port, 0.0, 0.40, 0.68, 0.19, 0.17, screen=False)
@@ -827,19 +833,28 @@ def tower_site(det, furn, tw, an, tel, r):
         boxes = [TM @ Vector((G.x_cab + dx, 0.155, G.z_top - 1.0 + 0.42 + 0.03)) for dx in (-0.13, 0.0, 0.13)]
         nbox = [0, 0, 0]
 
-        def to_box(e, rad, mat, kind):
-            """Cola colgante e -> baja a la cama bajo la plataforma, corre hacia el centro y entra por arriba a una caja."""
+        nsec = [0, 0, 0]
+
+        def to_box(e, rad, mat, kind, sec=0, via=()):
+            """Cola colgante e -> (puntos `via`) -> baja/sube a la cama de su sector bajo la plataforma (cada sector a su altura y
+            cada cable con su carril, para que los haces de los 3 sectores no se crucen), corre hacia el centro y entra por arriba
+            a una caja."""
             e = Vector(e)
             bi = int(np.argmin([(b - e).length for b in boxes]))
             b = boxes[bi]
             k = nbox[bi]
             nbox[bi] += 1
+            q = nsec[sec]
+            nsec[sec] += 1
             ent = b + Vector(((k % 3 - 1) * 0.03, 0.0, 0.0)) + R3 @ Vector((0.0, (k // 3 - 0.5) * 0.04, 0.0))
-            zb = G.z_top - 0.30 - 0.012 * (k % 4)
+            zb = G.z_top - 0.27 - 0.034 * sec - 0.012 * (q % 3)
             c = Vector((TOWER["x"], TOWER["y"], zb))
-            mid = c + (Vector((e.x, e.y, zb)) - c) * 0.45
-            P = _sfillet([tuple(e), (e.x, e.y, zb + 0.06), (e.x, e.y, zb), tuple(mid), (ent.x, ent.y, zb), (ent.x, ent.y, ent.z + 0.05),
-                           (ent.x, ent.y, ent.z)], 0.07, 6)
+            last = Vector(via[-1]) if via else e
+            rad_ = Vector((last.x - c.x, last.y - c.y, 0.0))
+            side = Vector((-rad_.y, rad_.x, 0.0)).normalized() if rad_.length > 1e-6 else Vector((1, 0, 0))
+            mid = c + (Vector((last.x, last.y, zb)) - c) * 0.45 + side * ((q - 3) * 0.022)
+            P = _sfillet([tuple(e)] + [tuple(v) for v in via] + [(last.x, last.y, zb + (0.06 if last.z > zb else -0.06)), (last.x, last.y, zb),
+                          tuple(mid), (ent.x, ent.y, zb), (ent.x, ent.y, ent.z + 0.05), (ent.x, ent.y, ent.z)], 0.07, 6)
             det.tube(P, rad, seg=14, mat=mat)
             ce.lathe(det, [(rad + 0.004, 0.0), (rad + 0.006, 0.003), (rad + 0.006, 0.014), (rad + 0.0025, 0.020)], seg=16, mat="plastic",
                      M=_T(ent.x, ent.y, ent.z - 0.004))
@@ -850,7 +865,7 @@ def tower_site(det, furn, tw, an, tel, r):
             M0 = _T(P0.x, P0.y, 0.0) @ _Rz(_face_rot(f))
             sd = int(r.integers(1e6))
             if j % 3 == 1:                                               # AAU 5G al centro de cada sector
-                Ma = M0 @ _T(0, 0, 40.80)
+                Ma = M0 @ _T(0, 0, 41.00)                                # abrazaderas sobre la placa de cruce del pasamanos
                 det.join(an.aau(seed=sd, tilt_deg=2.0), Ma)
                 for k, e in enumerate(an.aau_tail_ends(seed=sd, tilt_deg=2.0)):
                     pe = Ma @ Vector(e)
@@ -859,7 +874,7 @@ def tower_site(det, furn, tw, an, tel, r):
                                  0.004, seg=14, mat="cable")
                         _rbox(det, tuple(M0 @ Vector((-0.02, -0.052, 40.22))), tuple(M0 @ Vector((0.02, -0.036, 40.27))), "copper", r=0.003)
                     else:
-                        to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k)
+                        to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k, sec=j // 3)
             else:                                                        # panel pasivo + RRU abajo con 4 jumpers
                 Mp = M0 @ _T(0, 0, 39.80)
                 det.join(an.panel_antenna(seed=sd, tilt_deg=4.0), Mp)
@@ -869,17 +884,36 @@ def tower_site(det, furn, tw, an, tel, r):
                 for k, rp in enumerate(an.rru_ports()):
                     det.join(an.jumper([tuple(Mr @ Vector(rp)), tuple(Mp @ Vector(pports[k]))], r=0.008,
                                        band=("sign_red", "sign_blue", "sign_green", "paint_yellow")[k]))
-                for (x, rad, mat) in ((-0.06, 0.0075, "cable"), (-0.03, 0.0035, "paint_yellow")):
+                for (x, rad, mat, xs) in ((-0.06, 0.0075, "cable", -0.165), (-0.03, 0.0035, "paint_yellow", -0.185)):
                     a0 = Mr @ Vector((x, -0.100, -0.026))
                     det.tube([tuple(a0), (a0.x, a0.y, a0.z - 0.10)], rad, seg=14, mat=mat, caps=False)
-                    to_box(Vector((a0.x, a0.y, a0.z - 0.10)), rad, mat, 0)
+                    # bajo el radio se hace a un lado (fuera de su ancho de 270 mm) antes de subir a la cama: no lo atraviesa
+                    zl = a0.z - 0.10
+                    to_box(Vector((a0.x, a0.y, zl)), rad, mat, 0, sec=j // 3,
+                           via=[tuple(Mr @ Vector((x - 0.03, -0.100, -0.126 - 0.03))), tuple(Mr @ Vector((xs, -0.100, -0.126 - 0.04)))])
         # platos de microondas (0,9 y 0,6 m) en la plataforma intermedia
         for k, d in enumerate(mounts["dish"]):
             px, py = d["pipe_pos"]
             P0 = TM @ Vector((px, py, 0.0))
             f = R3 @ Vector(d["facing"])
             Md = _T(P0.x, P0.y, d["dish_z"]) @ _Rz(_face_rot(f))
-            det.join(an.mw_dish(d=0.9 if k == 0 else 0.6, seed=int(r.integers(1e6))), Md)
+            sdd = int(r.integers(1e6))
+            try:
+                det.join(an.mw_dish(d=0.9 if k == 0 else 0.6, seed=sdd, cable=False), Md)
+            except TypeError:
+                det.join(an.mw_dish(d=0.9 if k == 0 else 0.6, seed=sdd), Md)
+                continue
+            # cable de la ODU (sale por abajo) con gaza de goteo hasta el 2.º prensaestopas de la caja de remate del tubo
+            sg = 1.0 if px > 0 else -1.0
+            am = math.atan2(py, px)
+            tv = Vector((-math.sin(am), math.cos(am), 0.0)) * sg
+            nn = Vector((math.cos(am), math.sin(am), 0.0))
+            gl = TM @ (Vector((px, py, G.z_mw + 0.15 - 0.032)) + tv * 0.075 + nn * 0.035)
+            s0 = Md @ Vector((-0.05, -0.228 + 0.029 + 0.108 * 0.45, -0.1605 - 0.026))
+            low = min(s0.z, gl.z) - 0.16
+            P = _sfillet([tuple(s0), (s0.x, s0.y, s0.z - 0.08), tuple((s0.lerp(gl, 0.5)) + Vector((0, 0, low - s0.lerp(gl, 0.5).z))),
+                          (gl.x, gl.y, gl.z - 0.07), tuple(gl)], 0.06, 6)
+            det.tube(P, 0.0045, seg=16, mat="cable")
         # baliza de obstrucción sobre su ménsula
         L0 = mounts["light"][0]["pos"]
         det.join(an.obstruction_light(mount="plate"), TM @ _T(*L0))
@@ -896,7 +930,7 @@ def tower_site(det, furn, tw, an, tel, r):
     furn.join(tel.ice_bridge(L=x_t - x_s, h=h, w=0.51, n_posts=2, n_cables=0, seed=int(r.integers(1e6))), _T(x_t, yc, 0.0) @ _Rz(180))
     _proxy_box((x_s, yc - 0.40, 0.0), (x_t, yc + 0.40, h + 0.10))
     py_, pz_ = PORT
-    boots = [(py_ - 0.195 + i * 0.13, pz_ - 0.085 + j * 0.085) for j in range(3) for i in range(4)]
+    boots = [(py_ + PORT_U[i], pz_ - 0.085 + j * 0.085) for j in range(3) for i in range(7)]
     order = sorted(range(len(cab)), key=lambda i: (cab[i]["x"], cab[i]["row"]))
     # capa sobre el puente (12 abajo y 6 encima) y, en el puerto, cada cable a la columna de botas de su lado (sin cruzarse)
     slots = []
@@ -911,9 +945,9 @@ def tower_site(det, furn, tw, an, tel, r):
     for q, i in enumerate(upper):
         place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.050, 1)
     by_y = sorted(place, key=lambda i: place[i][0])
-    cols = [[] for _ in range(4)]
+    cols = [[] for _ in range(6)]
     for q, i in enumerate(by_y):
-        cols[q * 4 // len(by_y)].append(i)
+        cols[q * 6 // len(by_y)].append(i)
     boot_of = {}
     for ci, lst in enumerate(cols):
         for m, i in enumerate(lst):
@@ -925,10 +959,8 @@ def tower_site(det, furn, tw, an, tel, r):
         yy, lay = place[i]
         zz = z_bed + c["r"] + (0.0 if lay == 0 else 0.024)
         ci, rj, dub = boot_of[i]
-        by, bz = boots[(2 - rj) * 4 + ci]
-        by += (0.013 if dub else 0.0)
-        bz += (0.011 if dub else 0.0)
-        tip = SH_X1 + 0.082
+        by, bz = boots[(2 - rj) * 7 + ci]
+        tip = SH_X1 + 0.076
         P = _sfillet([tuple(p0), (p0.x - 0.12, p0.y, p0.z), (x_t - 0.25, yy, zz), (x_s + 0.35, yy, zz), (x_s - 0.02, yy, zz),
                        (x_s - 0.10, (yy + by) / 2, min(zz, bz) - 0.16), (tip + 0.14, by, bz - 0.04), (tip + 0.05, by, bz), (tip, by, bz)],
                       0.12, 8)

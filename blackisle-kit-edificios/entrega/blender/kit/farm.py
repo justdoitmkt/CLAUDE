@@ -380,6 +380,13 @@ def _bale_ring(hy, hz, rc, n=48):
     return out
 
 
+def _mat_hay(y, z, sd):
+    """Relieve de la testa de una paca (la cara de un tajo: popotes aplastados en todas direcciones): grumos de 2-3 cm y
+    mechones de 5-8 mm, hasta ~5 mm hacia afuera."""
+    return 0.0028 * (0.5 + 0.5 * noise.noise(Vector((y * 28 + sd, z * 28, 1.7)))) + \
+        0.0018 * (0.5 + 0.5 * noise.noise(Vector((y * 75, z * 75 + sd, 4.2))))
+
+
 def hay_bale(seed=0):
     """Paca chica de 0,90 × 0,46 × 0,36 (eje largo X; medidas de paca de dos hilos 14 × 18 × 36"): cuerpo de 'tajos' (flakes)
     de 6-10 cm, cada uno con su contorno (48 puntos, esquinas de 3-4 cm), juntas hundidas 3-6 mm y onduladas, y la superficie
@@ -415,8 +422,8 @@ def hay_bale(seed=0):
         tl = tl or F["tl"]
         out = []
         for (y0, z0, ny, nz, s_) in base:
-            y = y0 * hy / (W / 2)
-            z = z0 * hz / hz0
+            y = y0 * (hy - inset) / (W / 2)                       # metido hacia el eje a escala (sin estrellas en las esquinas)
+            z = z0 * (hz - inset) / hz0
             dn = 0.0
             if nz > 0.5:                                          # cara superior: lomo entre hilos, surco del hilo
                 dn += 0.006 * (1 - min(abs(abs(y) - tw) / 0.07, 1.0)) * -1.0 + 0.004 * math.cos(PI * y / (W / 2)) ** 2
@@ -429,7 +436,6 @@ def hay_bale(seed=0):
             dn += 0.0022 * noise.noise(Vector((x * 14 + sd, s_ * 11.0, 5.3)))
             if nz < -0.5:
                 dn *= 0.25                                        # la base apoya en el piso
-            dn -= inset
             yy, zz = y + ny * dn + dy, z + nz * dn + dz
             out.append(Vector((x + tl[0] * yy + tl[1] * zz + (float(r.uniform(-xj, xj)) if xj else 0.0), yy, zz + hz0)))
         return out
@@ -438,13 +444,13 @@ def hay_bale(seed=0):
     for i in range(nfl):
         F = flk[i]
         xa, xb = xs[i], xs[i + 1]
-        if i == 0:                                                # testa: copete abombado e irregular
-            loops.append([Vector((xa - float(r.uniform(0.012, 0.02)), F["dy"] + float(r.uniform(-0.03, 0.03)),
-                                  hz0 + F["dz"] + float(r.uniform(-0.03, 0.03))))])
-            for (dx, ins) in ((0.0, 0.07), (0.004, 0.03), (0.010, 0.008)):
-                rg = ring_at(xa + dx, F, inset=ins, xj=0.004)
-                if ins > 0.05:
-                    rg = [Vector((v.x - 0.012 + 0.005 * noise.noise(Vector((v.y * 20 + sd, v.z * 20, 1.0))), v.y, v.z)) for v in rg]
+        if i == 0:                                                # testa: casi plana, apenas abombada (9 mm), irregular
+            loops.append([Vector((xa - float(r.uniform(0.009, 0.012)), F["dy"] + float(r.uniform(-0.02, 0.02)),
+                                  hz0 + F["dz"] + float(r.uniform(-0.02, 0.02))))])
+            for (dx, ins) in ((-0.009, 0.15), (-0.008, 0.12), (-0.007, 0.095), (-0.006, 0.07), (-0.004, 0.048), (-0.002, 0.03),
+                              (0.001, 0.016), (0.004, 0.007)):
+                rg = ring_at(xa + dx, F, inset=ins, xj=0.002)
+                rg = [Vector((v.x - _mat_hay(v.y, v.z, sd) * min(1.0, ins / 0.03), v.y, v.z)) for v in rg]
                 loops.append(rg)
         else:
             G = flk[i - 1]
@@ -456,13 +462,13 @@ def hay_bale(seed=0):
         loops.append(ring_at(xm, F))
         loops.append(ring_at(xb - e, F))
         if i == nfl - 1:
-            for (dx, ins) in ((-0.010, 0.008), (-0.004, 0.03), (0.0, 0.07)):
-                rg = ring_at(xb + dx, F, inset=ins, xj=0.004)
-                if ins > 0.05:
-                    rg = [Vector((v.x + 0.012 + 0.005 * noise.noise(Vector((v.y * 20 + sd, v.z * 20, 2.0))), v.y, v.z)) for v in rg]
+            for (dx, ins) in ((-0.004, 0.007), (-0.001, 0.016), (0.002, 0.03), (0.004, 0.048), (0.006, 0.07), (0.007, 0.095),
+                              (0.008, 0.12), (0.009, 0.15)):
+                rg = ring_at(xb + dx, F, inset=ins, xj=0.002)
+                rg = [Vector((v.x + _mat_hay(v.y, v.z, sd + 7.0) * min(1.0, ins / 0.03), v.y, v.z)) for v in rg]
                 loops.append(rg)
-            loops.append([Vector((xb + float(r.uniform(0.012, 0.02)), F["dy"] + float(r.uniform(-0.03, 0.03)),
-                                  hz0 + F["dz"] + float(r.uniform(-0.03, 0.03))))])
+            loops.append([Vector((xb + float(r.uniform(0.009, 0.012)), F["dy"] + float(r.uniform(-0.02, 0.02)),
+                                  hz0 + F["dz"] + float(r.uniform(-0.02, 0.02))))])
     for L_ in loops:                                              # asentada: la base se aplana contra el piso
         for v in L_:
             if v.z < 0.012:
@@ -2039,8 +2045,8 @@ def hoist(drop=2.0, seed=0):
     Rs = 0.06
     zc = zb - 0.03 - Rs - 0.012
     outline = []
-    for k in range(20):
-        a = 2 * PI * k / 20
+    for k in range(64):                                          # contorno del cachete: 64 puntos (silueta redonda)
+        a = 2 * PI * k / 64
         rx = Rs + 0.016
         rz = Rs + 0.02 + (0.012 if math.sin(a) > 0 else 0.004) * abs(math.sin(a))
         outline.append((rx * math.cos(a), rz * math.sin(a)))
@@ -2593,9 +2599,6 @@ def wire_fence(L=6.0, seed=0, brace_ends=False):
             tw_ = pa.lerp(pb, 0.5)
             tube(mb, [tuple(tw_ + Vector((0, 0.008, 0.0))), tuple(tw_ + Vector((0, 0.008, 0.0)) + (pb - pa).normalized().cross(Vector((0, 1, 0))) * 0.2)],
                  0.009, mat="wood_dark")
-            for c in (Vector((xa + sgn * 0.0, 0, 0.18)), Vector((xb, 0, zb + 0.06))):
-                for q in (-1, 1):                                # clavos de anclaje del tirante
-                    nail(mb, _T(c.x + q * 0.02, -0.075, c.z) @ _Rx(90), r=0.0045)
     tree = BVHTree.FromBMesh(pm.bm)
     mb.join(pm)
 

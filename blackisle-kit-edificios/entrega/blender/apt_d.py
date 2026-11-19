@@ -19,6 +19,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bpy  # noqa: E402,F401
+import bmesh  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import apt_builder as ab  # noqa: E402
@@ -46,7 +47,8 @@ def cfg_apt_d():
     holes = {k: [(s["x0"], s["x0"] + s["w"], s["y0"], s["y0"] + s["l"]) for s in stairs] for k in (1, 2, 3)}
     return dict(id="APT_D_4p", xs=xs, ys=ys, h=h, cells=set(), stair=stairs[0], stairs=stairs, stair_levels=set(), holes=holes,
                 slab_rects=[(xs[0], xs[-1], ys[0], ys[-1], (0.12, 0.12, 0.12, 0.12))], seed=41, loggia_depth=0.0,
-                footprint=[(xs[0] - FO, xs[-1] + FO, ys[0] - FO, ys[-1] + FO)], lookdev=dict(paint_tint=(0.60, 0.68, 0.80)))
+                footprint=[(xs[0] - FO, xs[-1] + FO, ys[0] - FO, ys[-1] + FO)], lookdev=dict(paint_tint=(0.60, 0.68, 0.80)),
+                slab_band=False)          # losas ocultas dentro del muro de panel: sin canto barrido
 
 
 # ----------------------------------------------------------------------------------------------
@@ -85,10 +87,31 @@ def facade_wall(cfg, mb, side, lv, ops_by_bay, P):
         uc = 0.5 * (o0 + o1)
         ops.append(("ac_box", (round(uc - 0.333, 4), round(uc + 0.333, 4), round(v0 - 0.596, 4), round(v0 - 0.15, 4))))
     m = ac.panel_matrix(side, a0, a1, face, z0)
-    wall_with_openings(mb, L, H, TW, [o for _, o in ops], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
-    p = dict(side=side, line=0, bay=-1, level=lv, a0=a0, a1=a1, L=L, z0=z0, H=H, face=face, recess=0.0, m=m, ops=ops, tag="panel")
+    keep = _joint_keepouts(cfg, side, a0, a1, lv, coords)
+    patches, pr = ab._wall_patches(cfg, side, ("w", lv), L, H, [o for _, o in ops] + keep, PATCH_D.get(side, 0.0))
+    wall_with_openings(mb, L, H, TW, [o for _, o in ops] + [q[1:] for q in patches], mat_out="plaster", mat_in="plaster",
+                       mat_reveal="concrete", m=m)
+    for q in patches:
+        ab.patch_fill(mb, m, q, TW, pr, filler="concrete", lip=0.02, mat_back="plaster")
+    p = dict(side=side, line=0, bay=-1, level=lv, a0=a0, a1=a1, L=L, z0=z0, H=H, face=face, recess=0.0, m=m, ops=ops, tag="panel",
+             patches=patches)
     P.append(p)
     return p
+
+
+PATCH_D = {"front": 2.2, "back": 2.6, "west": 0.8, "east": 0.8}   # recubrimiento caído con la malla a la vista, por muro
+
+
+def _joint_keepouts(cfg, side, a0, a1, lv, coords):
+    """Bandas (u0, u1, v0, v1) de las juntas de panel y del zócalo: ahí no se abre parche (el cordón de sellado flotaría)."""
+    out = []
+    for c in coords[1:-1]:
+        u = (a1 - c) if side in ("back", "west") else (c - a0)
+        out.append((u - 0.05, u + 0.05, 0.0, 99.0))
+    if lv == 0:
+        out.append((-1.0, 99.0, 0.0, 0.62))          # zócalo y junta de PB
+        out.append((-1.0, 99.0, 2.2, 99.0))          # marquesinas, arbotantes y acometida
+    return out
 
 
 def vent_grid(cfg, lv, side, center_u, cols=2, rows=4, s=0.2, gap=0.12, z_mid=1.45):
@@ -120,9 +143,14 @@ def side_wall(cfg, mb, side, lv, P):
     if lv > 0:
         ops.append(("window_small", (round(uw - 0.45, 4), round(uw + 0.45, 4), 1.1, 1.9)))
     m = ac.panel_matrix(side, a0, a1, face, zl[lv])
-    wall_with_openings(mb, L, H, TW, [o for _, o in ops], mat_out="plaster", mat_in="plaster", mat_reveal="concrete", m=m)
+    keep = _joint_keepouts(cfg, side, a0, a1, lv, ys)
+    patches, pr = ab._wall_patches(cfg, side, ("s", lv), L, H, [o for _, o in ops] + keep, PATCH_D.get(side, 0.0))
+    wall_with_openings(mb, L, H, TW, [o for _, o in ops] + [q[1:] for q in patches], mat_out="plaster", mat_in="plaster",
+                       mat_reveal="concrete", m=m)
+    for q in patches:
+        ab.patch_fill(mb, m, q, TW, pr, filler="concrete", lip=0.02, mat_back="plaster")
     P.append(dict(side=side, line=0, bay=-1, level=lv, a0=a0, a1=a1, L=L, z0=zl[lv], H=H, face=face, recess=0.0, m=m, ops=ops,
-                  tag="panel"))
+                  tag="panel", patches=patches))
 
 
 FRONT = {0: {0: [("window", 0.5)], 1: [("lobby_door", 0.5)], 2: [("window", 0.5)], 3: [("window", 0.5)], 4: [("lobby_door", 0.5)],
@@ -161,6 +189,17 @@ def _minus(a, b, holes):
     return segs
 
 
+def _bead(mb, p0, p1, normal, w=0.035, hgt=0.011):
+    """Cordón de sellador de junta de panel (3,5 cm, abombado 11 mm, cantos que mueren en el panel; empotrado 2 mm)
+    de p0 a p1 sobre la cara del muro cuya normal exterior es `normal`."""
+    h = w / 2
+    prof = [(-h, -0.002), (-h, 0.0015), (-h + 0.004, 0.005), (-h + 0.009, 0.0085), (-0.004, hgt - 0.0005), (0.0, hgt),
+            (0.004, hgt - 0.0005), (h - 0.009, 0.0085), (h - 0.004, 0.005), (h, 0.0015), (h, -0.002)]
+    P0, P1 = Vector(p0), Vector(p1)
+    with mb.soft():
+        mb.sweep(prof, [P0, P1], mat="mortar", closed_profile=True, normal=normal)
+
+
 def build_joints(cfg, shell, P):
     """Cordones de sellado de las juntas de panel (verticales en cada módulo, horizontales en cada losa) y zócalo corrido."""
     xs, ys = cfg["xs"], cfg["ys"]
@@ -171,18 +210,18 @@ def build_joints(cfg, shell, P):
     for side, coords, face, sgn in (("front", xs, ys[0] - FO, -1), ("back", xs, ys[-1] + FO, 1)):
         for x in coords[1:-1]:
             y0, y1 = sorted((face, face + sgn * jp))
-            shell.box((x - jw / 2, y0, 0.5), (x + jw / 2, y1, top), "mortar")
+            _bead(shell, (x, face, 0.5), (x, face, top), (0, sgn, 0))
             n += 1
         p0 = next(p for p in P if p["side"] == side and p["level"] == 0)
         to_x = (lambda u: p0["a0"] + u) if side == "front" else (lambda u: p0["a1"] - u)
         doors = [tuple(sorted((to_x(o[0]), to_x(o[1])))) for k, o in p0["ops"] if "door" in k]
         for z in zl[1:-1]:
             y0, y1 = sorted((face, face + sgn * jp))
-            shell.box((coords[0] - FO, y0, z - jw / 2), (coords[-1] + FO, y1, z + jw / 2), "mortar")
+            _bead(shell, (coords[0] - FO, face, z), (coords[-1] + FO, face, z), (0, sgn, 0))
             n += 1
         y0, y1 = sorted((face, face + sgn * jp))
         for a, b in _minus(coords[0] - FO, coords[-1] + FO, doors):                  # junta de PB, cortada en las puertas
-            shell.box((a, y0, zl[0] + 0.45 - jw / 2), (b, y1, zl[0] + 0.45 + jw / 2), "mortar")
+            _bead(shell, (a, face, zl[0] + 0.45), (b, face, zl[0] + 0.45), (0, sgn, 0))
             n += 1
         # zócalo (no pasa por las puertas: el umbral queda al nivel del escalón de llegada)
         y0, y1 = sorted((face, face + sgn * 0.03))
@@ -191,11 +230,11 @@ def build_joints(cfg, shell, P):
     for side, face, sgn in (("west", xs[0] - FO, -1), ("east", xs[-1] + FO, 1)):
         for y in ys[1:-1]:
             x0, x1 = sorted((face, face + sgn * jp))
-            shell.box((x0, y - jw / 2, 0.5), (x1, y + jw / 2, top), "mortar")
+            _bead(shell, (face, y, 0.5), (face, y, top), (sgn, 0, 0))
             n += 1
         for z in zl[1:-1]:
             x0, x1 = sorted((face, face + sgn * jp))
-            shell.box((x0, ys[0] - FO, z - jw / 2), (x1, ys[-1] + FO, z + jw / 2), "mortar")
+            _bead(shell, (face, ys[0] - FO, z), (face, ys[-1] + FO, z), (sgn, 0, 0))
             n += 1
         x0, x1 = sorted((face, face + sgn * 0.03))
         shell.box((x0, ys[0] - FO, -0.05), (x1, ys[-1] + FO, 0.5), "concrete", bevel=0.008, seg=1)
@@ -212,12 +251,27 @@ def build_joints(cfg, shell, P):
 def canopy(shell, x0, x1, face, sgn, z, depth=1.1):
     """Marquesina de concreto en voladizo sobre ménsulas de lámina, con escalón de llegada."""
     y0, y1 = sorted((face, face + sgn * depth))
-    shell.box((x0, y0, z), (x1, y1, z + 0.12), "concrete", bevel=0.012, seg=2)
+    # losa: núcleo + canto barrido con goterón en las 3 orillas libres
+    w = ab.SLAB_BAND
+    yo = face + sgn * depth
+    shell.box((x0 + w, min(face, yo - sgn * w), z), (x1 - w, max(face, yo - sgn * w), z + 0.12), "concrete", bevel=0.0)
+    path = [(x0, face), (x0, yo), (x1, yo), (x1, face)] if sgn < 0 else [(x1, face), (x1, yo), (x0, yo), (x0, face)]
+    ab.slab_band(shell, path, False, z + 0.12, t=0.12)
     yb0, yb1 = sorted((face + sgn * (depth - 0.08), face + sgn * depth))
     shell.box((x0, yb0, z + 0.12), (x1, yb1, z + 0.30), "concrete", bevel=0.008, seg=1)
-    for x in (x0 + 0.15, x1 - 0.15):
-        a, b = sorted((face, face + sgn * (depth - 0.15)))
-        shell.box((x - 0.04, a, z - 0.35), (x + 0.04, b, z), "metal_paint", bevel=0.004, seg=1)
+    for x in (x0 + 0.15, x1 - 0.15):              # ménsula: cartabón de placa de 3/8" con placa base y 4 taquetes
+        L = depth - 0.15
+        tri = MB()
+        tri.plate([(0.0, 0.0), (sgn * L, 0.0), (sgn * (L - 0.03), -0.03), (sgn * 0.06, -0.33), (0.0, -0.35)], 0.0095, "metal_paint",
+                  m=Matrix(((0, 0, 1, x - 0.00475), (1, 0, 0, face), (0, 1, 0, z - 0.0005), (0, 0, 0, 1))))
+        bmesh.ops.bevel(tri.bm, geom=list(tri.bm.edges), offset=0.0015, segments=1, affect="EDGES", clamp_overlap=True)
+        shell.join(tri)
+        a, b = sorted((face, face + sgn * 0.008))
+        shell.box((x - 0.06, a, z - 0.38), (x + 0.06, b, z - 0.002), "metal_paint", bevel=0.002, seg=1)
+        for zz in (z - 0.33, z - 0.05):
+            for dx in (-0.035, 0.035):
+                yb = face + sgn * 0.008
+                shell.cyl((x + dx, yb, zz), (x + dx, yb + sgn * 0.009, zz), 0.0095, seg=6, mat="steel")
     s0, s1 = sorted((face, face + sgn * 0.9))
     shell.box((x0 + 0.1, s0, 0.0), (x1 - 0.1, s1, GROUND), "concrete", bevel=0.01, seg=1)
 
@@ -277,11 +331,7 @@ def build_balconies(cfg, shell, det):
             shell.join(circ.balcony_slab(w=w, d=d, t=0.15, seed=int(r.integers(1e6)), spalled=0.8 if broken else 0.08), M)
             zt = zl[lv]
             # antepecho de lámina corrugada pintada al frente + barandal de tubo a los lados
-            par = MB()
-            par.box((0.04, -d + 0.03, 0.02), (w - 0.04, -d + 0.06, 0.95), "metal_paint")
-            for k in range(int((w - 0.08) / 0.08)):
-                x = 0.06 + k * 0.08
-                par.box((x, -d + 0.015, 0.03), (x + 0.03, -d + 0.03, 0.94), "metal_paint")
+            par = corrugated_parapet(w, d, seed=int(r.integers(1e6)))
             if broken:
                 par = MB()                                         # antepecho arrancado: queda el barandal doblado
             det.join(par, M @ _T(0, 0, 0.15))
@@ -294,6 +344,46 @@ def build_balconies(cfg, shell, det):
             det.join(sides, M @ _T(0, 0, 0.15))
             n += 1
     return n
+
+
+def corrugated_parapet(w, d, seed=0, pitch=0.0762, depth=0.019, t=0.0006):
+    """Antepecho de balcón: lámina acanalada (paso 76,2 mm, peralte 19 mm, calibre ~0,6 mm) entre un ángulo de 1 1/2"
+    abajo y un pasamanos de tubo Ø 1 1/4" arriba, con 2 o 3 abolladuras. Local del balcón: frente en y = -d, x 0..w."""
+    r = rng(seed)
+    mb = MB()
+    x0, x1 = 0.04, w - 0.04
+    z0, z1 = 0.05, 0.90
+    yc = -d + 0.035
+    nx = int((x1 - x0) / pitch * 10)
+    zs = [z0 + (z1 - z0) * k / 8 for k in range(9)]
+    dents = [(float(r.uniform(x0 + 0.2, x1 - 0.2)), float(r.uniform(0.25, 0.75)), float(r.uniform(0.06, 0.16)), float(r.uniform(0.008, 0.02)))
+             for _ in range(int(r.integers(2, 4)))]
+
+    def Y(x, z):
+        y = yc + depth / 2 * math.sin(2 * math.pi * (x - x0) / pitch)
+        for (cx, cz, rad, dep) in dents:
+            y += dep * math.exp(-((x - cx) ** 2 + (z - cz) ** 2) / (rad * rad))
+        return y
+    F = [[mb.bm.verts.new((x0 + (x1 - x0) * i / nx, Y(x0 + (x1 - x0) * i / nx, z), z)) for z in zs] for i in range(nx + 1)]
+    B = [[mb.bm.verts.new((v.co.x, v.co.y + t, v.co.z)) for v in col] for col in F]
+    with mb.soft():
+        for i in range(nx):
+            for j in range(len(zs) - 1):
+                mb.face([F[i][j], F[i + 1][j], F[i + 1][j + 1], F[i][j + 1]], "metal_paint")
+                mb.face([B[i][j], B[i][j + 1], B[i + 1][j + 1], B[i + 1][j]], "metal_paint")
+        for i in range(nx):
+            mb.face([F[i][0], B[i][0], B[i + 1][0], F[i + 1][0]], "metal_paint")
+            mb.face([F[i][-1], F[i + 1][-1], B[i + 1][-1], B[i][-1]], "metal_paint")
+        for j in range(len(zs) - 1):
+            mb.face([F[0][j], F[0][j + 1], B[0][j + 1], B[0][j]], "metal_paint")
+            mb.face([F[-1][j], B[-1][j], B[-1][j + 1], F[-1][j + 1]], "metal_paint")
+    # ángulo inferior (38 × 38 × 3 mm) y pasamanos de tubo con tapas
+    mb.box((x0 - 0.01, yc - 0.03, z0 - 0.04), (x1 + 0.01, yc - 0.027, z0 + 0.0), "metal_paint", bevel=0.001, seg=1)
+    mb.box((x0 - 0.01, yc - 0.03, z0 - 0.04), (x1 + 0.01, yc + 0.008, z0 - 0.037), "metal_paint", bevel=0.001, seg=1)
+    mb.cyl((x0 - 0.02, yc, z1 + 0.025), (x1 + 0.02, yc, z1 + 0.025), 0.0167, seg=24, mat="metal_paint")
+    for xx in (x0 + 0.3, (x0 + x1) / 2, x1 - 0.3):           # grapas que sujetan la lámina al pasamanos
+        mb.box((xx - 0.012, yc - 0.018, z1 - 0.01), (xx + 0.012, yc + 0.018, z1 + 0.012), "metal_paint", bevel=0.002, seg=1)
+    return mb
 
 
 def roof_dims(cfg):
@@ -413,8 +503,13 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
     for lv in (1, 2, 3):
         xc = 0.5 * (xs[2] + xs[3])
         posts = MB()                              # dos postes de tubo sobre los barandales laterales del balcón
-        for x in (xc - 1.08, xc + 1.08):
-            posts.box((x - 0.02, ys[0] - FO - 0.62, zl[lv]), (x + 0.02, ys[0] - FO - 0.58, zl[lv] + 2.05), "metal_rust", bevel=0.004, seg=1)
+        for x in (xc - 1.08, xc + 1.08):          # tubo de 1 1/2" (Ø 48 mm) con placa base atornillada y tapa
+            yy = ys[0] - FO - 0.60
+            posts.cyl((x, yy, zl[lv] + 0.006), (x, yy, zl[lv] + 2.05), 0.024, seg=24, mat="metal_rust")
+            posts.box((x - 0.06, yy - 0.06, zl[lv] + 0.0005), (x + 0.06, yy + 0.06, zl[lv] + 0.0065), "metal_rust", bevel=0.002, seg=1)
+            posts.cyl((x, yy, zl[lv] + 2.05), (x, yy, zl[lv] + 2.056), 0.026, seg=24, mat="metal_rust")
+            for (dx, dy) in ((-0.042, -0.042), (0.042, -0.042), (0.042, 0.042), (-0.042, 0.042)):
+                posts.cyl((x + dx, yy + dy, zl[lv] + 0.0065), (x + dx, yy + dy, zl[lv] + 0.012), 0.0065, seg=6, mat="metal_rust")
         add("laundry_post", posts, Matrix())
         add("laundry_line", sv.laundry_line(length=2.12, seed=int(r.integers(1e6)), detail=near if lv == 1 else far),
             _T(xc - 1.06, ys[0] - FO - 0.6, zl[lv] + 1.9))
@@ -444,7 +539,7 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
     return n
 
 
-def dress_damage(cfg, shell, det, inter, skirt, detail="low"):
+def dress_damage(cfg, shell, det, inter, skirt, detail="high"):
     from kit import damage as dm
     r = rng(cfg["seed"] + 606)
     zl = level_z(cfg)
