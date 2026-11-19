@@ -879,3 +879,26 @@ Cifras finales del kit UE5 (triángulos por parte):
 - MIL_1_almacen: Estructura 166 010 · Detalle 1 962 145 · Mobiliario 2 972 157 · Perímetro 3 241 247 · Carga 2 836 496 ·
   Malla 3 349 518 · Vidrio 22 608 · Colisión 73 538.
 - MIL_2_avanzada: Detalle 1 130 036 · Mobiliario 1 739 503 · Perímetro 788 772 · Carga 1 127 859 · Vidrio 28 584 · Colisión 390.
+
+## Kit completo rehorneado con el depurador corregido (2026-11-19)
+Los 11 modelos restantes se rehornearon y exportaron (todos `OK`, sin observaciones del validador). Depurador viejo → nuevo
+(caras borradas, m² borrados, caras hundidas); la diferencia son relieves que antes se perdían:
+| Modelo | Viejo | Nuevo |
+|---|---|---|
+| HOS_1_pueblo | 13 543 · 70,8 m² · 978 | 12 094 · 32,9 m² · 744 (≈ 38 m² de relieves: zoclos, placas, letreros) |
+| COM_1_antena | 2 266 · 3,6 m² · 541 | 677 · 1,5 m² · 222 (p. ej. la cara blanca del NO TRESPASSING de la malla) |
+| GRA_1_tienda | 1 534 · 13,1 m² · 1 087 | 762 · 12,0 m² · 932 |
+| MUE_1_carga | 416 · 8,9 m² · 614 | 378 · 8,9 m² · 511 |
+| APT_A_5p | 253 · 2,8 m² · 278 | 88 · 2,8 m² · 138 |
+| APT_B_4p | 201 · 0,5 m² · 254 | 64 · 0,4 m² · 115 |
+| APT_C_3p | 562 · 1,9 m² · 231 | 285 · 1,6 m² · 120 |
+| APT_D_4p | 502 · 1,4 m² · 454 | 175 · 0,9 m² · 292 |
+| CAB_1_tablones | 95 · 0,28 m² · 171 | 58 · 0,21 m² · 133 |
+| CAB_2_pilotes | 67 · 0,19 m² · 107 | 31 · 0,09 m² · 60 |
+| CAB_3_ladrillo | 257 · 0,19 m² · 112 | 92 · 0,10 m² · 99 |
+- Las cabañas no horneaban desde el 12-11 (`KeyError: 'xs'`: los límites del panel de grafiti se calculaban aunque el modelo no
+  llevara panel); corregido en `bake_apt.py`.
+- Vistas UE5 de los 11 regeneradas y comparadas contra las anteriores (diferencia media < 1 % de píxeles en casi todas; las
+  mayores son relieves recuperados). La vista exterior del hospital que estaba en el repo era la primera texturizada (antes de
+  "pintura mantenida" y "herrería pintada"); el ZIP entregado ya tenía el acabado limpio, solo la imagen estaba vieja.
+- ZIP de los 13 modelos y de `comun` regenerados y verificados (`unzip -t`).
