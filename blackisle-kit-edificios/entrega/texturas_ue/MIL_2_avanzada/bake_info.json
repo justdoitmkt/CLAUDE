@@ -1,5 +1,5 @@
 {
- "tris": 4778285,
+ "tris": 4806301,
  "mem_mb": 218.1,
  "materials": [
   "BLK_aluminium",
@@ -23,6 +23,7 @@
   "BLK_plastic",
   "BLK_plywood",
   "BLK_polymer",
+  "BLK_rack_orange",
   "BLK_rubber",
   "BLK_sand",
   "BLK_sandbag",

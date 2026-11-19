@@ -1566,7 +1566,7 @@ def generator_power(GX, GY):
                    bevel=0.002)
     # varilla de tierra con conector de bellota y cable verde al borne GROUND (cara +X, 0,25 m hacia -y)
     xr_, yr_ = GX + 1.05, GY - 0.45
-    mb.cyl((xr_, yr_, -0.30), (xr_, yr_, 0.15), 0.008, seg=24, mat="copper")
+    mb.cyl((xr_, yr_, -0.15), (xr_, yr_, 0.15), 0.008, seg=24, mat="copper")     # lo enterrado no se modela completo
     ce.lathe(mb, [(0.0, 0.0), (0.016, 0.0), (0.018, 0.012), (0.017, 0.03), (0.011, 0.045), (0.0, 0.048)], seg=24, mat="brass",
              M=_T(xr_, yr_, 0.09))
     ce.hexnut(mb, _T(xr_ + 0.017, yr_, 0.115) @ _Ry(90), d=0.012, mat="brass")
