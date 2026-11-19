@@ -1,6 +1,6 @@
 {
  "kit": "BLACKISLE · edificios y cabañas para Unreal Engine 5",
- "version_repo": "cf0d87c",
+ "version_repo": "4fe96e7",
  "unidades": "Los GLB están en metros (glTF): el importador de Unreal los pasa a centímetros (x100).",
  "ejes": "Blender: z arriba, fachada principal hacia -y. La conversión de ejes la hace el importador glTF; comun/geometria/SM_BLK_Ejes.glb (caja de 1,0 x 0,5 x 0,25 m en +x, +y, +z de Blender) dice a dónde fue cada eje.",
  "partes": {
@@ -1193,7 +1193,7 @@
     "Estructura": {
      "nombre": "SM_APT_A_5p_Estructura",
      "archivo": "modelos/APT_A_5p/SM_APT_A_5p_Estructura.glb",
-     "triangulos": 401605,
+     "triangulos": 401736,
      "ranuras": [
       "APT_A_5p_walls_main",
       "APT_A_5p_walls_rest",
@@ -1214,12 +1214,12 @@
       "BLK_tile",
       "BLK_mortar"
      ],
-     "mib": 24.55
+     "mib": 24.56
     },
     "Detalle": {
      "nombre": "SM_APT_A_5p_Detalle",
      "archivo": "modelos/APT_A_5p/SM_APT_A_5p_Detalle.glb",
-     "triangulos": 375730,
+     "triangulos": 375880,
      "ranuras": [
       "BLK_concrete",
       "BLK_aluminium",
@@ -1234,7 +1234,7 @@
       "BLK_wood_dark",
       "BLK_brick"
      ],
-     "mib": 22.47
+     "mib": 22.48
     },
     "Escombro": {
      "nombre": "SM_APT_A_5p_Escombro",
@@ -1251,7 +1251,7 @@
     "Vidrio": {
      "nombre": "SM_APT_A_5p_Vidrio",
      "archivo": "modelos/APT_A_5p/SM_APT_A_5p_Vidrio.glb",
-     "triangulos": 37749,
+     "triangulos": 37751,
      "ranuras": [
       "BLK_glass"
      ],
@@ -1260,11 +1260,11 @@
     "Colision": {
      "nombre": "SM_APT_A_5p_Colision",
      "archivo": "modelos/APT_A_5p/SM_APT_A_5p_Colision.glb",
-     "triangulos": 138477,
+     "triangulos": 138960,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 6.27
+     "mib": 6.3
     }
    },
    "texturas": {
@@ -1472,6 +1472,21 @@
     ],
     "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
    },
+   "medidas_estructura_m": {
+    "x": 16.293,
+    "y": 12.765,
+    "z": 18.381,
+    "min": [
+     -8.147,
+     -6.383,
+     -0.034
+    ],
+    "max": [
+     8.146,
+     6.383,
+     18.347
+    ]
+   },
    "comprobaciones": {
     "Estructura_presente": true,
     "Estructura_ranuras": true,
@@ -1496,7 +1511,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 57.28,
+   "mib_total": 57.33,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "pórtico de concreto con la entrada de PB entre cortinas metálicas, logias con barandal"
@@ -1528,7 +1543,7 @@
     "Estructura": {
      "nombre": "SM_APT_B_4p_Estructura",
      "archivo": "modelos/APT_B_4p/SM_APT_B_4p_Estructura.glb",
-     "triangulos": 307012,
+     "triangulos": 307116,
      "ranuras": [
       "APT_B_4p_walls_main",
       "APT_B_4p_walls_rest",
@@ -1554,7 +1569,7 @@
     "Detalle": {
      "nombre": "SM_APT_B_4p_Detalle",
      "archivo": "modelos/APT_B_4p/SM_APT_B_4p_Detalle.glb",
-     "triangulos": 400277,
+     "triangulos": 400407,
      "ranuras": [
       "BLK_metal_paint",
       "BLK_metal_rust",
@@ -1570,7 +1585,7 @@
       "BLK_sand",
       "BLK_brick"
      ],
-     "mib": 22.62
+     "mib": 22.63
     },
     "Escombro": {
      "nombre": "SM_APT_B_4p_Escombro",
@@ -1587,7 +1602,7 @@
     "Vidrio": {
      "nombre": "SM_APT_B_4p_Vidrio",
      "archivo": "modelos/APT_B_4p/SM_APT_B_4p_Vidrio.glb",
-     "triangulos": 26674,
+     "triangulos": 26677,
      "ranuras": [
       "BLK_glass"
      ],
@@ -1596,11 +1611,11 @@
     "Colision": {
      "nombre": "SM_APT_B_4p_Colision",
      "archivo": "modelos/APT_B_4p/SM_APT_B_4p_Colision.glb",
-     "triangulos": 93379,
+     "triangulos": 93542,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 4.23
+     "mib": 4.24
     }
    },
    "texturas": {
@@ -1778,6 +1793,21 @@
     ],
     "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
    },
+   "medidas_estructura_m": {
+    "x": 16.293,
+    "y": 12.378,
+    "z": 15.064,
+    "min": [
+     -8.146,
+     -7.195,
+     -0.031
+    ],
+    "max": [
+     8.146,
+     5.182,
+     15.034
+    ]
+   },
    "comprobaciones": {
     "Estructura_presente": true,
     "Estructura_ranuras": true,
@@ -1802,7 +1832,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 47.97,
+   "mib_total": 47.99,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "galerías de acceso con balaustrada y el pórtico con marquesina"
@@ -1834,7 +1864,7 @@
     "Estructura": {
      "nombre": "SM_APT_C_3p_Estructura",
      "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Estructura.glb",
-     "triangulos": 332622,
+     "triangulos": 333778,
      "ranuras": [
       "APT_C_3p_walls_main",
       "APT_C_3p_walls_rest",
@@ -1855,12 +1885,12 @@
       "BLK_tile",
       "BLK_mortar"
      ],
-     "mib": 18.55
+     "mib": 18.62
     },
     "Detalle": {
      "nombre": "SM_APT_C_3p_Detalle",
      "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Detalle.glb",
-     "triangulos": 216354,
+     "triangulos": 216433,
      "ranuras": [
       "BLK_concrete",
       "BLK_aluminium",
@@ -1893,7 +1923,7 @@
     "Vidrio": {
      "nombre": "SM_APT_C_3p_Vidrio",
      "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Vidrio.glb",
-     "triangulos": 27544,
+     "triangulos": 27546,
      "ranuras": [
       "BLK_glass"
      ],
@@ -1902,11 +1932,11 @@
     "Colision": {
      "nombre": "SM_APT_C_3p_Colision",
      "archivo": "modelos/APT_C_3p/SM_APT_C_3p_Colision.glb",
-     "triangulos": 84039,
+     "triangulos": 85074,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 3.64
+     "mib": 3.69
     }
    },
    "texturas": {
@@ -1983,29 +2013,34 @@
      5.422
     ],
     [
-     3.072,
-     4.416,
-     8.394
+     2.958,
+     1.054,
+     8.489
     ],
     [
-     0.037,
-     4.474,
-     8.405
+     0.004,
+     4.463,
+     8.491
     ],
     [
-     2.578,
-     -3.431,
-     8.574
+     3.972,
+     4.453,
+     8.587
     ],
     [
-     2.573,
-     -0.035,
-     8.517
+     2.426,
+     -3.432,
+     8.569
     ],
     [
-     -4.084,
-     1.018,
-     8.506
+     -4.382,
+     0.977,
+     8.51
+    ],
+    [
+     -0.481,
+     -4.441,
+     8.436
     ]
    ],
    "medidas_m": {
@@ -2034,6 +2069,21 @@
     ],
     "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
    },
+   "medidas_estructura_m": {
+    "x": 13.475,
+    "y": 13.735,
+    "z": 11.657,
+    "min": [
+     -6.737,
+     -6.738,
+     -0.032
+    ],
+    "max": [
+     6.738,
+     6.997,
+     11.625
+    ]
+   },
    "comprobaciones": {
     "Estructura_presente": true,
     "Estructura_ranuras": true,
@@ -2058,7 +2108,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 37.6,
+   "mib_total": 37.72,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "hastial del ala sur con la cortina metálica de PB y 'Mi Vida Loca'"
@@ -2090,7 +2140,7 @@
     "Estructura": {
      "nombre": "SM_APT_D_4p_Estructura",
      "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Estructura.glb",
-     "triangulos": 464824,
+     "triangulos": 465512,
      "ranuras": [
       "APT_D_4p_walls_main",
       "APT_D_4p_walls_rest",
@@ -2111,12 +2161,12 @@
       "BLK_wood_grey",
       "BLK_tile"
      ],
-     "mib": 26.28
+     "mib": 26.33
     },
     "Detalle": {
      "nombre": "SM_APT_D_4p_Detalle",
      "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Detalle.glb",
-     "triangulos": 244812,
+     "triangulos": 244886,
      "ranuras": [
       "BLK_concrete",
       "BLK_wood",
@@ -2130,7 +2180,7 @@
       "BLK_cable",
       "BLK_wood_dark"
      ],
-     "mib": 15.04
+     "mib": 15.05
     },
     "Escombro": {
      "nombre": "SM_APT_D_4p_Escombro",
@@ -2147,20 +2197,20 @@
     "Vidrio": {
      "nombre": "SM_APT_D_4p_Vidrio",
      "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Vidrio.glb",
-     "triangulos": 26963,
+     "triangulos": 27305,
      "ranuras": [
       "BLK_glass"
      ],
-     "mib": 1.91
+     "mib": 1.93
     },
     "Colision": {
      "nombre": "SM_APT_D_4p_Colision",
      "archivo": "modelos/APT_D_4p/SM_APT_D_4p_Colision.glb",
-     "triangulos": 140585,
+     "triangulos": 140987,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 6.1
+     "mib": 6.13
     }
    },
    "texturas": {
@@ -2242,24 +2292,29 @@
      8.159
     ],
     [
-     -6.484,
-     -1.59,
-     11.199
+     3.841,
+     0.435,
+     11.037
     ],
     [
-     3.905,
-     0.456,
-     11.16
+     6.409,
+     -1.612,
+     11.247
     ],
     [
-     1.293,
-     2.431,
-     11.096
+     1.381,
+     2.557,
+     11.095
     ],
     [
-     -4.113,
-     2.569,
-     11.237
+     -4.005,
+     2.941,
+     11.202
+    ],
+    [
+     -1.563,
+     -0.603,
+     11.161
     ]
    ],
    "medidas_m": {
@@ -2288,6 +2343,21 @@
     ],
     "nota": "ejes de Blender (z arriba, metros); fachada principal hacia -y; pivote = centro de la planta a nivel del suelo. Sin terreno: el edificio apoya en z = 0."
    },
+   "medidas_estructura_m": {
+    "x": 17.525,
+    "y": 10.732,
+    "z": 15.006,
+    "min": [
+     -8.762,
+     -5.379,
+     -0.05
+    ],
+    "max": [
+     8.763,
+     5.353,
+     14.956
+    ]
+   },
    "comprobaciones": {
     "Estructura_presente": true,
     "Estructura_ranuras": true,
@@ -2312,7 +2382,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 49.82,
+   "mib_total": 49.93,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "balcones colgados y las dos puertas de PB con marquesina"
@@ -2762,7 +2832,7 @@
     "Detalle": {
      "nombre": "SM_MUE_1_carga_Detalle",
      "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Detalle.glb",
-     "triangulos": 420172,
+     "triangulos": 420298,
      "ranuras": [
       "BLK_concrete",
       "BLK_metal_rust",
@@ -2780,7 +2850,7 @@
       "BLK_paper",
       "BLK_brick"
      ],
-     "mib": 22.5
+     "mib": 22.51
     },
     "Escombro": {
      "nombre": "SM_MUE_1_carga_Escombro",
@@ -2800,7 +2870,7 @@
     "Vidrio": {
      "nombre": "SM_MUE_1_carga_Vidrio",
      "archivo": "modelos/MUE_1_carga/SM_MUE_1_carga_Vidrio.glb",
-     "triangulos": 5258,
+     "triangulos": 5259,
      "ranuras": [
       "BLK_glass"
      ],
@@ -2901,7 +2971,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 31.78,
+   "mib_total": 31.79,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "la rampa ancha que sube desde la playa (pivote en su eje, en la orilla de la cubierta); el atraque mira al mar (+y)"
@@ -2933,7 +3003,7 @@
     "Estructura": {
      "nombre": "SM_HOS_1_pueblo_Estructura",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Estructura.glb",
-     "triangulos": 10168,
+     "triangulos": 10360,
      "ranuras": [
       "HOS_1_pueblo_walls_main",
       "HOS_1_pueblo_walls_rest",
@@ -2949,12 +3019,12 @@
       "BLK_wood_varnish",
       "BLK_plaster"
      ],
-     "mib": 0.71
+     "mib": 0.73
     },
     "Detalle": {
      "nombre": "SM_HOS_1_pueblo_Detalle",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Detalle.glb",
-     "triangulos": 388886,
+     "triangulos": 389074,
      "ranuras": [
       "BLK_paint_green",
       "BLK_aluminium",
@@ -2982,12 +3052,12 @@
       "BLK_fabric",
       "BLK_wood"
      ],
-     "mib": 20.54
+     "mib": 20.53
     },
     "Mobiliario": {
      "nombre": "SM_HOS_1_pueblo_Mobiliario",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Mobiliario.glb",
-     "triangulos": 1574647,
+     "triangulos": 1577914,
      "ranuras": [
       "BLK_sign_white",
       "BLK_steel",
@@ -3012,7 +3082,7 @@
       "BLK_wool_blue",
       "BLK_paint_green"
      ],
-     "mib": 80.68
+     "mib": 80.59
     },
     "Vidrio": {
      "nombre": "SM_HOS_1_pueblo_Vidrio",
@@ -3026,11 +3096,11 @@
     "Colision": {
      "nombre": "SM_HOS_1_pueblo_Colision",
      "archivo": "modelos/HOS_1_pueblo/SM_HOS_1_pueblo_Colision.glb",
-     "triangulos": 9144,
+     "triangulos": 9325,
      "ranuras": [
       "BLK_colision"
      ],
-     "mib": 0.39
+     "mib": 0.4
     }
    },
    "texturas": {
@@ -3439,7 +3509,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 103.26,
+   "mib_total": 103.19,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "pórtico de 4 columnas con COMMUNITY HOSPITAL en el pretil; la cochera de ambulancias queda al oriente (+x)"
@@ -3471,7 +3541,7 @@
     "Estructura": {
      "nombre": "SM_GRA_1_tienda_Estructura",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Estructura.glb",
-     "triangulos": 199930,
+     "triangulos": 200854,
      "ranuras": [
       "GRA_1_tienda_walls_main",
       "GRA_1_tienda_walls_rest",
@@ -3491,12 +3561,12 @@
       "BLK_steel",
       "BLK_roof_metal"
      ],
-     "mib": 12.92
+     "mib": 13.01
     },
     "Detalle": {
      "nombre": "SM_GRA_1_tienda_Detalle",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Detalle.glb",
-     "triangulos": 131637,
+     "triangulos": 131828,
      "ranuras": [
       "BLK_wood_red",
       "BLK_paint_white",
@@ -3518,12 +3588,12 @@
       "BLK_sign_white",
       "BLK_enamel"
      ],
-     "mib": 6.29
+     "mib": 6.28
     },
     "Mobiliario": {
      "nombre": "SM_GRA_1_tienda_Mobiliario",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Mobiliario.glb",
-     "triangulos": 767630,
+     "triangulos": 768528,
      "ranuras": [
       "BLK_sign_white",
       "BLK_steel",
@@ -3553,7 +3623,7 @@
       "BLK_linen",
       "BLK_enamel"
      ],
-     "mib": 45.76
+     "mib": 45.71
     },
     "Vidrio": {
      "nombre": "SM_GRA_1_tienda_Vidrio",
@@ -3567,7 +3637,7 @@
     "Colision": {
      "nombre": "SM_GRA_1_tienda_Colision",
      "archivo": "modelos/GRA_1_tienda/SM_GRA_1_tienda_Colision.glb",
-     "triangulos": 31012,
+     "triangulos": 31060,
      "ranuras": [
       "BLK_colision"
      ],
@@ -3675,7 +3745,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 66.05,
+   "mib_total": 66.08,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "hastial del granero con el portón corredizo; la tienda COMMUNITY STORE queda al oriente (+x), su pórtico también hacia -y"
@@ -3720,7 +3790,7 @@
     "Detalle": {
      "nombre": "SM_COM_1_antena_Detalle",
      "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Detalle.glb",
-     "triangulos": 789549,
+     "triangulos": 790840,
      "ranuras": [
       "BLK_concrete",
       "BLK_plastic",
@@ -3739,12 +3809,12 @@
       "BLK_paint_yellow",
       "BLK_sign_blue"
      ],
-     "mib": 46.13
+     "mib": 46.18
     },
     "Mobiliario": {
      "nombre": "SM_COM_1_antena_Mobiliario",
      "archivo": "modelos/COM_1_antena/SM_COM_1_antena_Mobiliario.glb",
-     "triangulos": 1078091,
+     "triangulos": 1080015,
      "ranuras": [
       "BLK_rubber",
       "BLK_plastic",
@@ -3763,7 +3833,7 @@
       "BLK_enamel",
       "BLK_concrete"
      ],
-     "mib": 86.3
+     "mib": 67.28
     },
     "Vidrio": {
      "nombre": "SM_COM_1_antena_Vidrio",
@@ -3885,7 +3955,7 @@
     "base_en_suelo": true
    },
    "ok": true,
-   "mib_total": 132.51,
+   "mib_total": 113.54,
    "fachada_principal": {
     "eje_blender": "-y",
     "rasgo": "portón doble del compound y la puerta de la caseta; la torre queda al fondo a la derecha (+x, +y)"
