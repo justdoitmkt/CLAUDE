@@ -369,7 +369,8 @@ def dress_services(cfg, P, bal, det, inter, far="low", near="mid"):
                                          ("east", 4, 1, 3, "split_outdoor", far), ("west", 0, 2, 2, "split_outdoor", far),
                                          ("front", 0, 1, 2, "split_outdoor", near)):
         p = _p(P, side, lv, bay, line)
-        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d), p["m"] @ _T(mid(p), 0, 0.32))
+        u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d)
+        add("ac_" + kind, u, p["m"] @ _T(mid(p), 0, ab.ac_base(u, p["ops"][0][1], kind)))
     # tendederos en los balcones, arbotante y medidores junto al acceso, letrero sobre la cortina del local sur
     for lv in (1, 2):
         add("laundry_line", sv.laundry_line(length=2.4, seed=int(r.integers(1e6)), detail=near),
@@ -412,13 +413,18 @@ def dress_damage(cfg, shell, det, inter, skirt, detail="high"):
     def add(key, mb, M, target):
         target.join(mb, M)
         ac.counter(n, key)
+    zones = cfg.get("door_zones", [])
     for (x, y, z, rad, tgt) in ((-4.6, -3.2, 0.0, 1.0, skirt), (2.5, -7.4, 0.0, 0.8, skirt), (-1.0, -1.3, zl[0], 0.6, inter),
                                 (3.2, 7.4, 0.0, 1.2, skirt)):
-        add("rubble_pile", dm.rubble_pile(radius=rad, seed=int(r.integers(1e6)), n=int(rad * 36), detail=detail), _T(x, y, z), tgt)
+        sd = int(r.integers(1e6))
+        q = ab.nudge(zones, x, y, z, rad * 0.85)
+        if q is not None:
+            add("rubble_pile", dm.rubble_pile(radius=rad, seed=sd, n=int(rad * 36), detail=detail), _T(q[0], q[1], z), tgt)
     for _ in range(18):
         x, y = float(r.uniform(-7.5, 6.5)), float(r.uniform(-8.0, -6.6))
-        add("chunk", dm.chunk(size=float(r.uniform(0.1, 0.4)), seed=int(r.integers(1e6)), detail=detail),
-            _T(x, y, 0.0) @ ac._rot_z(float(r.uniform(0, 360))), skirt)
+        size, sd, rz = float(r.uniform(0.1, 0.4)), int(r.integers(1e6)), float(r.uniform(0, 360))
+        if ab.clear_of(zones, x, y, 0.0, size / 2):
+            add("chunk", dm.chunk(size=size, seed=sd, detail=detail), _T(x, y, 0.0) @ ac._rot_z(rz), skirt)
     # muro de lindero demolido al norte (varillas de castillos)
     for x in (-5.0, -1.5, 2.0, 5.5):
         add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 7)), length=float(r.uniform(0.5, 0.9)),
@@ -458,6 +464,7 @@ def build_apt_c(collection_root=None, dress_all=True):
     out["Shell"].append(shell.finish(f"{cid}_Shell", cols["Shell"], uv_size=3.0, merge=0))
     entry = (-5.4, -3.4, -2.4, -0.6)
     rear = (-2.4, 6.0, -0.4, 9.0)
+    cfg["door_zones"] = ab.door_zones(cfg, P, doors)
     out["stats_skirt"] = build_skirt_l(cfg, sk, keep_clear=(entry, rear))
     if dress_all:
         stats["damage"] = dress_damage(cfg, dmg["Shell"], dmg["Details"], dmg["Interior"], sk)
@@ -478,4 +485,4 @@ def build_skirt_l(cfg, sk, keep_clear=()):
     c = COL_CORNER / 2
     xs, ys = cfg["xs"], cfg["ys"]
     cfg = dict(cfg, footprint=[(xs[0] - c, xs[-1] + c, ys[2] - c, ys[-1] + c), (xs[1] - c, xs[3] + c, ys[0] - c, ys[2] - c)])
-    return ab.build_skirt(cfg, sk, margin=3.0, keep_clear=keep_clear)
+    return ab.build_skirt(cfg, sk, margin=3.0, keep_clear=keep_clear, caps=ab.door_caps(cfg))

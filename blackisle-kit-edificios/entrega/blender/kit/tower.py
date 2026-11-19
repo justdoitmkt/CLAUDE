@@ -993,10 +993,10 @@ def build_cables(mb, G):
             if sg < 0:
                 tail += [(xr, 0.75, z_run)]
             mid = Vector(((xr + pend.x) / 2, (0.75 + pend.y) / 2, z_run - 0.03))
-            tail += [tuple(mid), (pend.x, pend.y, z_run + 0.1), (pend.x, pend.y, G.z_mw + 0.13)]
+            tail += [tuple(mid), (pend.x, pend.y, z_run + 0.1), (pend.x, pend.y, G.z_mw + MWBOX_DZ - 0.02)]
             path = pts[:-1] + fillet([pts[-2]] + tail, 0.1, 8)[1:]
             mb.tube(path, 0.0095, seg=14, mat=c["mat"])
-            ends[c["id"]] = (pend.x, pend.y, G.z_mw + 0.13, tv.x, tv.y)
+            ends[c["id"]] = (pend.x, pend.y, G.z_mw + MWBOX_DZ - 0.02, tv.x, tv.y)
         else:
             mb.tube(pts, rc, seg=14, mat=c["mat"])
     # abrazaderas de bloque en la escalerilla
@@ -1621,6 +1621,9 @@ def _pipe_axis(n, t, v_edge, u, rp):
     return Vector((p.x, p.y, 0.0))
 
 
+MWBOX_DZ = 0.0     # fondo de la caja de remate de los platos sobre el piso de la plataforma de microondas (libra la montura)
+
+
 def _mw_boxes(mb, G, specs):
     """Caja de remate (supresor/tierra) del cable de cada plato, abrazada al tubo de montaje por su costado."""
     for spec in specs["pipes"]:
@@ -1630,7 +1633,7 @@ def _mw_boxes(mb, G, specs):
         am = math.atan2(pa.y, pa.x)
         tv = Vector((-math.sin(am), math.cos(am), 0.0)) * sg
         nn = Vector((math.cos(am), math.sin(am), 0.0))
-        zb = G.z_mw + 0.15
+        zb = G.z_mw + MWBOX_DZ
         c = pa + tv * (rp + 0.003 + 0.05)
         M = Matrix(((nn.x, tv.x, 0, c.x), (nn.y, tv.y, 0, c.y), (0, 0, 1, 0), (0, 0, 0, 1)))
         _box(mb, (-0.06, -0.05, zb), (0.06, 0.05, zb + 0.24), "aluminium", bevel=0.006, seg=2, m=M)

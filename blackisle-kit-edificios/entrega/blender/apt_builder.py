@@ -770,6 +770,53 @@ def dress_openings(cfg, placed, details, interior):
     return n
 
 
+DOOR_KINDS = ("door", "lobby", "portico", "loggia", "shutter", "hall")
+
+
+def door_zones(cfg, panels=(), doors=(), depth=0.9, pad=0.15):
+    """Zonas de paso (cajas x0, x1, y0, y1, z0, z1 en mundo) delante y detrás de cada puerta, cortina y vano de paso:
+    ahí no se pone escombro, basura ni muebles (auditoría de coherencia 2026-11-19: escombro tapando puertas).
+    panels: paneles de fachada (dicts con m y ops / opening+kind); doors: puertas de tabiques (dicts con m, u0, w, t)."""
+    out = []
+
+    def box(m, u0, u1, t):
+        cs = [m @ Vector((u, y, v)) for u in (u0 - pad, u1 + pad) for y in (-depth, t + depth) for v in (0.0, 2.0)]
+        out.append((min(c.x for c in cs), max(c.x for c in cs), min(c.y for c in cs), max(c.y for c in cs),
+                    min(c.z for c in cs), max(c.z for c in cs)))
+    for p in panels:
+        ops = p.get("ops") or ([(p["kind"], p["opening"])] if p.get("opening") else [])
+        for kind, o in ops:
+            if any(k in kind for k in DOOR_KINDS):
+                box(p["m"], o[0], o[1], INFILL)
+    for d in doors:
+        box(d["m"], d["u0"], d["u0"] + d["w"], d["t"])
+    return out
+
+
+def door_caps(cfg):
+    """Topes de la arena acumulada (build_skirt caps) en los pasos de las puertas de PB: la deriva de 30 cm tapaba los
+    umbrales (auditoría 2026-11-19). Solo aplica al terreno de revisión; el kit UE5 no lleva terreno."""
+    return [(x0, x1, y0, y1, 0.02) for (x0, x1, y0, y1, z0, z1) in cfg.get("door_zones", []) if z0 < 0.6]
+
+
+def clear_of(zones, x, y, z, rad):
+    """True si un círculo (x, y, rad) a la cota z no toca ninguna zona de paso."""
+    return not any(z0 - 0.3 <= z <= z1 and x + rad > x0 and x - rad < x1 and y + rad > y0 and y - rad < y1
+                   for (x0, x1, y0, y1, z0, z1) in zones)
+
+
+def nudge(zones, x, y, z, rad, tries=8, step=0.3):
+    """Mueve un montón hasta que no tape un paso (espiral de 30 cm); None si no hay lugar."""
+    if clear_of(zones, x, y, z, rad):
+        return x, y
+    for k in range(1, tries + 1):
+        for a in range(8):
+            xx, yy = x + k * step * math.cos(a * math.pi / 4), y + k * step * math.sin(a * math.pi / 4)
+            if clear_of(zones, xx, yy, z, rad):
+                return xx, yy
+    return None
+
+
 def door_frame_remnant(w, h, t, seed=0, mat=None):
     """Lo que queda de un marco de puerta interior cuya hoja se arrancó (R-AAA: el vano no queda como un corte limpio en el
     muro): forro de jambas y cabezal de pino de 19 mm del espesor del muro, chambrana de 70 × 15 mm con canto redondeado en
@@ -1053,6 +1100,16 @@ def _panel(placed, side, level, bay):
     raise KeyError((side, level, bay))
 
 
+def ac_base(mb, o, kind, default=0.32):
+    """Cota (sobre el piso del panel) del equipo de A/C bajo una ventana: su parte de arriba queda 6 cm bajo la nariz del
+    alféizar (auditoría 2026-11-19: el condensador de services ya mide ~0,8 m y atravesaba el alféizar). Los de ventana
+    ('box_old', 'window') van en su hueco: se respeta `default`."""
+    if kind in ("box_old", "window") or o[2] <= 0.05:
+        return default
+    ztop = max(v.co.z for v in mb.bm.verts)
+    return max(0.02, min(default, o[2] - 0.04 - 0.06 - ztop))
+
+
 def dress_services(cfg, placed, pent, details, interior, detail_far="low", detail_near="mid"):
     """Elementos secundarios con lógica constructiva (>= 30 distintos en el modelo completo)."""
     from kit import services as sv
@@ -1069,9 +1126,10 @@ def dress_services(cfg, placed, pent, details, interior, detail_far="low", detai
                                       ("front", 2, 0, "split_outdoor", detail_near)):
         p = _panel(placed, side, lv, bay)
         o = p["opening"]
-        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=det), p["m"] @ _T((o[0] + o[1]) / 2, 0, 0.32))
+        u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=det)
+        add("ac_" + kind, u, p["m"] @ _T((o[0] + o[1]) / 2, 0, ac_base(u, o, kind)))
     # acometida aérea por la banda de viga de PB (frente) + medidores y conduit junto al vestíbulo
-    yb = cfg["ys"][0] - BEAM_W / 2 - 0.005
+    yb = cfg["ys"][0] - COL / 2 - 0.012            # cara de columna: pasa por delante de los letreros, no a través
     zc = zl[1] - 0.30
     add("cable_bundle", sv.cable_bundle([(-7.0, yb, zc), (-3.6, yb, zc + 0.04), (-0.1, yb, zc)], n=4, sag=0.22, seed=int(r.integers(1e6)),
                                         detail=detail_near), Matrix())
@@ -1083,8 +1141,9 @@ def dress_services(cfg, placed, pent, details, interior, detail_far="low", detai
     # letreros arrancados sobre los locales
     for bay in (1, 3):
         p = _panel(placed, "front", 0, bay)
-        add("sign_torn", sv.sign_torn(w=min(2.6, p["L"] - 0.3), h=0.42, seed=int(r.integers(1e6)), detail=detail_near),
-            p["m"] @ _T(p["L"] / 2, -0.03, p["H"] + 0.04))
+        sw = min(2.6 if bay == 1 else 2.2, p["L"] - 0.3)         # el de la crujía este libra la bajante (x 6,6)
+        add("sign_torn", sv.sign_torn(w=sw, h=0.42, seed=int(r.integers(1e6)), detail=detail_near),
+            p["m"] @ _T(p["L"] / 2 - (0.12 if bay == 3 else 0.0), -0.03, p["H"] + 0.04))
     # arbotantes rotos en columnas del frente y puerta trasera
     for x in (-3.6, 3.6):
         add("light_fixture", sv.light_fixture("bracket", seed=int(r.integers(1e6)), detail=detail_near),
@@ -1107,7 +1166,9 @@ def dress_services(cfg, placed, pent, details, interior, detail_far="low", detai
     for x in (4.45, 6.25):
         add("water_tank", sv.water_tank(seed=int(r.integers(1e6)), detail=detail_far), _T(x, 0.25, zt))
     add("tv_antenna", sv.tv_antenna(seed=int(r.integers(1e6)), detail=detail_far), _T(5.35, -1.45, zt))
-    add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=detail_far), _T(4.7, -1.8 - (COL / 2 - RECESS), zl[-1] + 1.7))
+    # parabólica en el muro este del casetón, bajo las ventilas (en el muro sur quedaba dentro del techo de teja)
+    add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=detail_far),
+        _T(7.2 + (COL / 2 - RECESS), 1.15, zl[-1] + 1.15) @ _rot_z(90))
     return n
 
 
@@ -1123,21 +1184,27 @@ def dress_damage(cfg, shell, details, interior, skirt, detail="high"):
         n[key] = n.get(key, 0) + 1
     # (las columnas y vigas con mordidas se arman en build_frame, integradas: ver cfg['spalls'])
     # varillas de espera: castillos en las 4 esquinas de la azotea del casetón + ruinas de una ampliación demolida atrás
-    for (xx, yy) in ((PENT_XW + 0.15, -1.65), (7.2, -1.8), (PENT_XW + 0.15, 1.65), (7.2, 1.8)):
-        add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 8)), length=0.7, stump=(0.25, 0.25, 0.25), detail=detail),
-            _T(xx, yy, zl[-1] + PENT_H + 0.35), details)
+    # (sobre las columnas del casetón, desde la losa: antes se apoyaban en la corona del pretil y flotaban sobre la losa)
+    for (xx, yy) in ((3.6, -1.75), (7.15, -1.75), (3.6, 1.75), (7.15, 1.75)):
+        add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(4, 8)), length=0.7, stump=(0.25, 0.25, 0.45), detail=detail),
+            _T(xx, yy, zl[-1] + PENT_H), details)
     for (xx, yy) in ((-6.0, 8.6), (-2.4, 8.6), (1.2, 8.6), (-6.0, 11.0), (-2.4, 11.0), (1.2, 11.0)):
         add("rebar_nest", dm.rebar_nest(seed=int(r.integers(1e6)), n=int(r.integers(5, 9)), length=float(r.uniform(0.6, 1.1)),
                                         stump=(0.35, 0.35, float(r.uniform(0.3, 0.9))), detail=detail), _T(xx, yy, 0.0), skirt)
     # escombro: al pie de la fachada oeste, en el local oeste (PB), en el corredor del 2.º piso y entre las ruinas
+    zones = cfg.get("door_zones", [])
     for (xx, yy, zz, rad, tgt) in ((-9.0, -1.5, 0.0, 1.3, skirt), (-4.2, -3.0, zl[0], 0.9, interior), (-5.2, 0.0, zl[2], 0.6, interior),
                                    (-1.0, 9.8, 0.0, 1.1, skirt)):
-        add("rubble_pile", dm.rubble_pile(radius=rad, seed=int(r.integers(1e6)), n=int(rad * 40), detail=detail), _T(xx, yy, zz), tgt)
+        sd = int(r.integers(1e6))
+        q = nudge(zones, xx, yy, zz, rad * 0.85)
+        if q is not None:
+            add("rubble_pile", dm.rubble_pile(radius=rad, seed=sd, n=int(rad * 40), detail=detail), _T(q[0], q[1], zz), tgt)
     # trozos sueltos al pie de los muros
     for _ in range(18):
         xx, yy = float(r.uniform(-9.5, -7.5)), float(r.uniform(-5.5, 5.5))
-        add("chunk", dm.chunk(size=float(r.uniform(0.12, 0.45)), seed=int(r.integers(1e6)), detail=detail),
-            _T(xx, yy, 0.0) @ _rot_z(float(r.uniform(0, 360))), skirt)
+        size, sd, rz = float(r.uniform(0.12, 0.45)), int(r.integers(1e6)), float(r.uniform(0, 360))
+        if clear_of(zones, xx, yy, 0.0, size / 2):
+            add("chunk", dm.chunk(size=size, seed=sd, detail=detail), _T(xx, yy, 0.0) @ _rot_z(rz), skirt)
     return n
 # ----------------------------------------------------------------------------------------------
 # ensamblado
@@ -1178,7 +1245,8 @@ def build_apt_a(collection_root=None, dress=True, roof_detail="low"):
     sk = MB()
     lobby = (0.2, cfg["ys"][0] - 3.2, 3.4, cfg["ys"][0])          # accesos limpios de hierba
     rear = (1.0, cfg["ys"][-1], 2.6, cfg["ys"][-1] + 3.0)
-    out["stats_skirt"] = build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear))
+    cfg["door_zones"] = door_zones(cfg, [p for L in placed.values() for p in L], doors)
+    out["stats_skirt"] = build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear), caps=door_caps(cfg))
     if dress:
         dmg_det, dmg_int = MB(), MB()
         out["stats_damage"] = dress_damage(cfg, dmg_shell, dmg_det, dmg_int, sk)

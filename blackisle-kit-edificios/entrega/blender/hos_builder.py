@@ -939,7 +939,7 @@ def _gas_cage(W=1.40, D=0.80, H=1.85, seed=0):
     dx0, dx1, dz0, dz1 = x0 + 0.045, x1 - 0.045, 0.06, H - 0.06
     yd = y0 - 0.012
     for (a, b) in (((dx0, dz0), (dx1, dz0)), ((dx0, dz1), (dx1, dz1)), ((dx0, (dz0 + dz1) / 2), (dx1, (dz0 + dz1) / 2))):
-        cl.rtube(mb, (a[0] + 0.0125, yd, a[1]), (b[0] - 0.0125, yd, b[1]), 0.024, 0.024, "paint_green", up=(0, 0, 1), r=0.003)
+        cl.rtube(mb, (a[0] + 0.0105, yd, a[1]), (b[0] - 0.0105, yd, b[1]), 0.024, 0.024, "paint_green", up=(0, 0, 1), r=0.003)
     for x in (dx0, dx1):
         cl.rtube(mb, (x, yd, dz0 - 0.0125), (x, yd, dz1 + 0.0125), 0.025, 0.025, "paint_green", up=(1, 0, 0), r=0.003)
     mesh((dx0 + 0.0125, yd + 0.002, dz0 + 0.0125), (1, 0, 0), (0, 0, 1), dx1 - dx0 - 0.025, dz1 - dz0 - 0.025)

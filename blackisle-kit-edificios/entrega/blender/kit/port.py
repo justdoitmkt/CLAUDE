@@ -302,7 +302,7 @@ def hexnut(mb, M, af=0.046, h=None, mat="metal_rust", washer=True, stud=None):
     if washer:
         rw, tw = af * 0.95, max(af * 0.09, 0.0015)
         lathe_n(mb, [(af * 0.56, 0.0), (rw - tw * 0.4, 0.0), (rw, tw * 0.4), (rw, tw * 0.6), (rw - tw * 0.4, tw),
-                     (af * 0.56, tw)], seg=24, mat=mat, M=M)
+                     (af * 0.56, tw)], seg=24 if af >= 0.03 else 16, mat=mat, M=M)
         z0 = tw
     ac = af / math.cos(math.radians(30))
     ch = h * 0.12
@@ -334,14 +334,18 @@ def hexnut(mb, M, af=0.046, h=None, mat="metal_rust", washer=True, stud=None):
             kk = (k + 1) % 12
             mb.face([R[3][k], R[3][kk], top[kk], top[k]], mat)
         mb.face(list(reversed(top)), mat)
-        prof = [(rs, z0 + h - 0.002)]
-        nth = max(2, int(stud / max(af * 0.075, 0.001)))
-        for j in range(nth):
-            z = z0 + h + stud * (j + 0.5) / (nth + 0.6)
-            prof += [(rs * 0.9, z), (rs, z + stud / (nth + 0.6) * 0.5)]
-        prof += [(rs * 0.94, z0 + h + stud - rs * 0.12), (rs * 0.7, z0 + h + stud), (0.0, z0 + h + stud)]
+        top_ = z0 + h + stud
+        if af >= 0.03:                                  # hilos visibles solo en tornillería gruesa
+            nth = min(3, max(1, int(stud / (af * 0.12))))
+            prof = [(rs, z0 + h - 0.002)]
+            for j in range(nth):
+                z = z0 + h + stud * (j + 0.5) / (nth + 0.6)
+                prof += [(rs * 0.9, z), (rs, z + stud / (nth + 0.6) * 0.5)]
+            prof += [(rs * 0.94, top_ - rs * 0.12), (rs * 0.7, top_), (0.0, top_)]
+        else:
+            prof = [(rs, z0 + h - 0.002), (rs, top_ - rs * 0.25), (rs * 0.75, top_), (0.0, top_)]
         with mb.soft():
-            lathe_n(mb, prof, seg=14, mat=mat, M=M)
+            lathe_n(mb, prof, seg=12, mat=mat, M=M)
     else:
         mb.face(R[3], mat)
 
@@ -511,7 +515,7 @@ def catenary(p0, p1, sag, n=16):
 def weld(mb, pts, r=0.004, mat="metal_rust"):
     """Cordón de soldadura (filete) a lo largo de una polilínea: tubo de sombreado continuo con ondas leves."""
     with mb.soft():
-        mb.tube(pts, r, seg=8, mat=mat, caps=True)
+        mb.tube(pts, r, seg=6, mat=mat, caps=True)
 
 
 def shackle(mb, M, d=0.019, mat="metal_rust"):
@@ -547,7 +551,7 @@ def _link_mb(d, seg=14, mat="metal_rust"):
     rc = 1.2 * d
     s = 1.6 * d
     pts = []
-    na = 9
+    na = 7
     for k in range(na + 1):                         # semicírculo derecho (de -y a +y)
         a = -math.pi / 2 + math.pi * k / na
         pts.append((s / 2 + rc * math.cos(a), rc * math.sin(a), 0.0))
@@ -711,7 +715,7 @@ def _rr_loft(mb, stations, mat, corner_n=4, M=None, caps=True):
     return rings
 
 
-def fender_tyre(seed=0, R=0.42, t=0.13, seg=120, sseg=16):
+def fender_tyre(seed=0, R=0.42, t=0.13, seg=96, sseg=16):
     """Llanta de camión de desecho como defensa (11R22.5: Ø ext. ~1,10 m, sección 0,28 m, ceja de 22,5"): corte real de la
     llanta (banda plana con hombros, costados abombados, cejas y forro interior: es HUECA y se ve por dentro), banda con
     3 ranuras circunferenciales en zigzag y tacos de hombro, desgaste por roce contra el muro. Eje en Y local."""
@@ -724,9 +728,8 @@ def fender_tyre(seed=0, R=0.42, t=0.13, seg=120, sseg=16):
                (Rb + 0.18, 0.137), (Ro - 0.045, 0.128), (Ro - 0.02, 0.118), (Ro - 0.006, 0.104)]
     tread = [(Ro, 0.095 - 0.01 * k) for k in range(20)]
     outer = side_up + tread + [(rr, -y) for (rr, y) in reversed(side_up)]
-    inner = [(Rb + 0.004, -0.082), (Rb + 0.03, -0.1), (Rb + 0.1, -0.118), (Rb + 0.17, -0.117), (Ro - 0.04, -0.1),
-             (Ro - 0.018, -0.07), (Ro - 0.016, 0.0), (Ro - 0.018, 0.07), (Ro - 0.04, 0.1), (Rb + 0.17, 0.117), (Rb + 0.1, 0.118),
-             (Rb + 0.03, 0.1), (Rb + 0.004, 0.082)]
+    inner = [(Rb + 0.004, -0.082), (Rb + 0.06, -0.112), (Rb + 0.17, -0.117), (Ro - 0.03, -0.088), (Ro - 0.016, 0.0),
+             (Ro - 0.03, 0.088), (Rb + 0.17, 0.117), (Rb + 0.06, 0.112), (Rb + 0.004, 0.082)]
     prof = outer + inner
     t0 = len(side_up)
     tread_idx = set(range(t0, t0 + len(tread)))
@@ -744,7 +747,7 @@ def fender_tyre(seed=0, R=0.42, t=0.13, seg=120, sseg=16):
                 for yc in (-0.045, 0.0, 0.045):
                     if abs(y - (yc + zz)) < 0.0075:
                         g = 0.013
-                if abs(y) > 0.068 and (i // 4) % 2 == 0 and abs(y) < 0.094:
+                if abs(y) > 0.068 and (i // 3) % 2 == 0 and abs(y) < 0.094:
                     g = max(g, 0.011 if abs(y) < 0.085 else 0.006)
                 rr = rr - g
                 rr -= 0.006 * max(0.0, math.cos(a - math.pi / 2 - wear_a)) ** 4          # banda gastada en un sector
@@ -811,8 +814,10 @@ def timber_fender(height, seed=0, wl=None):
         checks.append((int(r.integers(0, 4)), int(r.integers(1, 6)) / 6.0, z0, z0 + float(r.uniform(0.6, 2.0)),
                        float(r.uniform(0.006, 0.014))))
     zn = height * 0.55
-    zs = sorted({round(z, 4) for z in [0.0, height] + [height * k / int(height / 0.1) for k in range(1, int(height / 0.1))] +
-                 [zn + 0.02 * k for k in range(-4, 18)]})
+    zlo = (wl - 1.9) if wl is not None else 0.0          # bajo la franja de mareas (bajo el agua) basta un anillo cada 0,5 m
+    zs = sorted({round(z, 4) for z in [0.0, height] + [height * k / int(height / 0.1) for k in range(1, int(height / 0.1))
+                                                        if height * k / int(height / 0.1) >= zlo] +
+                 [0.5 * k for k in range(1, int(max(zlo, 0) / 0.5) + 1)] + [zn + 0.02 * k for k in range(-4, 18)]})
     rings = []
     for z in zs:
         rr_ = []
@@ -865,7 +870,7 @@ def timber_fender(height, seed=0, wl=None):
     # percebes en la franja de mareas
     if wl is not None:
         pts = []
-        for _ in range(90):
+        for _ in range(32):
             z = float(r.uniform(max(0.05, wl - 1.6), wl + 0.25))
             face = int(r.integers(0, 4))
             u = float(r.uniform(-w / 2 + 0.03, w / 2 - 0.03))
@@ -935,7 +940,7 @@ def marine_ladder(z0, z1, seed=0, standoff=0.17, brackets=None, wl=None):
         while z < wl + 0.2:
             for dx in xs:
                 for sx in (-1, 1):
-                    if r.random() < 0.55:
+                    if r.random() < 0.35:
                         pts.append(((dx + sx * 0.006, standoff + float(r.uniform(-0.025, 0.025)), z + float(r.uniform(-0.05, 0.05))),
                                     (sx, 0, 0)))
             z += 0.07

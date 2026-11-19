@@ -962,7 +962,7 @@ def trash(mb, r, n_papers=10, n_bottles=3, fits=None):
         return None
     for _ in range(int(n_papers)):
         if r.random() < 0.55:
-            q = spot(0.15)
+            q = spot(0.19)
             if q:
                 _sheet(mb, _T(q[0], q[1], 0.0) @ _Rz(r.uniform(0, 6.3)), r)
         else:
@@ -1185,6 +1185,15 @@ def plaster_debris(mb, r, n_chunks=7, spread=0.55, fits=None):
     s = spread * 0.9
     off = _off(r)
     na, nr = 24, 5
+    lim = []                                      # la loma se encoge donde hay un muro o un paso cerca
+    for ia in range(na):
+        th = 2 * PI * ia / na
+        k = 1.0
+        if fits is not None:
+            for k in (1.0, 0.75, 0.5, 0.3):
+                if fits(s * k * math.cos(th), 0.6 * s * k * math.sin(th), 0.02):
+                    break
+        lim.append(k)
     c = mb.bm.verts.new((0.0, 0.0, 0.012))
     R = []
     for ir in range(1, nr + 1):
@@ -1192,7 +1201,7 @@ def plaster_debris(mb, r, n_chunks=7, spread=0.55, fits=None):
         for ia in range(na):
             th = 2 * PI * ia / na
             k = ir / nr
-            rr_ = s * k * (0.75 + 0.25 * _mnoise.noise(Vector((math.cos(th) * 1.4, math.sin(th) * 1.4, 0.0)) + Vector(off)))
+            rr_ = s * k * (0.75 + 0.25 * _mnoise.noise(Vector((math.cos(th) * 1.4, math.sin(th) * 1.4, 0.0)) + Vector(off))) * lim[ia]
             z = 0.012 * (1 - k ** 1.5) + 0.003 * _mnoise.noise(Vector((math.cos(th) * 4, math.sin(th) * 4, k * 3)) + Vector(off))
             ring.append(mb.bm.verts.new((rr_ * math.cos(th), 0.6 * rr_ * math.sin(th), max(z, 0.0) if ir < nr else -0.002)))
         R.append(ring)
@@ -1247,21 +1256,26 @@ def _frame(p, n):
     return Matrix(((xax.x, inward.x, 0, o.x), (xax.y, inward.y, 0, o.y), (0, 0, 1, o.z), (0, 0, 0, 1)))
 
 
-def _fits_fn(sc, M, zs=(0.05, 0.25)):
-    """fits(x, y, rad) para piezas de un montón con marco M: nada entre el centro del montón y el punto (+ rad)."""
+def _in_zones(zones, x, y, z, rad):
+    return any(z0 - 0.3 <= z <= z1 and x + rad > x0 and x - rad < x1 and y + rad > y0 and y - rad < y1
+               for (x0, x1, y0, y1, z0, z1) in zones)
+
+
+def _fits_fn(sc, M, zs=(0.05, 0.25), zones=()):
+    """fits(x, y, rad) para piezas de un montón con marco M: nada entre el centro del montón y el punto, ni entre el punto
+    y su contorno (4 direcciones, radio rad), y fuera de las zonas de paso de puertas (cfg['door_zones'])."""
     def fits(x, y, rad):
-        d = Vector((x, y, 0.0))
-        L = d.length
-        if L < 1e-4:
-            return True
         for z in zs:
             a = M @ Vector((0.0, 0.0, z))
             b = M @ Vector((x, y, z))
             dv = b - a
-            hh = sc.hit(a, dv.normalized(), dv.length + rad)
-            if hh is not None:
+            if dv.length > 1e-4 and sc.hit(a, dv.normalized(), dv.length) is not None:
                 return False
-        return True
+            for d in DIRS8[::2]:
+                if sc.hit(b, d, rad + 0.02) is not None:
+                    return False
+        c = M @ Vector((x, y, 0.0))
+        return not _in_zones(zones, c.x, c.y, c.z, rad)
     return fits
 
 
@@ -1298,8 +1312,13 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
         r.shuffle(pts)
         used = []
 
+        zones = cfg.get("door_zones", [])
+
         def free(p, rad):
             return all((p["x"] - q[0]) ** 2 + (p["y"] - q[1]) ** 2 >= (rad + q[2]) ** 2 for q in used)
+
+        def clear(p, rad):                       # fuera de las zonas de paso de puertas y cortinas
+            return not _in_zones(zones, p["x"], p["y"], p["zf"], rad)
 
         # focos: centro de cuarto (lejos de los muros), uno cada ~3 m
         bulbs = []
@@ -1320,7 +1339,7 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
         def place(kind, ok, prob, gap, rad, put):
             mine = []
             for p in pts:
-                if r.random() >= prob * density or not ok(p) or not free(p, rad):
+                if r.random() >= prob * density or not ok(p) or not free(p, rad) or not clear(p, rad * 0.6):
                     continue
                 if any((p["x"] - q[0]) ** 2 + (p["y"] - q[1]) ** 2 < gap * gap for q in mine):
                     continue
@@ -1337,7 +1356,7 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
         def put_debris(p):
             M = _frame(p, p["wall_dir"]) @ _T(0, 0.3, 0)
             tmp = MB()
-            plaster_debris(tmp, r, n_chunks=r.integers(4, 9), fits=_fits_fn(sc, M, zs=(0.04,)))
+            plaster_debris(tmp, r, n_chunks=r.integers(4, 9), fits=_fits_fn(sc, M, zs=(0.04,), zones=zones))
             mb.join(tmp, M)
 
         def put_mattress(p):
@@ -1349,19 +1368,24 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
             box = [(x * math.cos(yaw) - y * math.sin(yaw), x * math.sin(yaw) + y * math.cos(yaw)) for (x, y) in box]
             if not footprint_clear(sc, M @ _T(0, 0.02, 0), box, 0.0, zs=(0.06, 0.2)):
                 return False
+            if any(_in_zones(zones, *(M @ Vector((x, y, 0.0)))[:3], 0.05) for (x, y) in box):
+                return False
             mb.join(tmp, M)
 
         def put_trash(p):
             M = _T(p["x"], p["y"], p["zf"])
             tmp = MB()
-            trash(tmp, r, n_papers=r.integers(4, 9), n_bottles=r.integers(1, 4), fits=_fits_fn(sc, M, zs=(0.04, 0.12)))
+            trash(tmp, r, n_papers=r.integers(4, 9), n_bottles=r.integers(1, 4), fits=_fits_fn(sc, M, zs=(0.04, 0.12), zones=zones))
             mb.join(tmp, M)
 
         def put_chair(p):
             M = _T(p["x"], p["y"], p["zf"])
             tmp = MB()
             broken_chair(tmp, r)
-            if not footprint_clear(sc, M, _outline8(tmp), 0.0, zs=(0.05, 0.3, 0.6)):
+            ol = _outline8(tmp)
+            if not footprint_clear(sc, M, ol, 0.0, zs=(0.05, 0.3, 0.6)):
+                return False
+            if any(_in_zones(zones, *(M @ Vector((x, y, 0.0)))[:3], 0.05) for (x, y) in ol):
                 return False
             mb.join(tmp, M)
 
@@ -1369,7 +1393,7 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
             kind = "switch" if r.random() < 0.5 else "socket"
             tmp = MB()
             wall_plate(tmp, kind, r)
-            mb.join(tmp, _frame(p, p["wall_dir"]) @ _T(0, 0, 1.1 if kind == "switch" else 0.3))
+            mb.join(tmp, _frame(p, p["wall_dir"]) @ _T(0, -0.0025, 1.1 if kind == "switch" else 0.3))   # 0,5 mm en el muro
 
         # escombro: muro sin puerta detrás (rayo a 0,3 m; bajo una ventana sí puede haber escombro)
         place("plaster_debris", wall_ok((0.3,), 0.35), 0.3, 2.3, 0.55, put_debris)

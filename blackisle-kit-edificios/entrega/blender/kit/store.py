@@ -1648,7 +1648,7 @@ def beer_cooler(seed=0):
             board(mb, x - 0.0075, x + 0.0075, y - 0.012, y + 0.012, zb + 0.05, zc - 0.05, "aluminium", rc=0.002, re=0.001)
             z_ = zb + 0.08
             while z_ < zc - 0.07:                                # ranuras de la cremallera (ceja de lámina)
-                mb.box((x - 0.0085, y - 0.006, z_), (x + 0.0085, y + 0.006, z_ + 0.0035), "aluminium", bevel=0.0006)
+                mb.box((x - 0.0085, y - 0.006, z_), (x + 0.0085, y + 0.006, z_ + 0.0035), "aluminium", bevel=0.0)
                 z_ += 0.0254
     board(mb, xi0 + 0.04, xi1 - 0.04, yi0 + 0.01, yi0 + 0.04, zc - 0.075, zc - 0.05, "plastic", rc=0.01, re=0.006)   # luz
     levels = [zb + 0.05, 0.62, 0.94, 1.26, 1.56]
@@ -2200,7 +2200,7 @@ def bottle_crate(seed=0, empty=True):
     mat = "sign_red" if seed % 2 == 0 else "plastic_blue"
     c = 0.068
     nx, ny = 6, 4
-    W, D, Hh = nx * c + 0.016, ny * c + 0.016, 0.19
+    W, D, Hh = nx * c + 0.016, ny * c + 0.016, 0.25           # 25 cm: las botellas de 23 cm quedan adentro y la jaba se estiba
     t = 0.006
     # piso con perforaciones de escurrimiento insinuadas (ranuras) y costados largos con costillas
     board(mb, -W / 2 + 0.002, W / 2 - 0.002, -D / 2 + 0.002, D / 2 - 0.002, 0.0, 0.008, mat, rc=0.012, re=0.002)

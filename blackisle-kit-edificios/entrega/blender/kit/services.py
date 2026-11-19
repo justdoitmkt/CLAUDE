@@ -35,20 +35,20 @@ polilíneas con tolerancia fina. La semilla se consume igual en los 3 niveles (m
 Kit/damage.py importa _detail(aaa=), _LOD.aaa, _tube, _box, _lattice: no cambiar su firma.
 Triángulos medidos (high / mid / low):
     ac_unit window ......... 29,7 / 15,7 / 12,1 k
-    ac_unit split_outdoor .. 76,3 / 51,1 / 43,3 k
+    ac_unit split_outdoor .. 75,6 / 45,8 / 38,7 k
     ac_unit box_old ........ 26,9 / 18,1 / 14,2 k
     cable_bundle ........... 53,8 / 46,7 / 41,0 k   (4 cables, 2 vanos de 3,2 m)
-    conduit (1,2–2,3 m) .... 14,0–19,7 / 11,9–17,8 / 9,6–15,8 k
+    conduit (1,2–2,3 m) .... 14,7–21,2 / 12,7–19,4 / 10,3–17,3 k
     meter_box .............. 29,5–33,3 / 22,5–25,9 / 18,3–22,1 k
     light_fixture .......... wall 6,7 / 5,9 / 5,1 k · bracket 7,4 / 6,4 / 5,6 k
     tv_antenna ............. 23,9 / 19,4 / 18,2 k
     satellite_dish ......... 16,5 / 12,9 / 11,0 k
-    water_tank ............. 52,0 / 30,9 / 29,1 k
+    water_tank ............. 52,0 / 30,8 / 29,1 k (con muretes) · 33,6 k high sobre base de ángulo
     mailboxes (n = 12) ..... 53,6 / 45,5 / 37,2 k
-    extinguisher_cabinet ... 13,9–22,7 / 11,2 / 9,0 k (con extintor ~ +8 k)
-    sign_torn (2,6 × 0,42) . 13,8 / 9,5 / 7,0 k
-    laundry_line (2,4 m) ... 31,0 / 25,3 / 16,5 k
-    curtain_torn ........... 32,7 / 27,6 / 15,7 k
+    extinguisher_cabinet ... 13,9–22,7 / 11,2–18,7 / 9,0 k (con extintor ~ +8 k)
+    sign_torn (2,6 × 0,42) . 14,4 / 10,1 / 7,6 k
+    laundry_line (2,4 m) ... 31,0 / 19,4 / 10,8 k
+    curtain_torn ........... 32,0 / 27,6 / 15,7 k
 """
 import contextlib
 import math

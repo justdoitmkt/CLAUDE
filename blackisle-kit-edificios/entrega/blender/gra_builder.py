@@ -364,6 +364,8 @@ def barn_roof(roof, det, inter):
         for (xa, xb) in (((BX1 + OVH_E * 0.9) * s, KNEE[0] * s), (KNEE[0] * s, 0.0)):
             n = max(2, int(abs(xb - xa) / 0.6))
             for i in range(n + 1):
+                if (xa == KNEE[0] * s and i == 0) or (xb == 0.0 and i == n and s > 0):
+                    continue                                    # un solo polín en el quiebre y en la cumbrera (sin duplicados)
                 x = xa + (xb - xa) * i / n
                 p = Vector((x, BY0 - OVH_G + 0.05, roof_z(x)))
                 q = Vector((x, BY1 + OVH_G - 0.05, roof_z(x)))
@@ -826,7 +828,7 @@ def store_openings(det, furn):
             if kind == "door":
                 det.join(cl.door_steel(w, h, depth=TS, seed=3 + i, ang=(-62.0 if sd == "front" else 0.0), panic=False, mat="paint_green"), Mo)
                 if sd == "front":
-                    det.join(security_gate(w, h, ang=-158.0), Mo)
+                    det.join(security_gate(w, h, ang=-176.0), Mo)       # abierta contra el muro, libre del medidor
             else:
                 det.join(cl.window_clean(w, h, depth=TS, seed=7 + i, open_frac=0.0 if sd == "front" else None), Mo)
                 det.join(cl.window_grille(w, h, seed=8 + i, mat="paint_green") if sd != "front" else heavy_bars(w, h), Mo)
@@ -893,8 +895,10 @@ def store_services(det, furn):
     bajada de agua pluvial."""
     det.join(cl.remap(sv.meter_box(seed=4, open_door=False, detail="high"), {"metal_rust": "steel", "metal_paint": "steel"}),
              _T(SX0 + 0.45, SY0, 1.45) @ _Rz(180))
-    det.join(cl.remap(sv.conduit([(SX0 + 0.45, SY0, 1.95), (SX0 + 0.45, SY0, S_PARA - 0.1), (SX0 + 0.45, SY0 + 0.25, S_PARA + 0.3)],
-                                 seed=5, detail="high"), {"metal_rust": "steel"}))
+    # conduit en coordenadas del muro (plano y = 0 local, se coloca con la matriz: antes se le daban coordenadas del mundo y sus
+    # cajas y abrazaderas caían en y = 0, dentro del muro del fondo, con un tramo cruzando la tienda)
+    det.join(cl.remap(sv.conduit([(0.0, 0.0, 1.95), (0.0, 0.0, S_PARA - 0.1), (0.0, 0.25, S_PARA + 0.3)], seed=5, detail="high"),
+                      {"metal_rust": "steel"}), _T(SX0 + 0.45, SY0, 0.0))
     # tinaco sobre base de ángulo de 2" × 3/16" (0,9 m): 4 patas, 2 marcos de ángulo, cama de solera y placas de desplante
     tx, ty = SX1 - 1.4, SY1 - 1.6
     hb = 0.52
@@ -971,25 +975,25 @@ def dress(furn, r, wire=None):
             _proxy(piece, Mx)
         furn.join(piece, Mx)
 
-    zl = GIRDER[1] + 0.20 + 0.028                  # piso del tapanco
+    zl = GIRDER[1] + 0.20 + 0.028 + 0.004          # piso del tapanco (sobre la comba de los tablones)
     # luminarias
     for y in FRAMES:
         LIGHTS.append([0.0, y, GIRDER[0] - 0.62])
     for y in (-5.6, -2.6):
         furn.join(cl.fluorescent(), _T(12.5, y, S_CEIL - 0.012) @ _Rz(90))
         LIGHTS.append([12.5, y, round(S_CEIL - 0.1, 3)])
-    furn.join(cl.fluorescent(0.6, 0.3), _T(12.5, SY0 - 0.45, 2.86))
-    LIGHTS.append([12.5, SY0 - 0.45, 2.78])
+    furn.join(cl.fluorescent(0.6, 0.3), _T(SX0 - 0.1 + 0.9 * 3, SY0 - 0.45, 2.864) @ _Rz(90))   # bajo el par del tejaban
+    LIGHTS.append([SX0 - 0.1 + 0.9 * 3, SY0 - 0.45, 2.78])
     put(cl.split_indoor(), 10.9, SY1 - TS, S_FFL + 2.35, "-y", solid=False)
-    put(cl.extinguisher(), SX0 + TS, -7.2, S_FFL + 1.05, "+x", solid=False)
+    put(cl.extinguisher(), 12.15, SY0 + TS + 0.013, S_FFL, "+y", solid=False)        # muro del frente, junto a la puerta
     put(cl.cylinder_rack(3, seed=int(r.integers(1e6)), medical=False), SX1 - 1.3, SY1 + 0.45, 0.0, "+y")
     if farm is not None:
         for y in FRAMES:
             put(farm.bare_bulb(0.55), 0.0, y, GIRDER[0], solid=False)
         put(farm.hoist(drop=2.4), 0.0, BY0 - 1.2, 7.40, solid=False)
         # tapanco: pacas estibadas
-        put(farm.hay_stack(3, 8, 3, seed=1), -4.2, -5.0, zl)
-        put(farm.hay_stack(3, 6, 2, seed=2), -4.2, 3.4, zl)
+        put(farm.hay_stack(3, 8, 3, seed=1), -4.15, -5.0, zl)                 # 5 cm libres de la solera y los postes del muro
+        put(farm.hay_stack(3, 6, 2, seed=2), -4.15, 3.4, zl)
         put(farm.loose_hay(1.6, 1.0, seed=3), -3.0, 0.2, zl, solid=False)
         # bajo el tapanco: banco, gabinete, costales, tambos
         put(farm.workbench(2.0, seed=4), -XP_WALL + 0.45, 2.0, FLOOR_B, "+x")
@@ -1003,7 +1007,7 @@ def dress(furn, r, wire=None):
         lad = farm.ladder(4.4)
         put(lad, 0, 0, M=_T(-0.99, -2.0, FLOOR_B) @ _Ry(-13.0) @ face_to("-x"))
         # bieldo y pala recargados en la cara del poste del pasillo (x 1,90): el mango toca el poste arriba, la punta en el piso
-        put(farm.pitchfork(seed=10), 0, 0, M=_T(XP_AISLE - 0.10 - 0.0145 - 1.66 * math.sin(math.radians(9.5)), 0.07, FLOOR_B)
+        put(farm.pitchfork(seed=10), 0, 0, M=_T(XP_AISLE - 0.10 - 0.0145 - 1.66 * math.sin(math.radians(9.5)), 0.07, FLOOR_B + 0.014)
             @ _Ry(9.5) @ _Rz(180))
         put(farm.shovel(seed=11), 0, 0, M=_T(XP_AISLE - 0.10 - 0.0148 - 1.53 * math.sin(math.radians(10.0)), -0.07, FLOOR_B)
             @ _Ry(10.0))
@@ -1012,30 +1016,30 @@ def dress(furn, r, wire=None):
             put(farm.loose_hay(1.3, 0.9, seed=int(abs(x * 10 + y)) + 70), x, y, FLOOR_B, solid=False)
         # corrales vacíos al oriente: divisiones y frentes con puerta
         for y in FRAMES:
-            put(farm.stall_partition(XP_WALL - XP_AISLE - 0.12, gate=False, seed=int(y + 20)), 0, 0,
+            put(farm.stall_partition(XP_WALL - XP_AISLE - 0.20, gate=False, seed=int(y + 20)), 0, 0,     # de cara a cara de poste
                 M=_T(XP_AISLE + 0.10, y, FLOOR_B))
         for (ya, yb) in ((-3.9, -0.1), (0.1, 3.9), (4.1, 7.6)):
             put(farm.stall_partition(yb - ya, gate=True, seed=int(ya + 40)), 0, 0, M=_T(XP_AISLE, ya, FLOOR_B) @ _Rz(90))
         for (x, y) in ((4.6, -2.0), (4.6, 2.0), (4.6, 5.9)):
             put(farm.bucket(seed=int(y * 3 + 50)), x, y + 0.9, FLOOR_B)
-            put(farm.loose_hay(1.6, 1.2, seed=int(y + 60)), x - 0.6, y - 0.4, FLOOR_B, solid=False)
+            put(farm.loose_hay(1.6, 1.2, seed=int(y + 60)), x - 1.25, y - 0.85, FLOOR_B, solid=False)  # lejos del bebedero
         put(farm.water_trough(1.2, seed=13), 4.6, 5.9, FLOOR_B, "-x")
         # afuera, frente: pacas, tarimas, bebedero, costales
         # (fuera del recorrido de las hojas del portón, x ±4,7, y del paso de x ±2 frente al vano)
         put(farm.hay_stack(2, 2, 2, seed=14), -4.0, -9.75, 0.0)
-        put(farm.hay_bale(seed=15), 0, 0, M=_T(-2.75, -10.35, 0.0) @ _Rz(17))
+        put(farm.hay_bale(seed=15), 0, 0, M=_T(-5.6, -11.2, 0.0) @ _Rz(17))                    # suelta, lejos de la estiba
         # tarimas recargadas en el hastial, paradas a lo largo (1,2 m de alto) a la izquierda del riel: giran sobre su canto
         # inferior, que queda en el piso, y la de atrás apoya su canto superior en las tablas
         put(farm.pallet(seed=16), 0, 0, M=_T(-5.42, BY0 - 0.29, 0.0) @ _Rx(78) @ _T(0, 0.6, 0) @ _Rz(90))
-        put(farm.pallet(seed=17), 0, 0, M=_T(-5.40, BY0 - 0.42, 0.0) @ _Rx(77) @ _T(0, 0.6, 0) @ _Rz(90))
+        put(farm.pallet(seed=17), 0, 0, M=_T(-5.40, BY0 - 0.445, 0.0) @ _Rx(77) @ _T(0, 0.6, 0) @ _Rz(90))
         put(farm.water_trough(1.8, seed=18), 4.15, -9.95, 0.0)
         put(farm.sack_pile(4, seed=19), 2.95, -8.85, 0.0)
         # tejaban: pacas, costales y corral vacío
-        put(farm.hay_stack(3, 6, 3, seed=20), -8.1, -4.0, 0.0, "+x")
+        put(farm.hay_stack(3, 6, 3, seed=20), -8.7, -4.0, 0.0, "+x")                  # las sueltas no tocan el muro
         put(farm.sack_pile(6, seed=21), -8.0, -0.4, 0.0, "+x")
         put(farm.pen_fence(4.3, seed=22), 0, 0, M=_T(-10.5, 1.0, 0.0))
-        put(farm.pen_fence(4.3, seed=23), 0, 0, M=_T(-10.5, 6.1, 0.0))
-        put(farm.pen_fence(5.1, seed=24), 0, 0, M=_T(-10.5, 1.0, 0.0) @ _Rz(90))
+        put(farm.pen_fence(4.3, seed=23), 0, 0, M=_T(-10.5, 6.25, 0.0))                       # libra el poste del tejaban (y 6)
+        put(farm.pen_fence(5.25, seed=24, post0=False, post1=False), 0, 0, M=_T(-10.5, 1.0, 0.0) @ _Rz(90))   # esquinas compartidas
         put(farm.water_trough(1.2, seed=25), -9.6, 4.6, 0.0, "+x")
         put(farm.loose_hay(1.8, 1.4, seed=26), -8.0, 3.2, 0.0, solid=False)
         # alambrado de púas al fondo (contexto de potrero, sin ganado): un solo tendido de 24 m con tornapuntas en H en los
@@ -1046,14 +1050,15 @@ def dress(furn, r, wire=None):
     if st is not None:
         yi0, yi1 = SY0 + TS, SY1 - TS
         put(st.shop_counter(3.2, seed=40), 14.0, -4.4, S_FFL, "-x")
-        put(st.ammo_cabinet(seed=41), SX1 - TS, -4.0, S_FFL, "-x")
-        put(st.medical_shelf(seed=42), SX1 - TS, -6.55, S_FFL, "-x")
+        WN = 0.013                                     # espesor del lambrín y su zoclo: los muebles de muro van por delante
+        put(st.ammo_cabinet(seed=41), SX1 - TS - WN, -4.0, S_FFL, "-x")
+        put(st.medical_shelf(seed=42), SX1 - TS - WN, -6.55, S_FFL, "-x")
         put(st.wall_calendar(seed=43), SX1 - TS, -5.3, S_FFL + 1.55, "-x", solid=False)
-        put(st.crate_stack(seed=44), 14.9, yi0 + 0.45, S_FFL, "-x")
+        put(st.crate_stack(seed=44), 14.76, -7.55, S_FFL, "+y")                    # rincón tras el mostrador, fuera del paso
         for k, (y, stock) in enumerate(((-6.85, "canned"), (-5.55, "dry"), (-4.25, "household"))):
-            put(st.grocery_shelving(1.2, seed=45 + k, stock=stock), SX0 + TS, y, S_FFL, "+x")          # espalda al muro poniente
+            put(st.grocery_shelving(1.2, seed=45 + k, stock=stock), SX0 + TS + WN, y, S_FFL, "+x")          # espalda al muro poniente
         for k, (x, stock) in enumerate(((10.45, "dry"), (11.75, "canned"))):
-            put(st.grocery_shelving(1.2, seed=48 + k, stock=stock), x, yi1, S_FFL, "-y")               # espalda al muro del fondo
+            put(st.grocery_shelving(1.2, seed=48 + k, stock=stock), x, yi1 - WN, S_FFL, "-y")               # espalda al muro del fondo
         put(st.beer_cooler(seed=50), 13.05, yi1 - 0.37, S_FFL, "-y")
         put(st.chalkboard(w=0.66, h=1.15, seed=51), 14.93, yi1, S_FFL + 1.2, "-y", solid=False)     # entre la puerta y el muro
         put(st.hand_scale(seed=52), 14.05, -3.6, S_FFL + 0.95, "-x", solid=False)
@@ -1061,8 +1066,8 @@ def dress(furn, r, wire=None):
         put(cl.trash_bin(pedal=False), 12.9, -6.9, S_FFL)
         # pórtico
         put(st.chest_freezer(seed=54), 12.65, SY0 - 0.42, S_FFL, "-y")
-        put(st.bottle_crate(seed=55), 13.75, SY0 - 0.30, S_FFL, "-y")
-        put(st.bottle_crate(seed=56), 13.78, SY0 - 0.31, S_FFL + 0.29, "-y")
+        put(st.bottle_crate(seed=55), 13.50, SY0 - 0.30, S_FFL, "-y")                    # fuera del frente de la ventanilla
+        put(st.bottle_crate(seed=56), 13.52, SY0 - 0.31, S_FFL + 0.253, "-y")             # sobre los esquineros de la de abajo
         put(st.bench(1.0, seed=57), SX0 + 0.36, SY0 - 0.35, S_FFL, "-y")                        # a un lado de la puerta
         put(st.open_sign(), 14.4, SY0 - 0.06, S_FFL + 1.95, "-y", solid=False)
 

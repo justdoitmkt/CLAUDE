@@ -285,7 +285,8 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
                                    ("east", 1, 1, "box_old", far)):
         p = _p(P, side, lv, bay)
         o = at_op(p)
-        add("ac_" + kind, sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d), p["m"] @ _T((o[0] + o[1]) / 2, 0, 0.32))
+        u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d)
+        add("ac_" + kind, u, p["m"] @ _T((o[0] + o[1]) / 2, 0, ab.ac_base(u, o, kind)))
     # galería: condensadoras junto a las puertas, tendederos entre columnas, arbotantes en columnas
     for lv, bay in ((1, 3), (2, 1)):
         p = _p(P, "front", lv, bay, line=1)
@@ -351,13 +352,19 @@ def dress_damage(cfg, shell, det, inter, skirt, detail="high"):
             _T(x, COLLAPSE[3] + 0.12, zt) @ ac._rot_z(float(r.uniform(-20, 20))), det)
     # (columnas y vigas con mordidas: integradas en build_frame, ver cfg['spalls'])
     # escombro: galería del piso 3 bajo el colapso, cuarto expuesto, pie de la esquina SO, local de PB
-    for (x, y, z, rad, tgt) in ((-2.7, -4.95, zl[3], 0.7, det), (-5.4, -4.9, zl[3], 0.9, inter), (-8.7, -6.9, 0.0, 1.5, skirt),
+    zones = cfg.get("door_zones", [])
+    # (el montón de la galería del piso 3 tapaba la puerta del depto oeste y la del retorno: va bajo la ventana, x -1,25)
+    for (x, y, z, rad, tgt) in ((-1.25, -4.95, zl[3], 0.7, det), (-5.4, -4.9, zl[3], 0.9, inter), (-8.7, -6.9, 0.0, 1.5, skirt),
                                 (-5.6, -7.6, 0.0, 0.9, skirt), (-4.0, -3.0, zl[0], 0.8, inter)):
-        add("rubble_pile", dm.rubble_pile(radius=rad, seed=int(r.integers(1e6)), n=int(rad * 38), detail=detail), _T(x, y, z), tgt)
+        sd = int(r.integers(1e6))
+        q = ab.nudge(zones, x, y, z, rad * 0.85)
+        if q is not None:
+            add("rubble_pile", dm.rubble_pile(radius=rad, seed=sd, n=int(rad * 38), detail=detail), _T(q[0], q[1], z), tgt)
     for _ in range(22):
         x, y = float(r.uniform(-10.0, -3.0)), float(r.uniform(-8.6, -6.2))
-        add("chunk", dm.chunk(size=float(r.uniform(0.12, 0.5)), seed=int(r.integers(1e6)), detail=detail),
-            _T(x, y, 0.0) @ ac._rot_z(float(r.uniform(0, 360))), skirt)
+        size, sd, rz = float(r.uniform(0.12, 0.5)), int(r.integers(1e6)), float(r.uniform(0, 360))
+        if ab.clear_of(zones, x, y, 0.0, size / 2):
+            add("chunk", dm.chunk(size=size, seed=sd, detail=detail), _T(x, y, 0.0) @ ac._rot_z(rz), skirt)
     for _ in range(6):                                  # trozos sobre el pretil roto del testero
         x = float(r.uniform(-7.0, -3.8))
         add("chunk", dm.chunk(size=float(r.uniform(0.15, 0.3)), seed=int(r.integers(1e6)), detail=detail),
@@ -398,7 +405,8 @@ def build_apt_b(collection_root=None, dress_all=True):
     xs, ys = cfg["xs"], cfg["ys"]
     lobby = (portico["x0"] - 0.3, portico["yo"] - 2.5, portico["x1"] + 0.3, ys[0])
     rear = (0.0, ys[-1], 1.6, ys[-1] + 3.0)
-    out["stats_skirt"] = ab.build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear))
+    cfg["door_zones"] = ab.door_zones(cfg, P, doors)
+    out["stats_skirt"] = ab.build_skirt(cfg, sk, margin=3.0, keep_clear=(lobby, rear), caps=ab.door_caps(cfg))
     if dress_all:
         stats["damage"] = dress_damage(cfg, dmg_shell, dmg_det, dmg_int, sk)
         out["Details"].append(det.finish(f"{cid}_Details", cols["Details"], uv_size=2.0, merge=0))

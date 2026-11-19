@@ -120,6 +120,14 @@ def c_sec(h, b, t=0.006):
     return [(0.0, t, -h / 2, h / 2), (t, b, h / 2 - t, h / 2), (t, b, -h / 2, -h / 2 + t)]
 
 
+def bevbox(mb, mn, mx, mat="concrete", bevel=0.002, seg=2, m=None):
+    """Caja biselada armada en un MB chico y copiada: bmesh.ops.bevel recorre TODA la malla destino, así que biselar
+    directo en los MB grandes del modelo (Details/Interior) vuelve el armado cuadrático."""
+    t = MB()
+    t.box(mn, mx, mat, bevel=bevel, seg=seg, m=m)
+    mb.join(t)
+
+
 def i_profile(h, b, tw=0.012, tf=0.016, rr=0.015):
     """Perfil I laminado (x = ancho de patín, y = peralte) con filetes de raíz y puntas de patín redondeadas."""
     pts = [(-b / 2, -h / 2), (b / 2, -h / 2), (b / 2, -h / 2 + tf), (tw / 2 + rr, -h / 2 + tf), (tw / 2, -h / 2 + tf + rr),
@@ -321,8 +329,14 @@ def clad_wall(mb, M, L, z0, ztop_fn, openings, r, mat="cladding", width=1.0, row
     """Muro de lámina en hojas de `width` m. openings/kill: [(u0, u1, z0, z1)] (kill = hojas arrancadas a propósito)."""
     n = int(math.ceil(L / width - 1e-6))
     stats = dict(sheets=0, missing=0, bent=0)
-    for k in range(n):
-        u0, u1 = k * width, min((k + 1) * width, L)
+    # columnas de hoja: cada `width` m y cortadas en las jambas de los vanos (una hoja no pasa por encima de un vano)
+    edges = {round(k * width, 4) for k in range(n)} | {round(L, 4)}
+    for (o0, o1, oz0, oz1) in openings:
+        for e in (o0, o1):
+            if 0.05 < e < L - 0.05:
+                edges.add(round(e, 4))
+    edges = sorted(edges)
+    for (u0, u1) in zip(edges[:-1], edges[1:]):
         if u1 - u0 < 0.05:
             continue
         cuts = [z0] + [z for z in rows if z > z0] + [None]
@@ -385,7 +399,7 @@ def _pile_variant(k):
                 s_ -= pd * math.exp(-q)
         return s_
     zs = [PILE_BOT, -2.7, SEA_Z + 0.3] + [SEA_Z + 0.35 + 0.17 * j for j in range(9)] + [1.5]
-    port.lathe_n(mb, [(R, z) for z in zs], seg=40, mat="metal_rust", caps=True, dr=dr_pipe)
+    port.lathe_n(mb, [(R, z) for z in zs], seg=32, mat="metal_rust", caps=True, dr=dr_pipe)
     ph = [float(r.uniform(0, 2 * math.pi)) for _ in range(3)]
 
     def dr_crust(a, z):
@@ -393,15 +407,15 @@ def _pile_variant(k):
     ztop = SEA_Z + 0.22
     prof = [(R + 0.002, -2.85), (R + 0.02, -2.78), (R + 0.03, -2.5), (R + 0.032, -1.8), (R + 0.03, -1.2), (R + 0.028, ztop - 0.35),
             (R + 0.02, ztop - 0.12), (R + 0.008, ztop), (R + 0.001, ztop + 0.05)]
-    port.lathe_n(mb, prof, seg=40, mat="rubble", caps=False, dr=dr_crust)
+    port.lathe_n(mb, prof, seg=32, mat="rubble", caps=False, dr=dr_crust)
     pts = []
-    for _ in range(12):
+    for _ in range(7):
         a = float(r.uniform(0, 2 * math.pi))
         z = float(r.uniform(ztop + 0.03, ztop + 0.55))
         pts.append(((R * math.cos(a), R * math.sin(a), z), (math.cos(a), math.sin(a), 0.0)))
     port._barnacles(mb, r, pts, size=(0.007, 0.016))
     port.bev_plate(mb, [(-0.34, -0.34), (0.34, -0.34), (0.34, 0.34), (-0.34, 0.34)], 0.025, "metal_rust", M=_T(0, 0, 1.475), ch=0.003)
-    port.weld(mb, [(0.282 * math.cos(2 * math.pi * q / 40), 0.282 * math.sin(2 * math.pi * q / 40), 1.47) for q in range(41)],
+    port.weld(mb, [(0.282 * math.cos(2 * math.pi * q / 32), 0.282 * math.sin(2 * math.pi * q / 32), 1.47) for q in range(33)],
               r=0.007, mat="metal_rust")
     for (x, y) in ((-0.27, -0.27), (0.27, -0.27), (0.27, 0.27), (-0.27, 0.27)):
         port.hexnut(mb, _T(x, y, 1.475) @ Matrix.Rotation(math.pi, 4, "X"), af=0.036, mat="metal_rust", washer=False, stud=0.02)
@@ -435,7 +449,7 @@ def _brace(det, p, q, r, ends=(True, True), off=Vector((0, 0, 0)), broken=False)
         M, _ = port.frame_on(c + off + hz * sgn * 0.22, e + d * sgn * 0.08, up=tuple(nrm))
         L_ = ((e + d * sgn * 0.08) - (c + off + hz * sgn * 0.22)).length
         port.bev_plate(det, [(0.0, -0.09), (L_, -0.06), (L_, 0.06), (0.0, 0.09)], 0.016, "metal_rust", M=M @ _T(0, 0, -0.008), ch=0.002)
-        for t_ in (0.06, 0.16):
+        for t_ in (0.1,):
             pp = e + d * sgn * (-t_ + 0.08)
             port.hexnut(det, _T(*pp) @ port.frame_on(pp, pp + nrm)[0].to_3x3().to_4x4() @ Matrix.Rotation(math.pi / 2, 4, "Y") @
                         _T(0, 0, 0.057), af=0.03, mat="metal_rust", washer=False, stud=0.01)
@@ -672,7 +686,7 @@ def tyre(mb, c, r, axis="z"):
     t = port.fender_tyre(int(r.integers(1e6)))
     M = _T(*c) @ _Rz(float(r.uniform(0, 360)))
     if axis == "z":
-        M = _T(c[0], c[1], c[2] - 0.13 + 0.115) @ _Rz(float(r.uniform(0, 360))) @ Matrix.Rotation(math.pi / 2, 4, "X")
+        M = _T(c[0], c[1], c[2] - 0.13 + 0.141) @ _Rz(float(r.uniform(0, 360))) @ Matrix.Rotation(math.pi / 2, 4, "X")
     mb.join(t, M)
 
 
@@ -737,15 +751,16 @@ def build_ramp(shell, inter, det, r):
     # rejilla de drenaje al pie (de lado a lado) con su marco de ángulo
     yg0, yg1 = RAMP_Y0 + 0.15, RAMP_Y0 + 0.55
     for yy in (yg0, yg1 - 0.03):
-        det.box((-W + 0.3, yy, ramp_z(yy) - 0.002), (W - 0.3, yy + 0.03, ramp_z(yy) + 0.008), "metal_rust", bevel=0.002)
+        bevbox(det, (-W + 0.3, yy, ramp_z(yy) - 0.002), (W - 0.3, yy + 0.03, ramp_z(yy) + 0.008), "metal_rust", bevel=0.002)
     x = -W + 0.35
     while x < W - 0.35:
-        det.box((x, yg0 + 0.03, ramp_z(yg0) - 0.002), (x + 0.008, yg1 - 0.03, ramp_z(yg1) + 0.006), "metal_rust", bevel=0.0015)
+        bevbox(det, (x, yg0 + 0.03, ramp_z(yg0) - 0.002), (x + 0.008, yg1 - 0.03, ramp_z(yg1) + 0.006), "metal_rust", bevel=0.0015,
+           seg=1)
         x += 0.045
     # ángulo de nariz al pie y placa de transición atornillada arriba
     port.angle_sweep(det, (-W, RAMP_Y0 - 0.012, 0.007), (W, RAMP_Y0 - 0.012, 0.007), leg=0.08, t=0.01, mat="metal_rust",
                      up=(0, 0, -1), flip=True)
-    det.box((-W + 0.3, -0.35, DECK_Z - 0.03), (W - 0.3, 0.35, DECK_Z + 0.012), "metal_rust", bevel=0.004)
+    bevbox(det, (-W + 0.3, -0.35, DECK_Z - 0.03), (W - 0.3, 0.35, DECK_Z + 0.012), "metal_rust", bevel=0.004)
     x = -W + 0.8
     while x < W - 0.5:
         for yb_ in (-0.27, 0.27):
@@ -836,8 +851,8 @@ def build_warehouse(shell, inter, det, roof, r):
 
     def base_plate(x, y, ax="x"):
         hx, hy = (0.30, 0.20) if ax == "x" else (0.20, 0.30)
-        inter.box((x - hx - 0.04, y - hy - 0.04, DECK_Z), (x + hx + 0.04, y + hy + 0.04, DECK_Z + 0.03), "concrete", bevel=0.012)
-        inter.box((x - hx, y - hy, DECK_Z + 0.03), (x + hx, y + hy, zbp), "metal_rust", bevel=0.003)
+        bevbox(inter, (x - hx - 0.04, y - hy - 0.04, DECK_Z), (x + hx + 0.04, y + hy + 0.04, DECK_Z + 0.03), "concrete", bevel=0.012)
+        bevbox(inter, (x - hx, y - hy, DECK_Z + 0.03), (x + hx, y + hy, zbp), "metal_rust", bevel=0.003)
         for (bx, by) in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
             port.hexnut(det, _T(x + bx * (hx - 0.045), y + by * (hy - 0.06), zbp), af=0.046, mat="metal_rust", stud=0.035)
     for yf in frames:
@@ -870,7 +885,7 @@ def build_warehouse(shell, inter, det, roof, r):
                         up=tuple(nr), miter=False)
             if abs(x) <= xc + 0.05:
                 for yf in frames:                       # clip de larguero atornillado a la viga
-                    det.box((x + 0.0016, yf - 0.004, z - 0.235), (x + 0.08, yf + 0.004, z - 0.06), "metal_paint", bevel=0.002)
+                    bevbox(det, (x + 0.0016, yf - 0.004, z - 0.235), (x + 0.08, yf + 0.004, z - 0.06), "metal_paint", bevel=0.002)
                     port.hexnut(det, _T(x - 0.0015, yf + 0.03, z - 0.13) @ Matrix.Rotation(-math.pi / 2, 4, "Y"), af=0.024,
                                 mat="metal_rust", stud=0.01)
     girt = [(-(x_ + 0.0016), y_) for (x_, y_) in cz_profile(0.16, 0.0644, 0.003, kind="C", lip=0.022)]
@@ -904,18 +919,18 @@ def build_warehouse(shell, inter, det, roof, r):
         rod((x, yb - 0.14, z0), (x, ya + 0.14, z1), 0.65)
         for (yy, zz) in ((ya + 0.125, z0), (ya + 0.125, z1), (yb - 0.125, z0), (yb - 0.125, z1)):
             sgn = 1 if yy < (ya + yb) / 2 else -1
-            det.box((x - 0.005, min(yy, yy + sgn * 0.16), zz - 0.07), (x + 0.005, max(yy, yy + sgn * 0.16), zz + 0.07),
-                    "metal_paint", bevel=0.002)
+            bevbox(det, (x - 0.005, min(yy, yy + sgn * 0.16), zz - 0.07), (x + 0.005, max(yy, yy + sgn * 0.16), zz + 0.07),
+               "metal_paint", bevel=0.002)
     # esquineros y tapajuntas del alero
     for (x, y) in ((WH["x0"], WH["y0"]), (WH["x1"], WH["y0"]), (WH["x0"], WH["y1"]), (WH["x1"], WH["y1"])):
         sx = -1 if x < 0 else 1
         sy = -1 if y < 10 else 1
         cx0, cx1 = sorted((x - sx * 0.02, x + sx * 0.05))
         cy0, cy1 = sorted((y - sy * 0.15, y + sy * 0.05))
-        det.box((cx0, cy0, DECK_Z + PL), (cx1, cy1, DECK_Z + WH["eave"] - 0.02), "metal_paint", bevel=0.002)
+        bevbox(det, (cx0, cy0, DECK_Z + PL), (cx1, cy1, DECK_Z + WH["eave"] - 0.02), "metal_paint", bevel=0.002)
         cx0, cx1 = sorted((x - sx * 0.15, x + sx * 0.05))
         cy0, cy1 = sorted((y - sy * 0.02, y + sy * 0.05))
-        det.box((cx0, cy0, DECK_Z + PL), (cx1, cy1, DECK_Z + WH["eave"] - 0.02), "metal_paint", bevel=0.002)
+        bevbox(det, (cx0, cy0, DECK_Z + PL), (cx1, cy1, DECK_Z + WH["eave"] - 0.02), "metal_paint", bevel=0.002)
     stats["roof"] = build_roof(roof, det, r)
     stats["mezzanine"] = build_mezzanine(inter, det, r)
     return stats
@@ -933,8 +948,10 @@ def _gaps(a, b, ops):
     return out
 
 
-def factory_window(mb, M, w, h, r):
-    """Ventana alta de taller: marco y montantes de acero, vidrios en cuadrícula (muchos rotos)."""
+def factory_window(mb_out, M, w, h, r):
+    """Ventana alta de taller: marco y montantes de acero biselados, vidrios en cuadrícula (muchos rotos). Se arma en un MB
+    propio y se copia al destino."""
+    mb = MB()
     t = 0.05
     for (u0, u1, z0, z1) in [(0, w, 0, t), (0, w, h - t, h), (0, t, 0, h), (w - t, w, 0, h)]:
         mb.box((u0, 0.02, z0), (u1, 0.08, z1), "metal_paint", m=M, bevel=0.004)
@@ -957,6 +974,7 @@ def factory_window(mb, M, w, h, r):
                 mb.join(tmp, M @ _T(0, 0.052, 0))
             else:
                 mb.box((u0, 0.046, z0), (u1, 0.05, z1), "glass", m=M)
+    mb_out.join(mb)
 
 
 def build_roof(roof, det, r):
@@ -1000,7 +1018,7 @@ def build_roof(roof, det, r):
                       lift=0.0 if za == 0.0 else SHEET_T * 2.5)
                 stats["sheets"] += 1
         # caballete
-        roof.box((WH["y0"] - ov, -0.003, roof_z(0.0) + 0.03), (WH["y1"] + ov, 0.003, roof_z(0.0) + 0.06), "metal_rust", bevel=0.001,
+        bevbox(roof, (WH["y0"] - ov, -0.003, roof_z(0.0) + 0.03), (WH["y1"] + ov, 0.003, roof_z(0.0) + 0.06), "metal_rust", bevel=0.001,
                  m=Matrix(((0, 1, 0, 0), (1, 0, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))))
         member(roof, (sg * 0.32, WH["y0"] - ov, roof_z(0.32) + 0.035), (sg * 0.32, WH["y1"] + ov, roof_z(0.32) + 0.035),
                [(-0.32, 0.32, -0.003, 0.003)], "metal_rust", up=(sg * math.sin(p), 0, math.cos(p)))
@@ -1033,13 +1051,13 @@ def build_mezzanine(inter, det, r):
     x0, x1, y0, y1 = 5.5, WH["x1"] - 0.4, WH["y0"] + 15.5, WH["y1"] - 0.3
     for (x, y) in ((x0 + 0.1, y0 + 0.1), (x0 + 0.1, y1 - 0.1), (x1 - 0.1, y0 + 0.1), (8.2, y0 + 0.1)):
         port.psweep(inter, port.rr_profile(0.2, 0.2, 0.012, n=3), [(x, y, DECK_Z + 0.02), (x, y, z - 0.3)], "metal_paint", up=(0, 1, 0))
-        inter.box((x - 0.17, y - 0.17, DECK_Z), (x + 0.17, y + 0.17, DECK_Z + 0.02), "metal_paint", bevel=0.003)
+        bevbox(inter, (x - 0.17, y - 0.17, DECK_Z), (x + 0.17, y + 0.17, DECK_Z + 0.02), "metal_paint", bevel=0.003)
         for (bx, by) in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
             port.hexnut(det, _T(x + bx * 0.13, y + by * 0.13, DECK_Z + 0.02), af=0.03, mat="metal_rust", stud=0.015)
-        inter.box((x - 0.12, y - 0.12, z - 0.3), (x + 0.12, y + 0.12, z - 0.288), "metal_paint", bevel=0.002)
+        bevbox(inter, (x - 0.12, y - 0.12, z - 0.3), (x + 0.12, y + 0.12, z - 0.288), "metal_paint", bevel=0.002)
     for y in (y0 + 0.1, (y0 + y1) / 2, y1 - 0.1):
         isweep(inter, (x0, y, z - 0.156), (x1, y, z - 0.156), 0.288, 0.15, "metal_paint", up=(0, 0, 1), tw=0.008, tf=0.012)
-    inter.box((x0, y0, z - 0.012), (x1, y1, z), "metal_rust", bevel=0.003)
+    bevbox(inter, (x0, y0, z - 0.012), (x1, y1, z), "metal_rust", bevel=0.003)
     # oficina de panel (puerta y ventanas rotas)
     yo = WH["y0"] + 18.0
     H = 2.6
@@ -1053,7 +1071,7 @@ def build_mezzanine(inter, det, r):
     wall_with_openings(inter, y1 - yo, H, 0.08, [(1.6, 3.6, 1.0, 2.2)], mat_out="metal_paint", mat_in="metal_paint",
                        mat_reveal="metal_paint", m=Mw)
     factory_window(det, Mw @ _T(1.6, 0, 1.0), 2.0, 1.2, r)
-    inter.box((x0, yo, z + H), (x1, y1, z + H + 0.06), "metal_paint", bevel=0.006)
+    bevbox(inter, (x0, yo, z + H), (x1, y1, z + H + 0.06), "metal_paint", bevel=0.006)
     # barandal en el borde libre del pasillo (y = y0) y en el lado oeste
     from kit import circulation as circ
     det.join(circ.railing("tube_metal", length=x1 - x0 - 1.3, h=1.0, seed=int(r.integers(1e6)), missing=0.12),
@@ -1089,7 +1107,7 @@ def build_mezzanine(inter, det, r):
     for (xx, sgn) in ((xa, 1), (xb, -1)):                     # zancas de canal C 250 con las alas hacia adentro
         prof = [(sgn * x_, y_) for (x_, y_) in cz_profile(0.25, 0.075, 0.006, kind="C")]
         port.psweep(inter, prof, [(xx, ys - 0.25, DECK_Z + 0.06), (xx, y0, z - 0.13)], "metal_paint", up=(0, 0, 1), miter=False)
-    pts = [(xb + 0.0, ys + i * going + going / 2, DECK_Z + (i + 1) * rise) for i in range(0, n - 1, 2)] + [(xb, y0, z)]
+    pts = [(xb + 0.035, ys + i * going + going / 2, DECK_Z + (i + 1) * rise) for i in range(0, n - 1, 2)] + [(xb + 0.035, y0, z)]
     det.join(circ.stair_railing(pts, h=0.95, kind="tube_metal", seed=int(r.integers(1e6)), missing=0.1))
     return dict(z=z, risers=n)
 
@@ -1164,15 +1182,15 @@ def build_annex(shell, inter, det, r):
         shell.box((a[0], a[1], DECK_Z + H + 0.2), (b[0], b[1], DECK_Z + H + 0.5), "concrete")
     # servicios: aire acondicionado, medidor, letrero
     det.join(sv.ac_unit("window", seed=int(r.integers(1e6)), detail="mid"),
-             _T(A["x0"], A["y0"] + 4.4, DECK_Z + 2.35) @ _Rz(90))
+             _T(A["x0"], A["y0"] + 3.0, DECK_Z + 2.35) @ _Rz(90))          # entre las dos ventanas del muro oeste
     det.join(sv.meter_box(seed=int(r.integers(1e6)), open_door=True, detail="mid"), _T(A["x1"] - 0.8, A["y0"], DECK_Z + 1.4))
     # paso entre la caseta y la nave (12 cm entre muros): forro de lámina en jambas y dintel, umbral de placa estriada
     yd0, yd1 = A["y0"] + A["t"] + 0.5, A["y0"] + A["t"] + 1.5
     xw = WH["x0"] - 0.035
     for yy in (yd0 - 0.004, yd1):
-        inter.box((A["x1"] - 0.02, yy, DECK_Z), (xw + 0.02, yy + 0.004, DECK_Z + 2.1), "metal_paint", bevel=0.0012)
-    inter.box((A["x1"] - 0.02, yd0 - 0.004, DECK_Z + 2.1), (xw + 0.02, yd1 + 0.004, DECK_Z + 2.104), "metal_paint", bevel=0.0012)
-    inter.box((A["x1"] - 0.03, yd0, DECK_Z), (xw + 0.03, yd1, DECK_Z + 0.008), "metal_rust", bevel=0.002)
+        bevbox(inter, (A["x1"] - 0.02, yy, DECK_Z), (xw + 0.02, yy + 0.004, DECK_Z + 2.1), "metal_paint", bevel=0.0012)
+    bevbox(inter, (A["x1"] - 0.02, yd0 - 0.004, DECK_Z + 2.1), (xw + 0.02, yd1 + 0.004, DECK_Z + 2.104), "metal_paint", bevel=0.0012)
+    bevbox(inter, (A["x1"] - 0.03, yd0, DECK_Z), (xw + 0.03, yd1, DECK_Z + 0.008), "metal_rust", bevel=0.002)
     # mobiliario: escritorio metálico volcado sobre su espalda y papeles
     import interior_dress as idr
     inter.join(office_desk(r), _T(A["x0"] + 0.35, A["y0"] + 4.0, DECK_Z) @ _Rz(8) @ _T(0, 0.7, 0) @
@@ -1211,7 +1229,8 @@ def light_pole(det, p, r, lean=0.0, broken=False, yaw=None):
     if yaw is None:
         yaw = math.degrees(math.atan2(-(y - 20.0), -(x - 0.0))) + 90.0
     tilt = Matrix.Rotation(math.radians(lean), 4, "X")
-    det.join(port.light_pole(9.0, int(r.integers(1e6)), broken=broken), _T(x, y, DECK_Z) @ _Rz(yaw) @ tilt)
+    lift = 0.23 * math.sin(math.radians(abs(lean)))      # el poste vencido gira sobre el canto de su placa, no se hunde
+    det.join(port.light_pole(9.0, int(r.integers(1e6)), broken=broken), _T(x, y, DECK_Z + lift) @ _Rz(yaw) @ tilt)
 
 
 # ------------------------------------------------------------------------------------------------------------ objetos sueltos
@@ -1426,7 +1445,7 @@ def build_props(inter, det, sk, r):
         pallet_stack(inter, p, r, n=n, rot=rot)
     for k in range(6):
         pallet(det, _T(float(r.uniform(X0 + 3, X1 - 3)), float(r.uniform(Y0 + 2, Y1 - 2)), z) @ _Rz(float(r.uniform(0, 360))), r)
-    for (p, sz, rot) in ((W(1.4, 9.0), (1.2, 1.0, 1.0), 4), (W(1.6, 10.3), (1.0, 1.0, 0.8), -3), (W(1.5, 9.2), (0.9, 0.8, 0.7), 12),
+    for (p, sz, rot) in ((W(1.4, 9.0), (1.2, 1.0, 1.0), 4), (W(1.6, 10.3), (1.0, 1.0, 0.8), -3), ((X0 + 1.6, Y0 + 9.15, z + 1.02), (0.9, 0.8, 0.7), 12),
                          (W(17.5, 3.0), (1.5, 1.2, 1.1), 20), (W(6.5, 22.2), (1.3, 1.0, 1.0), 0)):
         crate(inter, p, sz, r, rot=rot)
     for p in (W(1.2, 16.5), W(1.8, 17.3), W(1.1, 17.9), W(20.5, 13.0), W(19.8, 13.6)):
@@ -1449,7 +1468,7 @@ def build_props(inter, det, sk, r):
               (bx1 - 1.8, by1 - 1.6, z)):
         drum(inter, p, r)
     drum(det, (bx0 + 12.0, by0 + 6.0, z), r, lying=True, rot=75)
-    for p in ((ax0 + 1.0, ay0 + 22.0, z), (bx0 + 44.0, by1 - 2.0, z)):
+    for p in ((ax0 + 1.0, ay0 + 22.0, z), (bx0 + 42.5, by1 - 2.6, z)):
         crate(inter, p, (1.2, 1.0, 1.0), r, rot=float(r.uniform(0, 30)))
     for p in ((bx0 + 26.0, by1 - 1.8, z), (bx1 - 14.0, by0 + 2.0, z), (bx0 + 16.0, by0 + 2.5, z)):
         rope_coil(det, p, r, R=0.5)
@@ -1467,7 +1486,7 @@ def build_props(inter, det, sk, r):
     # postes de luz en las orillas (uno inclinado y uno sin luminaria) y cable hacia la nave
     for (pp, lean, broken) in POLES:
         light_pole(det, pp, r, lean=lean, broken=broken)
-    det.join(sv.cable_bundle([(ax1 - 0.8, ay1 - 6.0, z + 7.6), (X1 + 0.05, Y1 - 4.0, z + 6.9)], n=3, sag=0.8,
+    det.join(sv.cable_bundle([(ax1 - 0.8 - 0.1, ay1 - 6.0 - 0.03, z + 7.6), (X1 + 0.05, Y1 - 4.0, z + 6.9)], n=3, sag=0.8,
                              seed=int(r.integers(1e6)), detail="low"))
     # letrero rasgado (sin texto) sobre la cortina del frente y arbotantes sobre las puertas
     det.join(sv.sign_torn(w=4.0, h=0.8, seed=int(r.integers(1e6)), detail="mid"), _T(0.0, Y0 - 0.05, z + 5.9))
@@ -1488,7 +1507,7 @@ def build_props(inter, det, sk, r):
         sk.join(dm.chunk(size=float(r.uniform(0.15, 0.45)), seed=int(r.integers(1e6)), detail="low"),
                 _T(sx * float(r.uniform(RAMP_X + 0.8, RAMP_X + 4.0)), float(r.uniform(RAMP_Y0, -3)), 0.0) @
                 _Rz(float(r.uniform(0, 360))))
-    tyre(sk, (-RAMP_X - 3.4, RAMP_Y0 + 1.6, 0.13), r, axis="z")
+    tyre(sk, (-RAMP_X - 4.6, RAMP_Y0 + 0.6, 0.13), r, axis="z")
     drum(sk, (RAMP_X + 1.8, RAMP_Y0 + 1.0, 0.0), r, lying=True, rot=30)
     driftwood(sk, (-RAMP_X - 3.5, -14.0, 0.16), (-RAMP_X - 2.2, -9.4, 0.12), 0.18, r)                    # tronco de deriva
 

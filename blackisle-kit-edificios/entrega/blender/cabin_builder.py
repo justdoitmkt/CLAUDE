@@ -89,8 +89,8 @@ def siding(kind, L, H, seed, ops, rot=0.08):
     if kind == "board_and_batten":
         return cl.board_and_batten(L, H, seed=seed, openings=o, rot=rot)
     if kind == "clapboard":
-        return cl.clapboard(L, H, seed=seed, openings=o, loose=0.08)
-    return cl.brick_wall(L, H, seed=seed, openings=o, missing=0.03, detail="aaa", fallen=False)
+        return cl.clapboard(L, H, seed=seed, openings=o, loose=0.08, corners=(False, False))   # los esquineros los pone la cabaña
+    return cl.brick_wall(L, H, seed=seed, openings=o, missing=0.03, detail="aaa", fallen=False, keep_ends=0.45)
 
 
 def place_ops(L, H, spec):
@@ -112,7 +112,8 @@ def dress_ops(det, M, ops, t, r):
         if kind == "win":
             k = "shutter" if r.random() < 0.6 else ("boarded" if r.random() < 0.3 else "casement")
             cur = r.random() < 0.35 and v0 < 1.5                          # ventana alta (sobre escalera): sin cortina
-            det.join(op.window(k, w, h, t, seed=s, broken=float(r.uniform(0.5, 1.0)), curtain=cur), Mi)
+            # sin alféizar de concreto: la repisa de madera la pone el revestimiento (antes había dos repisas encimadas)
+            det.join(op.window(k, w, h, t, seed=s, broken=float(r.uniform(0.5, 1.0)), curtain=cur, sill=False), Mi)
         elif kind == "door":
             det.join(op.door("plank", w, h, t, seed=s, open_angle=max(60.0, float(r.uniform(10, 70)))), Mi)
         else:
@@ -619,7 +620,9 @@ def build_cabin(bid, collection_root=None, dress_all=True):
         holes0.append((chx - chw / 2 - 0.004, chx + chw / 2 + 0.004, chy - chd / 2 - 0.004, chy + chd / 2 + 0.004))
     if cfg["base"] == "slab":                       # duela de 1" sobre la losa, clavada a rastreles ahogados en el firme
         jx0 = [x for x in [-w / 2 + t + 0.2 + 0.45 * k for k in range(40)] if x < w / 2 - t - 0.1]
-    boards_floor(inter, -w / 2 + t - 0.02, w / 2 - t + 0.02, yf + t - 0.02, d / 2 - t + 0.02, zb0, rw, missing=0.03, holes=holes0,
+    tg = WALL_T[cfg.get("ground", cfg["siding"])]                     # PB de ladrillo: muro de 0,14 (la duela no se mete en él)
+    eg = 0.02 if tg == t else -0.002
+    boards_floor(inter, -w / 2 + tg - eg, w / 2 - tg + eg, yf + tg - eg, d / 2 - tg + eg, zb0, rw, missing=0.03, holes=holes0,
                  nail_xs=jx0, t=0.0283 if cfg["base"] == "slab" else FLOOR_T)
     # ---------------- muros ----------------
     P = []
@@ -676,15 +679,16 @@ def build_cabin(bid, collection_root=None, dress_all=True):
                         k += 1
                     continue
                 # tabla en la cara del testero (cubre el canto del muro de frente/fondo) y tabla en la cara de frente/fondo
-                lbox(shell, (min(xo, xo + sx * 0.026), min(yc + sy * 0.026, yc - sy * (t + 0.12)), zl),
-                     (max(xo, xo + sx * 0.026), max(yc + sy * 0.026, yc - sy * (t + 0.12)), zh), trim_mat, r=rw, axis=2, rc=0.004,
+                xo2 = xo + sx * 0.0015                                    # 1,5 mm por delante de la testa de la tabla traslapada
+                lbox(shell, (min(xo2, xo2 + sx * 0.026), min(yc + sy * 0.0275, yc - sy * (t + 0.12)), zl),
+                     (max(xo2, xo2 + sx * 0.026), max(yc + sy * 0.0275, yc - sy * (t + 0.12)), zh), trim_mat, r=rw, axis=2, rc=0.004,
                      grain=1.0, check=0.6, bow=rw.uniform(-0.002, 0.002))
-                lbox(shell, (min(xo - sx * 0.001, xo - sx * 0.15), min(yc, yc + sy * 0.026), zl),
-                     (max(xo - sx * 0.001, xo - sx * 0.15), max(yc, yc + sy * 0.026), zh), trim_mat, r=rw, axis=2, rc=0.004,
+                lbox(shell, (min(xo - sx * 0.001, xo - sx * 0.15), min(yc + sy * 0.0015, yc + sy * 0.0275), zl),
+                     (max(xo - sx * 0.001, xo - sx * 0.15), max(yc + sy * 0.0015, yc + sy * 0.0275), zh), trim_mat, r=rw, axis=2, rc=0.004,
                      grain=1.0, check=0.6, bow=rw.uniform(-0.002, 0.002))
                 for zz in [zl + 0.25 + 0.6 * k for k in range(int(fh / 0.6))]:
-                    nail(shell, (xo + sx * 0.026, yc - sy * (t + 0.05) + sy * 0.0, zz), (sx, 0, 0), r=0.0046, h=0.0024)
-                    nail(shell, (xo - sx * 0.075, yc + sy * 0.026, zz + 0.05), (0, sy, 0), r=0.0046, h=0.0024)
+                    nail(shell, (xo + sx * 0.0275, yc - sy * (t + 0.05), zz), (sx, 0, 0), r=0.0046, h=0.0024)
+                    nail(shell, (xo - sx * 0.075, yc + sy * 0.0275, zz + 0.05), (0, sy, 0), r=0.0046, h=0.0024)
     # ---------------- entrepiso ----------------
     ceil0 = []                                     # vigas y duela del nivel superior (las divisiones de PB suben hasta ellas)
     if nl > 1:
@@ -729,16 +733,17 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     # ---------------- divisiones ----------------
     idoors = []
     for lv in range(nl):
-        zl = z0 + lv * fh
+        zl = z0 + lv * fh + (zb0 - z0 if lv == 0 else 0.0)                  # sobre la duela (en la losa de CAB_3, 2,8 cm arriba)
         cl_ = ceil0 if lv == 0 else []
-        Hp = fh - 0.005 if cl_ else fh - 0.05
+        Hp = (fh - 0.005 if cl_ else fh - 0.05) - (zb0 - z0 if lv == 0 else 0.0)
         xs_ = cfg["split_x"]
-        partition_wood(inter, (xs_, yf + t), (xs_, d / 2 - t), zl, Hp, doors=[(-0.6, 0.85)] if lv == 0 else [(-0.6, 0.85), (2.4, 0.85)],
+        tl = tg if lv == 0 else t
+        partition_wood(inter, (xs_, yf + tl), (xs_, d / 2 - tl), zl, Hp, doors=[(-0.6, 0.85)] if lv == 0 else [(-0.6, 0.85), (2.4, 0.85)],
                        out=idoors, r=rw, ceil=cl_)
         if lv == 0:
-            partition_wood(inter, (xs_, 0.9), (w / 2 - t, 0.9), zl, Hp, doors=[(xs_ + 1.0, 0.8)], out=idoors, r=rw, ceil=cl_)
+            partition_wood(inter, (xs_ + 0.026, 0.9), (w / 2 - tl, 0.9), zl, Hp, doors=[(xs_ + 1.0, 0.8)], out=idoors, r=rw, ceil=cl_)
         elif hole:
-            partition_wood(inter, (-w / 2 + t, hole[2] - 0.15), (xs_, hole[2] - 0.15), zl, Hp, doors=[(hole[1] + 0.6, 0.85)], out=idoors,
+            partition_wood(inter, (-w / 2 + t, hole[2] - 0.15), (xs_ - 0.026, hole[2] - 0.15), zl, Hp, doors=[(hole[1] + 0.6, 0.85)], out=idoors,
                            r=rw, ceil=cl_)
     n_id = 0
     for dd in idoors:
@@ -939,7 +944,7 @@ def _stilts(cfg, shell, rw, r):
             # cachetes (2x6 de 0,55) en las caras ±y: abrazan pilote y viga madre, 2 tornillos en cada uno
             for sg in (-1, 1):
                 yy = y + sg * (0.1 + 0.019 + 0.0005)
-                lumber(shell, (x, yy, zg0 - 0.28), (x, yy, zg0 + 0.27), 0.14, 0.038, "wood_grey", up=(0, 1, 0), r=rw, rc=0.004, grain=1.0,
+                lumber(shell, (x, yy, zg0 - 0.28), (x, yy, zg1 - 0.006), 0.14, 0.038, "wood_grey", up=(0, 1, 0), r=rw, rc=0.004, grain=1.0,
                        check=0.5)
             for zz in (zg0 - 0.2, zg0 - 0.08, zg0 + 0.07, zg0 + 0.19):
                 for dx in (-0.035, 0.035):
@@ -961,7 +966,11 @@ def _stilts(cfg, shell, rw, r):
         lbox(shell, (-w / 2, y - 0.1, zg0), (w / 2, y + 0.1, zg1), "wood_dark", r=rw, axis=0, rc=0.008, check=1.0, grain=1.0, step=0.6)
     for (a, b) in (((-w / 2, yf), (w / 2, yf + t)), ((-w / 2, d / 2 - t), (w / 2, d / 2)),       # vigas de borde bajo los muros
                    ((-w / 2, yf + t), (-w / 2 + t, d / 2 - t)), ((w / 2 - t, yf + t), (w / 2, d / 2 - t))):
-        lbox(shell, (a[0], a[1], zg1 + 0.001), (b[0], b[1], z0 - 0.002), "wood_dark", r=rw, rc=0.006, check=0.7, grain=1.0)
+        lbox(shell, (a[0], a[1], zg1 + 0.001), (b[0], b[1], z0 - 0.0305), "wood_dark", r=rw, rc=0.006, check=0.7, grain=1.0)
+    # soleras bajo los muros (sobre las vigas de borde, fuera de la duela): cierran los 3 cm entre viga y muro
+    for (a, b) in (((-w / 2, yf), (w / 2, yf + t - 0.021)), ((-w / 2, d / 2 - t + 0.021), (w / 2, d / 2)),
+                   ((-w / 2, yf + t - 0.0205), (-w / 2 + t - 0.021, d / 2 - t + 0.0205)), ((w / 2 - t + 0.021, yf + t - 0.0205), (w / 2, d / 2 - t + 0.0205))):
+        lbox(shell, (a[0], a[1], z0 - 0.0303), (b[0], b[1], z0 - 0.0005), "wood_dark", r=rw, rc=0.004, grain=0.8)
     # cruces de San Andrés: en frente y fondo, una diagonal por la cara exterior y la otra por la interior del pilote
     zl_, zh_ = 0.5, 1.1
     for i in range(len(xs) - 1):
@@ -974,7 +983,7 @@ def _stilts(cfg, shell, rw, r):
                 _brace(shell, p0, p1, Vector((0, face, 0)), rw)
     for j in range(len(ys) - 1):
         for x in (xs[0], xs[-1]):
-            face = 1 if x < 0 else -1                                             # cara interior del pilote de orilla
+            face = -1 if x < 0 else 1                         # cara exterior del pilote de orilla (no cruza la diagonal interior)
             xx = x + face * (0.1 + 0.02)
             p0, p1 = Vector((xx, ys[j], zl_)), Vector((xx, ys[j + 1], zh_))
             _brace(shell, p0, p1, Vector((face, 0, 0)), rw)
@@ -1579,11 +1588,18 @@ def build_porch(cfg, shell, det, roof, r):
     holes = [(px - 0.072, px + 0.072, py - 0.072, py + 0.072) for (px, py) in posts]
     if west:
         lbox(shell, (x1 - 0.062, y0, zj_top - hj), (x1 - 0.024, y1, zj_top), "wood_grey", r=rw, axis=1, rc=0.004, check=0.6)   # ledger
-        lbox(shell, (x0 + 0.171, y0, zj_top - hj), (x0 + 0.209, y1, zj_top), "wood_grey", r=rw, axis=1, rc=0.004, check=0.6)   # borde
+        for xx in (x0 + 0.171, x0 + 0.2095):                                   # viga doble bajo las vigas de piso, atornillada a los postes
+            lbox(shell, (xx, y0, zj_top - hj - 0.14), (xx + 0.038, y1, zj_top - hj - 0.0003), "wood_grey", r=rw, axis=1, rc=0.004, check=0.6)
+        for (px, py) in posts:
+            for zz in (zj_top - hj - 0.1, zj_top - hj - 0.04):
+                bolt_head(shell, (x0 + 0.2475, py, zz), (1, 0, 0), d=0.012, kind="nut")
         for k in range(int((y1 - y0) / 0.406) + 1):
             yy = min(y0 + 0.03 + 0.406 * k, y1 - 0.03)
+            near = [py for (px, py) in posts if abs(py - yy) < 0.07 + 0.021]
+            if near:                                                            # la viga pasa junto al poste, no a través
+                yy = near[0] + (0.092 if yy >= near[0] else -0.092)
             jpos.append(yy)
-            lumber(shell, (x0 + 0.21, yy, zj_top - hj / 2), (x1 - 0.063, yy, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
+            lumber(shell, (x0 + 0.031, yy, zj_top - hj / 2), (x1 - 0.063, yy, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
                    r=rw, rc=0.004, check=0.5 if rw.random() < 0.4 else 0.0)
             if yy + 0.2 < y1:                                                   # pija de la viga de amarre
                 bolt_head(shell, (x1 - 0.0625, yy + 0.2, zj_top - hj / 2), (1, 0, 0), d=0.012, kind="nut")
@@ -1596,11 +1612,18 @@ def build_porch(cfg, shell, det, roof, r):
         tmp.bm.free()
     else:
         lbox(shell, (x0, y1 - 0.062, zj_top - hj), (x1, y1 - 0.024, zj_top), "wood_grey", r=rw, axis=0, rc=0.004, check=0.6)
-        lbox(shell, (x0, y0 + 0.171, zj_top - hj), (x1, y0 + 0.209, zj_top), "wood_grey", r=rw, axis=0, rc=0.004, check=0.6)
+        for yy_ in (y0 + 0.171, y0 + 0.2095):
+            lbox(shell, (x0, yy_, zj_top - hj - 0.14), (x1, yy_ + 0.038, zj_top - hj - 0.0003), "wood_grey", r=rw, axis=0, rc=0.004, check=0.6)
+        for (px, py) in posts:
+            for zz in (zj_top - hj - 0.1, zj_top - hj - 0.04):
+                bolt_head(shell, (px, y0 + 0.2475, zz), (0, 1, 0), d=0.012, kind="nut")
         for k in range(int((x1 - x0) / 0.406) + 1):
             xx = min(x0 + 0.03 + 0.406 * k, x1 - 0.03)
+            near = [px for (px, py) in posts if abs(px - xx) < 0.07 + 0.021]
+            if near:
+                xx = near[0] + (0.092 if xx >= near[0] else -0.092)
             jpos.append(xx)
-            lumber(shell, (xx, y0 + 0.21, zj_top - hj / 2), (xx, y1 - 0.063, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
+            lumber(shell, (xx, y0 + 0.031, zj_top - hj / 2), (xx, y1 - 0.063, zj_top - hj / 2), 0.038, hj, "wood_grey", up=(0, 0, 1),
                    r=rw, rc=0.004, check=0.5 if rw.random() < 0.4 else 0.0)
         boards_floor(shell, x0 + 0.02, x1 - 0.02, y0, y0 + 0.42, zdeck, rw, missing=0.0, mat="wood_grey", holes=holes, nail_xs=jpos, t=DT)
         boards_floor(shell, x0 + 0.02, x1 - 0.02, y0 + 0.42, y1, zdeck, rw, missing=0.08, mat="wood_grey", holes=holes, nail_xs=jpos, t=DT)
@@ -1626,7 +1649,7 @@ def build_porch(cfg, shell, det, roof, r):
     # ---- barandal entre postes y escalones ----
     if west:
         xr = x0 + 0.1
-        segs = [(y0 + 0.1 + 0.07, (y0 + y1) / 2 - 0.07), ((y0 + y1) / 2 + 0.07, y1 - 1.4)]
+        segs = [(y0 + 0.1 + 0.105, (y0 + y1) / 2 - 0.105), ((y0 + y1) / 2 + 0.105, y1 - 1.4)]
         for i, (a, b) in enumerate(segs):
             if b - a > 0.3:
                 ac.rail_along(det, "wood", (xr, a), (xr, b), zdeck, "-x", seed=cfg["seed"] + 21 + i, bend=0.2 if i == 0 else 0.0, missing=0.2)
@@ -1636,8 +1659,8 @@ def build_porch(cfg, shell, det, roof, r):
         stair_rect = (x0 - run, x0, y1 - 1.25, y1 - 0.25)
     else:
         yr = y0 + 0.1
-        det.join(circ.railing("wood", (sx0 - 0.15) - (x0 + 0.17), h=0.9, seed=cfg["seed"] + 21, missing=0.15), T(x0 + 0.17, yr, zdeck))
-        det.join(circ.railing("wood", (x1 - 0.17) - (sx1 + 0.05), h=0.9, seed=cfg["seed"] + 22, missing=0.1, bend=0.2),
+        det.join(circ.railing("wood", (sx0 - 0.185) - (x0 + 0.205), h=0.9, seed=cfg["seed"] + 21, missing=0.15), T(x0 + 0.205, yr, zdeck))
+        det.join(circ.railing("wood", (x1 - 0.205) - (sx1 + 0.05), h=0.9, seed=cfg["seed"] + 22, missing=0.1, bend=0.2),
                  T(sx1 + 0.05, yr, zdeck))
         st = circ.stair_straight(width=sx1 - sx0, rise_total=zdeck, seed=cfg["seed"] + 23, kind="wood", going=0.28, broken=0.15)
         run = (st.meta["N"] - 1) * 0.28 if hasattr(st, "meta") and "N" in st.meta else 0.56
@@ -1686,14 +1709,15 @@ def build_veranda(cfg, shell, det, r, top, z_crown):
             bolt_head(shell, (x, yy + sg * 0.005, z0 + 0.055), (0, sg, 0), d=0.011, kind="carriage" if sg < 0 else "nut")
     # barandal: tramos entre postes (deja libre el arranque de la escalera en el tramo oeste)
     for i in range(len(xs) - 1):
-        a, b = xs[i] + 0.06, xs[i + 1] - 0.06
+        a, b = xs[i] + 0.06 + 0.035, xs[i + 1] - 0.06 - 0.035          # el pasamanos vuela 3 cm: no se mete en el poste
         if i == 0:
             a = a + 1.0
         det.join(circ.railing("wood", b - a, h=0.95, seed=int(r.integers(1e6)), missing=0.12, bend=0.2 if i == 2 else 0.0),
                  T(a, y0 + 0.08, z0))
     for sx in (-1, 1):
         x = sx * (w / 2 - 0.04)
-        ac.rail_along(det, "wood", (x, y0 + 0.14), (x, yf), z0, "-x" if sx < 0 else "+x", seed=int(r.integers(1e6)), h=0.95, missing=0.1)
+        ac.rail_along(det, "wood", (x, y0 + 0.14 + 0.035), (x, yf - 0.09), z0, "-x" if sx < 0 else "+x", seed=int(r.integers(1e6)), h=0.95,
+                      missing=0.1)
     st = circ.stair_straight(width=1.0, rise_total=z0, seed=cfg["seed"] + 23, kind="wood", going=0.26, broken=0.12, rail="wood", rail_side="both")
     run = (st.meta["N"] - 1) * 0.26 if hasattr(st, "meta") and "N" in st.meta else 2.6
     det.join(st, T(xs[0] + 1.06, y0 - run, 0.0) @ RZ(90))
@@ -1703,7 +1727,7 @@ def build_veranda(cfg, shell, det, r, top, z_crown):
         v = 0.0
         while v < zt - 0.02:
             hb = min(0.15, zt - v)
-            lumber(shell, (-w / 2 + 0.002, yf + 0.011, z_crown + v + hb / 2), (w / 2 - 0.002, yf + 0.011, z_crown + v + hb / 2), hb - 0.004,
+            lumber(shell, (-w / 2 + 0.03, yf + 0.011, z_crown + v + hb / 2), (w / 2 - 0.03, yf + 0.011, z_crown + v + hb / 2), hb - 0.004,
                    0.02, "wood_grey", up=(0, -1, 0), r=rw, rc=0.003, grain=1.0, check=0.4)
             for xx in [-w / 2 + 0.3 + 0.6 * k for k in range(int(w / 0.6))]:
                 nail(shell, (xx, yf + 0.0005, z_crown + v + 0.03), (0, -1, 0), r=0.0045, h=0.0024)

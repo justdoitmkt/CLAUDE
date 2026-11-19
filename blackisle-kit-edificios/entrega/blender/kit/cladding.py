@@ -707,7 +707,7 @@ def _patch(mb, pts, t, mat, m, r):
 
 
 def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14, plaster=0.12, lintel_courses=3,
-               fallen=True, detail="high"):
+               fallen=True, detail="high", keep_ends=0.0):
     """Muro de ladrillo individual a soga sobre núcleo de mortero (ver cabecera). openings como wall_with_openings.
     detail = 'aaa' | 'high' | 'mid' | 'low' (BRICK_LOD); la disposición (aparejo, faltantes, descascarados, caídos, revoque) es la
     misma en los tres niveles. Ladrillo de 20 / 10 / 6 tris (bisel / caja sin trasera / cara + tabla + sardinel; los de
@@ -862,6 +862,8 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
             if any(pu + ru > o[0] - 0.03 and pu - ru < o[1] + 0.03 and pv + rv > o[2] - 0.03 and pv - rv < o[3] + 0.03
                    for o in stone):
                 continue
+            if keep_ends and (pu - ru * 1.3 < keep_ends or pu + ru * 1.3 > L - keep_ends):
+                continue                                                  # sin revoque bajo los sillares de esquina
             nn = _N1(r, wl=1.0, n=4)
             pts = []
             jit = [r.uniform(-0.06, 0.06) for _ in range(22)]
@@ -871,8 +873,8 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 k = 1.0 + 0.32 * nn(a * 2.0) + jit[int(i * 22 / npp)]
                 pts.append((min(max(pu + ru * k * math.cos(a), 0.01), L - 0.01), min(max(pv + rv * k * math.sin(a), 0.01), H - 0.01)))
             t = r.uniform(0.008, 0.013)
-            m = Matrix(((1, 0, 0, 0), (0, 0, -1, -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
-            if detail == "aaa":
+            m = Matrix(((1, 0, 0, 0), (0, 0, -1, 0.002 if detail == "aaa" else -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
+            if detail == "aaa":                                           # el parche asienta 2 mm dentro de la cara del ladrillo
                 _patch(mb, pts, t, "plaster", m, r)
             else:
                 mb.plate(pts, t, "plaster", m=m)
@@ -1051,6 +1053,10 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
                    jag0=0.02 if c > 0.05 else 0.0)
             if M is not None:
                 M = _T(0, -0.002, 0) @ M
+                # el clavo del que cuelga: cabeza sobre el junquillo y caña que lo atraviesa hasta el tablón
+                with tmp.soft():
+                    tmp.tube([(um, yo - 0.003, d - 0.05), (um, 0.006, d - 0.05)], 0.0016, seg=8, mat="metal_rust")
+                nail(tmp, (um, yo - 0.0005, d - 0.05), (0, -1, 0), r=0.0046, h=0.0025)
             mb.join(tmp, M)
             tmp.bm.free()
             for gv in girts_v:

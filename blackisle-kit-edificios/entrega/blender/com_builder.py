@@ -834,6 +834,7 @@ def tower_site(det, furn, tw, an, tel, r):
         nbox = [0, 0, 0]
 
         nsec = [0, 0, 0]
+        pending = []
 
         def to_box(e, rad, mat, kind, sec=0, via=()):
             """Cola colgante e -> (puntos `via`) -> baja/sube a la cama de su sector bajo la plataforma (cada sector a su altura y
@@ -841,20 +842,35 @@ def tower_site(det, furn, tw, an, tel, r):
             a una caja."""
             e = Vector(e)
             bi = int(np.argmin([(b - e).length for b in boxes]))
-            b = boxes[bi]
-            k = nbox[bi]
-            nbox[bi] += 1
             q = nsec[sec]
             nsec[sec] += 1
-            ent = b + Vector(((k % 3 - 1) * 0.03, 0.0, 0.0)) + R3 @ Vector((0.0, (k // 3 - 0.5) * 0.04, 0.0))
-            zb = G.z_top - 0.27 - 0.034 * sec - 0.012 * (q % 3)
-            c = Vector((TOWER["x"], TOWER["y"], zb))
+            pending.append((e, rad, mat, sec, via, bi, q))
+
+        TMi = TM.inverted()
+
+        def corridor(last, sec, q, zb, ent=None):
+            """Recorrido bajo la plataforma (coordenadas de la torre) que NO cruza la zona del escalador (x -0,66..-0,02,
+            y -0,60..0,30 frente a la escalera y bajo la escotilla): los cables del lado de la escalera dan la vuelta por fuera de la
+            cara +Y (pasillo y = 0,62) o por fuera de la pata 0 (pasillo inferior) y llegan a las cajas por el lado derecho."""
+            lv = TMi @ Vector((last.x, last.y, zb))
+            W = lambda x, y: TM @ Vector((x, y, zb))          # noqa: E731
+            el = TMi @ ent if ent is not None else Vector((0.30, 0.155, 0.0))
+            if lv.x > 0.05 and lv.y <= 0.40:                 # lado derecho: directo, llega a la caja por el lado del centro
+                return [W(el.x, el.y - 0.12)], W(el.x, el.y - 0.12)
+            if lv.y > -0.30:                                 # pasillo superior (fuera de la cara de la escalera), llega por arriba;
+                yl_ = 0.60 + 0.021 * q                       # antes se arrima a |x| <= 0,95 por donde las tornapuntas de las
+                xp = max(-0.95, min(0.95, lv.x))             # patas 1 y 2 aún van bajas (no las cruza a la altura de la cama)
+                return [W(xp, lv.y), W(xp, yl_), W(el.x, yl_), W(el.x, el.y + 0.12)], W(el.x, el.y + 0.12)
+            xl_ = 0.22 + 0.021 * q                           # pasillo inferior: rodea la pata 0 por fuera
+            return ([W(min(lv.x, -0.25), -1.05 - 0.021 * q), W(xl_, -1.05 - 0.021 * q), W(el.x, el.y - 0.12)],
+                    W(el.x, el.y - 0.12))
+
+        def draw_box(e, rad, mat, sec, via, b, ent, q, lev):
+            zb = G.z_top - 0.20 - 0.0125 * lev                # un nivel por cable: cruzan unos sobre otros, nunca a través
             last = Vector(via[-1]) if via else e
-            rad_ = Vector((last.x - c.x, last.y - c.y, 0.0))
-            side = Vector((-rad_.y, rad_.x, 0.0)).normalized() if rad_.length > 1e-6 else Vector((1, 0, 0))
-            mid = c + (Vector((last.x, last.y, zb)) - c) * 0.45 + side * ((q - 3) * 0.022)
-            P = _sfillet([tuple(e)] + [tuple(v) for v in via] + [(last.x, last.y, zb + (0.06 if last.z > zb else -0.06)), (last.x, last.y, zb),
-                          tuple(mid), (ent.x, ent.y, zb), (ent.x, ent.y, ent.z + 0.05), (ent.x, ent.y, ent.z)], 0.07, 6)
+            wp, _ = corridor(last, sec, q, zb, ent)
+            P = _sfillet([tuple(e)] + [tuple(v) for v in via] + [(last.x, last.y, zb + (0.06 if last.z > zb else -0.06)), (last.x, last.y, zb)]
+                         + [tuple(v) for v in wp] + [(ent.x, ent.y, zb), (ent.x, ent.y, ent.z + 0.05), (ent.x, ent.y, ent.z)], 0.07, 6)
             det.tube(P, rad, seg=14, mat=mat)
             ce.lathe(det, [(rad + 0.004, 0.0), (rad + 0.006, 0.003), (rad + 0.006, 0.014), (rad + 0.0025, 0.020)], seg=16, mat="plastic",
                      M=_T(ent.x, ent.y, ent.z - 0.004))
@@ -874,7 +890,12 @@ def tower_site(det, furn, tw, an, tel, r):
                                  0.004, seg=14, mat="cable")
                         _rbox(det, tuple(M0 @ Vector((-0.02, -0.052, 40.22))), tuple(M0 @ Vector((0.02, -0.036, 40.27))), "copper", r=0.003)
                     else:
-                        to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k, sec=j // 3)
+                        el_ = M0.inverted() @ pe
+                        xs_ = (-0.14, 0.15, 0.17)[k]
+                        zv = G.z_top - 0.32
+                        to_box(pe, 0.0075 if k == 0 else 0.0035, "cable" if k == 0 else "paint_yellow", k, sec=j // 3,
+                               via=[tuple(M0 @ Vector((el_.x, el_.y, zv + 0.08))), tuple(M0 @ Vector((xs_, el_.y, zv))),
+                                    tuple(M0 @ Vector((xs_, (0.30, 0.36, 0.42)[k], zv)))])
             else:                                                        # panel pasivo + RRU abajo con 4 jumpers
                 Mp = M0 @ _T(0, 0, 39.80)
                 det.join(an.panel_antenna(seed=sd, tilt_deg=4.0), Mp)
@@ -884,13 +905,42 @@ def tower_site(det, furn, tw, an, tel, r):
                 for k, rp in enumerate(an.rru_ports()):
                     det.join(an.jumper([tuple(Mr @ Vector(rp)), tuple(Mp @ Vector(pports[k]))], r=0.008,
                                        band=("sign_red", "sign_blue", "sign_green", "paint_yellow")[k]))
-                for (x, rad, mat, xs) in ((-0.06, 0.0075, "cable", -0.165), (-0.03, 0.0035, "paint_yellow", -0.185)):
+                for (x, rad, mat, xs) in ((-0.06, 0.0075, "cable", -0.165), (-0.03, 0.0035, "paint_yellow", 0.165)):
                     a0 = Mr @ Vector((x, -0.100, -0.026))
                     det.tube([tuple(a0), (a0.x, a0.y, a0.z - 0.10)], rad, seg=14, mat=mat, caps=False)
                     # bajo el radio se hace a un lado (fuera de su ancho de 270 mm) antes de subir a la cama: no lo atraviesa
                     zl = a0.z - 0.10
                     to_box(Vector((a0.x, a0.y, zl)), rad, mat, 0, sec=j // 3,
-                           via=[tuple(Mr @ Vector((x - 0.03, -0.100, -0.126 - 0.03))), tuple(Mr @ Vector((xs, -0.100, -0.126 - 0.04)))])
+                           via=[tuple(Mr @ Vector((x + (0.03 if xs > 0 else -0.03), -0.100, -0.126 - 0.03))),
+                                tuple(Mr @ Vector((xs, -0.100, -0.126 - 0.04))), tuple(Mr @ Vector((xs, 0.30 if xs < 0 else 0.38, -0.126 - 0.04)))])
+        # niveles de la cama: uno por cable, alternando alimentación (Ø 15) y fibra (Ø 7) para que dos de alimentación nunca
+        # queden a menos de 25 mm en altura; todos entre el peldaño de la escalerilla (39,4 m) y las vigas de la plataforma
+        pw_ = [p_ for p_ in pending if p_[1] > 0.005]
+        fb_ = [p_ for p_ in pending if p_[1] <= 0.005]
+        levels, lv_ = {}, 0
+        while pw_ or fb_:
+            for lst_ in (pw_, fb_):
+                if lst_:
+                    levels[id(lst_.pop(0))] = lv_
+                    lv_ += 1
+        for bi, b in enumerate(boxes):                    # entradas de cada caja en el orden del ángulo de llegada
+            req = [q_ for q_ in pending if q_[5] == bi]
+            ang = []
+            for (e, rad, mat, sec, via, _, q) in req:
+                last = Vector(via[-1]) if via else e
+                lv = TMi @ last
+                ang.append(math.atan2(lv.y - (TMi @ b).y, lv.x - (TMi @ b).x))
+            def from_top(i):
+                last = Vector(req[i][4][-1]) if req[i][4] else req[i][0]
+                lv = TMi @ last
+                return lv.y > -0.30 and not (lv.x > 0.05 and lv.y <= 0.40)
+            for row, sel in ((1, [i for i in range(len(req)) if from_top(i)]), (-1, [i for i in range(len(req)) if not from_top(i)])):
+                ordr = sorted(sel, key=lambda i: (TMi @ (Vector(req[i][4][-1]) if req[i][4] else req[i][0])).x)
+                n_ = len(ordr)
+                for slot, i in enumerate(ordr):
+                    e, rad, mat, sec, via, _, q = req[i]
+                    ent = b + R3 @ Vector(((slot - (n_ - 1) / 2) * (0.10 / max(n_ - 1, 1)) if n_ > 1 else 0.0, row * 0.022, 0.0))
+                    draw_box(e, rad, mat, sec, via, b, ent, q, levels[id(req[i])])
         # platos de microondas (0,9 y 0,6 m) en la plataforma intermedia
         for k, d in enumerate(mounts["dish"]):
             px, py = d["pipe_pos"]
@@ -908,7 +958,7 @@ def tower_site(det, furn, tw, an, tel, r):
             am = math.atan2(py, px)
             tv = Vector((-math.sin(am), math.cos(am), 0.0)) * sg
             nn = Vector((math.cos(am), math.sin(am), 0.0))
-            gl = TM @ (Vector((px, py, G.z_mw + 0.15 - 0.032)) + tv * 0.075 + nn * 0.035)
+            gl = TM @ (Vector((px, py, G.z_mw + getattr(tw, "MWBOX_DZ", 0.15) - 0.032)) + tv * 0.075 + nn * 0.035)
             s0 = Md @ Vector((-0.05, -0.228 + 0.029 + 0.108 * 0.45, -0.1605 - 0.026))
             low = min(s0.z, gl.z) - 0.16
             P = _sfillet([tuple(s0), (s0.x, s0.y, s0.z - 0.08), tuple((s0.lerp(gl, 0.5)) + Vector((0, 0, low - s0.lerp(gl, 0.5).z))),
@@ -933,23 +983,22 @@ def tower_site(det, furn, tw, an, tel, r):
     boots = [(py_ + PORT_U[i], pz_ - 0.085 + j * 0.085) for j in range(3) for i in range(7)]
     order = sorted(range(len(cab)), key=lambda i: (cab[i]["x"], cab[i]["row"]))
     # capa sobre el puente (12 abajo y 6 encima) y, en el puerto, cada cable a la columna de botas de su lado (sin cruzarse)
-    slots = []
-    for n_, i in enumerate(order):
-        lay = 0 if n_ % 3 != 1 else 1
-        slots.append((i, lay))
-    bottom = [i for (i, l) in slots if l == 0]
-    upper = [i for (i, l) in slots if l == 1]
+    # dos capas como en la escalerilla de la torre: la fila B de la salida (la de abajo) va en la capa de abajo y la fila A
+    # encima, al mismo paso de 42 mm y en el mismo orden lateral: los cables pasan de la torre al puente sin cruzarse
+    lower = sorted([i for i in range(len(cab)) if cab[i]["row"] == "B"], key=lambda i: cab[i]["x"])
+    upper = sorted([i for i in range(len(cab)) if cab[i]["row"] == "A"], key=lambda i: cab[i]["x"])
     place = {}
-    for q, i in enumerate(bottom):
-        place[i] = (yc + (q - (len(bottom) - 1) / 2) * 0.031, 0)
+    for q, i in enumerate(lower):
+        place[i] = (yc + (q - (len(lower) - 1) / 2) * 0.042, 0)
     for q, i in enumerate(upper):
-        place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.050, 1)
+        place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.042, 1)
     by_y = sorted(place, key=lambda i: place[i][0])
     cols = [[] for _ in range(6)]
     for q, i in enumerate(by_y):
         cols[q * 6 // len(by_y)].append(i)
     boot_of = {}
     for ci, lst in enumerate(cols):
+        lst = sorted(lst, key=lambda i: (-place[i][1], place[i][0]))     # el de la capa de arriba va a la fila de arriba
         for m, i in enumerate(lst):
             boot_of[i] = (ci, m % 3, m >= 3)
     for i in order:
@@ -957,18 +1006,18 @@ def tower_site(det, furn, tw, an, tel, r):
         zh = G.z_exit - (yA - c["y"])
         p0 = TM @ Vector((c["x"], y_exit - 0.004 * (c["k"] % 3), zh))
         yy, lay = place[i]
-        zz = z_bed + c["r"] + (0.0 if lay == 0 else 0.024)
+        zz = z_bed + (c["r"] if lay == 0 else 0.026 + 0.0015 + c["r"])
         ci, rj, dub = boot_of[i]
         by, bz = boots[(2 - rj) * 7 + ci]
         tip = SH_X1 + 0.076
-        P = _sfillet([tuple(p0), (p0.x - 0.12, p0.y, p0.z), (x_t - 0.25, yy, zz), (x_s + 0.35, yy, zz), (x_s - 0.02, yy, zz),
-                       (x_s - 0.10, (yy + by) / 2, min(zz, bz) - 0.16), (tip + 0.14, by, bz - 0.04), (tip + 0.05, by, bz), (tip, by, bz)],
-                      0.12, 8)
+        P = _sfillet([tuple(p0), (p0.x - 0.12, p0.y, p0.z), (p0.x - 0.26, yy, max(p0.z, zz)), (x_t - 0.40, yy, zz), (x_s + 0.35, yy, zz),
+                      (x_s - 0.02, yy, zz),
+                       (SH_X1 + 0.235, by, bz - 0.11), (SH_X1 + 0.16, by, bz - 0.03), (tip + 0.035, by, bz), (tip, by, bz)], 0.10, 8)
         furn.tube(P, c["r"], seg=14, mat=c["mat"])
     # flejes inoxidables con hebilla cada ~0,9 m sobre el puente
     nst = max(2, int((x_t - x_s) / 0.9))
     for k in range(nst):
-        x = x_s + 0.3 + (x_t - x_s - 0.6) * k / (nst - 1)
+        x = x_s + 0.3 + (x_t - x_s - 0.75) * k / (nst - 1)
         loop = [(x, yc - 0.205, z_bed - 0.004), (x, yc - 0.205, z_bed + 0.062), (x, yc + 0.205, z_bed + 0.062),
                 (x, yc + 0.205, z_bed - 0.004)]
         rect_sweep(furn, _sfillet(loop, 0.012, 3), 0.0127, 0.0008, 0.0003, "steel", lambda p: (0, 0, 1) if p[2] > z_bed + 0.03 else

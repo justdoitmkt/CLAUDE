@@ -382,9 +382,9 @@ def _bale_ring(hy, hz, rc, n=48):
 
 def _mat_hay(y, z, sd):
     """Relieve de la testa de una paca (la cara de un tajo: popotes aplastados en todas direcciones): grumos de 2-3 cm y
-    mechones de 5-8 mm, hasta ~5 mm hacia afuera."""
-    return 0.0028 * (0.5 + 0.5 * noise.noise(Vector((y * 28 + sd, z * 28, 1.7)))) + \
-        0.0018 * (0.5 + 0.5 * noise.noise(Vector((y * 75, z * 75 + sd, 4.2))))
+    mechones de 5-8 mm, hasta ~9 mm hacia afuera."""
+    return 0.0055 * (0.5 + 0.5 * noise.noise(Vector((y * 28 + sd, z * 28, 1.7)))) + \
+        0.0035 * (0.5 + 0.5 * noise.noise(Vector((y * 75, z * 75 + sd, 4.2))))
 
 
 def hay_bale(seed=0):
@@ -511,7 +511,7 @@ def hay_bale(seed=0):
     areas = np.array([a_ * (1.0 + 12.0 * (1.0 - max(abs(n_.x), abs(n_.y), abs(n_.z)))) for (_, n_, a_) in faces])   # más en aristas
     cdf = np.cumsum(areas) / areas.sum()
     n_long = n_stub = tries = 0
-    NL, NS = 50, 90
+    NL, NS = 50, 140
     while (n_long < NL or n_stub < NS) and tries < 8000:
         tries += 1
         c, nrm, _ = faces[int(np.searchsorted(cdf, r.uniform()))]
@@ -2439,19 +2439,22 @@ def split_rail(mb, p0, p1, w, t, rr, mat="wood_grey", seg=9, face=(0, -1, 0)):
     return M, L
 
 
-def pen_fence(L=4.0, h=1.3, seed=0):
+def pen_fence(L=4.0, h=1.3, seed=0, post0=True, post1=True):
     """Cerca de corral a la intemperie: postes rollizos chuecos de mezquite (Ø 12-15 cm, cabeza gastada, grietas) a cada ~2 m,
     tres morillos partidos por tramo clavados al frente de los postes, empalmados en los postes intermedios uno junto a otro;
-    algunos amarres de alambre galvanizado (3 vueltas) además de los clavos. Corre a lo largo de +X. ≤ 4 000 triángulos."""
+    algunos amarres de alambre galvanizado (3 vueltas) además de los clavos. Corre a lo largo de +X. post0/post1=False: sin el
+    poste de ese extremo (esquina compartida con otro tramo: los morillos se clavan al costado del poste del otro tramo)."""
     r = rng(seed)
     mb = MB()
     nb = max(1, int(round(L / 2.0)))
     xs = [L * k / nb for k in range(nb + 1)]
     rp = []
     pm = MB()
-    for x in xs:
+    for i_, x in enumerate(xs):
         r0 = float(r.uniform(0.065, 0.078))
         rp.append(r0)
+        if (i_ == 0 and not post0) or (i_ == len(xs) - 1 and not post1):
+            continue
         log_post(pm, (x, 0.0, -0.06), (x + float(r.uniform(-0.03, 0.03)), float(r.uniform(-0.02, 0.02)), h + float(r.uniform(0.05, 0.16))),
                  r0, r0 * 0.88, "wood_grey", r, seg=12, rings=10, crook=0.022, checks=2)
     tree = BVHTree.FromBMesh(pm.bm)
@@ -2480,6 +2483,8 @@ def pen_fence(L=4.0, h=1.3, seed=0):
                     nail(mb, _T(xp + float(r.uniform(-0.02, 0.02)), yp - tk + 0.004, zp + dzn) @ _Rx(90), r=0.006, seg=5, mat="metal_rust")
     # amarres de alambre: 3 vueltas alrededor del poste y el morillo
     for (xi, k) in sorted({(0, 1), (nb, 0), (min(1, nb), 2), (nb, 2), (min(1, nb), 0)}):
+        if (xi == 0 and not post0) or (xi == nb and not post1):
+            continue
         x = xs[xi]
         z = zr[k]
         R = rp[xi] + 0.06
@@ -2569,7 +2574,7 @@ def wire_fence(L=6.0, seed=0, brace_ends=False):
     de alambre de púas comercial (dos alambres de 12,5 ga torcidos, púas de 4 puntas de 14 ga a cada 5" = 12,7 cm) con
     catenaria entre postes, grapas en U de alambre de 9 ga clavadas sobre el hilo en cada poste. brace_ends=True: postes de
     extremo más gruesos con tornapunta en H (travesaño a 0,92 m y tirante diagonal de alambre doble torcido con su tarabilla) y
-    los hilos dan vuelta al poste y se amarran sobre sí mismos. Corre a lo largo de +X. Púas a 12,7 cm (Bekaert / Red Brand)."""
+    los hilos rematan engrapados en la cara del poste de extremo. Corre a lo largo de +X. Púas a 12,7 cm (Bekaert / Red Brand)."""
     r = rng(seed)
     mb = MB()
     nb = max(1, int(math.ceil(L / 2.5)))
