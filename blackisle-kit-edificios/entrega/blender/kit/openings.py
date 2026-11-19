@@ -289,7 +289,7 @@ def _frame_on(p0, p1, up=(0.0, 0.0, 1.0)):
     return Matrix(((x.x, y.x, z.x, p0.x), (x.y, y.y, z.y, p0.y), (x.z, y.z, z.z, p0.z), (0.0, 0.0, 0.0, 1.0))), L
 
 
-def _lathe(mb, prof, seg=24, mat="metal_rust", M=None, phase=0.0, caps=True):
+def _lathe(mb, prof, seg=24, mat="metal_rust", M=None, phase=0.0, caps=True, closed=False):
     """Sólido de revolución alrededor del Z local: prof [(r, z)] de un extremo al otro; r = 0 en un extremo = polo (abanico
     de triángulos, sin caras degeneradas). Los extremos con r > 0 se tapan (caps) para cerrar el sólido."""
     rings = []
@@ -299,7 +299,8 @@ def _lathe(mb, prof, seg=24, mat="metal_rust", M=None, phase=0.0, caps=True):
         else:
             rings.append(mb._verts([(rr * math.cos(phase + 2 * PI * k / seg), rr * math.sin(phase + 2 * PI * k / seg), z)
                                     for k in range(seg)], M))
-    for a, b in zip(rings[:-1], rings[1:]):
+    pairs = list(zip(rings[:-1], rings[1:])) + ([(rings[-1], rings[0])] if closed else [])
+    for a, b in pairs:
         if len(a) == 1 and len(b) == 1:
             continue
         for k in range(seg):
@@ -310,7 +311,7 @@ def _lathe(mb, prof, seg=24, mat="metal_rust", M=None, phase=0.0, caps=True):
                 mb.face([a[k], a[kk], b[0]], mat)
             else:
                 mb.face([a[k], a[kk], b[kk], b[k]], mat)
-    if caps:
+    if caps and not closed:
         if len(rings[0]) > 1:
             mb.face(list(reversed(rings[0])), mat)
         if len(rings[-1]) > 1:
@@ -2134,8 +2135,8 @@ def rolling_shutter(w, h, seed=0, dent=0.5, open_frac=0.0):
         # porta-candado junto a la guía: oreja con ojo en la barra (el candado lo cortaron)
         xq = xc + sx * (w / 2 - 0.12)
         _plate_bev(cur, _rrect(0.04, 0.05, 0.008, 3, xq, zb0 + 0.03), yc - 0.0135, 0.005, "metal_rust", face=-1, bev=0.0012)
-        _lathe(cur, [(0.009, -0.0025), (0.015, -0.0025), (0.016, -0.0015), (0.016, 0.0015), (0.015, 0.0025), (0.009, 0.0025),
-                     (0.009, -0.0025)], seg=24, mat="metal_rust", M=_T(xq, yc - 0.034, zb0 + 0.012), caps=False)
+        _lathe(cur, [(0.009, -0.0025), (0.015, -0.0025), (0.016, -0.0015), (0.016, 0.0015), (0.015, 0.0025), (0.009, 0.0025)],
+               seg=24, mat="metal_rust", M=_T(xq, yc - 0.034, zb0 + 0.012), closed=True)
     # abolladuras, panza y esquina inferior forzada
     nz_ = _Noise(r, wl=0.7, octaves=3, waves=3)
     dn = _dents(r, int(4 + 12 * dent), 0.15, w - 0.15, zb0 + 0.05, hc - 0.1, rad=(0.07, 0.3), depth=(0.003, 0.04 * dent + 0.006))

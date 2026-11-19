@@ -1952,12 +1952,15 @@ def _rail_wood(mb, path, h, rs, missing, bend, stair=False):
         return [(-wd / 2 + c, 0.0), (wd / 2 - c, 0.0), (wd / 2, c), (wd / 2, ht - c), (wd / 2 - c, ht), (-wd / 2 + c, ht),
                 (-wd / 2, ht - c), (-wd / 2, c)]
     rprof_t, rprof_b = _chf(rw, trh), _chf(rw, brh)
-    for s in post_nails:                  # dos clavos de la tapa sobre cada poste, en la cara de arriba real (alabeo, pendiente)
+    from mathutils.bvhtree import BVHTree
+    cap_tree = BVHTree.FromBMesh(mb.bm)        # postes + tapa ya construidos: la cara de arriba real (alabeo, pendiente, rotura)
+    for s in post_nails:                  # dos clavos de la tapa sobre cada poste
         base, hd = path.at(s), path.hdir(s)
-        sl = path.slope(s)
-        ztop = base.z + h - ct + warp(s) + ct * math.sqrt(1.0 + sl * sl)
         for dx in (-0.022, 0.022):
-            _nailhead(mb, Vector((base.x, base.y, ztop + sl * dx)) + hd * dx + path.side(s) * (0.35 * dx), ZV, r=0.0042)
+            q = base + hd * dx + path.side(s) * (0.35 * dx)
+            loc, nrm, _, _ = cap_tree.ray_cast(Vector((q.x, q.y, base.z + h + 0.3)), Vector((0.0, 0.0, -1.0)), 0.6)
+            if loc is not None and loc.z > base.z + h - 0.08:
+                _nailhead(mb, loc, nrm if nrm.z > 0.5 else ZV, r=0.0042)
     for jb, (a, b) in enumerate(zip(sposts, sposts[1:])):
         ra, rb_ = a + pw / 2 - 0.012, b - pw / 2 + 0.012
         drop = 0.0
