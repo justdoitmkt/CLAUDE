@@ -873,9 +873,9 @@ def brick_wall(length, height, seed=0, openings=(), missing=0.02, thickness=0.14
                 k = 1.0 + 0.32 * nn(a * 2.0) + jit[int(i * 22 / npp)]
                 pts.append((min(max(pu + ru * k * math.cos(a), 0.01), L - 0.01), min(max(pv + rv * k * math.sin(a), 0.01), H - 0.01)))
             t = r.uniform(0.008, 0.013)
-            m = Matrix(((1, 0, 0, 0), (0, 0, -1, 0.002 if detail == "aaa" else -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
-            if detail == "aaa":                                           # el parche asienta 2 mm dentro de la cara del ladrillo
-                _patch(mb, pts, t, "plaster", m, r)
+            m = Matrix(((1, 0, 0, 0), (0, 0, -1, 0.009 if detail == "aaa" else -0.004), (0, 1, 0, 0), (0, 0, 0, 1)))
+            if detail == "aaa":                         # el parche se agarra del mortero (1 mm dentro del núcleo) y sale 4–9 mm
+                _patch(mb, pts, t + 0.0045, "plaster", m, r)
             else:
                 mb.plate(pts, t, "plaster", m=m)
             area += PI * ru * rv

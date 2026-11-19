@@ -1912,6 +1912,52 @@ def _shard_plate(mb, pts2, t, mat, M, rr, i):
     mb.plate(pts2, t, mat, m=M @ _T(0, 0, -t / 2 + 0.00045 * (i % 7 - 3)) @ tilt)
 
 
+def _cracked_glass(mb, M, R, rr, n=8, t=0.003, mat="glass"):
+    """Vidrio redondo estrellado (plano XY local de M, radio R): punto de impacto descentrado, n grietas radiales
+    quebradas, una grieta anular, trozos separados 0,4–0,8 mm por la grieta y ligeramente desalineados; faltan algunos
+    trozos junto al impacto (hueco irregular)."""
+    ix, iy = rr.uniform(-0.25, 0.25) * R, rr.uniform(-0.25, 0.25) * R
+    angs = sorted(rr.uniform(0, 2 * PI) for _ in range(n))
+    ri = [rr.uniform(0.35, 0.6) * R for _ in range(n)]
+    hole = rr.uniform(0.08, 0.16) * R
+
+    def rim(a):  # punto del borde del círculo en dirección a desde el impacto
+        dx, dy = math.cos(a), math.sin(a)
+        b = ix * dx + iy * dy
+        c = ix * ix + iy * iy - R * R
+        return b * -1 + math.sqrt(max(b * b - c, 0.0))
+
+    k_ = 0
+    for i in range(n):
+        a0, a1 = angs[i], angs[(i + 1) % n] + (2 * PI if i == n - 1 else 0.0)
+        steps = max(2, int((a1 - a0) / 0.12))
+        arc = [a0 + (a1 - a0) * j / steps for j in range(steps + 1)]
+        rmid0, rmid1 = ri[i], ri[(i + 1) % n]
+        for (lo, hi, kind) in ((hole, None, "in"), (None, R, "out")):
+            pts = []
+            for j, a in enumerate(arc):
+                rm_ = rmid0 + (rmid1 - rmid0) * j / steps + 0.004 * math.sin(7 * a)
+                r0 = lo if kind == "in" else rm_
+                r1 = rm_ if kind == "in" else rim(a)
+                pts.append((r0, a))
+                pts.append((r1, a))
+            inner = [(ix + r0 * math.cos(a), iy + r0 * math.sin(a)) for (r0, a) in pts[0::2]]
+            outer = [(ix + r1 * math.cos(a), iy + r1 * math.sin(a)) for (r1, a) in pts[1::2]]
+            poly = outer + list(reversed(inner))
+            cx_ = sum(p_[0] for p_ in poly) / len(poly)
+            cy_ = sum(p_[1] for p_ in poly) / len(poly)
+            gap = rr.uniform(0.0004, 0.0008)
+            poly = [(x + (cx_ - x) * gap / max(math.hypot(cx_ - x, cy_ - y), 1e-6), y + (cy_ - y) * gap / max(math.hypot(cx_ - x, cy_ - y), 1e-6))
+                    for (x, y) in poly]
+            if kind == "in" and rr.random() < 0.45:  # trozo caído junto al impacto
+                continue
+            ang = math.radians(rr.uniform(0.4, 2.0)) * (1 if k_ % 2 else -1)
+            ax = Vector((math.cos((a0 + a1) / 2), math.sin((a0 + a1) / 2), 0)).orthogonal().normalized()
+            tilt = _about((cx_, cy_, 0.0), Matrix.Rotation(ang, 4, Vector((-math.sin((a0 + a1) / 2), math.cos((a0 + a1) / 2), 0))))
+            mb.plate(poly, t, mat, m=M @ _T(0, 0, -t / 2 + 0.0003 * (k_ % 3 - 1)) @ tilt)
+            k_ += 1
+
+
 def _hinge(mb, p, h=0.05, r=0.0055, mat="metal_rust"):
     p = _v(p)
     if _LOD.aaa:  # bisagra de 3 nudillos con holgura de 0,6 mm y perno con cabeza
@@ -2097,6 +2143,8 @@ def meter_box(seed=0, open_door=True, detail="high", state=None):
         droop = rr.uniform(0.5, 4.0)
         if svc:
             ang, droop = 0.6, 0.0
+        elif meter and not open_door:   # con medidor, la puerta (con su vidrio) no cierra: queda entreabierta 22–35°
+            ang = 22.0 + (ang - 3.0) / 9.0 * 13.0
         piv = Vector((x0 - 0.004, yf - 0.006, 0.0))
         Md = _T(piv) @ _R("Z", -ang) @ _R("Y", -droop)
         dw, dh = W + 0.008, H + 0.008
@@ -2116,7 +2164,9 @@ def meter_box(seed=0, open_door=True, detail="high", state=None):
         Mw = Md @ _T(0.004 + dw / 2, -0.0019, 0.32) @ _R("X", 90)
         _lathe(mb, [(0.0745, -0.0012), (0.0795, -0.0012), (0.0805, 0.0008), (0.0795, 0.0045), (0.0745, 0.0045)], seg=80,
                mat="rubber", m=Mw @ _T(0, 0, -0.0035), loop=True)
-        rr.integers(3, 7)  # (antes: esquirlas del vidrio; se consume igual)
+        nsh = int(rr.integers(3, 7))
+        if not svc:  # vidrio de 4 mm estrellado: impacto, grietas radiales y anular, trozos faltantes junto al impacto
+            _cracked_glass(mb, Mw @ _T(0, 0, -0.0016), 0.078, rr, n=5 + nsh)
         _box(mb, (dw - 0.02, -0.012, 0.22), (dw + 0.002, -0.0005, 0.25), steel, bevel=0.0015, m=Md)  # aldaba
         for zh in (0.07, H - 0.07):
             _hinge(mb, piv + Vector((0, 0, zh)), mat=steel)

@@ -667,8 +667,9 @@ def build_cabin(bid, collection_root=None, dress_all=True):
                 if lv == 0 and cfg.get("ground") == "brick":
                     k = 0
                     z = zl
-                    while z < zh - 0.05:                                  # sillares alternos de 0,28 de alto (piedra labrada)
-                        hq = min(0.28, zh - z)
+                    zq = zh - (0.125 if nl > 1 else 0.0)                  # bajo la cinta de entrepiso
+                    while z < zq - 0.05:                                  # sillares alternos de 0,28 de alto (piedra labrada)
+                        hq = min(0.28, zq - z)
                         lq = 0.42 if k % 2 == 0 else 0.26
                         _quoin(shell, (min(xo, xo + sx * 0.035), min(yc, yc - sy * lq), z + 0.005),
                                (max(xo, xo + sx * 0.035), max(yc, yc - sy * lq), z + hq - 0.005), rw)
@@ -704,9 +705,10 @@ def build_cabin(bid, collection_root=None, dress_all=True):
             sx_, sy_ = STOVE_XY
             holes1.append((sx_ - 0.14, sx_ + 0.14, sy_ - 0.14, sy_ + 0.14))
         jx1 = []
-        joists(inter, -w / 2 + t, w / 2 - t, yf + t, d / 2 - t, z1 - 0.03, skip=skip, r=rw, xs_out=jx1, boxes_out=ceil0)
-        boards_floor(inter, -w / 2 + t, w / 2 - t, yf + t, d / 2 - t, z1, rw, holes=holes1, missing=0.06, nail_xs=jx1)
-        ceil0.append((-w / 2 + t, w / 2 - t, yf + t, d / 2 - t, z1 - FLOOR_T))
+        tb = max(t, tg) + (0.002 if tg > t else 0.0)                    # sobre PB de ladrillo: la duela no se mete en el muro
+        joists(inter, -w / 2 + tb, w / 2 - tb, yf + t, d / 2 - t, z1 - 0.03, skip=skip, r=rw, xs_out=jx1, boxes_out=ceil0)
+        boards_floor(inter, -w / 2 + tb, w / 2 - tb, yf + tb, d / 2 - tb, z1, rw, holes=holes1, missing=0.06, nail_xs=jx1)
+        ceil0.append((-w / 2 + tb, w / 2 - tb, yf + tb, d / 2 - tb, z1 - FLOOR_T))
     if cfg.get("loft"):                                                            # tapanco sobre la mitad trasera
         zl = z0 + fh
         jxl = []
@@ -719,12 +721,12 @@ def build_cabin(bid, collection_root=None, dress_all=True):
     if hole:
         # zancas recortadas bajo las huellas: las tres primeras se pisan desde el cuarto (caída lateral < 0,6 m);
         # el barandal del lado del cuarto arranca en la 4.ª huella
-        s = circ.stair_straight(width=sw, rise_total=fh, seed=cfg["seed"] + 1, kind="wood", going=going, broken=0.08, rail=None,
-                                stringers=False)
+        s = circ.stair_straight(width=sw, rise_total=fh - (zb0 - z0), seed=cfg["seed"] + 1, kind="wood", going=going, broken=0.08,
+                                rail=None, stringers=False)
         N_, rr, gg = s.meta["N"], s.meta["riser"], s.meta["going"]
         ks = [4] + [k for k in sorted(set(list(range(1, N_, 4)) + [N_ - 1])) if k > 4]
         s.join(circ.stair_railing([((k - 1) * gg + 0.07, 0.045, k * rr) for k in ks], h=0.9, kind="wood", seed=cfg["seed"] + 2))
-        inter.join(s, T(st["x"], d / 2 - t - sw - 0.02, z0))
+        inter.join(s, T(st["x"], d / 2 - t - sw - 0.02, zb0))
         stats["stair_N"] = getattr(s, "meta", {}).get("N")
     if cfg.get("loft"):                                                            # escalera de mano al tapanco
         lad = _ladder(fh + 0.9, rw)
