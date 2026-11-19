@@ -351,7 +351,7 @@ def corrugated_parapet(w, d, seed=0, pitch=0.0762, depth=0.019, t=0.0006):
     abajo y un pasamanos de tubo Ø 1 1/4" arriba, con 2 o 3 abolladuras. Local del balcón: frente en y = -d, x 0..w."""
     r = rng(seed)
     mb = MB()
-    x0, x1 = 0.04, w - 0.04
+    x0, x1 = 0.10, w - 0.10                       # entre los postes de esquina de los barandales laterales (x 0,07 / w - 0,07)
     z0, z1 = 0.05, 0.90
     yc = -d + 0.035
     nx = int((x1 - x0) / pitch * 10)
@@ -380,7 +380,7 @@ def corrugated_parapet(w, d, seed=0, pitch=0.0762, depth=0.019, t=0.0006):
     # ángulo inferior (38 × 38 × 3 mm) y pasamanos de tubo con tapas
     mb.box((x0 - 0.01, yc - 0.03, z0 - 0.04), (x1 + 0.01, yc - 0.027, z0 + 0.0), "metal_paint", bevel=0.001, seg=1)
     mb.box((x0 - 0.01, yc - 0.03, z0 - 0.04), (x1 + 0.01, yc + 0.008, z0 - 0.037), "metal_paint", bevel=0.001, seg=1)
-    mb.cyl((x0 - 0.02, yc, z1 + 0.025), (x1 + 0.02, yc, z1 + 0.025), 0.0167, seg=24, mat="metal_paint")
+    mb.cyl((x0 - 0.012, yc, z1 + 0.025), (x1 + 0.012, yc, z1 + 0.025), 0.0167, seg=24, mat="metal_paint")
     for xx in (x0 + 0.3, (x0 + x1) / 2, x1 - 0.3):           # grapas que sujetan la lámina al pasamanos
         mb.box((xx - 0.012, yc - 0.018, z1 - 0.01), (xx + 0.012, yc + 0.018, z1 + 0.012), "metal_paint", bevel=0.002, seg=1)
     return mb
@@ -527,9 +527,10 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
             _T(sg * (3.2 + 0.051), -2.1, zl[0] + 1.05) @ ac._rot_z(-90 if sg < 0 else 90), inter)   # 1,6 m libre del vano (y = 0)
     for i, x in enumerate((-3.05, -2.55)):              # machón entre la puerta del vestíbulo y la ventana
         add("meter_box", sv.meter_box(seed=int(r.integers(1e6)), open_door=bool(i), detail=near), _T(x, ys[0] - FO, 1.2))
-    add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.03, zl[1] + 0.15), (-2.45, ys[0] - FO - 0.03, zl[1] + 0.15)], n=3, sag=0.2,
+    # (x -2,55: la bajada entra al medidor de la derecha y no atraviesa la losa del balcón del módulo 2, que empieza en -2,5)
+    add("cable_bundle", sv.cable_bundle([(-8.25, ys[0] - FO - 0.03, zl[1] + 0.15), (-2.55, ys[0] - FO - 0.03, zl[1] + 0.15)], n=3, sag=0.2,
                                         seed=int(r.integers(1e6)), detail=near), Matrix())
-    add("conduit", sv.conduit([(0, 0, 1.7), (0, 0, zl[1] + 0.12)], seed=int(r.integers(1e6)), detail=near), _T(-2.45, ys[0] - FO, 0.0))
+    add("conduit", sv.conduit([(0, 0, 1.7), (0, 0, zl[1] + 0.12)], seed=int(r.integers(1e6)), detail=near), _T(-2.55, ys[0] - FO, 0.0))
     for lv in (1, 3):
         add("extinguisher_cabinet", sv.extinguisher_cabinet(seed=int(r.integers(1e6)), detail=near),
             _T(-5.4 - 0.075 - 0.001, -2.9, zl[lv] + 1.05) @ ac._rot_z(-90), inter)

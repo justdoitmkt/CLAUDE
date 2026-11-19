@@ -968,11 +968,12 @@ def _vboard(mb, uc, w, t, v0, v1, r, jag0=0.0, jag1=0.0, mat="wood", step=0.45, 
 # =====================================================================================================================
 # 2) TABLÓN Y JUNQUILLO
 # =====================================================================================================================
-def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, gap=0.022, frame=True, batten=0.064):
+def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, gap=0.022, frame=True, batten=0.064, end_clear=0.0):
     """Tablones verticales (0,22 = 1x10 en bruto, rendija 0,022 ± 8 mm: la tabla vieja se encoge) con junquillos 1x3
     (0,064 x 0,020) que traslapan ~2 cm cada tablón (ver cabecera para cotas). rot 0..1: tablones podridos por abajo (más
     cortos, punta astillada), rotos con tramo faltante, faltantes; junquillos faltantes, cortos o colgando de un clavo.
-    Bastidor de postes y largueros detrás (frame=True)."""
+    Bastidor de postes y largueros detrás (frame=True). end_clear: sin junquillos a menos de esa distancia de los extremos
+    (ahí van los esquineros)."""
     r = rng(seed + 8080)
     mb = MB()
     L, H = float(length), float(height)
@@ -1026,6 +1027,8 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
     hb = batten / 2
     for (c0, c1) in zip(cols[:-1], cols[1:]):
         um = (c0[1] + c1[0]) / 2
+        if end_clear and (um - hb < end_clear or um + hb > L - end_clear):
+            continue
         rc = (um - hb, um + hb, 0.03, H - 0.01)
         pcs = [rc]
         for t in trims:
@@ -1041,7 +1044,7 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
                 continue
             if x < 0.45 * sev:
                 c = c + r.uniform(0.1, 0.6) * (d - c)                # corto
-            yo = -0.021 - (r.uniform(0.0, 0.004) if r.uniform() < 0.3 else 0.0)
+            yo = -0.0195 - (r.uniform(0.0, 0.004) if r.uniform() < 0.3 else 0.0)   # asienta 0,5 mm en los cantos de los tablones
             M = None
             if 0.45 * sev < x < 0.6 * sev and d - c > 0.6:
                 # colgando del clavo superior: gira en el plano y se despega
@@ -1059,8 +1062,11 @@ def board_and_batten(length, height, seed=0, openings=(), rot=0.1, board=0.22, g
                 nail(tmp, (um, yo - 0.0005, d - 0.05), (0, -1, 0), r=0.0046, h=0.0025)
             mb.join(tmp, M)
             tmp.bm.free()
-            for gv in girts_v:
-                if c + 0.04 < gv < d - 0.04 and M is None:
+            gvs = [gv for gv in girts_v if c + 0.04 < gv < d - 0.04]
+            if M is None and not gvs:
+                gvs = [(c + d) / 2]                                         # tramo corto: un clavo al centro
+            for gv in gvs:
+                if M is None:
                     nail(mb, (um + r.uniform(-0.004, 0.004), yo, gv), (0, -1, 0), r=0.0046, h=0.0025)
     return mb
 

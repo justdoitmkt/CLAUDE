@@ -1074,8 +1074,8 @@ def build_mezzanine(inter, det, r):
     bevbox(inter, (x0, yo, z + H), (x1, y1, z + H + 0.06), "metal_paint", bevel=0.006)
     # barandal en el borde libre del pasillo (y = y0) y en el lado oeste
     from kit import circulation as circ
-    det.join(circ.railing("tube_metal", length=x1 - x0 - 1.3, h=1.0, seed=int(r.integers(1e6)), missing=0.12),
-             _T(x0 + 1.3, y0 + 0.03, z))
+    det.join(circ.railing("tube_metal", length=x1 - x0 - 1.55, h=1.0, seed=int(r.integers(1e6)), missing=0.12),
+             _T(x0 + 1.55, y0 + 0.03, z))
     det.join(circ.railing("tube_metal", length=yo - y0 - 0.1, h=1.0, seed=int(r.integers(1e6)), missing=0.1),
              _T(x0 + 0.03, y0 + 0.1, z) @ Matrix.Rotation(math.pi / 2, 4, "Z"))
     # escalera recta de acero: sube en +y y llega al pasillo por el borde y = y0, entre x0 y x0 + 1,2
@@ -1083,7 +1083,7 @@ def build_mezzanine(inter, det, r):
     rise = 3.2 / n
     going = 0.27
     ys = y0 - (n - 1) * going
-    xa, xb = x0 + 0.05, x0 + 1.15
+    xa, xb = x0 + 0.3, x0 + 1.4             # libra el poste de la esquina (x0 + 0,1) y llega entre él y el barandal
     for i in range(n - 1):
         # peldaño de rejilla electrosoldada: soleras portantes 30 x 3 cada 30 mm, varilla transversal, nariz de placa
         # antiderrapante y placas laterales atornilladas a la zanca
@@ -1107,7 +1107,7 @@ def build_mezzanine(inter, det, r):
     for (xx, sgn) in ((xa, 1), (xb, -1)):                     # zancas de canal C 250 con las alas hacia adentro
         prof = [(sgn * x_, y_) for (x_, y_) in cz_profile(0.25, 0.075, 0.006, kind="C")]
         port.psweep(inter, prof, [(xx, ys - 0.25, DECK_Z + 0.06), (xx, y0, z - 0.13)], "metal_paint", up=(0, 0, 1), miter=False)
-    pts = [(xb + 0.035, ys + i * going + going / 2, DECK_Z + (i + 1) * rise) for i in range(0, n - 1, 2)] + [(xb + 0.035, y0, z)]
+    pts = [(xb + 0.055, ys + i * going + going / 2, DECK_Z + (i + 1) * rise) for i in range(0, n - 1, 2)] + [(xb + 0.055, y0, z)]
     det.join(circ.stair_railing(pts, h=0.95, kind="tube_metal", seed=int(r.integers(1e6)), missing=0.1))
     return dict(z=z, risers=n)
 
@@ -1445,7 +1445,7 @@ def build_props(inter, det, sk, r):
         pallet_stack(inter, p, r, n=n, rot=rot)
     for k in range(6):
         pallet(det, _T(float(r.uniform(X0 + 3, X1 - 3)), float(r.uniform(Y0 + 2, Y1 - 2)), z) @ _Rz(float(r.uniform(0, 360))), r)
-    for (p, sz, rot) in ((W(1.4, 9.0), (1.2, 1.0, 1.0), 4), (W(1.6, 10.3), (1.0, 1.0, 0.8), -3), ((X0 + 1.6, Y0 + 9.15, z + 1.02), (0.9, 0.8, 0.7), 12),
+    for (p, sz, rot) in ((W(1.4, 9.0), (1.2, 1.0, 1.0), 4), (W(1.6, 10.3), (1.0, 1.0, 0.8), -3), ((X0 + 1.6, Y0 + 9.15, z + 1.05), (0.9, 0.8, 0.7), 12),
                          (W(17.5, 3.0), (1.5, 1.2, 1.1), 20), (W(6.5, 22.2), (1.3, 1.0, 1.0), 0)):
         crate(inter, p, sz, r, rot=rot)
     for p in (W(1.2, 16.5), W(1.8, 17.3), W(1.1, 17.9), W(20.5, 13.0), W(19.8, 13.6)):

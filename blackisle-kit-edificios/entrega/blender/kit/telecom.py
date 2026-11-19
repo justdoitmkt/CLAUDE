@@ -1413,7 +1413,7 @@ def _vrla(mb, M, r):
     _box(mb, (-0.035, 0.02, -0.0004), (0.035, 0.032, 0.006), "plastic", bevel=0.002, seg=1, m=Mf)    # asa embutida
 
 
-def _bat_shelf(mb, M, y0, z, n=4, seed=0):
+def _bat_shelf(mb, M, y0, z, n=4, seed=0, dest=None):
     """Repisa de baterías de 19" (charola de lámina de 2 mm con ceja y orejas atornilladas a los rieles) con n baterías VRLA
     de bornes frontales en serie (puentes de cobre aislados) y cables a la planta. Devuelve la altura que ocupa."""
     r = rng(seed)
@@ -1433,11 +1433,19 @@ def _bat_shelf(mb, M, y0, z, n=4, seed=0):
         b = Vector((xs[k + 1] - 0.03, y0 - 0.031, zt))
         rtube(mb, tuple(M @ a), tuple(M @ b), 0.022, 0.006, "sign_red" if k % 2 else "cable", up=tuple(M.to_3x3() @ Vector((0, -1, 0))),
               r=0.002)
-    for (x, mat) in ((xs[0] - 0.03, "sign_red"), (xs[-1] + 0.03, "cable")):   # salidas a la planta (35 mm²)
+    for (x, mat) in ((xs[0] - 0.03, "sign_red"), (xs[-1] + 0.03, "cable")):   # salidas (35 mm²) por el costado, por fuera del riel
         p0 = M @ Vector((x, y0 - 0.031, zt))
         side = -1.0 if x < 0 else 1.0
-        wire(mb, [tuple(p0), tuple(M @ Vector((x, y0 - 0.06, zt + 0.02))), tuple(M @ Vector((side * 0.255, y0 - 0.04, zt + 0.05))),
-                  tuple(M @ Vector((side * 0.262, y0 - 0.03, zt + 0.35)))], 0.0065, mat=mat, bend=0.04, seg=16, nseg=4)
+        pts = [tuple(p0), tuple(M @ Vector((x, y0 - 0.06, zt + 0.02))), tuple(M @ Vector((side * 0.255, y0 - 0.04, zt + 0.05)))]
+        if dest is not None and dest[0] == "up":         # sube a la distribución de CD y entra por el costado de su chasis
+            zd = dest[1]
+            pts += [tuple(M @ Vector((side * 0.262, y0 - 0.03, zd - 0.05))), tuple(M @ Vector((side * 0.262, y0 + 0.04, zd))),
+                    tuple(M @ Vector((side * 0.20, y0 + 0.10, zd)))]
+        else:                                             # baja al piso y sale por la placa de prensaestopas
+            zd = dest[1] if dest is not None else z - 0.05
+            pts += [tuple(M @ Vector((side * 0.262, y0 - 0.03, zd + 0.10))), tuple(M @ Vector((side * 0.255, y0 + 0.20, zd + 0.03))),
+                    tuple(M @ Vector((side * 0.24, y0 + 0.28, zd - 0.02)))]
+        wire(mb, pts, 0.0065, mat=mat, bend=0.04, seg=16, nseg=4)
     return 0.30
 
 
@@ -1524,17 +1532,17 @@ def _cab_interior(mb, kind, W, D, z0, H, tw, seed=0):
             xa_, xb_ = sx * 0.2445, sx * (W / 2 - tw)
             _box(mb, (min(xa_, xb_), y0 + 0.004, zz - 0.02), (max(xa_, xb_), y0 + 0.022, zz + 0.02), "galvanized", bevel=0.0008, seg=1)
     u = 0
-    if kind == "power":
-        h = _bat_shelf(mb, M, y0, zb, seed=seed + 1)
+    if kind == "power":                               # las baterías suben a la distribución de CD (U 15-16)
+        h = _bat_shelf(mb, M, y0, zb, seed=seed + 1, dest=("up", zb + 15.6 * U))
         u += 7
-        _bat_shelf(mb, M, y0, zb + u * U, seed=seed + 2)
+        _bat_shelf(mb, M, y0, zb + u * U, seed=seed + 2, dest=("up", zb + 16.4 * U))
         u += 7
         layout = ["cm", "dcd", "rect", "rect", "b1"]
-    elif kind == "battery":
+    elif kind == "battery":                           # las baterías bajan al piso y salen al gabinete de energía
         for k in range(4):
             if u + 7 > nU:
                 break
-            _bat_shelf(mb, M, y0, zb + u * U, seed=seed + k)
+            _bat_shelf(mb, M, y0, zb + u * U, seed=seed + k, dest=("down", z0 + tw))
             u += 7
         layout = []
     else:
@@ -1562,14 +1570,18 @@ def _cab_interior(mb, kind, W, D, z0, H, tw, seed=0):
     # entrada de cables por el piso (placa con prensaestopas) y haz por el costado izquierdo, con cinchos
     zf = z0 + tw
     _box(mb, (-0.2, yb - 0.16, zf), (0.0, yb - 0.04, zf + 0.004), "galvanized", bevel=0.0008, seg=1)
+    # el haz termina dentro del equipo al que alimenta (tablero de CA en 'power', BBU en 'telecom'), entrando por su costado
+    z_h = zb + (23.5 if kind == "power" else 2.5 if kind == "telecom" else 5.0) * U
     for k, (gx, rc) in enumerate(((-0.17, 0.011), (-0.115, 0.014), (-0.06, 0.009), (-0.025, 0.0065))):
         gy = yb - 0.1
         lathe(mb, [(rc + 0.008, zf + 0.004), (rc + 0.008, zf + 0.014), (rc + 0.005, zf + 0.018), (rc + 0.005, zf + 0.028),
                    (rc + 0.0008, zf + 0.034)], seg=24, mat="plastic", M=_T(gx, gy, 0), caps=False)
+        if kind == "battery":                         # el de baterías no lleva haz: sus cables salen por el piso
+            continue
         xs_ = -W / 2 + tw + 0.03 + 0.022 * k
-        wire(mb, [(gx, gy, zf + 0.02), (gx, gy, zf + 0.09), (xs_, y0 + 0.11, zf + 0.25), (xs_, y0 + 0.11, zb + (nU - 4) * U)],
-             rc, mat="cable", bend=0.09, seg=16, nseg=5)
-    for zt in [zf + 0.35 + 0.3 * k for k in range(int((zb + (nU - 4) * U - zf - 0.4) / 0.3))]:
+        wire(mb, [(gx, gy, zf + 0.02), (gx, gy, zf + 0.09), (xs_, y0 + 0.11, zf + 0.25), (xs_, y0 + 0.11, z_h - 0.06 - 0.015 * k),
+                  (-0.205, y0 + 0.09, z_h - 0.015 * k), (-0.15, y0 + 0.07, z_h - 0.015 * k)], rc, mat="cable", bend=0.05, seg=16, nseg=5)
+    for zt in ([] if kind == "battery" else [zf + 0.35 + 0.3 * k for k in range(int((z_h - zf - 0.45) / 0.3))]):
         pts = [(-W / 2 + tw + 0.01, y0 + 0.08, zt)]
         for a in range(9):
             t_ = a / 8.0

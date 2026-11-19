@@ -1160,6 +1160,13 @@ def _stoop(inter, det, M, W, D, n=3, run=0.30, h=FFL, rails=True):
             del p0
 
 
+# sombreado continuo en los redondos de pocos lados de las piezas exteriores (mismo criterio que kit.clinic.soften_facets)
+for _n in ("_vent_pipe", "_scupper", "_roof_hatch", "_bench", "_planter", "_wheelie_bin", "_gas_cage", "_tpost", "_cone", "_tire_flat",
+           "_hose_reel"):
+    globals()[_n] = cl._aaa(globals()[_n])
+del _n
+
+
 # ------------------------------------------------------------------------------------------------------------ azotea y servicios
 def rooftop(roof, det, r):
     # registro de azotea (brocal boleado, tapa de lámina con faldón, bisagras, aldaba y candado)
@@ -1302,7 +1309,8 @@ def furnish(inter, det, r):
     put(inter, cl.shelving(1.0, 0.4, 2.0, 5, seed=int(r.integers(1e6))), 4.3, y1 - 0.25, "-y")       # no frente a la puerta doble
     _wall_item(det, cl.sink(), x0, -6.5, z, "+x")
     put(det, cl.wheelchair(int(r.integers(1e6))), 10.8, y1 - 0.5, "+x")
-    put(det, cl.trash_bin(), x0 + 0.3, -7.5)
+    put(det, cl.trash_bin(), x0 + 0.3, -6.0)
+    put(inter, cl.stretcher(int(r.integers(1e6))), x0 + 0.42, -8.65, "-y")   # segunda camilla estacionada aquí, no en el pasillo
     _wall_item(det, cl.split_indoor(), 9.0, y1, z + 2.35, "-y")
     _wall_item(det, cl.exit_sign(), x1, (ER_DOOR[0] + ER_DOOR[1]) / 2, z + 2.47, "-x")    # sobre la puerta, bajo el plafón
     _wall_item(det, cl.sanitizer(), x1, ER_DOOR[0] - 0.6, z + 1.2, "-x")
@@ -1323,7 +1331,6 @@ def furnish(inter, det, r):
     det.join(cl.hanging_sign("EXAM ROOMS", 1.2, 0.26), _T(-9.5, (y0 + y1) / 2 + 0.42, CEIL))        # fuera de la línea de luminarias
     det.join(cl.hanging_sign("EXIT", 0.6, 0.2, bg="sign_green", fg="sign_white"), _T(-12.5, (y0 + y1) / 2 + 0.42, CEIL))
     _wall_item(det, cl.extinguisher(), 1.45, CYS - TE / 2, z - 0.4, "-y")   # entre la puerta y la ventana del patio, no sobre el vidrio
-    put(inter, cl.stretcher(int(r.integers(1e6))), 8.2, y1 - 0.45, "-x")
     put(det, cl.wheelchair(int(r.integers(1e6))), -2.0, y0 + 0.45, "-x")
     _wall_item(det, cl.exit_sign(), x0, -2.95, z + 2.35, "+x")
     # consultorios

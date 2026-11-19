@@ -87,7 +87,7 @@ def wall_m(cfg, side, z0, t):
 def siding(kind, L, H, seed, ops, rot=0.08):
     o = [x for _, x in ops]
     if kind == "board_and_batten":
-        return cl.board_and_batten(L, H, seed=seed, openings=o, rot=rot)
+        return cl.board_and_batten(L, H, seed=seed, openings=o, rot=rot, end_clear=0.16)          # esquineros encima
     if kind == "clapboard":
         return cl.clapboard(L, H, seed=seed, openings=o, loose=0.08, corners=(False, False))   # los esquineros los pone la cabaña
     return cl.brick_wall(L, H, seed=seed, openings=o, missing=0.03, detail="aaa", fallen=False, keep_ends=0.45)
@@ -368,11 +368,11 @@ def gable(mb, cfg, side, z_crown, t, r, top_fn):
             top = vt(um)
             if top < 0.15 or r.random() < 0.15:
                 continue
-            lumber(sub, (um, -0.011, 0.0), (um, -0.011, top), 0.064, 0.020, "wood_dark", up=(0, 1, 0), r=r, rc=0.004, grain=0.8,
+            lumber(sub, (um, -0.0095, 0.0), (um, -0.0095, top), 0.064, 0.020, "wood_dark", up=(0, 1, 0), r=r, rc=0.004, grain=0.8,
                    cut1=cut_at(um))
             for vv in (0.35, 1.0, 1.65):
                 if vv < top - 0.1:
-                    nail(sub, (um, -0.021, vv), (0, -1, 0), r=0.0046, h=0.0025)
+                    nail(sub, (um, -0.0195, vv), (0, -1, 0), r=0.0046, h=0.0025)
         y_fr = (0.074, 0.174)                         # pies derechos detrás de los travesaños de clavar (0,024..0,072)
     else:
         ybb, ytb = cl._clap_y()
