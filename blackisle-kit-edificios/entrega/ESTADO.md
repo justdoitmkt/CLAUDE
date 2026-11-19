@@ -853,3 +853,29 @@ portón (las filas no se traslapaban). Lo que se corrigió:
   de diseño (lazos y pasadores de las Jersey conectadas, fusiles en armeros, clavija dentro del conector, cable por la manga de
   lona, esquinas de muros T con la malla); zonas libres nuevas (carril de revisión, pasos del serpentín, pie de la escalera,
   paso rampa → tienda, frente y espalda de cada cortina) sin nada adentro.
+
+## Pipeline · el depurador de coplanares destruía los relieves finos (2026-11-19)
+En el recorrido de auditoría después de las correcciones del revisor, el STOP de la pluma, el SUPPLY del mostrador, la placa
+de triplay del HESCO y las etiquetas de las cajas se veían rotos. Renderizadas solas las piezas salían limpias: el defecto
+estaba en `coplanar.dedupe` (ronda 3 del pipeline, corre en cada horneado). Para cada par de caras paralelas a menos de 1,2 mm
+actuaba siempre sobre la **menor**, aunque fuera la de **delante**: una letra de 0,8 mm sobre su placa es la menor, la placa la
+"cubre" y la letra se borraba (o se hundía 3 mm). En la pluma: 395 → 141 caras frontales de letra.
+- Corrección: si la separación es > 0,25 mm (relieve, no coplanar) solo se toca la cara de atrás y solo si es la menor; los
+  coplanares reales (≤ 0,25 mm) siguen igual. Prueba unitaria de 6 casos (coplanar, 0,1 mm detrás, 0,8 mm delante/detrás,
+  solape parcial coplanar y en relieve) correcta.
+- MIL_1: antes borraba 22 434 caras y hundía 5 909; ahora 6 549 y 1 631 (~20 200 caras de relieve conservadas). MIL_2: de
+  5 633 / 3 642 a 862 / 1 447 (~7 000). STOP, SUPPLY, placa del HESCO, etiquetas AMMO/SUPPLY/LOT/NET WT y marcos de señalética
+  ya se leen en las vistas.
+- El defecto afecta a **todos** los modelos horneados desde la ronda 3: la medición viejo-vs-nuevo dio 75 caras en CAB_1 y 83
+  en CAB_2 (coincide exacto con el registro de su horneado); HOS_1, COM_1 y GRA_1 llevan texto 3D (clínica, telecom, granja).
+  Se rehornean los 11 restantes con el depurador corregido.
+
+## MIL_1 · liner con esquinas limpias (2026-11-19)
+En las esquinas interiores las dos mantas abombadas (2,5 cm entre largueros) se cruzaban en zigzag. El abombado se apaga en
+los últimos 0,6 m de cada muro (engrapada a la columna de esquina) y las dos mantas se encuentran en una arista recta;
+muestreo horizontal a 0,3 m.
+
+Cifras finales del kit UE5 (triángulos por parte):
+- MIL_1_almacen: Estructura 166 010 · Detalle 1 962 145 · Mobiliario 2 972 157 · Perímetro 3 241 247 · Carga 2 836 496 ·
+  Malla 3 349 518 · Vidrio 22 608 · Colisión 73 538.
+- MIL_2_avanzada: Detalle 1 130 036 · Mobiliario 1 739 503 · Perímetro 788 772 · Carga 1 127 859 · Vidrio 28 584 · Colisión 390.
