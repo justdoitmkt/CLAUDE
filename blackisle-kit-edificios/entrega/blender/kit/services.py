@@ -270,6 +270,22 @@ def _svc():
     return _LOD.state == "service"
 
 
+def _clean_svc(mb):
+    """En servicio no hay óxido: toda cara 'metal_rust' que haya quedado (tornillería, ménsulas, herrajes) pasa a acero
+    galvanizado limpio."""
+    if not _svc() or "metal_rust" not in mb.mats:
+        return
+    new, idx = [], []
+    for nm in mb.mats:
+        nm2 = "galvanized" if nm == "metal_rust" else nm
+        if nm2 not in new:
+            new.append(nm2)
+        idx.append(new.index(nm2))
+    for f in mb.bm.faces:
+        f.material_index = idx[f.material_index]
+    mb.mats = new
+
+
 def _lv(high, mid, low):
     """Valor según el nivel de detalle activo."""
     lv = _LOD.level
@@ -1541,6 +1557,7 @@ def ac_unit(kind="window", seed=0, detail="high", state=None):
         else:
             raise ValueError(f"ac_unit: kind desconocido {kind!r}")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -1817,6 +1834,7 @@ def cable_bundle(points, n=4, sag=0.25, seed=0, r=0.0045, mount=(0.0, -1.0, 0.0)
             _frayed(mb, pts[-1], pts[-1] - pts[-2], rr)
             _torus(mb, top + Xl * 0.004, Xl, 0.007, 0.0016, n=10, seg=4, mat="aluminium")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -1995,6 +2013,7 @@ def conduit(points, seed=0, r=0.0117, standoff=0.003, box_corners=None, detail="
                          0.0094, mat=sm, chamfer=0.0004)
                     _screw(mb, Vector((c.x, yw - 0.0015, c.z)) + w * sg * (R_ + 0.016), (0, -1, 0), r=0.0042)
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -2291,6 +2310,7 @@ def meter_box(seed=0, open_door=True, detail="high", state=None):
         if svc or rr.random() < 0.7:
             _padlock(mb, st + Vector((0.016, 0.0, 0.0028)), rr, open_=not svc)
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -2454,6 +2474,7 @@ def light_fixture(kind="wall", seed=0, detail="high", state=None):
         else:
             raise ValueError(f"light_fixture: kind desconocido {kind!r}")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -2615,6 +2636,7 @@ def tv_antenna(seed=0, detail="high", state=None):
             _torus(mb, down[k] - (down[k] - (top + lean.to_3x3() @ Vector((0, 0, -0.12 - 0.1 * k)))) * 0.45,
                    lean.to_3x3() @ Vector((0, 0, 1)), 0.022, 0.0025, n=14, seg=4, mat="cable")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -2789,6 +2811,7 @@ def satellite_dish(seed=0, detail="high", state=None):
                  Vector((mx + 0.08, -0.05, -0.32)), Vector((mx + 0.1, -0.02, -0.15)), Vector((mx + 0.1, 0.02, -0.12))]
         _tube(mb, _spline(cpts, 0.03), 0.0035, seg=6, mat="cable")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -2989,6 +3012,7 @@ def water_tank(seed=0, detail="high", state=None, stand=None):
         _pvc_run(mb, [pin + di * 0.05, pin + di * 0.12, pin + di * 0.12 - Vector((0, 0, 1.22 + zt - zl)),
                       pin + di * 0.9 - Vector((0, 0, 1.22 + zt - zl))], 0.0107, 0.045)
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -3103,6 +3127,7 @@ def mailboxes(n=8, seed=0, detail="high", state=None):
         for (xx, zz) in ((x0 + 0.03, H - 0.03), (x1 - 0.03, H - 0.03), (x0 + 0.03, 0.03), (x1 - 0.03, 0.03)):
             _screw(mb, (xx, yb - 0.0015, zz), (0, -1, 0), r=0.005)
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -3271,6 +3296,7 @@ def extinguisher_cabinet(seed=0, detail="high", state=None):
         else:
             _cyl(mb, (0.11, 0.02, H + 0.1), (0.11, -0.006, H + 0.1), 0.0025, mat="metal_rust")
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -3415,6 +3441,7 @@ def sign_torn(w=2.4, h=0.6, seed=0, detail="high", state=None):
                 _merge(mb, _solid_sheet(_curl_edge([[Vector((x, yface - 0.0004, z)) for (x, z) in col] for col in cols], rr, nz, rc=(0.004, 0.007)),
                                         0.001, "metal_paint"))
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -3655,6 +3682,7 @@ def laundry_line(length=3.0, seed=0, detail="high", state=None):
                 if b - a > 0.6:
                     _clothespin(mb, (a + b) / 2, wz((a + b) / 2), rr)
         _declump(mb)
+        _clean_svc(mb)
         return mb
 
 
@@ -3769,4 +3797,5 @@ def curtain_torn(w=1.4, h=1.5, seed=0, detail="high", state=None):
                 th = _spline([p0, p0 + sw * 0.3 - Vector((0, 0, Lh * 0.4)), p0 + sw - Vector((0, 0, Lh))], 0.004)
                 _tube(mb, th, 0.00045, mat="linen" if _svc() else "fabric")
         _declump(mb)
+        _clean_svc(mb)
         return mb
