@@ -499,9 +499,9 @@ def steel_frame(inter):
             if side in ("east", "west"):
                 pass
             if side == "front" and z < FFL + DOOR_H + 0.2:
-                segs = _gaps(L, [(cx - w / 2 - WX0 - 0.1, cx + w / 2 - WX0 + 0.1) for (cx, w) in DOORS] +
+                segs = _gaps(L, [(cx - w / 2 - WX0 - 0.075, cx + w / 2 - WX0 + 0.075) for (cx, w) in DOORS] +
                              [(PDOOR_X - 0.6 - WX0, PDOOR_X + 0.6 - WX0)] if z < FFL + PDOOR_H + 0.2 else
-                             [(cx - w / 2 - WX0 - 0.1, cx + w / 2 - WX0 + 0.1) for (cx, w) in DOORS])
+                             [(cx - w / 2 - WX0 - 0.075, cx + w / 2 - WX0 + 0.075) for (cx, w) in DOORS])
             else:
                 segs = [(0.3, L - 0.3)]
             for (ua, ub) in segs:
@@ -726,27 +726,82 @@ def bollard(det, x, y, z, h=1.07):
              seg=32, mat="paint_yellow", M=_T(x, y, z + h - 0.07))
 
 
-def rollup_door(det, cx, w, seed=0, damaged=False):
-    """Cortina de acero de 14 × 14 ft: caja del rollo (capota) con tapas laterales, guías de canal con burlete, cortina de
-    duelas curvas entrelazadas con costillas, barra inferior con astrágalo de hule, cerrojos de pasador con candado, cadena de
-    operación manual con su polea. damaged: las tres duelas bajas abolladas hacia adentro, marcas de palanca y pintura rayada
-    junto al cerrojo (intento de saqueo que no pasó)."""
+Y_JAMB = WY0 + 0.205                # cara interior de las jambas de PTR del vano (al paño de los largueros de muro)
+
+
+def door_frame(det, cx, w):
+    """Vano enmarcado de la cortina (edificio metálico): jambas de canal C 200 × 75 de la cabeza del muro de concreto al
+    cerramiento, cerramiento de canal C sobre el vano, ángulos de 100 × 100 anclados a la cara interior del muro de concreto
+    (donde se atornillan las guías abajo) y, por fuera, remate de lámina en J que tapa el canto cortado de la lámina R en las
+    jambas y la cabeza, con gotero en la cabeza."""
+    x0, x1 = cx - w / 2, cx + w / 2
+    z1 = FFL + DOOR_H
+    for (xa, xb) in ((x0 - 0.075, x0), (x1, x1 + 0.075)):          # jambas de canal C (alma al vano)
+        sg = -1 if xa < x0 else 1
+        xw = x0 if sg < 0 else x1                                 # alma al paño del vano
+        cl.rbox(det, (min(xw, xw + sg * 0.008), WY0 + 0.002, KNEE), (max(xw, xw + sg * 0.008), Y_JAMB, z1 + 0.20), "paint_tan", r=0.002)
+        for yf in (WY0 + 0.002, Y_JAMB - 0.010):                 # patines
+            cl.rbox(det, (min(xw, xw + sg * 0.075), yf, KNEE), (max(xw, xw + sg * 0.075), yf + 0.008, z1 + 0.20), "paint_tan", r=0.002)
+        cl.rbox(det, (min(xw, xw + sg * 0.16), WY0 + 0.0, KNEE - 0.012), (max(xw, xw + sg * 0.16), Y_JAMB, KNEE), "paint_tan", r=0.002)
+        for yy in (0.05, 0.15):                                   # anclas de la placa de asiento sobre el muro
+            ce.hexnut(det, _T(xw + sg * 0.11, WY0 + yy, KNEE), d=0.016, mat="steel")
+        # jamba baja: PTR 100 × 40 anclado a la cara interior del muro de concreto (asiento de las guías bajo la cabeza del muro)
+        yc = WY0 - RIB_T + WT
+        cl.rbox(det, (min(xw, xw + sg * 0.10), yc, FFL), (max(xw, xw + sg * 0.10), Y_JAMB, KNEE - 0.012), "paint_tan", r=0.003)
+        for zz in np.arange(FFL + 0.25, KNEE - 0.1, 0.45):        # taquetes de expansión con tuerca
+            ce.hexnut(det, _T(xw + sg * 0.06, Y_JAMB, zz) @ _Rx(-90), d=0.014, mat="steel")
+    # cerramiento (canal C) sobre el vano
+    cl.rbox(det, (x0 - 0.075, WY0 + 0.002, z1 + 0.20), (x1 + 0.075, Y_JAMB, z1 + 0.208), "paint_tan", r=0.002)
+    for yf in (WY0 + 0.002, Y_JAMB - 0.010):
+        cl.rbox(det, (x0 - 0.075, yf, z1 + 0.208 - 0.075), (x1 + 0.075, yf + 0.008, z1 + 0.208), "paint_tan", r=0.002)
+    cl.rbox(det, (x0 - 0.075, WY0 + 0.002, z1), (x1 + 0.075, Y_JAMB, z1 + 0.008), "paint_tan", r=0.002)
+    # remate exterior en J: tapa el canto de la lámina R en jambas y cabeza (la cabeza con gotero)
+    ye = WY0 - RIB_T
+    for xw, sg in ((x0, -1), (x1, 1)):
+        cl.rbox(det, (min(xw, xw + sg * 0.060), ye - 0.010, KNEE + 0.002), (max(xw, xw + sg * 0.060), ye - 0.0005, z1 + 0.03),
+                "paint_tan", r=0.0015)
+        cl.rbox(det, (min(xw, xw + sg * 0.0012), ye - 0.010, KNEE + 0.002), (max(xw, xw + sg * 0.0012), WY0 + 0.004, z1),
+                "paint_tan", r=0.0006)
+    cl.rbox(det, (x0 - 0.065, ye - 0.010, z1), (x1 + 0.065, WY0 + 0.004, z1 + 0.0012), "paint_tan", r=0.0006)
+    cl.rbox(det, (x0 - 0.065, ye - 0.030, z1 + 0.0012), (x1 + 0.065, ye - 0.0005, z1 + 0.06), "paint_tan", r=0.0015)
+    det.box((x0 - 0.065, ye - 0.042, z1 - 0.012), (x1 + 0.065, ye - 0.030, z1 + 0.0012), "paint_tan", bevel=0.0005)
+
+
+def rollup_door(det, cx, w, seed=0, damaged=False, inside=True):
+    """Cortina de acero de 14 × 14 ft MONTADA POR DENTRO (lo normal en un almacén con material sensible: guías, rollo y
+    operador no se alcanzan desde el patio): caja del rollo (capota) con tapas laterales sobre el cerramiento, guías de canal
+    con burlete atornilladas a las jambas, cortina de duelas curvas entrelazadas con costillas, barra inferior con astrágalo
+    de hule, cerrojos de pasador con candado (por dentro), cadena de operación manual con su polea (por dentro).
+    damaged: las tres duelas bajas abolladas hacia adentro, marcas de palanca y pintura rayada en la cara de afuera de la
+    barra inferior (intento de saqueo que no pasó). inside=False: montaje exterior anterior."""
     r = rng(seed)
-    y0 = WY0 - RIB_T
+    if inside:
+        yb, s = Y_JAMB, 1.0                # plano de montaje y sentido hacia el lado de la cortina (adentro)
+    else:
+        yb, s = WY0 - RIB_T, -1.0
+
+    def Y(off):
+        return yb + s * off
+
+    def yy(a, b):
+        return (min(Y(a), Y(b)), max(Y(a), Y(b)))
     z0, z1 = FFL, FFL + DOOR_H
     x0, x1 = cx - w / 2, cx + w / 2
     # guías
     for xg, sg in ((x0, -1), (x1, 1)):
-        det.box((xg + sg * 0.0 - (0.12 if sg > 0 else 0.0) * 0, y0 - 0.16, z0), (xg + sg * 0.11 if sg > 0 else xg, y0 - 0.005, z1 + 0.15),
-                "galvanized", bevel=0.004) if sg > 0 else det.box((xg - 0.11, y0 - 0.16, z0), (xg, y0 - 0.005, z1 + 0.15), "galvanized", bevel=0.004)
-        det.box((xg - 0.004 if sg < 0 else xg, y0 - 0.12, z0), (xg if sg < 0 else xg + 0.004, y0 - 0.04, z1), "rubber", bevel=0.0)
-    # capota del rollo
-    hood = cl.MB()
-    hood.cyl((x0 - 0.15, -0.30, 0.30), (x1 + 0.15, -0.30, 0.30), 0.30, seg=48, mat="galvanized")
-    hood.box((x0 - 0.15, -0.60, 0.0), (x1 + 0.15, -0.30, 0.30), "galvanized", bevel=0.004)
+        ya, yb_ = yy(0.005, 0.16)
+        xa, xb = (xg - 0.11, xg) if sg < 0 else (xg, xg + 0.11)
+        det.box((xa, ya, z0), (xb, yb_, z1 + 0.15), "galvanized", bevel=0.004)
+        ya, yb_ = yy(0.04, 0.12)
+        det.box((xg - 0.004 if sg < 0 else xg, ya, z0), (xg if sg < 0 else xg + 0.004, yb_, z1), "rubber", bevel=0.0)
+        for zz in np.arange(z0 + 0.3, z1, 0.6):              # tornillos de la guía a la jamba
+            ce.hexnut(det, _T(xg + sg * 0.055, Y(0.16), zz) @ (_Rx(-90) if s > 0 else _Rx(90)), d=0.012, mat="steel")
+    # capota del rollo (sobre el cerramiento, del lado del rollo)
+    zc = z1 + 0.15
+    det.cyl((x0 - 0.15, Y(0.30), zc + 0.30), (x1 + 0.15, Y(0.30), zc + 0.30), 0.30, seg=48, mat="galvanized")
+    det.box((x0 - 0.15, yy(0.30, 0.60)[0], zc), (x1 + 0.15, yy(0.30, 0.60)[1], zc + 0.30), "galvanized", bevel=0.004)
     for xs in (x0 - 0.17, x1 + 0.15):
-        hood.box((xs, -0.62, -0.02), (xs + 0.02, 0.0, 0.64), "galvanized", bevel=0.004)
-    det.join(hood, _T(0, y0, z1 + 0.15))
+        det.box((xs, yy(0.0, 0.62)[0], zc - 0.02), (xs + 0.02, yy(0.0, 0.62)[1], zc + 0.64), "galvanized", bevel=0.004)
     # cortina: duelas de 3" con costilla
     n = int(DOOR_H / 0.0762)
     zs = np.linspace(z0 + 0.10, z1, n + 1)
@@ -758,41 +813,48 @@ def rollup_door(det, cx, w, seed=0, damaged=False):
         prof = [(-0.020 * math.sin(math.pi * t) ** 0.8 - 0.003 * math.sin(2 * math.pi * t), za + (zb - za) * t)
                 for t in np.linspace(0.0, 1.0, 11)]                 # duela curva con costilla central, sin facetas
         nx = 24
-        V = []
+        V, B = [], []
         for k in range(nx + 1):
             x = x0 + 0.02 + (w - 0.04) * k / nx
             dd = 0.0
             if dent:
                 c = cx + 0.6
-                dd = dent * math.exp(-((x - c) / 0.75) ** 2)
-            V.append([det.bm.verts.new((x, y0 - 0.07 + dy + dd, z)) for (dy, z) in prof])
+                dd = dent * math.exp(-((x - c) / 0.75) ** 2)      # hacia adentro del edificio (+y)
+            V.append([det.bm.verts.new((x, Y(0.07) + dy + dd, z)) for (dy, z) in prof])
+            B.append([det.bm.verts.new((x, Y(0.07) + dy * 0.55 + dd + 0.0035, z)) for (dy, z) in prof])   # cara de adentro
         for k in range(nx):
             for j in range(len(prof) - 1):
                 det.face([V[k][j], V[k][j + 1], V[k + 1][j + 1], V[k + 1][j]], "galvanized")
+                det.face([B[k + 1][j], B[k + 1][j + 1], B[k][j + 1], B[k][j]], "galvanized")
+            for j in (0, len(prof) - 1):                          # canto de la duela (cierra la lámina)
+                q = [V[k][j], V[k + 1][j], B[k + 1][j], B[k][j]]
+                det.face(q if j == 0 else list(reversed(q)), "galvanized")
         for k in (0, nx):
-            det.face(V[k] if k == 0 else list(reversed(V[k])), "galvanized")
+            ring = V[k] + list(reversed(B[k]))
+            det.face(ring if k == 0 else list(reversed(ring)), "galvanized")
     # barra inferior y astrágalo
-    det.box((x0 + 0.02, y0 - 0.11, z0 + 0.03), (x1 - 0.02, y0 - 0.05, z0 + 0.10), "galvanized", bevel=0.006)
-    det.box((x0 + 0.02, y0 - 0.095, z0 + 0.002), (x1 - 0.02, y0 - 0.065, z0 + 0.03), "rubber", bevel=0.006)
-    # cerrojos de pasador con candado
+    det.box((x0 + 0.02, yy(0.05, 0.11)[0], z0 + 0.03), (x1 - 0.02, yy(0.05, 0.11)[1], z0 + 0.10), "galvanized", bevel=0.006)
+    det.box((x0 + 0.02, yy(0.065, 0.095)[0], z0 + 0.002), (x1 - 0.02, yy(0.065, 0.095)[1], z0 + 0.03), "rubber", bevel=0.006)
+    # cerrojos de pasador con candado (del lado del rollo: por dentro si va montada por dentro)
     for xl, sg in ((x0 + 0.25, -1), (x1 - 0.25, 1)):
-        det.box((xl - 0.08, y0 - 0.125, z0 + 0.12), (xl + 0.08, y0 - 0.105, z0 + 0.20), "steel", bevel=0.003)
-        det.cyl((xl - 0.05 * sg, y0 - 0.14, z0 + 0.16), (xl + 0.22 * sg, y0 - 0.14, z0 + 0.16), 0.010, seg=24, mat="steel")
-        padlock(det, xl + 0.10 * sg, y0 - 0.17, z0 + 0.12, r)
+        det.box((xl - 0.08, yy(0.105, 0.125)[0], z0 + 0.12), (xl + 0.08, yy(0.105, 0.125)[1], z0 + 0.20), "steel", bevel=0.003)
+        det.cyl((xl - 0.05 * sg, Y(0.14), z0 + 0.16), (xl + 0.22 * sg, Y(0.14), z0 + 0.16), 0.010, seg=24, mat="steel")
+        padlock(det, xl + 0.10 * sg, Y(0.17), z0 + 0.12, r)
     if damaged:
-        # marcas de palanca: canales cortos con la pintura levantada junto al cerrojo derecho y en la barra inferior
+        # marcas de palanca en la cara de AFUERA de la barra inferior (la del vano), junto al extremo derecho
+        yo = min(Y(0.05), Y(0.11)) if s > 0 else Y(0.11)
         for k in range(5):
             xm = x1 - 0.55 + r.uniform(-0.15, 0.15)
-            zm = z0 + 0.12 + r.uniform(0, 0.25)
+            zm = z0 + 0.04 + r.uniform(0, 0.05)
             a = r.uniform(-30, 30)
-            M = _T(xm, y0 - 0.1135, zm) @ _Ry(a)
+            M = _T(xm, yo - 0.0005 if s > 0 else yo - 0.0035, zm) @ _Ry(a)
             det.box((-0.045, -0.0012, -0.004), (0.045, 0.0002, 0.004), "steel", bevel=0.0006, m=M)
     # cadena de operación con polea y gancho de seguro
     xc = x1 + 0.06
-    det.cyl((xc, y0 - 0.25, z1 + 0.30), (xc + 0.04, y0 - 0.25, z1 + 0.30), 0.10, seg=32, mat="steel")
-    ce.chain(det, [(xc + 0.02, y0 - 0.33, z1 + 0.25), (xc + 0.02, y0 - 0.33, z0 + 1.0), (xc + 0.02, y0 - 0.20, z0 + 0.95),
-                   (xc + 0.02, y0 - 0.18, z1 + 0.25)], link=0.03, wire=0.003, mat="steel")
-    det.box((xc - 0.01, y0 - 0.20, z0 + 1.0), (xc + 0.05, y0 - 0.005, z0 + 1.06), "steel", bevel=0.003)
+    det.cyl((xc, Y(0.25), z1 + 0.30), (xc + 0.04, Y(0.25), z1 + 0.30), 0.10, seg=32, mat="steel")
+    ce.chain(det, [(xc + 0.02, Y(0.33), z1 + 0.25), (xc + 0.02, Y(0.33), z0 + 1.0), (xc + 0.02, Y(0.20), z0 + 0.95),
+                   (xc + 0.02, Y(0.18), z1 + 0.25)], link=0.03, wire=0.003, mat="steel")
+    det.box((xc - 0.01, yy(0.005, 0.20)[0], z0 + 1.0), (xc + 0.05, yy(0.005, 0.20)[1], z0 + 1.06), "steel", bevel=0.003)
 
 
 def padlock(mb, x, y, z, r):
@@ -1496,6 +1558,7 @@ def build_mil1(bid="MIL_1_almacen", collection_root=None, dress_on=True, **kw):
     sprinklers(inter)
     dock(det)
     for k, (cx, w) in enumerate(DOORS):
+        door_frame(det, cx, w)
         rollup_door(det, cx, w, seed=k + 3, damaged=(k == 1))
     personnel_door(det)
     exterior_services(det, r)
