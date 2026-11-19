@@ -759,7 +759,7 @@ def dress_openings(cfg, placed, details, interior):
                 details.join(op.rolling_shutter(w, h, seed=seed, dent=float(r.uniform(0.4, 0.9)),
                                                 open_frac=float(r.choice([0.0, 0.0, 0.35]))), M)
             elif kind == "breeze":
-                details.join(op.breeze_block_screen(w, h, seed=seed, pattern="cross", bevel=0.0, y0=0.025,
+                details.join(op.breeze_block_screen(w, h, seed=seed, pattern="cross", y0=0.025,
                                                     missing=float(r.uniform(0.04, 0.12))), M)
             n += 1
             # barandal de loggia sobre el canto de la losa
