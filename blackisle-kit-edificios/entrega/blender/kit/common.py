@@ -305,10 +305,27 @@ def _clear_soft_sharp(me):
 
 # ---------------- muros con vanos (sin booleanos) ----------------
 def wall_with_openings(mb, length, height, thickness, openings=(), mat_out="concrete", mat_in="plaster", mat_reveal="concrete",
-                       m=None, reveal=True):
+                       m=None, reveal=True, arris=0.008):
     """Muro en coordenadas locales: u = 0..length (eje X), v = 0..height (eje Z), cara exterior en y = 0, interior en y = thickness.
     openings: [(u0, u1, v0, v1)] rectángulos que atraviesan el muro (puertas: v0 = 0).
-    Malla de cuadriláteros soldada (grid por las líneas de los vanos) + jambas/dintel/alféizar. `m` coloca el muro en el mundo."""
+    Malla de cuadriláteros soldada (grid por las líneas de los vanos) + jambas/dintel/alféizar. `m` coloca el muro en el mundo.
+    `arris`: las aristas de cada vano (jamba, dintel y alféizar contra las caras del muro) se boleán con ese radio (8 mm:
+    esquinero de aplanado / chaflán de colado); 0 las deja vivas. Se arma en una malla aparte y se une: biselar sobre la malla
+    destino recorrería el modelo entero en cada muro."""
+    if arris > 0 and reveal and openings:
+        w = MB()
+        wall_with_openings(w, length, height, thickness, openings, mat_out, mat_in, mat_reveal, m, reveal, arris=0.0)
+        rev = getattr(w, "_reveal_faces", set())
+        edges = [e for e in w.bm.edges if len(e.link_faces) == 2 and
+                 sum(1 for f in e.link_faces if f in rev) == 1]
+        if edges:
+            res = bmesh.ops.bevel(w.bm, geom=edges, offset=arris, offset_type="OFFSET", segments=2, profile=0.5,
+                                  affect="EDGES", clamp_overlap=True)
+            sl = w._soft_layer()
+            for f in res.get("faces", []):
+                f[sl] = 1
+        mb.join(w)
+        return mb
     R = lambda x: round(float(x), 5)          # rejilla soldada sin filas/columnas fantasma por error de coma flotante
     length, height = R(length), R(height)
     openings = [(max(R(o[0]), 0.0), min(R(o[1]), length), max(R(o[2]), 0.0), min(R(o[3]), height)) for o in openings]
@@ -356,19 +373,21 @@ def wall_with_openings(mb, length, height, thickness, openings=(), mat_out="conc
             mb.face(f if i != 0 else list(reversed(f)), mat_reveal)
     # jambas, dintel y alféizar (las caras internas de cada vano), segmentadas por la rejilla para soldar
     if reveal:
+        rev = set()
         for (u0, u1, v0, v1) in openings:
             i0, i1 = us.index(u0), us.index(u1)
             j0, j1 = vs.index(v0), vs.index(v1)
             for i in range(i0, i1):  # alféizar (abajo) y dintel (arriba)
                 if j0 > 0:
-                    mb.face([V(vf, i, j0, 0), V(vb, i, j0, thickness), V(vb, i + 1, j0, thickness), V(vf, i + 1, j0, 0)], mat_reveal)
+                    rev.add(mb.face([V(vf, i, j0, 0), V(vb, i, j0, thickness), V(vb, i + 1, j0, thickness), V(vf, i + 1, j0, 0)], mat_reveal))
                 if j1 < nv:
-                    mb.face([V(vf, i + 1, j1, 0), V(vb, i + 1, j1, thickness), V(vb, i, j1, thickness), V(vf, i, j1, 0)], mat_reveal)
+                    rev.add(mb.face([V(vf, i + 1, j1, 0), V(vb, i + 1, j1, thickness), V(vb, i, j1, thickness), V(vf, i, j1, 0)], mat_reveal))
             for j in range(j0, j1):  # jambas
                 if i0 > 0:
-                    mb.face([V(vf, i0, j + 1, 0), V(vb, i0, j + 1, thickness), V(vb, i0, j, thickness), V(vf, i0, j, 0)], mat_reveal)
+                    rev.add(mb.face([V(vf, i0, j + 1, 0), V(vb, i0, j + 1, thickness), V(vb, i0, j, thickness), V(vf, i0, j, 0)], mat_reveal))
                 if i1 < nu:
-                    mb.face([V(vf, i1, j, 0), V(vb, i1, j, thickness), V(vb, i1, j + 1, thickness), V(vf, i1, j + 1, 0)], mat_reveal)
+                    rev.add(mb.face([V(vf, i1, j, 0), V(vb, i1, j, thickness), V(vb, i1, j + 1, thickness), V(vf, i1, j + 1, 0)], mat_reveal))
+        mb._reveal_faces = rev
     return mb
 
 

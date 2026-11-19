@@ -248,12 +248,15 @@ def beam_loft(mb, p0, p1, w, h, mat, up=(0, 0, 1), out=None, r=None, spalls=0, c
 
 
 def _pit(mb, rect, z0, dep, r, mat="concrete", up=True, rebar=False):
-    """Descascarado somero dentro de un rectángulo de la losa (la losa deja ese hueco sin cara): borde en z0, paredes rotas
-    que bajan (up=True, cara superior) o suben (lecho inferior) y fondo de agregado expuesto, irregular. rebar: malla de
-    varilla oxidada a la vista en el fondo (lecho inferior)."""
+    """Descascarado de la losa dentro de un rectángulo que la rejilla deja sin cara (cara superior o lecho inferior):
+    una corona plana a la cota de la losa cierra el rectángulo hasta un contorno IRREGULAR (polilínea con ruido), de ahí
+    baja un canto roto de pared desigual, y el fondo es una malla regular (anillos que se funden en una cuadrícula de 8 x 8,
+    sin vértice central) con rugosidad de agregado y piedras asomando. rebar: malla de varilla a la vista (lecho inferior)."""
     x0, x1, y0, y1 = rect
     n = 8
     sg = -1.0 if up else 1.0
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    hx, hy = (x1 - x0) / 2, (y1 - y0) / 2
     per = []
     for k in range(n):
         per.append((x0 + (x1 - x0) * k / n, y0))
@@ -263,36 +266,69 @@ def _pit(mb, rect, z0, dep, r, mat="concrete", up=True, rebar=False):
         per.append((x1 - (x1 - x0) * k / n, y1))
     for k in range(n):
         per.append((x0, y1 - (y1 - y0) * k / n))
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    rim = [mb.bm.verts.new((x, y, z0)) for (x, y) in per]
-    inner = []
-    for (x, y) in per:
-        f = float(r.uniform(0.6, 0.85))
-        px, py = cx + (x - cx) * f, cy + (y - cy) * f
-        inner.append(mb.bm.verts.new((px, py, z0 + sg * dep * float(r.uniform(0.55, 0.85)))))
     m = len(per)
-    for k in range(m):
-        kk = (k + 1) % m
-        q = [rim[k], rim[kk], inner[kk], inner[k]]
-        mb.face(q if up else list(reversed(q)), mat)
-    # fondo: anillos concéntricos con rugosidad de agregado
-    rings = [inner]
+    ph = [float(r.uniform(0, 2 * math.pi)) for _ in range(3)]
+    ea, eb = hx - 0.025, hy - 0.025
+
+    def contour(theta, f):
+        re = 1.0 / math.sqrt((math.cos(theta) / ea) ** 2 + (math.sin(theta) / eb) ** 2)
+        g = 0.8 + 0.09 * math.sin(3 * theta + ph[0]) + 0.06 * math.sin(5 * theta + ph[1]) + 0.04 * math.sin(9 * theta + ph[2])
+        return re * min(0.98, g * f)
+    th = [math.atan2(py - cy, px - cx) for (px, py) in per]
+    rim = [mb.bm.verts.new((x, y, z0)) for (x, y) in per]
+    edge = []
+    for t in th:
+        rr = contour(t, 1.0 + float(r.uniform(-0.04, 0.04)))
+        edge.append(mb.bm.verts.new((cx + rr * math.cos(t), cy + rr * math.sin(t), z0)))
+
+    # pared rota: dos anillos bajo el contorno, con la pared desigual (entrantes y salientes de 5–12 mm)
+    mid, foot = [], []
+    for (v, t) in zip(edge, th):
+        d = (Vector((v.co.x - cx, v.co.y - cy, 0.0))).normalized()
+        j1 = float(r.uniform(-0.012, 0.006))
+        j2 = float(r.uniform(-0.03, -0.008))
+        mid.append(mb.bm.verts.new((v.co.x + d.x * j1, v.co.y + d.y * j1, z0 + sg * dep * float(r.uniform(0.3, 0.55)))))
+        foot.append(mb.bm.verts.new((v.co.x + d.x * j2, v.co.y + d.y * j2, z0 + sg * dep * float(r.uniform(0.75, 0.95)))))
+    # fondo: anillos que pasan del contorno a la orilla de una cuadrícula de 8 x 8
+    g = 0.42
+    gx0, gx1, gy0, gy1 = cx - hx * g, cx + hx * g, cy - hy * g, cy + hy * g
+    G = [[None] * (n + 1) for _ in range(n + 1)]
+
+    def zfl():
+        return z0 + sg * (dep * float(r.uniform(0.92, 1.05)) + float(r.uniform(-0.003, 0.003)))
+    for i in range(n + 1):
+        for j in range(n + 1):
+            px = gx0 + (gx1 - gx0) * i / n + float(r.uniform(-0.004, 0.004)) * (0 < i < n)
+            py = gy0 + (gy1 - gy0) * j / n + float(r.uniform(-0.004, 0.004)) * (0 < j < n)
+            G[i][j] = mb.bm.verts.new((px, py, zfl()))
+    gper = [G[i][0] for i in range(n)] + [G[n][j] for j in range(n)] + [G[i][n] for i in range(n, 0, -1)] + [G[0][j] for j in range(n, 0, -1)]
+    rings = [rim, edge, mid, foot]
     for f in (0.66, 0.33):
         rg = []
-        for v in inner:
-            px, py = cx + (v.co.x - cx) * f, cy + (v.co.y - cy) * f
-            rg.append(mb.bm.verts.new((px, py, z0 + sg * dep * float(r.uniform(0.85, 1.05)))))
+        for (vf, vg) in zip(foot, gper):
+            p = vf.co.lerp(vg.co, 1.0 - f)
+            rg.append(mb.bm.verts.new((p.x + float(r.uniform(-0.006, 0.006)), p.y + float(r.uniform(-0.006, 0.006)), zfl())))
         rings.append(rg)
-    for a, b in zip(rings[:-1], rings[1:]):
+    rings.append(gper)
+    for A, B_ in zip(rings[:-1], rings[1:]):
         for k in range(m):
             kk = (k + 1) % m
-            q = [a[k], a[kk], b[kk], b[k]]
+            q = [A[k], A[kk], B_[kk], B_[k]]
             mb.face(q if up else list(reversed(q)), mat)
-    c = mb.bm.verts.new((cx, cy, z0 + sg * dep))
-    for k in range(m):
-        kk = (k + 1) % m
-        q = [rings[-1][k], rings[-1][kk], c]
-        mb.face(q if up else list(reversed(q)), mat)
+    for i in range(n):
+        for j in range(n):
+            q = [G[i][j], G[i + 1][j], G[i + 1][j + 1], G[i][j + 1]]
+            mb.face(q if up else list(reversed(q)), mat)
+    # piedras de agregado asomando del fondo
+    with mb.soft():
+        for _ in range(int(r.integers(6, 12))):
+            t = float(r.uniform(0, 2 * math.pi))
+            rr = contour(t, float(r.uniform(0.1, 0.7)))
+            px, py = cx + rr * math.cos(t), cy + rr * math.sin(t)
+            sz = float(r.uniform(0.006, 0.014))
+            Mp = _T(px, py, z0 + sg * dep * 0.97) @ (Matrix.Rotation(math.pi, 4, "X") if not up else Matrix()) @ _Rz(float(r.uniform(0, 360)))
+            port.lathe_n(mb, [(0.0, -sz * 0.6), (sz * 0.85, -sz * 0.45), (sz, 0.0), (sz * 0.8, sz * 0.4), (sz * 0.35, sz * 0.62),
+                              (0.0, sz * 0.66)], seg=8, mat="gravel", M=Mp @ Matrix.Scale(1.0, 4, (1, 0, 0)))
     if rebar:
         cz = z0 + sg * 0.035
         with mb.soft():
@@ -1141,6 +1177,9 @@ def build_roof(roof, det, r):
     zr = roof_z(0.0) + 0.038
     port.psweep(roof, prof, [(0.0, WH["y0"] - ov - 0.01, zr), (0.0, WH["y1"] + ov + 0.01, zr)], "metal_rust", up=(0, 0, 1),
                 miter=False)
+    for (yb, sgn) in ((WH["y0"] - ov - 0.006, 1), (WH["y1"] + ov + 0.006, -1)):     # cierres de los extremos de la cumbrera
+        cap = [(-0.3, -0.3 * tp_ - 0.045), (0.3, -0.3 * tp_ - 0.045), (0.3, -0.3 * tp_), (0.0, 0.012), (-0.3, -0.3 * tp_)]
+        port.bev_plate(roof, cap, 0.0012, "metal_rust", M=Matrix(((1, 0, 0, 0), (0, 0, sgn, yb), (0, 1, 0, zr), (0, 0, 0, 1))), ch=0.0)
     y = WH["y0"] - ov + 0.1
     while y < WH["y1"] + ov - 0.05:
         for sg in (-1, 1):

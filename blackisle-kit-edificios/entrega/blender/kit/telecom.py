@@ -2932,9 +2932,11 @@ def _rack(mb, M, w=0.6, d=0.8, h=2.0, items=(), jumpers=0, seed=0, sides=(True, 
     _box(mb, (-w / 2 + 0.004, d / 2 - 0.0012, 0.1), (w / 2 - 0.004, d / 2, h - 0.022), "cable", bevel=0.0006, seg=1, m=M)
     _box(mb, (-w / 2, -d / 2, h - 0.022), (w / 2, d / 2, h), "cable", bevel=0.004, seg=2, m=M)
     _box(mb, (-0.18, d / 2 - 0.2, h), (0.18, d / 2 - 0.06, h + 0.006), "rubber", bevel=0.0015, seg=1, m=M)   # pasacables de cepillo
-    yr = -d / 2 + 0.06                                   # rieles de 19"
+    yr = -d / 2 + 0.06                                   # rieles de 19" delanteros y traseros (se ven por las U libres)
+    yrb = d / 2 - (0.10 if d > 0.7 else 0.045)           # traseros: detrás del equipo más profundo (servidor 0,6 / batería 0,48)
     for sx in (-1, 1):
         _rail19(mb, M, sx, yr, 0.1, 0.1 + 42 * U)
+        _rail19(mb, M, sx, yrb, 0.1, 0.1 + 42 * U)
     u = 0
     placed = []
     for k, it in enumerate(items):
@@ -3049,33 +3051,48 @@ def _trapeze(mb, c, along, z_under, H, w=0.45):
         lathe(mb, [(0.0048, H - 0.03), (0.011, H - 0.025), (0.011, H)], seg=24, mat="galvanized", caps=False, M=_T(p.x, p.y, 0))
 
 
-def _entry_port(mb, x_wall, yc, zc, ncol=4, nrow=2, used=8):
-    """Puerto de entrada de cables (placa de 4" × ncol × nrow) en el muro x = x_wall (cara interior, sobresale hacia -X):
-    marco atornillado, botas de hule con abrazadera inoxidable en cada cable y tapones en los puertos libres.
-    Devuelve las salidas [(punto, radio)] de las botas usadas."""
-    pitch = 0.12
-    Wp, Hp = ncol * pitch + 0.06, nrow * pitch + 0.06
-    M = _T(x_wall, yc, zc) @ _Rz(-90) @ _Rx(90)         # XY local sobre el muro, +Z hacia -X (adentro)
+PORT_U = [-0.24 + 0.08 * i for i in range(7)]        # columnas de botas del puerto (a lo largo del muro, +y del mundo)
+PORT_V = [-0.085, 0.0, 0.085]                          # filas (de abajo hacia arriba)
+
+
+def default_port_map():
+    """Ocupación del puerto de 21 botas de 3" (7 × 3) si el ensamblador no da la suya: 16 coaxiales/híbridos Ø 26, 2 fibras
+    Ø 13, 2 cables GPS Ø 9 (columna 6, filas 1 y 2) y un tapón (columna 6, fila 0). {(col, fila): (radio, material)}."""
+    cab = {}
+    for i in range(6):
+        for j in range(3):
+            cab[(i, j)] = (0.0065, "paint_yellow") if (i, j) in ((0, 0), (5, 0)) else (0.013, "cable")
+    cab[(6, 1)] = (0.0045, "cable")
+    cab[(6, 2)] = (0.0045, "cable")
+    return dict(cables=cab, plug=(6, 0))
+
+
+def _entry_port(mb, x_wall, yc, zc, port=None):
+    """Cara interior del puerto de entrada de cables: la misma placa de 21 botas de 3" (7 × 3, paso 80 × 85 mm) que el puerto
+    exterior, en el muro x = x_wall (sobresale hacia -X): marco atornillado, bota de hule con abrazadera inoxidable en cada
+    cable (del diámetro de su cable) y tapón ciego en la libre. Cada bota interior está en el mismo barreno que la exterior
+    del mismo cable (columna i en y = yc + PORT_U[i]). Devuelve [(punto de salida, radio, material, col, fila)]."""
+    port = port or default_port_map()
+    Wp, Hp = 7 * 0.08 + 0.04, 3 * 0.085 + 0.06
+    M = _T(x_wall, yc, zc) @ _Rz(-90) @ _Rx(90)         # XY local sobre el muro (x local = -y del mundo), +Z hacia -X
     slab(mb, M @ _T(0, 0, -0.0005), Wp, Hp, 0.012, rc=0.012, re=0.003, mat="galvanized", nc=3, ne=1, re0=0.0, cap0=False)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            bolt(mb, M @ _T(sx * (Wp / 2 - 0.018), sy * (Hp / 2 - 0.018), 0.012), d=0.01, mat="galvanized", seg=24)
+            bolt(mb, M @ _T(sx * (Wp / 2 - 0.016), sy * (Hp / 2 - 0.016), 0.012), d=0.01, mat="galvanized", seg=24)
     outs = []
-    k = 0
-    for j in range(nrow):
-        for i in range(ncol):
-            x = (i - (ncol - 1) / 2) * pitch
-            y = ((nrow - 1) / 2 - j) * pitch
-            Mb = M @ _T(x, y, 0.012)
-            if k < used:                                 # bota: brida, cuerpo cónico escalonado y cuello sobre el cable
-                lathe(mb, [(0.05, 0.0), (0.05, 0.012), (0.03, 0.06), (0.019, 0.08), (0.0135, 0.11)], seg=SEG, mat="rubber", M=Mb,
-                      caps=False)
-                ring(mb, Mb @ _T(0, 0, 0.1), 0.0148, 0.0018, mat="steel", n=SEG, seg=6)
-                _box(mb, (0.012, -0.004, 0.096), (0.024, 0.004, 0.104), "steel", bevel=0.001, seg=1, m=Mb)
-                outs.append((Mb @ Vector((0, 0, 0.11)), 0.0115))
-            else:
-                lathe(mb, [(0.0, 0.0), (0.05, 0.0), (0.05, 0.012), (0.04, 0.02), (0.0, 0.024)], seg=SEG, mat="rubber", M=Mb, caps=False)
-            k += 1
+    for j, v in enumerate(PORT_V):
+        for i, u in enumerate(PORT_U):
+            Mb = M @ _T(-u, v, 0.012)
+            if (i, j) == tuple(port.get("plug", (-1, -1))) or (i, j) not in port["cables"]:
+                lathe(mb, [(0.0, 0.0), (0.032, 0.0), (0.032, 0.012), (0.026, 0.02), (0.0, 0.022)], seg=SEG, mat="rubber", M=Mb, caps=False)
+                continue
+            rc, mat = port["cables"][(i, j)]
+            neck = rc + 0.0022
+            lathe(mb, [(0.032, 0.0), (0.032, 0.012), (0.024, 0.045), (neck + 0.004, 0.07), (neck, 0.095)], seg=SEG, mat="rubber",
+                  M=Mb, caps=False)
+            ring(mb, Mb @ _T(0, 0, 0.085), neck + 0.0004, 0.0016, mat="steel", n=SEG, seg=6)
+            _box(mb, (neck - 0.002, -0.004, 0.081), (neck + 0.01, 0.004, 0.089), "steel", bevel=0.001, seg=1, m=Mb)
+            outs.append((Mb @ Vector((0, 0, 0.095)), rc, mat, i, j))
     return outs
 
 
@@ -3154,7 +3171,7 @@ def _desk(mb, M, seed=0):
          bend=0.04, nseg=3)
 
 
-def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
+def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0, port=None):
     """Equipamiento interior completo de la caseta prefabricada (piso interior z = 0; muros interiores en x = ±L/2, y = ±W/2;
     plafón en z = H). Supuesto de puerta: vano de 1,0 m en el muro -Y centrado en x = -L/2 + 0,9; queda libre la zona
     x ∈ [-L/2 + 0,35, -L/2 + 1,45] × y ∈ [-W/2, -W/2 + 1,0] hasta el plafón.
@@ -3222,7 +3239,7 @@ def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
     _ladder_tray(mb, (xa_N, yTN), (xT + 0.235, yTN), zt, rung_phase=0.15 + (xN[0] - xa_N) % 0.3)
     _ladder_tray(mb, (xa_S, yTS), (xT + 0.235, yTS), zt, rung_phase=0.15 + (xS[0] - xa_S) % 0.3)
     _ladder_tray(mb, (xT, yTS - 0.235), (xT, yTN + 0.235), zt + 0.0, rung_phase=0.2)
-    _ladder_tray(mb, (xT + 0.235, 0.7), (x1 - 0.06, 0.7), zt, rung_phase=0.1)
+    _ladder_tray(mb, (xT + 0.235, 0.6), (x1 - 0.06, 0.6), zt, w=0.56, rung_phase=0.1)    # bajo el puerto (21 botas)
     zu = zt - 0.012 - 0.002
     for x in (xN[0] + 0.15, (xN[0] + xT) / 2 + 0.15, xT - 0.45):
         _trapeze(mb, (x, yTN), (1, 0), zu, H)
@@ -3231,54 +3248,66 @@ def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
     for y in (-0.2, 0.95):                               # fuera del minisplit del muro +X
         _trapeze(mb, (xT, y), (0, 1), zu, H)
     # ---- puerto de entrada y cables
-    outs = _entry_port(mb, x1, 0.6, 2.3)
+    outs = _entry_port(mb, x1, 0.6, 2.3, port)
     zb = zt + 0.0
     groups = []
-    # cables RF / híbridos del puerto -> charola transversal (lado +X) -> fila N -> BBU / transmisión
-    route_p = [(x1 - 0.34, 0.6), (xT, 0.6), (xT, yTN), (xN[0] - 0.1, yTN)]
-    outs = sorted(outs, key=lambda e: (e[0].y, -e[0].z))
-    dests = [xN[0] - 0.05, xN[0] + 0.05, xN[2] - 0.1, xN[2] + 0.0, xN[2] + 0.1, xN[1] - 0.1, xN[1] + 0.0, xN[1] + 0.1]
-    for i, (pt, rc) in enumerate(outs):
-        o = -0.016 - 0.0245 * i                          # a la derecha del avance (lado exterior de las vueltas)
-        groups.append(("cable", rc, o, zb + rc, route_p, dests[i], pt, "N"))
+    # los 20 cables del puerto (los mismos que entran por fuera) viajan en bloque: un carril por columna de botas y una capa por
+    # fila (fila de abajo = capa de abajo), puerto -> charola corta -> transversal (+X) -> fila N. Cada capa baja a un rack
+    # (la de abajo al más cercano), así ningún cable que baja atraviesa a otro que sigue de largo
+    route_p = [(xT, 0.6), (xT, yTN), (xN[0] - 0.1, yTN)]
+    rk = {0: xN[2], 1: xN[1], 2: xN[0]}
+    for (pt, rc, mat, i, j) in outs:
+        o = -0.215 + 0.0433 * (6 - i)                      # carril en la transversal: la columna 6 (más al norte) al oriente
+        groups.append((mat, rc, o, zb + 0.032 * j + rc, route_p, rk[j] + (3 - i) * 0.030, pt, "N"))
     # fuerza CD desde la planta (S1) -> fila S -> transversal (lado -X) -> fila N, una por rack
     route_d = [(xS[0], yTS), (xT, yTS), (xT, yTN), (xN[0] - 0.1, yTN)]
     for i in range(len(xN)):
         o = 0.2 - 0.016 * i
-        groups.append(("cable", 0.0065, o, zb + 0.0065, route_d, xN[len(xN) - 1 - i] + 0.12, None, "N"))
+        groups.append(("cable", 0.0065, o, zb + 0.0065, route_d, xN[len(xN) - 1 - i] + 0.118, None, "N"))
     # baterías -> planta (fila S)
     for i, xb in enumerate(xS[1:3]):
-        groups.append(("cable", 0.009, -0.09 + 0.022 * i, zb + 0.009, [(xb, yTS), (xS[0], yTS)], xS[0] + 0.1 + 0.05 * i, "S", "S"))
+        groups.append(("cable", 0.009, 0.16 + 0.022 * i, zb + 0.009, [(xb, yTS), (xS[0], yTS)], xS[0] - 0.06 - 0.04 * i, "S", "S"))
     # fibra (capa superior) desde la ODF de transmisión (N1) hacia los BBU y la ODF de distribución
-    route_f = [(xN[0], yTN), (xT - 0.3, yTN)]
-    for i, xd in enumerate((xN[1] - 0.05, xN[1] + 0.05, xN[2] - 0.05, xN[2] + 0.05, xN[4], xN[4] + 0.06)):
-        groups.append(("paint_yellow", 0.0035, -0.08 + 0.03 * i, zb + 0.026 + 0.0035, route_f, xd, "N1", "N"))
+    route_f = [(xN[0] - 0.15, yTN), (xT - 0.3, yTN)]   # capa de arriba, sobre la fuerza CD (lado del muro de la fila N)
+    for i, xd in enumerate((xN[1] - 0.125, xN[1] - 0.145, xN[2] - 0.125, xN[2] - 0.145, xN[4], xN[4] + 0.06)):
+        groups.append(("paint_yellow", 0.0035, -0.110 + 0.0075 * i, zb + 0.026 + 0.0035, route_f, xd, "N1", "N"))
     for (mat, rc, o, zc, route, xd, src, row) in groups:
-        P = _offset_route(route, o)
-        heading_x = route[-1][0] - route[-2][0]
+        # eje de la charola con curvas de radio 0,30 m muestreadas: los carriles desplazados quedan concéntricos (paralelos
+        # en las vueltas: los cables vecinos no se acercan al dar la vuelta)
+        dense = [(q[0], q[1]) for q in fillet([(x, y, 0.0) for (x, y) in route], 0.30, 10)] if len(route) > 2 else route
+        P = _offset_route(dense, o)
         seg_y = P[-1][1]
         path = []
-        if isinstance(src, Vector):                     # sale de la bota: horizontal hacia -X y baja a la charola
-            path += [tuple(src), (src.x - 0.08, src.y, src.z), (P[0][0] - 0.02, P[0][1], zc + 0.02)]
-            P = P[1:] if len(P) > 1 else P
+        if isinstance(src, Vector):                     # sale de la bota hacia -X, baja a su capa y da vuelta a su carril de la
+            xi, yi = xT - o, src.y                      # transversal (escalonado: cada columna entra a un carril más al
+            P = [q for q in P if q[1] > yi + 0.16 or q[0] < xT - 0.40]   # oriente que la anterior, sin cruzar a nadie)
+            jr = round((zc - zb - rc) / 0.032)           # fila: la de arriba baja un poco después (no roza a la de en medio)
+            path += [tuple(src), (src.x - 0.025, src.y, src.z), (xi + 0.07 - 0.012 * jr, yi, zc + 0.003), (xi, yi + 0.07, zc)]
         elif src == "N1" or src == "S" or src is None:  # sube desde el rack de origen
-            if src is None:
-                xr0, yr0 = xS[0] + 0.05 - 0.02 * (o * 50 % 3), yS - 0.17
-            elif src == "S":
-                xr0, yr0 = route[0][0] + 0.04, yS - 0.17
+            if src in (None, "N1"):                     # el de carril más lejano sube más al poniente: no se cruzan
+                if src is None:
+                    xr0, yr0 = xS[0] + 0.02 + 0.02 * round((0.2 - o) / 0.016), yS - 0.17
+                else:
+                    xr0, yr0 = xN[0] - 0.17 + 0.009 * round((o + 0.110) / 0.0075), yN + 0.28
+                y0_ = P[0][1]
+                P = [q for q in P if not (abs(q[1] - y0_) < 1e-6 and q[0] <= xr0 + 0.04)] or [(xd, y0_)]
+                path += [(xr0, yr0, 1.98), (xr0, yr0, zc - 0.08), (xr0, y0_, zc)]
             else:
-                xr0, yr0 = xN[0] + 0.04 * (o * 30 % 3) - 0.04, yN + 0.28
-            path += [(xr0, yr0, 1.98), (xr0, yr0, zc - 0.08), (P[0][0], P[0][1], zc)]
-        # recorrido por la charola hasta el punto de bajada xd
+                xr0, yr0 = route[0][0] + 0.04, yS - 0.17
+                path += [(xr0, yr0, 1.98), (xr0, yr0, zc - 0.08), (P[0][0], P[0][1], zc)]
+        # recorrido por la charola hasta el punto de bajada xd (el último tramo se corta en xd)
+        sgn = 1.0 if route[-1][0] > route[-2][0] else -1.0
         pts2 = []
-        for i in range(len(P) - 1):
-            pts2.append(P[i])
+        for q in P:
+            if abs(q[1] - seg_y) < 1e-6 and (q[0] - xd) * sgn >= 0:
+                break
+            pts2.append(q)
         pts2.append((xd, seg_y))
         for (x, y) in pts2:
             path.append((x, y, zc))
         y_ent = (yN + 0.28) if row == "N" else (yS - 0.17)
         path += [(xd, seg_y, zc - 0.05), (xd, y_ent, 2.08), (xd, y_ent, 1.96)]
-        wire(mb, _dedupe(path), rc, mat=mat, seg=13, bend=0.05 if rc < 0.008 else 0.09, nseg=3)
+        wire(mb, _dedupe(path), rc, mat=mat, seg=13, bend=0.035 if isinstance(src, Vector) else (0.05 if rc < 0.008 else 0.09), nseg=4)
     # ---- equipo de muro
     split = split_indoor(seed)
     mb.join(split, _T(x0, -0.05, 2.25) @ _Rz(90))
@@ -3289,7 +3318,10 @@ def shelter_interior(L=5.6, W=3.1, H=2.7, seed=0):
     ends2 = _ground_bar(mb, x1, 0.6, 0.45, n=6)
     for k, e in enumerate(ends[:6]):
         if k < 3:                                       # al plafón / charola (tierra de racks y del puerto)
-            wire(mb, [tuple(e), (e.x - 0.05, e.y, e.z + 0.12), (e.x - 0.12 - 0.02 * k, e.y + 0.02 * k, zt - 0.03), (xT, 0.6 + 0.05 * k, zt + 0.004)],
+            yk = 1.054 - 0.012 * k                         # por fuera del puerto y de la charola corta: no cruza el bloque
+            xk = x1 - 0.11 + 0.02 * k                      # se amarra al larguero exterior de la charola corta
+            wire(mb, [tuple(e), (e.x - 0.05, e.y, e.z + 0.05), (e.x - 0.09 - 0.025 * k, yk, e.z + 0.10), (xk, yk, zt + 0.02),
+                      (xk, 0.6 + 0.295, zt + 0.02)],
                  0.0045, mat="sign_green", seg=13, bend=0.06, nseg=4)
         else:                                           # a la barra inferior (halo)
             e2 = ends2[k - 3]

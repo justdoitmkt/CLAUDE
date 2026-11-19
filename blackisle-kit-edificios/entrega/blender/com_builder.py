@@ -430,17 +430,22 @@ def wall_services(det, r):
     # un cable por bota (las botas no se comparten)
     port = cl.MB()
     _rbox(port, (-0.30, -0.012, -0.16), (0.30, 0.0, 0.16), "galvanized", r=0.004)
+    twm = _mod("tower")
+    pm = port_map(twm) if twm is not None else dict(cables={}, plug=(6, 0))
     for i in range(7):
         for j in range(3):
             u, v = PORT_U[i], -0.085 + j * 0.085
             port.cyl((u, -0.012, v), (u, -0.022, v), 0.033, seg=32, mat="galvanized")
-            if i == 6 and j == 0:                         # libre: tapón ciego de hule
+            if (i, j) == pm["plug"]:                      # libre: tapón ciego de hule
                 ce.lathe(port, [(0.0, 0.0), (0.030, 0.0), (0.030, 0.016), (0.026, 0.024), (0.0, 0.026)], seg=24, mat="rubber",
                          M=_T(u, -0.022, v) @ _Rx(90))
                 continue
-            ce.lathe(port, [(0.0, 0.0), (0.030, 0.0), (0.030, 0.018), (0.0255, 0.027), (0.0255, 0.046), (0.0225, 0.054),
+            rc = pm["cables"].get((i, j), (0.013, "cable"))[0]
+            nk = rc + 0.0022                              # la bota se corta al diámetro de su cable
+            ce.lathe(port, [(0.0, 0.0), (0.030, 0.0), (0.030, 0.018), (0.024, 0.030), (nk + 0.003, 0.046), (nk, 0.054),
                             (0.0, 0.054)], seg=24, mat="rubber", M=_T(u, -0.022, v) @ _Rx(90))
-            port.cyl((u, -0.036, v), (u, -0.045, v), 0.0275, seg=24, mat="steel")    # abrazadera
+            ce.lathe(port, [(nk + 0.0003, 0.040), (nk + 0.0028, 0.041), (nk + 0.0028, 0.049), (nk + 0.0003, 0.050)], seg=24,
+                     mat="steel", M=_T(u, -0.022, v) @ _Rx(90))   # abrazadera inoxidable sobre el cuello
     for (u, v) in ((-0.28, -0.14), (0.28, -0.14), (-0.28, 0.14), (0.28, 0.14)):
         ce.hexnut(port, _T(u, -0.012, v) @ _Rx(90), d=0.008, mat="steel")
     # capucha de lámina doblada
@@ -692,7 +697,12 @@ def dress(det, furn, r, per=None, wire=None):
         (mb or furn).join(piece, Mx)
 
     # interior de la caseta (racks, charolas, minisplits, alarmas, tierras, escritorio) y sus luminarias
-    furn.join(tel.shelter_interior(L=IN_L, W=IN_W, H=IN_H, seed=7), _T(IN_CX, IN_CY, Z_FLOOR))
+    tw_ = _mod("tower")
+    try:                                              # por dentro, las mismas 21 botas con los mismos cables que por fuera
+        inter = tel.shelter_interior(L=IN_L, W=IN_W, H=IN_H, seed=7, port=port_map(tw_) if tw_ is not None else None)
+    except TypeError:
+        inter = tel.shelter_interior(L=IN_L, W=IN_W, H=IN_H, seed=7)
+    furn.join(inter, _T(IN_CX, IN_CY, Z_FLOOR))
     for xl in (-1.6, 0.0, 1.6):
         LIGHTS.append([round(IN_CX + xl, 3), round(IN_CY - 0.1, 3), round(Z_FLOOR + IN_H - 0.06, 3)])
     for (a, b) in (((IN_CX - 2.4, IN_CY + 0.75), (IN_CX + 2.4, IN_CY + 1.55)), ((IN_CX - 1.2, IN_CY - 1.55), (IN_CX + 1.2, IN_CY - 0.9))):
@@ -785,6 +795,43 @@ def fence(per, wire, tel, r):
                             ("DANGER HIGH VOLTAGE", CX1, CY0 + bay * 2.5, 90), ("NO TRESPASSING", CX0, CY1 - bay * 2.5, -90),
                             ("NO TRESPASSING", CX1 - bay * 3.5, CY1, 180)):
         furn.join(sg[nm], _T(x, y, z + 1.40) @ _Rz(rot) @ _T(0, -0.045, 0))
+
+
+def _trunk_slots(cab, yc=0.0):
+    """Lugar de cada troncal sobre el puente {i: (y, capa)} y su bota del puerto {i: (columna, rj, -)} (fila = 2 - rj).
+    Lo usan tower_site (cables por fuera) y dress (las mismas botas por dentro de la caseta)."""
+    # dos capas como en la escalerilla de la torre: la fila B de la salida (la de abajo) va en la capa de abajo y la fila A
+    # encima, al mismo paso de 42 mm y en el mismo orden lateral: los cables pasan de la torre al puente sin cruzarse
+    lower = sorted([i for i in range(len(cab)) if cab[i]["row"] == "B"], key=lambda i: cab[i]["x"])
+    upper = sorted([i for i in range(len(cab)) if cab[i]["row"] == "A"], key=lambda i: cab[i]["x"])
+    place = {}
+    for q, i in enumerate(lower):
+        place[i] = (yc + (q - (len(lower) - 1) / 2) * 0.042, 0)
+    for q, i in enumerate(upper):
+        place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.042, 1)
+    by_y = sorted(place, key=lambda i: place[i][0])
+    cols = [[] for _ in range(6)]
+    for q, i in enumerate(by_y):
+        cols[q * 6 // len(by_y)].append(i)
+    boot_of = {}
+    for ci, lst in enumerate(cols):
+        lst = sorted(lst, key=lambda i: (-place[i][1], place[i][0]))     # el de la capa de arriba va a la fila de arriba
+        for m, i in enumerate(lst):
+            boot_of[i] = (ci, m % 3, m >= 3)
+    return place, boot_of
+
+
+def port_map(tw):
+    """Ocupación del puerto (21 botas, 7 × 3) con los cables reales del sitio: troncales según _trunk_slots, 2 GPS en la
+    columna 6 (filas 2 y 1) y tapón en la columna 6, fila 0. {(col, fila): (radio, material)} para tel.shelter_interior."""
+    cab = tw.cable_layout(tw.Geo(42.0, 5.0, 1.6))
+    _, boot_of = _trunk_slots(cab)
+    cables = {}
+    for i, (ci, rj, _) in boot_of.items():
+        cables[(ci, 2 - rj)] = (cab[i]["r"], cab[i]["mat"])
+    cables[(6, 2)] = (0.0045, "cable")
+    cables[(6, 1)] = (0.0045, "cable")
+    return dict(cables=cables, plug=(6, 0))
 
 
 def _sfillet(pts, rad, n=6):
@@ -983,24 +1030,7 @@ def tower_site(det, furn, tw, an, tel, r):
     boots = [(py_ + PORT_U[i], pz_ - 0.085 + j * 0.085) for j in range(3) for i in range(7)]
     order = sorted(range(len(cab)), key=lambda i: (cab[i]["x"], cab[i]["row"]))
     # capa sobre el puente (12 abajo y 6 encima) y, en el puerto, cada cable a la columna de botas de su lado (sin cruzarse)
-    # dos capas como en la escalerilla de la torre: la fila B de la salida (la de abajo) va en la capa de abajo y la fila A
-    # encima, al mismo paso de 42 mm y en el mismo orden lateral: los cables pasan de la torre al puente sin cruzarse
-    lower = sorted([i for i in range(len(cab)) if cab[i]["row"] == "B"], key=lambda i: cab[i]["x"])
-    upper = sorted([i for i in range(len(cab)) if cab[i]["row"] == "A"], key=lambda i: cab[i]["x"])
-    place = {}
-    for q, i in enumerate(lower):
-        place[i] = (yc + (q - (len(lower) - 1) / 2) * 0.042, 0)
-    for q, i in enumerate(upper):
-        place[i] = (yc + (q - (len(upper) - 1) / 2) * 0.042, 1)
-    by_y = sorted(place, key=lambda i: place[i][0])
-    cols = [[] for _ in range(6)]
-    for q, i in enumerate(by_y):
-        cols[q * 6 // len(by_y)].append(i)
-    boot_of = {}
-    for ci, lst in enumerate(cols):
-        lst = sorted(lst, key=lambda i: (-place[i][1], place[i][0]))     # el de la capa de arriba va a la fila de arriba
-        for m, i in enumerate(lst):
-            boot_of[i] = (ci, m % 3, m >= 3)
+    place, boot_of = _trunk_slots(cab, yc)
     for i in order:
         c = cab[i]
         zh = G.z_exit - (yA - c["y"])

@@ -506,13 +506,15 @@ def partition_wood(mb, p0, p1, z0, H, doors=(), t=0.05, out=None, r=None, ceil=(
                 tt = top - r.uniform(0.3, 0.9)
                 jag1 = 0.03
             boards.append((pa, pb, pc, tt))
+            cup = r.uniform(0.0, 0.002)
             lumber(sub, ((pa + pb) / 2, BT / 2, pc + 0.003), ((pa + pb) / 2, BT / 2, tt), pb - pa - 0.002, BT, "wood_grey",
                    up=(0, 1, 0), r=r, rc=0.003, step=0.5, grain=1.0, check=0.5 if r.random() < 0.25 else 0.0,
-                   bow=r.uniform(-0.002, 0.002), cup=r.uniform(0.0, 0.002), jag1=jag1)
-            if pb - pa > 0.12 and r.random() < 0.5:
-                kv = r.uniform(pc + 0.3, max(pc + 0.35, tt - 0.3))
-                ku = (pa + pb) / 2 + r.uniform(-0.03, 0.03)
-                knot(sub, (ku, 0.0005, kv), (0, -1, 0), (0, 0, 1), r.uniform(0.01, 0.02), r.uniform(0.007, 0.012))
+                   bow=0.0, cup=cup, jag1=jag1)
+            if pb - pa > 0.12 and r.random() < 0.5 and tt - pc > 0.8:
+                kv = r.uniform(pc + 0.3, tt - 0.3)
+                dk = r.uniform(-0.03, 0.03)
+                knot(sub, ((pa + pb) / 2 + dk, cup * (1.0 - (2 * dk / (pb - pa - 0.002)) ** 2), kv), (0, -1, 0), (0, 0, 1),
+                     r.uniform(0.01, 0.02), r.uniform(0.007, 0.012))
         u += bw + r.uniform(0.003, 0.008)
     # soleras, travesaño y cabezales por la cara de atrás (y = BT .. t)
     Hm = min([H] + [top_at(0.0, L)])
@@ -723,6 +725,11 @@ def build_cabin(bid, collection_root=None, dress_all=True):
         # el barandal del lado del cuarto arranca en la 4.ª huella
         s = circ.stair_straight(width=sw, rise_total=fh - (zb0 - z0), seed=cfg["seed"] + 1, kind="wood", going=going, broken=0.08,
                                 rail=None, stringers=False)
+        # dentro de la casa la escalera apoya en la duela: sin el dado de concreto del pie ni las zapatas de exterior del kit
+        if "concrete" in s.mats:
+            import bmesh as _bm
+            ci = s.mats.index("concrete")
+            _bm.ops.delete(s.bm, geom=[f for f in s.bm.faces if f.material_index == ci], context="FACES")
         N_, rr, gg = s.meta["N"], s.meta["riser"], s.meta["going"]
         ks = [4] + [k for k in sorted(set(list(range(1, N_, 4)) + [N_ - 1])) if k > 4]
         s.join(circ.stair_railing([((k - 1) * gg + 0.07, 0.045, k * rr) for k in ks], h=0.9, kind="wood", seed=cfg["seed"] + 2))

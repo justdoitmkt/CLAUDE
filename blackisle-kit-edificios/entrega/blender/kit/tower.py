@@ -191,9 +191,82 @@ def rr_pts2(w, h, r, n=3):
     return pts
 
 
+def _bplate(mb, outline, t, mat, m=None, b=0.0012):
+    """Placa (cartela, oreja, placa de cruce) con canto real: cada esquina del contorno con chaflán de `b` y las aristas de
+    ambas caras con chaflán de `b` (1,2 mm, el canto cortado y desbarbado de una placa de 10 mm). Contorno 2D (x, y) en el
+    plano de `m`, espesor de z = 0 a t (como MB.plate)."""
+    P = []
+    for p in outline:
+        v = Vector((float(p[0]), float(p[1])))
+        if not P or (v - P[-1]).length > 1e-6:
+            P.append(v)
+    if len(P) > 2 and (P[0] - P[-1]).length < 1e-6:
+        P.pop()
+    n = len(P)
+    if n < 3:
+        return
+    area = sum(P[i].x * P[(i + 1) % n].y - P[(i + 1) % n].x * P[i].y for i in range(n))
+    if area < 0:
+        P.reverse()
+    b = min(b, t / 3.0)
+    Q = []
+    for i in range(n):
+        a, q, c = P[i - 1], P[i], P[(i + 1) % n]
+        d0, d1 = (a - q), (c - q)
+        if d0.length < 1e-9 or d1.length < 1e-9:
+            continue
+        if d0.normalized().dot(d1.normalized()) < -0.999:
+            Q.append(q)
+            continue
+        Q += [q + d0.normalized() * min(b, 0.3 * d0.length), q + d1.normalized() * min(b, 0.3 * d1.length)]
+    k = len(Q)
+    I = []
+    for i in range(k):
+        a, q, c = Q[i - 1], Q[i], Q[(i + 1) % k]
+        e0, e1 = (q - a), (c - q)
+        n0 = Vector((-e0.y, e0.x)).normalized() if e0.length > 1e-9 else Vector((0, 0))
+        n1 = Vector((-e1.y, e1.x)).normalized() if e1.length > 1e-9 else n0
+        nm = n0 + n1
+        nm = nm.normalized() if nm.length > 1e-9 else n0
+        f = 1.0 / max(nm.dot(n0), 0.5)
+        I.append(q + nm * (b * f))
+    M = m if m is not None else Matrix()
+    rings = [[mb.bm.verts.new(M @ Vector((p.x, p.y, z))) for p in pts] for (pts, z) in ((I, 0.0), (Q, b), (Q, t - b), (I, t))]
+    mb.face(list(reversed(rings[0])), mat)
+    mb.face(rings[3], mat)
+    for r in range(3):
+        A, B = rings[r], rings[r + 1]
+        for i in range(k):
+            j = (i + 1) % k
+            mb.face([A[i], A[j], B[j], B[i]], mat)
+
+
+def _rprof(prof, r=0.0015, nseg=2):
+    """Perfil 2D cerrado con las esquinas redondeadas a radio r (radio de laminado de ángulos, vigas y canales)."""
+    P = [Vector((float(x), float(y))) for (x, y) in prof]
+    n = len(P)
+    out = []
+    for i in range(n):
+        a, q, c = P[i - 1], P[i], P[(i + 1) % n]
+        d0, d1 = (a - q), (c - q)
+        L0, L1 = d0.length, d1.length
+        if L0 < 1e-9 or L1 < 1e-9 or d0.normalized().dot(d1.normalized()) < -0.999:
+            out.append((q.x, q.y))
+            continue
+        d0n, d1n = d0.normalized(), d1.normalized()
+        ang = math.acos(max(min(d0n.dot(d1n), 1.0), -1.0))
+        tl = min(r / math.tan(ang / 2), 0.45 * L0, 0.45 * L1)
+        p0, p1 = q + d0n * tl, q + d1n * tl
+        for j in range(nseg + 1):
+            u = j / nseg
+            w = p0.lerp(q, u).lerp(q.lerp(p1, u), u)
+            out.append((w.x, w.y))
+    return out
+
+
 def plate_m(mb, outline, t, mat, M, center=True):
     """Placa: contorno 2D (x, y) en el plano XY de M, espesor t a lo largo de Z local (centrada si center)."""
-    mb.plate(outline, t, mat, m=M @ _T(0, 0, -t / 2 if center else 0.0))
+    _bplate(mb, outline, t, mat, m=M @ _T(0, 0, -t / 2 if center else 0.0))
 
 
 def weld_ring(mb, M, r, w=0.006, seg=32, mat=GALV):
@@ -371,7 +444,7 @@ def _rib(mb, base, u, r_in, r_out, h_in, h_out, t, mat=GALV, shift=None):
     M = Matrix(((u.x, up.x, side.x, base.x), (u.y, up.y, side.y, base.y), (u.z, up.z, side.z, base.z), (0, 0, 0, 1)))
     ch = 0.015                                                  # despunte de esquina (paso del cordón de soldadura)
     o2 = [(r_in, ch), (r_in + ch, 0.0), (r_out, 0.0), (r_out, h_out), (r_in + sh, h_in)]
-    mb.plate(o2, t, mat, m=M @ _T(0, 0, -t / 2))
+    _bplate(mb, o2, t, mat, m=M @ _T(0, 0, -t / 2))
 
 
 def _anchor_pf():
@@ -418,10 +491,10 @@ def build_base(mb, G, seed=0):
         pc = Vector((pc.x, pc.y, zt))
         rlz = G.od_leg[0] / 2
         Mt = Matrix(((ug.x, 0, side.x, 0), (ug.y, 0, side.y, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
-        mb.plate([(rlz - 0.006, -0.05), (rlz + 0.07, -0.05), (rlz + 0.085, -0.035), (rlz + 0.085, 0.05), (rlz - 0.006, 0.05)],
+        _bplate(mb, [(rlz - 0.006, -0.05), (rlz + 0.07, -0.05), (rlz + 0.085, -0.035), (rlz + 0.085, 0.05), (rlz - 0.006, 0.05)],
                  0.010, GALV, m=_T(*pc) @ Mt @ _T(0, 0, -0.005))
         Ml = _T(*pc) @ Mt @ _T(0, 0, 0.0052)
-        mb.plate([(rlz + 0.012, -0.013), (rlz + 0.07, -0.013), (rlz + 0.07, 0.013), (rlz + 0.012, 0.013)], 0.004, "copper", m=Ml)
+        _bplate(mb, [(rlz + 0.012, -0.013), (rlz + 0.07, -0.013), (rlz + 0.07, 0.013), (rlz + 0.012, 0.013)], 0.004, "copper", m=Ml)
         for xx in (rlz + 0.024, rlz + 0.052):
             q = _T(*pc) @ Mt @ Vector((xx, 0.0, -0.0052))
             bolt_at(mb, q, side, 0.010, 0.0144, ug, stub=0.4)
@@ -455,7 +528,7 @@ def _flange(mb, M, rf, tf, rt, n_rib=8, up=True, rib_h=0.10, phase=0.0):
         Mr = M @ Matrix(((u.x, 0, side.x, 0), (u.y, 0, side.y, 0), (0, s, 0, 0), (0, 0, 0, 1)))
         pts = [(rt - 0.004, tf - 0.0005), (rf - 0.008, tf - 0.0005), (rf - 0.008, tf + 0.02), (rt + 0.012, tf + rib_h),
                (rt - 0.004, tf + rib_h)]
-        mb.plate(pts, 0.012, GALV, m=Mr @ _T(0, 0, -0.006))
+        _bplate(mb, pts, 0.012, GALV, m=Mr @ _T(0, 0, -0.006))
     Mw = M @ (_T(0, 0, s * tf) if up else _T(0, 0, -tf)) @ (Matrix() if up else _Rx180())
     weld_ring(mb, Mw, rt, w=0.007, seg=32)
 
@@ -706,7 +779,7 @@ def build_bracing(mb, G):
             M = Matrix(((md.x, lat.x, nn.x, 0), (md.y, lat.y, nn.y, 0), (md.z, lat.z, nn.z, 0), (0, 0, 0, 1)))
             M = _T(*(wp + nn * (T_PL / 2 + 0.0005))) @ M
             outline = [(a + ch, -w / 2), (a + kn_l, -w / 2), (a + kn_l, w / 2), (a + ch, w / 2), (a, w / 2 - ch), (a, -w / 2 + ch)]
-            mb.plate(outline, T_PL, GALV, m=M)
+            _bplate(mb, outline, T_PL, GALV, m=M)
             for sb in bs:
                 q = wp + md * (a + sb) - nn * (T_PL / 2)
                 bolt_at(mb, q, nn, m["bd"], 2 * T_PL + 0.0005, md)
@@ -744,7 +817,7 @@ def build_bracing(mb, G):
             q2 = [(max(x, (rl - 0.004)), y) for (x, y) in q2]
             hl = hull2(q2)
             M = Matrix(((ein.x, ev.x, nn.x, 0), (ein.y, ev.y, nn.y, 0), (ein.z, ev.z, nn.z, 0), (0, 0, 0, 1)))
-            mb.plate(hl, T_PL, GALV, m=_T(*wp) @ M @ _T(0, 0, -T_PL / 2))
+            _bplate(mb, hl, T_PL, GALV, m=_T(*wp) @ M @ _T(0, 0, -T_PL / 2))
             # cordones de soldadura a lo largo de la línea pata-cartela (ambas caras)
             xs = [p for p in hl if abs(p[0] - (rl - 0.004)) < 1e-4]
             if len(xs) >= 2:
@@ -766,7 +839,7 @@ def build_bracing(mb, G):
             q2 += [(0.09, 0.0), (-0.09, 0.0)]
             hl = hull2(q2)
             M = Matrix(((e1.x, e2.x, nn.x, 0), (e1.y, e2.y, nn.y, 0), (e1.z, e2.z, nn.z, 0), (0, 0, 0, 1)))
-            mb.plate(hl, T_PL, GALV, m=_T(*C) @ M @ _T(0, 0, -T_PL / 2))
+            _bplate(mb, hl, T_PL, GALV, m=_T(*C) @ M @ _T(0, 0, -T_PL / 2))
     return dict(nodes=N)
 
 
@@ -862,6 +935,7 @@ def build_climb_ladder(mb, G):
     # riel rígido anticaídas (perfil C con labios) al centro, frente a los peldaños
     prof = [(-0.02, 0.0), (0.02, 0.0), (0.02, 0.03), (0.009, 0.03), (0.009, 0.026), (0.016, 0.026), (0.016, 0.004), (-0.016, 0.004),
             (-0.016, 0.026), (-0.009, 0.026), (-0.009, 0.03), (-0.02, 0.03)]
+    prof = _rprof(prof, 0.0008, 1)
     yr = yl - 0.0125 - 0.003
     M = Matrix(((0, 1, 0, xl), (0, 0, -1, yr), (1, 0, 0, 0), (0, 0, 0, 1)))
     prism(mb, prof, M, 0.9, ztop - 0.05, GALV)
@@ -887,7 +961,7 @@ def build_cable_ladder(mb, G):
     for sx in (-1, 1):
         xi = xc + sx * 0.245
         prof = [(0.0, 0.0), (0.005, 0.0), (0.005, 0.045), (0.05, 0.045), (0.05, 0.05), (0.0, 0.05)]
-        prof = [(sx * px, py) for (px, py) in prof]
+        prof = _rprof([(sx * px, py) for (px, py) in prof], 0.0012)
         M = Matrix(((0, 1, 0, xi), (0, 0, 1, yl - 0.025), (1, 0, 0, 0), (0, 0, 0, 1)))
         prism(mb, prof, M, z0, z1, GALV)
     rungs = []
@@ -1031,7 +1105,7 @@ def build_cables(mb, G):
     for sx in (-1, 1):
         xi = xc + sx * 0.245
         prof = [(0.0, 0.0), (0.005, 0.0), (0.005, 0.045), (0.05, 0.045), (0.05, 0.05), (0.0, 0.05)]
-        prof = [(sx * px, -py + 0.025) for (px, py) in prof]
+        prof = _rprof([(sx * px, -py + 0.025) for (px, py) in prof], 0.0012)
         M = Matrix(((0, 1, 0, xi), (1, 0, 0, 0), (0, 0, 1, ztr), (0, 0, 0, 1)))
         prism(mb, [(a_, b_) for (a_, b_) in prof], M, y0t, y1t, GALV)
     yy = y0t + 0.05
@@ -1213,10 +1287,11 @@ def split_holes(poly, holes, gap=0.005):
     return pieces
 
 
-IBEAM = [(-0.05, -0.13), (0.05, -0.13), (0.05, -0.122), (0.003, -0.122), (0.003, -0.038), (0.05, -0.038), (0.05, -0.03),
+IBEAM_ = [(-0.05, -0.13), (0.05, -0.13), (0.05, -0.122), (0.003, -0.122), (0.003, -0.038), (0.05, -0.038), (0.05, -0.03),
          (-0.05, -0.03), (-0.05, -0.038), (-0.003, -0.038), (-0.003, -0.122), (-0.05, -0.122)]
-WEB = [(-0.003, -0.1215), (0.003, -0.1215), (0.003, -0.0385), (-0.003, -0.0385)]
-ANG50 = [(0.0, -0.08), (0.005, -0.08), (0.005, -0.035), (0.05, -0.035), (0.05, -0.03), (0.0, -0.03)]
+WEB_ = [(-0.003, -0.1215), (0.003, -0.1215), (0.003, -0.0385), (-0.003, -0.0385)]
+ANG50_ = [(0.0, -0.08), (0.005, -0.08), (0.005, -0.035), (0.05, -0.035), (0.05, -0.03), (0.0, -0.03)]
+IBEAM, WEB, ANG50 = _rprof(IBEAM_, 0.002), _rprof(WEB_, 0.0008, 1), _rprof(ANG50_, 0.0015)
 
 
 def _leg_ring(mb, G, i, z0, z1, ear_dir):
@@ -1232,7 +1307,7 @@ def _leg_ring(mb, G, i, z0, z1, ear_dir):
         for off in (-0.008, 0.008):
             base = Vector((c.x, c.y, z0)) + e * off
             M = Matrix(((u.x, 0, e.x, base.x), (u.y, 0, e.y, base.y), (0, 1, 0, base.z), (0, 0, 0, 1)))
-            mb.plate([(rl + 0.006, 0.006), (rl + 0.055, 0.006), (rl + 0.055, z1 - z0 - 0.006), (rl + 0.006, z1 - z0 - 0.006)], 0.006,
+            _bplate(mb, [(rl + 0.006, 0.006), (rl + 0.055, 0.006), (rl + 0.055, z1 - z0 - 0.006), (rl + 0.006, z1 - z0 - 0.006)], 0.006,
                      GALV, m=M @ _T(0, 0, -0.003))
         q = Vector((c.x, c.y, (z0 + z1) / 2)) + u * (rl + 0.035) - e * 0.011
         bolt_at(mb, q, e, 0.012, 0.022, (0, 0, 1), stub=0.4)
@@ -1334,8 +1409,8 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
                 M = Matrix(((0, 1, 0, xx), (1, 0, 0, 0), (0, 0, 1, z_f), (0, 0, 0, 1)))
                 prism(mb, [(-0.025 + a_, b_) for (a_, b_) in ANG50], M, iv[0], iv[1], GALV)
     # --- estructura: perímetro de canal C100, vigas I en esquinas y al centro de cada cara, ángulo interior
-    prof = [(0.0, -0.13), (0.0, -0.03), (-0.05, -0.03), (-0.05, -0.038), (-0.006, -0.038), (-0.006, -0.122), (-0.05, -0.122),
-            (-0.05, -0.13)]
+    prof = _rprof([(0.0, -0.13), (0.0, -0.03), (-0.05, -0.03), (-0.05, -0.038), (-0.006, -0.038), (-0.006, -0.122), (-0.05, -0.122),
+                   (-0.05, -0.13)], 0.002)
     mb.sweep(list(reversed(prof)), [(x, y, z_f) for (x, y) in P], mat=GALV, closed_profile=True, closed_path=True, normal=(0, 0, 1))
     for i in range(3):
         a = ang2(LEG_ANG[i])
@@ -1352,9 +1427,9 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         pb = a * rk + Vector((0, 0, z_f - 0.13))
         dk = (pb - pa).normalized()
         mb.tube([pa + dk * 0.035, pb - dk * 0.02], 0.0302, seg=24, mat=GALV)
-        mb.plate([(-0.05, -0.04), (0.05, -0.04), (0.05, 0.04), (-0.05, 0.04)], 0.01, GALV,
+        _bplate(mb, [(-0.05, -0.04), (0.05, -0.04), (0.05, 0.04), (-0.05, 0.04)], 0.01, GALV,
                  m=frame((0, 0, 1), a, pb - Vector((0, 0, 0.01))))
-        mb.plate([(0.0, -0.03), (0.07, -0.03), (0.07, 0.03), (0.0, 0.03)], 0.01, GALV,
+        _bplate(mb, [(0.0, -0.03), (0.07, -0.03), (0.07, 0.03), (0.0, 0.03)], 0.01, GALV,
                  m=frame(Vector((-a.y, a.x, 0)), a, pa - a * 0.004) @ _T(0, 0, -0.005))
         # cartela interior: une el ángulo interior con el aro
         ai = a * (2 * ri - 0.07)
@@ -1396,7 +1471,7 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         mb.tube([(pp.x, pp.y, z_f - 0.125), (pp.x, pp.y, z_f + 1.1)], 0.0241, seg=24, mat=GALV)
         q = p + nout * 0.0005
         M = Matrix(((tdir.x, 0, nout.x, q.x), (tdir.y, 0, nout.y, q.y), (0, 1, 0, z_f - 0.125), (0, 0, 0, 1)))
-        mb.plate([(-0.045, 0.0), (0.045, 0.0), (0.045, 0.085), (-0.045, 0.085)], 0.0085, GALV, m=M)
+        _bplate(mb, [(-0.045, 0.0), (0.045, 0.0), (0.045, 0.085), (-0.045, 0.085)], 0.0085, GALV, m=M)
         for (dz, su) in ((0.025, 1), (0.06, -1)):
             bolt_at(mb, Vector((q.x, q.y, z_f - 0.125 + dz)) - Vector((nout.x, nout.y, 0)) * 0.0065 + Vector((tdir.x, tdir.y, 0)) * (0.036 * su),
                     Vector((nout.x, nout.y, 0)), 0.010, 0.015, (0, 0, 1), stub=0.3)
@@ -1412,7 +1487,7 @@ def build_platform(mb, G, z_f, v_out, cut, holes, knee_dz, pipes):
         q = b + m * 0.0005
         tdir = Vector((-m.y, m.x))
         M = Matrix(((tdir.x, 0, m.x, q.x), (tdir.y, 0, m.y, q.y), (0, 1, 0, z_f - 0.125), (0, 0, 0, 1)))
-        mb.plate([(-0.018, 0.0), (0.018, 0.0), (0.018, 0.085), (-0.018, 0.085)], 0.0085 / max(m.dot(n0), 0.3) + 0.004, GALV, m=M)
+        _bplate(mb, [(-0.018, 0.0), (0.018, 0.0), (0.018, 0.085), (-0.018, 0.085)], 0.0085 / max(m.dot(n0), 0.3) + 0.004, GALV, m=M)
     # --- tubos de montaje con placas de cruce al pasamanos y a la rodillera
     out = []
     for spec in pipes:
@@ -1445,7 +1520,7 @@ def build_top(mb, G):
         _leg_ring(mb, G, i, za - 0.06, za + 0.06, Vector((-a.y, a.x, 0)))
         M = frame_xz(a, (0, 0, 1), Vector((0, 0, za)))
         prism(mb, rr_pts2(0.06, 0.06, 0.006, 3), M, rm - 0.004, R - rl - 0.0118, GALV)
-        mb.plate([(rm - 0.002, -0.0305), (rm + 0.10, -0.0305), (rm - 0.002, -0.11)], 0.008, GALV,
+        _bplate(mb, [(rm - 0.002, -0.0305), (rm + 0.10, -0.0305), (rm - 0.002, -0.11)], 0.008, GALV,
                  m=M @ Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, 1, 0, 0), (0, 0, 0, 1))) @ _T(0, 0, -0.004))
     z0m, z1m = G.h - 0.45, G.h + 1.0
     lathe(mb, [(rm, z0m), (rm, z1m)], seg=24, mat=GALV, caps=True)

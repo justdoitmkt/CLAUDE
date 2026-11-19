@@ -1393,7 +1393,10 @@ def dress(objs, cfg, levels, stairs, bounds, seed, density=1.0, step=0.5, log=pr
             kind = "switch" if r.random() < 0.5 else "socket"
             tmp = MB()
             wall_plate(tmp, kind, r)
-            mb.join(tmp, _frame(p, p["wall_dir"]) @ _T(0, -0.0025, 1.1 if kind == "switch" else 0.3))   # 0,5 mm en el muro
+            Mp = _frame(p, p["wall_dir"]) @ _T(0, -0.0025, 1.1 if kind == "switch" else 0.3)   # 0,5 mm en el muro
+            if _in_zones(zones, Mp.translation.x, Mp.translation.y, p["zf"], 0.1):   # la placa (no el punto) fuera de pasos
+                return False
+            mb.join(tmp, Mp)
 
         # escombro: muro sin puerta detrás (rayo a 0,3 m; bajo una ventana sí puede haber escombro)
         place("plaster_debris", wall_ok((0.3,), 0.35), 0.3, 2.3, 0.55, put_debris)
