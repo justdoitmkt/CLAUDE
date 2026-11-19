@@ -1056,11 +1056,11 @@ def _ac_front(mb, x0, x1, z0, z1, y, rr, old=False, nz=None):
         xk = (dx0 + dx1) / 2
         flute = (lambda p_, a, rad, z_: Vector((p_.x * (1 - 0.06 * (0.5 + 0.5 * math.cos(16 * a))), p_.y * (1 - 0.06 * (0.5 + 0.5 * math.cos(16 * a))), p_.z))
                  if rad > 0.012 else p_)
-        _lathe(mb, [(0.0, 0.0), (0.0165, 0.0), (0.0165, 0.014), (0.015, 0.0175), (0.0, 0.018)], seg=48, mat="cable" if old else "plastic",
+        _lathe(mb, [(0.0, 0.0), (0.0165, 0.0), (0.0165, 0.009), (0.015, 0.0115), (0.0, 0.012)], seg=48, mat="cable" if old else "plastic",
                m=_frame((xk, yf + 0.0024, zz), (0, 1, 0)), deform=flute)
         ang = rr.uniform(0, 2 * PI)
-        _box(mb, (-0.0012, -0.001, 0.0), (0.0012, 0.0005, 0.013), "cable" if not old else "sign_white",
-             m=_frame((xk, yf + 0.0204, zz), (0, 1, 0)) @ _R("Z", math.degrees(ang)) @ _R("X", 90))
+        _box(mb, (-0.0012, 0.0, -0.0004), (0.0012, 0.013, 0.0004), "cable" if not old else "sign_white",
+             m=_frame((xk, yf + 0.0144, zz), (0, 1, 0)) @ _R("Z", math.degrees(ang)))
         for j in range(7):  # marcas del cuadrante
             a = -PI * 0.75 + 1.5 * PI * j / 6
             Mt = _T(xk + 0.022 * math.cos(a), yf + 0.0025, zz + 0.022 * math.sin(a)) @ _R("Y", -math.degrees(a))
@@ -1138,8 +1138,7 @@ def _ac_window(r):
     _accordion(mb, x1 + g, x1 + fo - 0.001, fy0, fy1 - 0.0006, -g + 0.001, H + g - 0.001)
     for xx in (x0 - fo + 0.001, x1 + fo - 0.002):  # perfil en U que remata cada fuelle
         _box(mb, (xx, fy0 - 0.001, -g), (xx + 0.0012, fy1 + 0.0004, H + g), "aluminium")
-    # frente interior (hacia el cuarto) con rejilla de retorno, salida y controles
-    _ac_front(mb, x0 + 0.004, x1 - 0.004, 0.004, H - 0.004, yi, r)
+
     # ménsulas
     for x in (-0.19, 0.19):
         _wall_bracket(mb, x + r.uniform(-0.01, 0.01), yo + 0.01, -0.0015, 0.30, nz, r, leg_top=-0.006)
@@ -1150,6 +1149,8 @@ def _ac_window(r):
     hose = _spline([(dx, yo + 0.045, -0.02), (dx + 0.01, yo + 0.05, -0.12), (dx + 0.03, yo + 0.09, -0.30 * L / 0.5),
                     (dx + r.uniform(0.0, 0.06), yo + 0.16, -L)], 0.03)
     _tube(mb, hose, 0.009, seg=8, mat="plastic")
+    # frente interior (hacia el cuarto) con rejilla de retorno, salida y controles: sobresale 3 mm de la cara del gabinete
+    _ac_front(mb, x0 + 0.004, x1 - 0.004, 0.004, H - 0.004, yi - 0.011, r)
     return mb
 
 
@@ -1533,7 +1534,7 @@ def _ac_box_old(r):
     xs_ = x1 if sd > 0 else x0
     _hood_louvers(mb, (xs_, (yo + 0.04) if sd > 0 else -0.05, H - 0.07), Vector((0, 1, 0)) * sd, (0, 0, 1), (sd, 0, 0), 2, 9,
                   0.12, 0.016, 0.14, 0.03, out=0.006, deform=deform)
-    _ac_front(mb, x0 + 0.004, x1 - 0.004, 0.004, H - 0.004, yi, r, old=True)
+    _ac_front(mb, x0 + 0.004, x1 - 0.004, 0.004, H - 0.004, yi - 0.011, r, old=True)
     return mb
 
 
@@ -2800,10 +2801,10 @@ def satellite_dish(seed=0, detail="high", state=None):
         _merge(mb, lb, Ml)
         _cyl(mb, Ml @ Vector((0, 0, -0.142)), Ml @ Vector((0, 0, -0.152)), 0.0048, mat="brass")
         _hexp(mb, Ml @ Vector((0, 0, -0.152)), Ml.to_3x3() @ Vector((0, 0, -1)), 0.011, 0.009, "brass")
-        _lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.009, 0.03), (0.0062, 0.05), (0.0, 0.05)], seg=32, mat="rubber",
-               m=Ml @ _T(0, 0, -0.165) @ _R("X", 180))                                                       # bota de hule
+        _lathe(mb, [(0.0, 0.0), (0.0085, 0.0), (0.009, 0.02), (0.0062, 0.032), (0.0, 0.032)], seg=32, mat="rubber",
+               m=Ml @ _T(0, 0, -0.163) @ _R("X", 180))                                                       # bota de hule
         # coaxial: LNB -> brazo -> mástil -> bucle -> muro
-        c0 = Ml @ Vector((0, 0.0, -0.21))
+        c0 = Ml @ Vector((0, 0.0, -0.192))
         under = Mdish.to_3x3() @ Vector((0, 0.0, -0.016))
         # sale del conector del LNB, da la vuelta por debajo de la punta del brazo (sin pasar por dentro del LNB) y sigue el brazo
         cpts = [c0, c0 + (Ml.to_3x3() @ Vector((0, 0, -0.05))), tip + under * 4.0] + [p + under for p in arm[7::-3]]

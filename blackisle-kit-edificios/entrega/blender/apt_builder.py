@@ -12,6 +12,7 @@ import os
 import sys
 
 import bpy  # noqa: F401  (debe importarse antes que mathutils)
+import bmesh  # noqa: E402
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -285,14 +286,14 @@ PENT_H = 2.7          # casetón de escalera sobre la losa de azotea
 PENT_XW = 2.30        # cara exterior del muro oeste del casetón: deja un descanso de llegada x 2,45..3,70 como en los pisos
 
 
-def coping(mb, path, z, closed=True, w=0.17, mat="concrete"):
+def coping(mb, path, z, closed=True, w=0.17, mat="concrete", pt=0.12):
     """Remate (albardilla) de concreto sobre un pretil de 12 cm: 17 × 5 cm con vuelo de 2,5 cm a cada lado, cantos
     redondeados, pendiente de 6 mm hacia adentro y gotero de 6 × 6 mm bajo cada vuelo; se asienta 2 mm en el pretil.
     path: eje del pretil en planta, antihorario (el lado + del perfil queda hacia afuera)."""
-    h = w / 2
-    prof = [(-0.060, -0.002), (-0.070, 0.0), (-0.070, 0.006), (-0.076, 0.006), (-0.076, 0.0), (-h + 0.002, 0.0), (-h, 0.004),
-            (-h, 0.040), (-h + 0.004, 0.047), (-h + 0.011, 0.050), (h - 0.011, 0.056), (h - 0.004, 0.053), (h, 0.046), (h, 0.004),
-            (h - 0.002, 0.0), (0.076, 0.0), (0.076, 0.006), (0.070, 0.006), (0.070, 0.0), (0.060, -0.002)]
+    h, c = w / 2, pt / 2
+    prof = [(-c, -0.002), (-c - 0.010, 0.0), (-c - 0.010, 0.006), (-c - 0.016, 0.006), (-c - 0.016, 0.0), (-h + 0.002, 0.0),
+            (-h, 0.004), (-h, 0.040), (-h + 0.004, 0.047), (-h + 0.011, 0.050), (h - 0.011, 0.056), (h - 0.004, 0.053), (h, 0.046),
+            (h, 0.004), (h - 0.002, 0.0), (c + 0.016, 0.0), (c + 0.016, 0.006), (c + 0.010, 0.006), (c + 0.010, 0.0), (c, -0.002)]
     mb.sweep(list(reversed(prof)), [Vector((p[0], p[1], z)) for p in path], mat=mat, closed_profile=True, closed_path=closed,
              normal=(0, 0, 1))
 
@@ -647,7 +648,23 @@ def partition(mb, p0, p1, z0, H, doors=(), t=PART, mat="plaster", door_h=2.05, o
         m = Matrix(((1, 0, 0, a0), (0, 1, 0, ya - t / 2), (0, 0, 1, z0), (0, 0, 0, 1)))
     else:
         m = Matrix(((0, -1, 0, xa + t / 2), (1, 0, 0, a0), (0, 0, 1, z0), (0, 0, 0, 1)))
-    wall_with_openings(mb, L, H, t, ops, mat_out=mat, mat_in=mat, mat_reveal=mat, m=m)
+    # cantos verticales de los extremos boleados 7 mm (esquinero de aplanado): antes eran aristas vivas; los vanos los bolea
+    # wall_with_openings (arris 8 mm)
+    tmp = MB()
+    wall_with_openings(tmp, L, H, t, ops, mat_out=mat, mat_in=mat, mat_reveal=mat)
+    ends = []
+    for e in tmp.bm.edges:
+        a, b = e.verts
+        if len(e.link_faces) == 2 and abs(a.co.z - b.co.z) > 1e-4 and abs(a.co.x - b.co.x) < 1e-6 and \
+                (abs(a.co.x) < 1e-6 or abs(a.co.x - L) < 1e-6) and \
+                any(abs(f.normal.x) > 0.9 for f in e.link_faces) and any(abs(f.normal.y) > 0.9 for f in e.link_faces):
+            ends.append(e)
+    if ends:
+        res = bmesh.ops.bevel(tmp.bm, geom=ends, offset=min(0.007, 0.3 * t), segments=3, profile=0.5, affect="EDGES",
+                              clamp_overlap=True)
+        for f in res["faces"]:
+            f.material_index = tmp.mi(mat)
+    mb.join(tmp, m)
     if out is not None:
         for (u0, u1, v0, v1) in ops:
             out.append(dict(m=m, u0=u0, w=u1 - u0, h=v1, t=t, tag=tag))
@@ -746,9 +763,12 @@ def dress_openings(cfg, placed, details, interior):
             elif kind == "vent":
                 details.join(op.window("casement", w, h, INFILL, seed=seed, broken=1.0, curtain=False), M)
             elif kind == "window_high":
-                details.join(op.window("sliding", w, h, INFILL, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False), M)
+                import apt_common as ac
+                win = op.window("sliding", w, h, INFILL, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False)
+                y0 = ac.grille_y0(win)
+                details.join(win, M)
                 if r.random() < 0.6:
-                    details.join(op.security_grille(w, h, seed=seed + 1), M)
+                    details.join(op.security_grille(w, h, seed=seed + 1, y0=y0), M)   # delante del marco real
             elif kind == "loggia":
                 details.join(op.door("double_glazed", w, h, INFILL, seed=seed, open_angle=max(58.0, float(r.uniform(15, 70)))), M)
             elif kind == "lobby":
@@ -1053,6 +1073,16 @@ def cull_components(mb, boxes, mode="center"):
     return len(kill)
 
 
+TAIL_J = 0.014        # las colas de cabio de roofing salen hasta +12 mm del alero: el canalón cuelga 14 mm más afuera
+
+
+def hip_rafter_x(W, ov, spacing=0.6):
+    """Ejes de los cabios del faldón largo de roofing.roof_frame('hip') (sin el jitter de ±8 mm): donde hay testa de cola
+    para atornillar los ganchos del canalón (circulation.gutter hangers_at) — el alero con colas no tiene fascia."""
+    k = int((W / 2 + ov - 0.08) / spacing)
+    return [i * spacing for i in range(-k, k + 1)]
+
+
 def dress_roof(cfg, pent, roof, details, detail="low"):
     from kit import circulation as circ
     from kit import roofing as rf
@@ -1073,14 +1103,16 @@ def dress_roof(cfg, pent, roof, details, detail="low"):
     # canalones solo en los aleros delantero y trasero (los de las limatesas laterales se perdieron) + 4 bajantes
     ex, ey = W / 2 + ROOF_OVH, D / 2 + ROOF_OVH
     ze = rf.roof_top("hip", W, D, ROOF_PITCH, ROOF_OVH, x=0.0, y=-ey + 0.01)
-    off = 0.0865
+    off = 0.0865 + TAIL_J                          # el gancho se atornilla en la testa de las colas (la más larga a +12 mm)
     gx, gy = ex - 0.15, ey + off
     xo = 6.6
     tops = []
+    rx = hip_rafter_x(W, ROOF_OVH)
     for side, path, outs in (("front", [(-gx, -gy, ze - 0.06), (gx, -gy, ze - 0.06)], [gx - xo, gx + xo]),
                              ("back", [(gx, gy, ze - 0.06), (-gx, gy, ze - 0.06)], [gx - xo, gx + xo])):
+        hat = sorted((x + gx) if side == "front" else (gx - x) for x in rx if abs(x) < gx - 0.03)
         g = circ.gutter([Vector(p) for p in path], seed=seed + (1 if side == "front" else 2), outlets=outs, dirt=False,
-                        hanger_step=1.0, fault="fallen" if side == "back" else "none")
+                        hanger_step=1.0, fault="fallen" if side == "back" else "none", hangers_at=hat)
         roof.join(g, _T(0, 0, z0))
         if hasattr(g, "meta") and "outlets" in g.meta:
             tops += [Vector(t) + Vector((0, 0, z0)) for t in g.meta["outlets"]]
@@ -1101,13 +1133,40 @@ def _panel(placed, side, level, bay):
 
 
 def ac_base(mb, o, kind, default=0.32):
-    """Cota (sobre el piso del panel) del equipo de A/C bajo una ventana: su parte de arriba queda 6 cm bajo la nariz del
-    alféizar (auditoría 2026-11-19: el condensador de services ya mide ~0,8 m y atravesaba el alféizar). Los de ventana
-    ('box_old', 'window') van en su hueco: se respeta `default`."""
+    """Cota (sobre el piso del panel) del cuerpo de una condensadora bajo una ventana: su tapa queda 10 cm bajo el alféizar.
+    Se usa la altura del CUERPO (0,55 m, services.ac_unit), no la de las líneas de cobre, que suben a un lado."""
     if kind in ("box_old", "window") or o[2] <= 0.05:
         return default
-    ztop = max(v.co.z for v in mb.bm.verts)
-    return max(0.02, min(default, o[2] - 0.04 - 0.06 - ztop))
+    return max(0.05, min(default, o[2] - 0.10 - 0.55))
+
+
+def ac_place(o, L, ops, kind="split_outdoor", default=0.32):
+    """Matriz local (del panel) de una condensadora junto a la ventana `o` = (u0, u1, v0, v1) de un panel de largo L con
+    vanos `ops`: el cuerpo va bajo el alféizar y las líneas de cobre y el desagüe (que en services.ac_unit salen por el lado
+    derecho, x 0,49–0,61, y suben ~1,1 m hasta el pasamuro) suben por MURO CIEGO junto a la jamba, no por la ventana.
+    Prueba a la derecha de la ventana y, en espejo (líneas a la izquierda), a la izquierda; None si no hay muro ciego."""
+    zb = ac_base(None, o, kind, default)
+    for side in (1, -1):
+        uc = (o[1] - 0.38) if side > 0 else (o[0] + 0.38)
+        la, lb = (uc + 0.47, uc + 0.63) if side > 0 else (uc - 0.63, uc - 0.47)      # franja de las líneas
+        body = (uc - 0.45, uc + 0.45, zb - 0.05, zb + 0.58)
+        lines = (la, lb, zb, zb + 1.2)
+        if min(body[0], la) < 0.04 or max(body[1], lb) > L - 0.04:
+            continue
+        bad = False
+        for q in ops:
+            q = q[1] if isinstance(q[0], str) else q
+            if tuple(q) == tuple(o):
+                if not (lines[0] > q[1] + 0.075 or lines[1] < q[0] - 0.075):          # alféizar: orejas de 6 cm
+                    bad = True
+                continue
+            for (a0, a1, b0, b1) in (body, lines):
+                if not (a1 < q[0] - 0.08 or a0 > q[1] + 0.08 or b1 < q[2] - 0.08 or b0 > q[3] + 0.08):
+                    bad = True
+        if not bad:
+            M = _T(uc, 0, zb)
+            return M if side > 0 else M @ Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
+    return None
 
 
 def dress_services(cfg, placed, pent, details, interior, detail_far="low", detail_near="mid"):
@@ -1126,12 +1185,15 @@ def dress_services(cfg, placed, pent, details, interior, detail_far="low", detai
                                       ("front", 2, 0, "split_outdoor", detail_near)):
         p = _panel(placed, side, lv, bay)
         o = p["opening"]
+        kind = "split_outdoor"                    # (el 'box_old' entra 0,20 en el muro: sin vano propio atravesaba el relleno)
         u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=det)
-        add("ac_" + kind, u, p["m"] @ _T((o[0] + o[1]) / 2, 0, ac_base(u, o, kind)))
+        Ma = ac_place(o, p["L"], [p["opening"]], kind)
+        if Ma is not None:
+            add("ac_" + kind, u, p["m"] @ Ma)
     # acometida aérea por la banda de viga de PB (frente) + medidores y conduit junto al vestíbulo
     yb = cfg["ys"][0] - COL / 2 - 0.012            # cara de columna: pasa por delante de los letreros, no a través
     zc = zl[1] - 0.30
-    add("cable_bundle", sv.cable_bundle([(-7.0, yb, zc), (-3.6, yb, zc + 0.04), (-0.1, yb, zc)], n=4, sag=0.22, seed=int(r.integers(1e6)),
+    add("cable_bundle", sv.cable_bundle([(-7.0, yb, zc), (-5.4, yb, zc + 0.04), (-3.85, yb, zc)], n=4, sag=0.22, seed=int(r.integers(1e6)),
                                         detail=detail_near), Matrix())
     p = _panel(placed, "front", 0, 0)
     for i, u in enumerate((p["L"] - 0.55, p["L"] - 0.12)):

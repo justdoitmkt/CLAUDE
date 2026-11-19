@@ -320,7 +320,10 @@ def build_roof(cfg, roof, det):
     yAs, yAn = yA_eave - off, A["cy"] + A["d"] / 2 + OVH + off
     xBw, xBe = xB0 - off, xB1 + off
     yBs = B["cy"] - B["w"] / 2 - 0.4
-    gut = [("A_sur", [(A["cx"] - A["w"] / 2 - 0.4, yAs, zeA), (xB0 - 0.15, yAs, zeA)], [-5.7 - (A["cx"] - A["w"] / 2 - 0.4)], "front", ys_face(cfg, "front_A")),
+    # bajante del ala A por la cara de la columna de esquina (x -6,0): en x -5,65 rozaba la ventana de la crujía 0 y entre la
+    # ventana y la puerta del balcón atravesaría las losas de los balcones (auditoría 2026-11-19)
+    gut = [("A_sur", [(A["cx"] - A["w"] / 2 - 0.4, yAs, zeA), (xB0 - 0.15, yAs, zeA)], [-6.0 - (A["cx"] - A["w"] / 2 - 0.4)], "front",
+            cfg["ys"][2] - COL_CORNER / 2),
            ("A_norte", [(A["cx"] + A["w"] / 2 + 0.4, yAn, zeA), (A["cx"] - A["w"] / 2 - 0.4, yAn, zeA)], [0.925, A["w"] - 0.4], "back",
             ys_face(cfg, "back")),
            ("B_oeste", [(xBw, yA_eave - 0.15, zeB), (xBw, yBs, zeB)], [(yA_eave - 0.15) - (-5.65)], "west", ys_face(cfg, "west_B")),
@@ -369,8 +372,11 @@ def dress_services(cfg, P, bal, det, inter, far="low", near="mid"):
                                          ("east", 4, 1, 3, "split_outdoor", far), ("west", 0, 2, 2, "split_outdoor", far),
                                          ("front", 0, 1, 2, "split_outdoor", near)):
         p = _p(P, side, lv, bay, line)
+        kind = "split_outdoor"                    # (el 'box_old' entra 0,20 en el muro: sin vano propio atravesaba el relleno)
         u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d)
-        add("ac_" + kind, u, p["m"] @ _T(mid(p), 0, ab.ac_base(u, p["ops"][0][1], kind)))
+        Ma = ab.ac_place(p["ops"][0][1], p["L"], p["ops"], kind)
+        if Ma is not None:
+            add("ac_" + kind, u, p["m"] @ Ma)
     # tendederos en los balcones, arbotante y medidores junto al acceso, letrero sobre la cortina del local sur
     for lv in (1, 2):
         add("laundry_line", sv.laundry_line(length=2.4, seed=int(r.integers(1e6)), detail=near),

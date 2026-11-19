@@ -236,12 +236,15 @@ def dress_roof(cfg, roof, det):
     # canalones: trasero completo; frontal solo al este del colapso; bajantes por las columnas de galería y la trasera
     ex, ey = W / 2 + O, D / 2 + O
     ze = rf.roof_top("hip", W, D, P, O, x=0.0, y=-ey + 0.01)
-    gx, gy = ex - 0.15, ey + 0.0865
+    gx, gy = ex - 0.15, ey + 0.0865 + ab.TAIL_J          # ganchos en las testas de las colas (sin fascia)
     tops = []
+    rx = ab.hip_rafter_x(W, O)
     for side, path, outs in (("front", [(-0.6, -gy, ze - 0.06), (gx, -gy, ze - 0.06)], [4.2, 7.8]),
                              ("back", [(gx, gy, ze - 0.06), (-gx, gy, ze - 0.06)], [gx - 3.6, gx + 3.6])):
+        hat = sorted((x + 0.6) if side == "front" else (gx - x) for x in rx
+                     if (-0.6 + 0.03 < x < gx - 0.03 if side == "front" else abs(x) < gx - 0.03))
         g = circ.gutter([Vector(p) for p in path], seed=seed + (1 if side == "front" else 2), outlets=outs, dirt=False,
-                        hanger_step=1.0, fault="none" if side == "front" else "sag")
+                        hanger_step=1.0, fault="none" if side == "front" else "sag", hangers_at=hat)
         roof.join(g, M)
         if hasattr(g, "meta") and "outlets" in g.meta:
             tops += [Vector(t) + Vector((0, yc, z0)) for t in g.meta["outlets"]]
@@ -285,13 +288,19 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
                                    ("east", 1, 1, "box_old", far)):
         p = _p(P, side, lv, bay)
         o = at_op(p)
+        kind = "split_outdoor"                    # (el 'box_old' entra 0,20 en el muro: sin vano propio atravesaba el relleno)
         u = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=d)
-        add("ac_" + kind, u, p["m"] @ _T((o[0] + o[1]) / 2, 0, ab.ac_base(u, o, kind)))
+        Ma = ab.ac_place(o, p["L"], p["ops"], kind)
+        if Ma is not None:
+            add("ac_" + kind, u, p["m"] @ Ma)
     # galería: condensadoras junto a las puertas, tendederos entre columnas, arbotantes en columnas
     for lv, bay in ((1, 3), (2, 1)):
         p = _p(P, "front", lv, bay, line=1)
         o = at_op(p, 0 if bay == 3 else 1)
-        add("ac_split_outdoor", sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail=near), p["m"] @ _T((o[0] + o[1]) / 2, 0, 0.30))
+        u = sv.ac_unit("split_outdoor", seed=int(r.integers(1e6)), detail=near)
+        Ma = ab.ac_place(o, p["L"], p["ops"], default=0.30)
+        if Ma is not None:
+            add("ac_split_outdoor", u, p["m"] @ Ma)
     yl = ys[0] + 0.10                                     # dentro del canto de la columna: las armellas entran en ella
     for lv, bay in ((1, 1), (2, 3), (3, 3)):
         a0 = xs[bay] + COL / 2

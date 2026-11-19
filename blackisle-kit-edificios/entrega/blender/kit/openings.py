@@ -847,6 +847,7 @@ _AL_FRAME = _fillet2d([(0.0, 0.040), (0.031, 0.040), (0.031, 0.050), (0.041, 0.0
 _WD_FRAME = _fillet2d([(0.0, 0.040), (0.035, 0.040), (0.035, 0.0745), (0.055, 0.0755), (0.055, 0.128), (0.0, 0.128)],
                       [0.0, 0.004, 0.0012, 0.003, 0.004, 0.0], n=3)
 _G = 0.008   # holgura perimetral marco–jamba (rellena de mortero)
+_WALL = {"g": _G, "wood": False, "fo": 0.0}   # lo fija window(): muro de mampostería o de madera (ver window, wall=)
 
 
 def _al_sash(sw, sh, r, broken, mid=True, latch=False):
@@ -893,7 +894,7 @@ def _al_sash(sw, sh, r, broken, mid=True, latch=False):
 
 
 def _win_sliding(mb, w, h, depth, r, broken):
-    g = _G
+    g = _WALL["g"]
     fr = MB()
     fr.sweep(_AL_FRAME, _rect_path(g, g, w - g, h - g, step=0.35, c=0.052), mat="aluminium", normal=(0, 1, 0), closed_path=True)
     cu0, cu1, cv0, cv1 = g + 0.031, w - g - 0.031, g + 0.031, h - g - 0.031
@@ -905,7 +906,8 @@ def _win_sliding(mb, w, h, depth, r, broken):
         top = vt - 0.023
     Rk = _rack(fr, w, h, r, deg=0.2, sag=0.004)   # las hojas que siguen en sus rieles se montan con el mismo descuadre
     _merge(mb, fr)
-    _packing(mb, w, h, g)
+    if not _WALL["wood"]:
+        _packing(mb, w, h, g)
     zb = g + 0.036
     sh = top - zb
     sw = (cu1 - cu0) / 2 + 0.02
@@ -1120,7 +1122,7 @@ def _hinge(mb, x, y, z, r, ln=0.07, rad=0.0065):
 def _win_wood_frame(mb, w, h, r, transom=True):
     """Marco de madera con galce, opcional montante con vidrio. Devuelve (cota superior libre para las hojas, matriz del
     descuadre del marco para montar las hojas con él)."""
-    g = _G
+    g = _WALL["g"]
     fr = MB()
     fr.sweep(_WD_FRAME, _rect_path(g, g, w - g, h - g, step=0.6, c=0.066), mat="wood", normal=(0, 1, 0), closed_path=True)
     top = h - g - 0.035
@@ -1131,12 +1133,13 @@ def _win_wood_frame(mb, w, h, r, transom=True):
         top = vt - 0.03
     Rk = _rack(fr, w, h, r, deg=0.3, sag=0.004)
     _merge(mb, fr)
-    _packing(mb, w, h, g, 0.06, 0.1)
+    if not _WALL["wood"]:   # en muro de madera el marco va calzado contra el forro, sin mortero
+        _packing(mb, w, h, g, 0.06, 0.1)
     return top, Rk
 
 
 def _win_casement(mb, w, h, depth, r, broken, allow_open=True, lites=(None, None), transom=True):
-    g = _G
+    g = _WALL["g"]
     top, Rk = _win_wood_frame(mb, w, h, r, transom=transom)
     hw = MB()   # hojas y herrajes: se montan con el mismo descuadre del marco
     zb = g + 0.037
@@ -1267,25 +1270,27 @@ def _win_shutter(mb, w, h, depth, r, broken):
         else:
             th = r.uniform(148, 170)
             loc = Matrix.Identity(4)
-        M = _T(ax, -0.02, zb) @ _R("Z", -th if k == 0 else th) @ (mir if k == 1 else Matrix.Identity(4)) @ loc
+        fo = _WALL["fo"]   # muro de madera: los postigos y pernios van por delante de los tapajuntas del constructor
+        M = _T(ax, -0.02 - fo, zb) @ _R("Z", -th if k == 0 else th) @ (mir if k == 1 else Matrix.Identity(4)) @ loc
         _xform(s, M)
         mn, mx = _bounds(s)
-        if mx.y > -0.002:
-            _xform(s, _T(0, -(mx.y + 0.002), 0))
+        if mx.y > -0.002 - fo:
+            _xform(s, _T(0, -(mx.y + 0.002 + fo), 0))
         _merge(mb, s)
         for zc in (zb + 0.12, zb + H - 0.12):   # pernios (goznes) empotrados en la fachada con su remiendo de mortero
             _lathe(mb, [(0.0, -0.034), (0.0055, -0.034), (0.0055, 0.027), (0.0042, 0.0292), (0.0022, 0.0302), (0.0, 0.0304)],
-                   seg=16, mat="metal_rust", M=_T(ax, -0.02, zc))
-            mb.box((ax - 0.008, -0.026, zc - 0.041), (ax + 0.008, 0.012, zc - 0.03), "metal_rust", bevel=0.002, seg=2)
-            pm = [(ax + 0.022 * math.cos(2 * PI * k / 12) * r.uniform(0.75, 1.15),
-                   zc - 0.035 + 0.019 * math.sin(2 * PI * k / 12) * r.uniform(0.75, 1.15)) for k in range(12)]
-            _plate_bev(mb, pm, 0.0015, 0.0045, "mortar", face=-1, bev=0.0018)
+                   seg=16, mat="metal_rust", M=_T(ax, -0.02 - fo, zc))
+            mb.box((ax - 0.008, -0.026 - fo, zc - 0.041), (ax + 0.008, 0.012, zc - 0.03), "metal_rust", bevel=0.002, seg=2)
+            if not _WALL["wood"]:   # en mampostería el pernio va recibido con mortero; en madera va clavado directo
+                pm = [(ax + 0.022 * math.cos(2 * PI * k / 12) * r.uniform(0.75, 1.15),
+                       zc - 0.035 + 0.019 * math.sin(2 * PI * k / 12) * r.uniform(0.75, 1.15)) for k in range(12)]
+                _plate_bev(mb, pm, 0.0015, 0.0045, "mortar", face=-1, bev=0.0018)
 
 
 def _win_boarded(mb, w, h, depth, r, broken):
     _win_casement(mb, w, h, depth, r, max(broken, 0.8), allow_open=False, lites=(1, 2), transom=False)
     T1 = 0.022
-    y1, y2 = -0.004 - T1 / 2, -0.006 - 1.5 * T1
+    y1, y2 = -0.004 - T1 / 2 - _WALL["fo"], -0.006 - 1.5 * T1 - _WALL["fo"]   # muro de madera: sobre los tapajuntas
     boards = []   # (ancho, matriz, [(x_local, y_cara)]) para clavos
 
     def horiz(zc, bw, tilt, ext=None):
@@ -1357,17 +1362,28 @@ def _win_boarded(mb, w, h, depth, r, broken):
                 _nail(mb, x + r.uniform(-0.008, 0.008), yf, dz * bw + r.uniform(-0.006, 0.006), r, m=M)
 
 
-def window(kind, w, h, depth=0.20, seed=0, broken=0.7, curtain=True, sill=True):
+def window(kind, w, h, depth=0.20, seed=0, broken=0.7, curtain=True, sill=True, wall=None):
     """Ventana completa para un vano w x h (local: u = 0..w en X, v = 0..h en Z, muro y = 0..depth).
     kind: 'sliding' (aluminio corredizo), 'casement' (madera abatible), 'shutter' (abatible + postigos), 'boarded' (tapiada).
-    broken 0..1: vidrio perdido. curtain: cortina rasgada del lado interior. sill: alféizar de concreto con gotero."""
+    broken 0..1: vidrio perdido. curtain: cortina rasgada del lado interior. sill: alféizar de concreto con gotero.
+    wall: 'masonry' (block/ladrillo: marco con holgura de 8 mm rellena de mortero, alféizar de concreto, pernios recibidos
+    con mortero) o 'wood' (muro de tablas con tapajuntas del constructor: marco calzado a 1,5 mm del forro, SIN mortero ni
+    alféizar de concreto —la repisa es del constructor— y postigos/tablas 25 mm por delante de los tapajuntas).
+    None = automático por espesor: < 0,135 m es muro de madera (cabañas 0,125/0,13, buhardilla 0,08), si no mampostería."""
+    global _WALL
     if kind not in ("sliding", "casement", "shutter", "boarded"):
         raise ValueError(f"window kind desconocido: {kind}")
+    wood = (wall == "wood") if wall is not None else depth < 0.135
     r = rng(seed)
     mb = MB()
+    sill = sill and not wood
     zs = _sill(mb, w, r) if sill else 0.0
-    {"sliding": _win_sliding, "casement": _win_casement, "shutter": _win_shutter, "boarded": _win_boarded}[kind](
-        mb, w, h, depth, r, broken)
+    _WALL = {"g": 0.0015 if wood else _G, "wood": wood, "fo": 0.025 if wood else 0.0}
+    try:
+        {"sliding": _win_sliding, "casement": _win_casement, "shutter": _win_shutter, "boarded": _win_boarded}[kind](
+            mb, w, h, depth, r, broken)
+    finally:
+        _WALL = {"g": _G, "wood": False, "fo": 0.0}
     if broken > 0.2 and kind != "boarded":
         if sill:   # sobre la parte plana del alféizar (dentro del vano, delante del marco)
             _loose_glass(mb, 0.06, w - 0.06, 0.003, 0.037, zs, int(2 + 6 * broken), r)

@@ -91,6 +91,14 @@ def panel(cfg, mb, side, line, bay, lv, kinds, H=None, d=0.0, z0=None, mat="plas
     return p
 
 
+def grille_y0(win):
+    """Plano de la reja (y0 de openings.security_grille) por delante del marco real de la ventana ya armada `win`: el
+    marco nuevo de openings ocupa el vano desde la cara del muro; la reja (ángulo de 30 + anclas, 4,3 cm) va delante de lo
+    que sobresalga del marco (sin contar el alféizar) con 3 mm de holgura (auditoría 2026-11-19: reja <-> marco)."""
+    ys = [v.co.y for v in win.bm.verts if v.co.z > 0.05]
+    return min(0.006, (min(ys) if ys else 0.0) - 0.046)
+
+
 def dress_panel(p, details, interior, r, primary=False, depth=INFILL):
     """Coloca ventanas, puertas, cortinas metálicas, rejas y celosías en los vanos del panel. Devuelve el número de piezas."""
     from kit import openings as op
@@ -102,18 +110,22 @@ def dress_panel(p, details, interior, r, primary=False, depth=INFILL):
         if kind in ("window", "window_small", "window_wide"):
             roll = r.random()
             k = "boarded" if roll < 0.18 else ("casement" if kind == "window_small" and roll < 0.45 else "sliding")
-            details.join(op.window(k, w, h, depth, seed=seed, broken=float(r.uniform(0.55, 1.0)), curtain=primary or r.random() < 0.4), M)
+            win = op.window(k, w, h, depth, seed=seed, broken=float(r.uniform(0.55, 1.0)), curtain=primary or r.random() < 0.4)
+            y0 = grille_y0(win)
+            details.join(win, M)
             if k != "boarded" and r.random() < 0.15:
-                details.join(op.security_grille(w, h, seed=seed + 1), M)
+                details.join(op.security_grille(w, h, seed=seed + 1, y0=y0), M)
         elif kind == "window_narrow":
             k = "boarded" if r.random() < 0.6 else "shutter"
             details.join(op.window(k, w, h, depth, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False), M)
         elif kind in ("vent", "window_stair"):
             details.join(op.window("casement", w, h, depth, seed=seed, broken=1.0, curtain=False), M)
         elif kind == "window_high":
-            details.join(op.window("sliding", w, h, depth, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False), M)
+            win = op.window("sliding", w, h, depth, seed=seed, broken=float(r.uniform(0.6, 1.0)), curtain=False)
+            y0 = grille_y0(win)
+            details.join(win, M)
             if r.random() < 0.6:
-                details.join(op.security_grille(w, h, seed=seed + 1), M)
+                details.join(op.security_grille(w, h, seed=seed + 1, y0=y0), M)
         elif kind == "loggia":
             details.join(op.window("sliding", w, h, depth, seed=seed, broken=float(r.uniform(0.5, 1.0)), curtain=True, sill=False), M)
         elif kind in ("lobby", "portico", "lobby_door"):

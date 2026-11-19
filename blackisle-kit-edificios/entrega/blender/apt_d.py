@@ -155,11 +155,13 @@ def side_wall(cfg, mb, side, lv, P):
 
 FRONT = {0: {0: [("window", 0.5)], 1: [("lobby_door", 0.5)], 2: [("window", 0.5)], 3: [("window", 0.5)], 4: [("lobby_door", 0.5)],
              5: [("window", 0.5)]},
-         "up": {0: [("window_small", 0.5)], 1: [("window", 0.5)], 2: [("door_balcony", 0.3), ("window_narrow", 0.78)],
-                3: [("window_narrow", 0.22), ("door_balcony", 0.7)], 4: [("window", 0.5)], 5: [("window_small", 0.5)]}}
+         "up": {0: [("window_small", 0.5)], 1: [("window", 0.5)], 2: [("door_balcony", 0.36), ("window_narrow", 0.78)],
+                3: [("window_narrow", 0.22), ("door_balcony", 0.64)], 4: [("window", 0.5)], 5: [("window_small", 0.5)]}}
+# (2026-11-19) puertas de balcón 16 cm hacia el centro del módulo: su chambrana exterior chocaba con el poste de arranque del
+# barandal lateral del balcón (x 0,07 del borde de la losa)
 BACK = {0: {0: [("window_small", 0.5)], 1: [("door_service", 0.5)], 2: [("window", 0.5)], 3: [("window", 0.5)],
             4: [("door_service", 0.5)], 5: [("window_small", 0.5)]},
-        "up": {0: [("window_small", 0.5)], 1: [("door_balcony", 0.3), ("window_narrow", 0.78)], 2: [("window", 0.5)],
+        "up": {0: [("window_small", 0.5)], 1: [("door_balcony", 0.36), ("window_narrow", 0.78)], 2: [("window", 0.5)],
                3: [("window", 0.5)], 4: [("window", 0.5)], 5: [("window_small", 0.5)]}}
 ac.OPENING.setdefault("lobby_door", (1.4, 2.3, 0.0))
 ac.OPENING.setdefault("vent_sq", (0.2, 0.2, 1.0))
@@ -412,7 +414,9 @@ def build_roof(cfg, roof, shell, det):
     for xc in DORMERS:
         box = lambda c, xc=xc: abs(c.x - xc) < bw / 2 + 0.06 and yf - 0.05 < c.y < yb + 0.05  # noqa: E731
         ac.cull_pred(tl, box)
-        ac.cull_pred(fr, lambda c, xc=xc: abs(c.x - xc) < bw / 2 - 0.05 and yf + 0.1 < c.y < yb - 0.1 and c.z > zb - 0.05)
+        # armadura recortada en todo el hueco de la buhardilla (cabios, rastreles y frisos que cruzaban sus mejillas y su
+        # frente; auditoría 2026-11-19): queda el brocal de lo que no se ve desde fuera
+        ac.cull_pred(fr, lambda c, xc=xc: abs(c.x - xc) < bw / 2 + 0.06 and yf - 0.06 < c.y < yb + 0.06 and c.z > zb - 0.45)
     roof.join(fr, _T(0, 0, z0))
     roof.join(tl, _T(0, 0, z0))
     for i, xc in enumerate(DORMERS):
@@ -499,8 +503,12 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         p = wall(side, lv)
         u, o = op_mid(p, k)                       # box_old: el último vano del panel es su hueco (AC_HOLES)
         unit = sv.ac_unit(kind, seed=int(r.integers(1e6)), detail=far)
-        zb = o[2] if kind == "box_old" else max(0.02, o[2] - 0.10 - max(v.co.z for v in unit.bm.verts))   # bajo el alféizar
-        add("ac_" + kind, unit, p["m"] @ _T(u, 0, zb))
+        if kind == "box_old":
+            add("ac_" + kind, unit, p["m"] @ _T(u, 0, o[2]))
+        else:                                     # líneas de cobre por el muro ciego junto a la ventana (ab.ac_place)
+            Ma = ab.ac_place(o, p["L"], p["ops"], kind)
+            if Ma is not None:
+                add("ac_" + kind, unit, p["m"] @ Ma)
     # parabólicas en los balcones y tendederos
     for lv in (1, 2, 3):
         xc = 0.5 * (xs[2] + xs[3])
@@ -516,7 +524,7 @@ def dress_services(cfg, P, det, inter, far="low", near="mid"):
         add("laundry_line", sv.laundry_line(length=2.12, seed=int(r.integers(1e6)), detail=near if lv == 1 else far),
             _T(xc - 1.06, ys[0] - FO - 0.6, zl[lv] + 1.9))
     for lv in (2, 3):
-        add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far), _T(0.5 * (xs[3] + xs[4]) - 0.16, ys[0] - FO, zl[lv] + 1.7))   # sobre el machón entre ventana y puerta
+        add("satellite_dish", sv.satellite_dish(seed=int(r.integers(1e6)), detail=far), _T(0.5 * (xs[3] + xs[4]) - 0.23, ys[0] - FO, zl[lv] + 1.7))   # sobre el machón entre ventana y puerta
     # accesos: arbotantes, medidores, buzones
     for sg in (-1, 1):
         x = sg * 4.05                                   # centro del módulo 1 / 4 = eje de las puertas de PB
